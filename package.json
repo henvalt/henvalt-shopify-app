@@ -1,0 +1,9 @@
+{
+  "name": "henvalt-shopify-app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "HENVALT Shopify OAuth and webhook integration",
+  "scripts": {
+    "check": "deno check supabase/functions/henvalt-shopify-oauth/index.ts"
+  }
+}
