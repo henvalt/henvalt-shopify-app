@@ -1,0 +1,7 @@
+name = "henvalt-clean-ingress-v1"
+main = "cloudflare/worker.js"
+compatibility_date = "2026-10-27"
+
+[vars]
+N8N_INGEST_URL = "https://n8n.henvalt.com/webhook/henvalt/ingest"
+SHOPIFY_API_KEY = "SET_IN_CLOUDFLARE_DASHBOARD"
