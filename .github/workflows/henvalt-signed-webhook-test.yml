@@ -41,7 +41,7 @@ jobs:
           const endpoint = process.env.ENDPOINT;
 
           if (!secret) throw new Error('Missing GitHub secret: SHOPIFY_CLIENT_SECRET');
-          if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop)) throw new Error('Invalid .myshopify.com shop domain');
+          if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) throw new Error('Invalid .myshopify.com shop domain');
           if (!['checkouts/update', 'carts/update', 'orders/create'].includes(topic)) throw new Error('Unsupported test topic');
 
           const now = new Date().toISOString();
