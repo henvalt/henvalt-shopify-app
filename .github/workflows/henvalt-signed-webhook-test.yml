@@ -1,0 +1,81 @@
+name: HENVALT signed Shopify webhook test
+
+on:
+  workflow_dispatch:
+    inputs:
+      shop:
+        description: Installed HENVALT test shop domain
+        required: true
+        default: ur4jvw-nz.myshopify.com
+      topic:
+        description: Shopify webhook topic
+        required: true
+        type: choice
+        options:
+          - checkouts/update
+          - carts/update
+          - orders/create
+        default: checkouts/update
+
+permissions:
+  contents: read
+
+jobs:
+  signed-webhook:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Send a synthetic Shopify-HMAC-signed test event
+        env:
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOP: ${{ inputs.shop }}
+          TOPIC: ${{ inputs.topic }}
+          ENDPOINT: https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+
+          const secret = process.env.SHOPIFY_CLIENT_SECRET;
+          const shop = (process.env.SHOP || '').trim().toLowerCase();
+          const topic = (process.env.TOPIC || '').trim().toLowerCase();
+          const endpoint = process.env.ENDPOINT;
+
+          if (!secret) throw new Error('Missing GitHub secret: SHOPIFY_CLIENT_SECRET');
+          if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) throw new Error('Invalid .myshopify.com shop domain');
+          if (!['checkouts/update', 'carts/update', 'orders/create'].includes(topic)) throw new Error('Unsupported test topic');
+
+          const now = new Date().toISOString();
+          const id = Date.now();
+          const payload = topic === 'checkouts/update'
+            ? { id, token: 'henvalt-synthetic-test', cart_token: 'henvalt-synthetic-cart', email: null, currency: 'USD', total_price: '0.00', created_at: now, updated_at: now, line_items: [] }
+            : topic === 'carts/update'
+              ? { id, token: 'henvalt-synthetic-cart', currency: 'USD', total_price: '0.00', created_at: now, updated_at: now, items: [] }
+              : { id, name: '#HENVALT-TEST', test: true, currency: 'USD', total_price: '0.00', created_at: now, updated_at: now, line_items: [] };
+
+          const raw = JSON.stringify(payload);
+          const hmac = crypto.createHmac('sha256', secret).update(raw, 'utf8').digest('base64');
+          const webhookId = crypto.randomUUID();
+
+          fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-shopify-shop-domain': shop,
+              'x-shopify-topic': topic,
+              'x-shopify-hmac-sha256': hmac,
+              'x-shopify-webhook-id': webhookId,
+              'x-shopify-event-id': webhookId,
+              'x-shopify-api-version': '2026-10',
+              'x-shopify-triggered-at': now
+            },
+            body: raw
+          }).then(async response => {
+            const responseText = await response.text();
+            console.log('HTTP status:', response.status);
+            console.log('Response:', responseText.slice(0, 1500));
+            if (!response.ok) process.exitCode = 1;
+          }).catch(error => {
+            console.error('Request failed:', error.message);
+            process.exitCode = 1;
+          });
+          NODE
