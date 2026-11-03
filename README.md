@@ -2,7 +2,7 @@
 
 ## Verified components
 - Shopify OAuth Edge Function is deployed in Supabase and uses authenticated install initiation, one-time hashed state, callback HMAC validation, owner-aware finalization, and Vault-backed Shopify token storage.
-- OAuth callback source registers and verifies eight Shopify webhook topics against the HENVALT Cloudflare ingress Worker. Dynamic merchant OAuth installation and a real customer event still require end-to-end verification.
+- OAuth callback source registers and verifies nine Shopify webhook topics against the HENVALT Cloudflare ingress Worker. Dynamic merchant OAuth installation and a real customer event still require end-to-end verification.
 - Cloudflare ingress Worker source is included for review. The production Worker is managed separately; do not deploy changes without comparing the live Worker and preserving its secret bindings.
 - `henvalt-merchant-dashboard` is deployed. It validates the Supabase user session, resolves the user's tenant and active Shopify connection server-side, and reads tenant-scoped metrics through the service-role-only dashboard summary RPC.
 - `henvalt-mailersend-setup` is deployed. It requires an OWNER/ADMIN membership, validates the MailerSend token and verified sender domain, and stores credentials through a service-role-only Vault configuration RPC. Setup does not send email.
@@ -13,7 +13,7 @@ The Shopify OAuth function requires:
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
 - `SHOPIFY_REDIRECT_URI` (must exactly match the Shopify Dev Dashboard callback URL)
-- Optional `SHOPIFY_SCOPES` (defaults to `read_orders`)
+- Optional `SHOPIFY_SCOPES` (defaults to `read_orders,read_customers`; both scopes are always requested by the current source)
 
 Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 
