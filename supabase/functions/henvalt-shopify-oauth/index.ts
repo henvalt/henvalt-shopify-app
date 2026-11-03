@@ -4,7 +4,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
-const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders").split(",").map((s) => s.trim()).filter(Boolean).concat("read_orders"))].join(",");
+const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers"]))].join(",");
 const STATE_TTL_SECONDS = 600;
 
 const json = (status: number, body: Record<string, unknown>) =>
@@ -152,7 +152,7 @@ Deno.serve(async (req: Request) => {
 
     // Registration is intentionally explicit and checked; never silently mark it successful.
     const webhookUri = "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks";
-    const specs = [{topic:"orders/create",gql:"ORDERS_CREATE"},{topic:"orders/paid",gql:"ORDERS_PAID"},{topic:"order_transactions/create",gql:"ORDER_TRANSACTIONS_CREATE"},{topic:"checkouts/create",gql:"CHECKOUTS_CREATE"},{topic:"checkouts/update",gql:"CHECKOUTS_UPDATE"},{topic:"carts/create",gql:"CARTS_CREATE"},{topic:"carts/update",gql:"CARTS_UPDATE"},{topic:"app/uninstalled",gql:"APP_UNINSTALLED"}];
+    const specs = [{topic:"orders/create",gql:"ORDERS_CREATE"},{topic:"orders/paid",gql:"ORDERS_PAID"},{topic:"order_transactions/create",gql:"ORDER_TRANSACTIONS_CREATE"},{topic:"checkouts/create",gql:"CHECKOUTS_CREATE"},{topic:"checkouts/update",gql:"CHECKOUTS_UPDATE"},{topic:"carts/create",gql:"CARTS_CREATE"},{topic:"carts/update",gql:"CARTS_UPDATE"},{topic:"customers_email_marketing_consent/update",gql:"CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE"},{topic:"app/uninstalled",gql:"APP_UNINSTALLED"}];
     const results: Array<Record<string, unknown>> = [];
     async function gql(query:string,variables:Record<string,unknown>={}) {
       const res=await fetch(`https://${shop}/admin/api/2026-10/graphql.json`,{method:"POST",headers:{"x-shopify-access-token":accessToken,"content-type":"application/json",accept:"application/json"},body:JSON.stringify({query,variables})});
