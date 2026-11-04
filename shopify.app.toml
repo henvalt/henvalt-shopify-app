@@ -20,3 +20,6 @@ redirect_urls = [
 
 [webhooks]
 api_version = "2026-10"
+
+[network_access]
+allowed_sources = ["https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev"]
