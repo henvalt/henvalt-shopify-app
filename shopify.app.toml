@@ -2,7 +2,7 @@
 # The client_id is a public Shopify app identifier, not an API secret.
 client_id = "1c0fd15c032fa26cd15ad7a63577a506"
 name = "HENVALT"
-handle = "henvalt"
+handle = "henvalt-recovery-engine"
 application_url = "https://henvalt-dashboard.pages.dev"
 embedded = true
 
