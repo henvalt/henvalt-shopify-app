@@ -55,7 +55,7 @@ async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
   return constantTimeEqual(await hmacHex(SHOPIFY_API_SECRET, message), supplied.toLowerCase());
 }
 
-async function activateShopifyPixel(shop: string, accessToken: string, tenantId: string): Promise<Record<string, unknown>> {
+async function activateShopifyPixel(shop: string, accessToken: string, tenantId: string, connectionId: string): Promise<Record<string, unknown>> {
   const graphUrl = `https://${shop}/admin/api/2026-10/graphql.json`;
   const graph = async (query: string, variables: Record<string, unknown> = {}) => {
     const response = await fetch(graphUrl, {
@@ -81,7 +81,7 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
 
   // Reuse the existing Shopify Web Pixel on reauthorization instead of creating duplicates.
   const existingResponse = await db(
-    `/rest/v1/pixel_keys?select=id,shopify_web_pixel_id&tenant_id=eq.${encodeURIComponent(tenantId)}&active=eq.true&order=created_at.desc&limit=1`,
+    `/rest/v1/pixel_keys?select=id,shopify_web_pixel_id&shopify_connection_id=eq.${encodeURIComponent(connectionId)}&active=eq.true&order=created_at.desc&limit=1`,
   );
   if (!existingResponse.ok) return { activated: false, error: "EXISTING_PIXEL_LOOKUP_FAILED" };
   const existingRows = await existingResponse.json().catch(() => []);
@@ -99,6 +99,7 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
     headers: { prefer: "return=representation" },
     body: JSON.stringify({
       tenant_id: tenantId,
+      shopify_connection_id: connectionId,
       key_digest: keyDigest,
       allowed_origins: allowedOrigins,
       active: true,
@@ -171,7 +172,7 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
   }
 
   const revoked = await db(
-    `/rest/v1/pixel_keys?tenant_id=eq.${encodeURIComponent(tenantId)}&active=eq.true&id=neq.${encodeURIComponent(keyId)}`,
+    `/rest/v1/pixel_keys?shopify_connection_id=eq.${encodeURIComponent(connectionId)}&active=eq.true&id=neq.${encodeURIComponent(keyId)}`,
     {
       method: "PATCH",
       headers: { prefer: "return=minimal" },
@@ -302,10 +303,11 @@ Deno.serve(async (req: Request) => {
     }
     const finalizedData = await finalized.json().catch(() => ({}));
     const tenantId = typeof finalizedData?.tenant_id === "string" ? finalizedData.tenant_id : "";
-    let pixelActivation: Record<string, unknown> = { activated: false, error: "TENANT_ID_MISSING" };
-    if (tenantId && scopes.includes("write_pixels") && scopes.includes("read_customer_events")) {
+    const connectionId = typeof finalizedData?.connection_id === "string" ? finalizedData.connection_id : "";
+    let pixelActivation: Record<string, unknown> = { activated: false, error: "TENANT_OR_CONNECTION_ID_MISSING" };
+    if (tenantId && connectionId && scopes.includes("write_pixels") && scopes.includes("read_customer_events")) {
       try {
-        pixelActivation = await activateShopifyPixel(shop, accessToken, tenantId);
+        pixelActivation = await activateShopifyPixel(shop, accessToken, tenantId, connectionId);
       } catch (error) {
         console.error("Shopify pixel activation failed unexpectedly", error instanceof Error ? error.message : "unknown_error");
         pixelActivation = { activated: false, error: "PIXEL_ACTIVATION_UNAVAILABLE" };
