@@ -100,7 +100,6 @@ Deno.serve(async (req: Request) => {
     authorize.searchParams.set("scope", SCOPES);
     authorize.searchParams.set("redirect_uri", SHOPIFY_REDIRECT_URI);
     authorize.searchParams.set("state", state);
-    authorize.searchParams.set("grant_options[]", "per-user");
     return req.method === "POST" ? json(200, { authorize_url: authorize.toString() }) : redirect(authorize.toString());
   }
 
@@ -121,7 +120,7 @@ Deno.serve(async (req: Request) => {
     const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ client_id: SHOPIFY_API_KEY, client_secret: SHOPIFY_API_SECRET, code }),
+      body: new URLSearchParams({ client_id: SHOPIFY_API_KEY, client_secret: SHOPIFY_API_SECRET, code, expiring: "1" }),
     });
     if (!tokenRes.ok) {
       console.error("Shopify token exchange failed", tokenRes.status);
@@ -129,8 +128,15 @@ Deno.serve(async (req: Request) => {
     }
     const tokenData = await tokenRes.json();
     const accessToken = typeof tokenData.access_token === "string" ? tokenData.access_token : "";
+    const refreshToken = typeof tokenData.refresh_token === "string" ? tokenData.refresh_token : "";
+    const accessExpiresIn = Number(tokenData.expires_in);
+    const refreshExpiresIn = Number(tokenData.refresh_token_expires_in);
     const scopes = typeof tokenData.scope === "string" ? tokenData.scope.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
-    if (!accessToken) return json(502, { error: "shopify_access_token_missing" });
+    if (!accessToken || !refreshToken || !Number.isFinite(accessExpiresIn) || accessExpiresIn < 60 ||
+        !Number.isFinite(refreshExpiresIn) || refreshExpiresIn < accessExpiresIn) {
+      console.error("Shopify expiring offline token response incomplete");
+      return json(502, { error: "shopify_expiring_offline_token_response_invalid" });
+    }
 
     const shopRes = await fetch(`https://${shop}/admin/api/2026-10/shop.json`, { headers: { "x-shopify-access-token": accessToken, accept: "application/json" } });
     if (!shopRes.ok) {
@@ -141,9 +147,19 @@ Deno.serve(async (req: Request) => {
     const shopId = String(shopData?.shop?.id ?? "");
     if (!shopId) return json(502, { error: "shopify_shop_id_missing" });
 
-    const finalized = await db("/rest/v1/rpc/control_plane_finalize_shopify_oauth_install_for_owner", {
+    const finalized = await db("/rest/v1/rpc/control_plane_finalize_shopify_oauth_install_expiring_for_owner", {
       method: "POST",
-      body: JSON.stringify({ p_state_hash: stateHash, p_shop_domain: shop, p_access_token: accessToken, p_shopify_shop_id: shopId, p_scopes: scopes, p_user_id: row.initiated_by_user_id }),
+      body: JSON.stringify({
+        p_state_hash: stateHash,
+        p_shop_domain: shop,
+        p_access_token: accessToken,
+        p_refresh_token: refreshToken,
+        p_access_expires_in: accessExpiresIn,
+        p_refresh_expires_in: refreshExpiresIn,
+        p_shopify_shop_id: shopId,
+        p_scopes: scopes,
+        p_user_id: row.initiated_by_user_id,
+      }),
     });
     if (!finalized.ok) {
       console.error("OAuth finalization failed", finalized.status, (await finalized.text()).slice(0, 300));
