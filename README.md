@@ -11,6 +11,8 @@
 - `HENVALT_DELIVERY` now uses the tenant-scoped delivery Edge Function in its published active version; the previous global n8n MailerSend credential is no longer used by the send node.
 - `HENVALT_INGEST` now correctly maps the top-level Shopify customer ID from `customers_email_marketing_consent/update` into the normalized customer identity. The fix is published.
 - A manual negative-path test confirmed that an unknown delivery request is rejected before the provider send node and is not recorded as a provider attempt. No email was sent during this test.
+- Multi-step recovery is now supported: a provider-accepted checkout/cart message can schedule steps 2 and 3 at 24 and 48 hours from sequence start (payment-failure sequences are capped at 2). Supabase rechecks active store, unrecovered opportunity, email consent, suppression, and verified sender before creating each next intervention.
+- Recovery context now includes the intervention step, prior message subject/body, and normalized line items from Shopify checkout/cart events. The model is instructed to avoid repeating earlier copy and to use only supplied product facts.
 - The merchant dashboard UI is published on Cloudflare Pages at `https://henvalt-dashboard.pages.dev`; the current immutable deployment URL is `https://8ffdc377.henvalt-dashboard.pages.dev`.
 
 ## Required Supabase Edge Function secrets
