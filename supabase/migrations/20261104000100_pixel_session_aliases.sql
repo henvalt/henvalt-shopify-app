@@ -96,6 +96,18 @@ begin
   values (p_tenant_id, p_alias_reference, p_session_reference)
   on conflict (tenant_id, alias_reference) do nothing;
 
+  -- Re-read after the insert to catch a concurrent attempt to bind this
+  -- checkout token to a different browser session.
+  select sa.session_reference
+    into v_existing_session_reference
+  from henvalt.session_aliases sa
+  where sa.tenant_id = p_tenant_id
+    and sa.alias_reference = p_alias_reference;
+
+  if v_existing_session_reference <> p_session_reference then
+    raise exception 'Session alias already bound to another session';
+  end if;
+
   return v_session_id;
 end;
 $function$;
@@ -115,6 +127,7 @@ declare
   v_customer_reference text;
   v_session_reference text;
   v_resolved_session_reference text;
+  v_resolved_customer_id uuid;
 begin
   select tenant_id, email, customer_reference, session_reference
     into v_tenant_id, v_email, v_customer_reference, v_session_reference
@@ -185,11 +198,13 @@ begin
     ), last_seen_at = now()
     returning id into session_id;
   elsif session_id is not null and customer_id is not null then
-    update henvalt.sessions
-      set customer_id = coalesce(customer_id, henvalt.sessions.customer_id),
+    update henvalt.sessions s
+      set customer_id = coalesce(v_resolved_customer_id, s.customer_id),
           last_seen_at = now()
-    where id = session_id;
+    where s.id = session_id;
   end if;
+
+  v_resolved_customer_id := customer_id;
 
   if v_email is not null then
     select co.id into checkout_id
