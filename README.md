@@ -20,7 +20,7 @@ The Shopify OAuth function requires:
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
 - `SHOPIFY_REDIRECT_URI` (must exactly match the Shopify Dev Dashboard callback URL)
-- Optional `SHOPIFY_SCOPES` (the source always requests `read_orders,read_customers`)
+- Optional `SHOPIFY_SCOPES` (the source always requests `read_orders,read_customers,write_pixels,read_customer_events`; pixel activation also requires merchant/user permission for customer events)
 
 Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 
@@ -33,7 +33,7 @@ Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 - Request the required protected customer data and email-field access in Shopify Partner Dashboard. A scope alone does not guarantee customer email fields are returned.
 - Reauthorize the test store once through the new expiring-offline-token OAuth flow, then verify that the access-token expiry, refresh-token expiry, refresh-token Vault reference, and required scopes are actually persisted. Existing installations are not migrated automatically.
 - Complete a real merchant OAuth install and verify all nine webhook registrations in that shop.
-- Build, deploy, and activate the Shopify Web Pixel extension for browse tracking. The repository currently has no `shopify.app.toml` or Web Pixel extension; do not treat `carts/create` or `carts/update` webhooks as a substitute for storefront browse events. Add `write_pixels` and `read_customer_events` only when the extension and activation path are ready.
+- The Web Pixel extension and tenant-keyed Cloudflare collector are now implemented on the `feature/web-pixel-foundation` branch; the collector Worker is deployed, and the Supabase ingestion migrations are applied. The pixel is not yet installable or active: the repository still needs the root Shopify CLI app scaffold (`shopify.app.toml`), Shopify-generated extension UID, app client ID/configuration, a released extension version, and a merchant-side `webPixelCreate` activation. OAuth now requests `write_pixels` and `read_customer_events` alongside the existing order/customer scopes; existing stores must reauthorize. The pixel requires analytics permission but does not require marketing permission merely to measure browse behavior. Email recovery still independently requires verified customer identity, explicit marketing consent, and suppression checks. Do not treat `carts/create` or `carts/update` webhooks as a substitute for storefront browse events.
 - Implement customer-reply handling through a MailerSend inbound route, with signed webhook verification, idempotent message storage, safe correlation to the original intervention, and sequence pause/merchant notification. No inbound route or reply processor is currently configured.
 - Add a deterministic, auditable high-intent score gate before recovery sequence creation. Current eligibility checks consent, suppression, paid orders, connection state, and duplicate sequences, but does not enforce an intent-score threshold. Calibrate it only after real merchant events are flowing; the current event set is synthetic and too small for model calibration.
 - Deliver an identifiable, consent-eligible checkout/cart event through Cloudflare → n8n → Supabase. Synthetic payloads without customer identity, checkout value, and consent do not qualify.
