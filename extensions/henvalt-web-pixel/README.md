@@ -11,6 +11,8 @@ It sends a minimized event payload to a tenant-specific HTTPS collector. It does
 
 ## Required before deployment
 
+Before deployment, run Shopify CLI's web-pixel extension scaffold/generation flow in the actual Shopify app project so Shopify generates and manages the required extension `uid`. This repository currently does not contain the root `shopify.app.toml` or a complete Shopify CLI app scaffold, so this branch is not independently deployable yet.
+
 1. Add `write_pixels` and `read_customer_events` to the Shopify app's released configuration and OAuth scope allowlist.
 2. Implement a tenant-scoped, revocable public pixel key in HENVALT. A public pixel key is not a secret and must be rate-limited, origin-checked where possible, and never grant Admin API access.
 3. Implement the collector endpoint. It must validate the key, resolve the tenant from the key (never trust a tenant ID supplied by the browser), enforce payload size and event allowlists, apply consent/privacy policy, and enqueue events idempotently.
