@@ -64,7 +64,8 @@ A browser-based Node.js workspace is prepared in `.devcontainer/devcontainer.jso
 1. Open the repository's **Code → Codespaces → Create codespace on `feature/web-pixel-foundation`**.
 2. Wait for the devcontainer setup to finish.
 3. In the terminal, run `shopify auth login` and sign in with the Shopify account that owns the HENVALT app Client ID.
-4. Run `shopify app deploy --no-release`. This is the one-time interactive UID mapping step; review the CLI's proposed extension mapping and confirm only if it identifies the existing HENVALT Browse Intelligence extension correctly.
-5. Stop before releasing the version. The generated UID must be committed and reviewed first.
+4. Generate a temporary Shopify-native Web Pixel scaffold so Shopify CLI creates an official UID: `shopify app generate extension --template web_pixel --name henvalt-uid-bootstrap`. Choose JavaScript.
+5. Open `extensions/henvalt-uid-bootstrap/shopify.extension.toml`, copy its generated `uid = "…"` line into `extensions/henvalt-web-pixel/shopify.extension.toml`, then delete the temporary `extensions/henvalt-uid-bootstrap` folder. Keep HENVALT's existing extension code and settings.
+6. Run `shopify app deploy --no-release`. Review the app/extension mapping and any warnings. Stop before releasing the version; the generated UID and CLI validation must be committed and reviewed first.
 
 Do not paste Shopify API secrets or access tokens into chat or commit them to GitHub. If Codespaces asks you to enable paid billing, do not enable it; stop and use another already-available CLI environment.
