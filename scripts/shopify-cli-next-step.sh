@@ -5,10 +5,17 @@ echo "HENVALT Shopify CLI environment"
 shopify version
 
 echo
-echo "Next: authenticate to the Shopify account that owns Client ID 1c0fd15c032fa26cd15ad7a63577a506."
-echo "Run: shopify auth login"
+echo "1. Authenticate to the Shopify account that owns Client ID 1c0fd15c032fa26cd15ad7a63577a506:"
+echo "   shopify auth login"
 echo
-echo "Then run the one-time UID mapping and create an unreleased version:"
-echo "shopify app deploy --no-release"
+echo "2. Generate a temporary native Web Pixel scaffold to obtain Shopify's generated UID:"
+echo "   shopify app generate extension --template web_pixel --name henvalt-uid-bootstrap"
+echo "   Choose JavaScript."
 echo
-echo "Review the CLI confirmation carefully. Do not release the app version yet."
+echo "3. Copy the generated uid line from extensions/henvalt-uid-bootstrap/shopify.extension.toml"
+echo "   into extensions/henvalt-web-pixel/shopify.extension.toml, then delete the temporary folder."
+echo
+echo "4. Create an unreleased app version for validation:"
+echo "   shopify app deploy --no-release"
+echo
+echo "Review the app/extension mapping and warnings. Do not release until the generated UID is committed and reviewed."
