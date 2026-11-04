@@ -4,6 +4,7 @@ compatibility_date = "2026-11-04"
 
 [vars]
 SUPABASE_URL = "https://ocyplckdojdubyrsxcxa.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_replace_with_project_key"
 
 [[ratelimits]]
 name = "RATE_LIMITER"
