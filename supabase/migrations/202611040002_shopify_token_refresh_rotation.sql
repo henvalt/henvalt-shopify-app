@@ -46,7 +46,6 @@ begin
   update henvalt.shopify_connections set token_refresh_lease_until=now()+interval '90 seconds',
     token_refresh_started_at=now(),updated_at=now() where id=v_conn.id;
   return jsonb_build_object('claimed',true,'shop_domain',v_conn.shop_domain,
-    'access_secret_ref',v_conn.access_token_secret_ref,'refresh_secret_ref',v_conn.refresh_token_secret_ref,
     'refresh_token',v_refresh_token);
 end;
 $function$;
@@ -58,7 +57,7 @@ set search_path=pg_catalog,public,henvalt,vault
 as $function$
 declare v_conn henvalt.shopify_connections%rowtype;
 begin
-  if current_setting('request.jwt.claim.role',true)<>'service_role' then raise exception 'service_role_required' using errcode='42501'; end if;
+  if current_setting('request.jwt.claim.role',true) is distinct from 'service_role' then raise exception 'service_role_required' using errcode='42501'; end if;
   if p_access_token is null or length(p_access_token)<20 or length(p_access_token)>512
      or p_refresh_token is null or length(p_refresh_token)<20 or length(p_refresh_token)>1024
      or p_access_expires_in is null or p_access_expires_in<60
@@ -97,7 +96,7 @@ set search_path=pg_catalog,public,henvalt
 as $function$
 declare v_id uuid;
 begin
-  if current_setting('request.jwt.claim.role',true)<>'service_role' then raise exception 'service_role_required' using errcode='42501'; end if;
+  if current_setting('request.jwt.claim.role',true) is distinct from 'service_role' then raise exception 'service_role_required' using errcode='42501'; end if;
   update henvalt.shopify_connections set token_refresh_lease_until=null,
     token_refresh_last_error=left(coalesce(p_error_code,'refresh_failed'),120),
     reauth_required_at=case when p_reauth_required then now() else reauth_required_at end,updated_at=now()
