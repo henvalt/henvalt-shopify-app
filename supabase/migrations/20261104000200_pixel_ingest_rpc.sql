@@ -127,4 +127,22 @@ end;
 $function$;
 
 revoke all on function henvalt.ingest_pixel_event(text, text, jsonb) from public;
-grant execute on function henvalt.ingest_pixel_event(text, text, jsonb) to anon, authenticated, service_role;
+grant execute on function henvalt.ingest_pixel_event(text, text, jsonb) to service_role;
+
+-- Expose only this narrowly scoped RPC through the already exposed public schema.
+-- Do not grant anon usage on the entire henvalt schema.
+create or replace function public.henvalt_ingest_pixel_event(
+  p_key_digest text,
+  p_origin text,
+  p_payload jsonb
+)
+returns jsonb
+language sql
+security definer
+set search_path to 'public', 'henvalt'
+as $function$
+  select henvalt.ingest_pixel_event(p_key_digest, p_origin, p_payload);
+$function$;
+
+revoke all on function public.henvalt_ingest_pixel_event(text, text, jsonb) from public;
+grant execute on function public.henvalt_ingest_pixel_event(text, text, jsonb) to anon, authenticated, service_role;
