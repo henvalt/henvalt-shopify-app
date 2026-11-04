@@ -22,6 +22,18 @@ function validId(value, max) {
   return typeof value === "string" && value.length > 0 && value.length <= max;
 }
 
+function safePageUrl(value) {
+  if (typeof value !== "string" || value.length > 4096) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:") return null;
+    // Never persist query strings or fragments; they can contain customer data.
+    return url.origin + url.pathname.slice(0, 1000);
+  } catch {
+    return null;
+  }
+}
+
 function safeOccurredAt(value) {
   if (typeof value === "string" && Number.isFinite(Date.parse(value))) {
     const parsed = new Date(value);
@@ -114,7 +126,7 @@ export default {
       event_type: payload.event_type,
       occurred_at: safeOccurredAt(payload.occurred_at),
       client_id: payload.client_id,
-      page_url: typeof payload.page_url === "string" ? payload.page_url.slice(0, 1200) : null,
+      page_url: safePageUrl(payload.page_url),
       product: payload.product ? {
         id: validId(payload.product.id, 200) ? payload.product.id : null,
         title: typeof payload.product.title === "string" ? payload.product.title.slice(0, 200) : null,
