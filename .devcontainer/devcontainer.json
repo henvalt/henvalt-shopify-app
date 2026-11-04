@@ -1,0 +1,12 @@
+{
+  "name": "HENVALT Shopify app",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
+  "postCreateCommand": "npm install --global @shopify/cli@latest && npm install --prefix extensions/henvalt-web-pixel",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Shopify.theme-check-vscode"
+      ]
+    }
+  }
+}
