@@ -10,6 +10,7 @@ const ALLOWED_EVENTS = new Set([
 function safePageUrl(raw) {
   try {
     const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
     // Do not forward query strings or fragments, which can contain personal data.
     return url.origin + url.pathname.slice(0, 1000);
   } catch {
