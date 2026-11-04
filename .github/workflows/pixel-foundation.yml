@@ -56,6 +56,9 @@ jobs:
           print("Shopify app and Web Pixel configuration checks passed.")
           PY
 
-      - name: Ensure collector has no service-role credential instructions
+      - name: Ensure collector has no service-role credential assignments
         run: |
-          ! grep -R "SUPABASE_SERVICE_ROLE_KEY" workers/pixel-collector/wrangler.toml.example
+          if grep -R -n -E '^[[:space:]]*SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=' workers/pixel-collector; then
+            echo "A service-role key assignment was found in the collector."
+            exit 1
+          fi
