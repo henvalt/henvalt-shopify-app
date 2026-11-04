@@ -1,0 +1,22 @@
+type = "web_pixel_extension"
+name = "HENVALT Browse Intelligence"
+runtime_context = "strict"
+
+[customer_privacy]
+analytics = true
+marketing = true
+preferences = false
+sale_of_data = false
+
+[settings]
+type = "object"
+
+[settings.fields.collectorUrl]
+name = "HENVALT event collector URL"
+description = "Tenant-specific HTTPS collector URL provisioned by HENVALT during pixel activation."
+type = "single_line_text_field"
+
+[settings.fields.publicKey]
+name = "HENVALT public pixel key"
+description = "Tenant-scoped, revocable public key. Never use a Shopify Admin API token here."
+type = "single_line_text_field"
