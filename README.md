@@ -55,3 +55,16 @@ The OAuth callback requests **expiring offline Admin API tokens** (`expiring=1`)
 `henvalt-shopify-token-refresh` is deployed as an internal service-role-only Edge Function. It serializes refresh attempts per shop with a database lease, reads the refresh credential only inside the privileged database claim, calls Shopify with `grant_type=refresh_token`, and persists the returned access/refresh pair together in Vault before clearing the lease. It records reauthorization-required state for invalid/expired refresh credentials and leaves transient network/provider failures retryable. Token values are never returned in the HTTP response or logged.
 
 The refresh service is an infrastructure primitive, not a scheduled job: the current app/dashboard and n8n workflows do not make Admin API calls using stored shop tokens. Any future server-side Admin API caller must check expiry and invoke this service before using an expiring offline token. Do not add per-user online tokens or bypass rotation.
+
+
+## Mobile-friendly Shopify CLI setup (GitHub Codespaces)
+
+A browser-based Node.js workspace is prepared in `.devcontainer/devcontainer.json`; it installs Shopify CLI and the Web Pixel package automatically. This avoids requiring a local Mac/PC.
+
+1. Open the repository's **Code → Codespaces → Create codespace on `feature/web-pixel-foundation`**.
+2. Wait for the devcontainer setup to finish.
+3. In the terminal, run `shopify auth login` and sign in with the Shopify account that owns the HENVALT app Client ID.
+4. Run `shopify app deploy --no-release`. This is the one-time interactive UID mapping step; review the CLI's proposed extension mapping and confirm only if it identifies the existing HENVALT Browse Intelligence extension correctly.
+5. Stop before releasing the version. The generated UID must be committed and reviewed first.
+
+Do not paste Shopify API secrets or access tokens into chat or commit them to GitHub. If Codespaces asks you to enable paid billing, do not enable it; stop and use another already-available CLI environment.
