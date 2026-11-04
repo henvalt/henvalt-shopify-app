@@ -40,9 +40,9 @@ Do not store aliases in an unvalidated client-controlled tenant context, and do 
 
 ## Required before deployment
 
-Before deployment, run Shopify CLI's web-pixel extension scaffold/generation flow in the actual Shopify app project so Shopify generates and manages the required extension `uid`. This repository currently does not contain the root `shopify.app.toml` or a complete Shopify CLI app scaffold, so this branch is not independently deployable yet.
+The root `shopify.app.toml` now exists and contains the HENVALT public client ID, app URL, OAuth callback URL, and required pixel scopes. The extension still needs Shopify CLI's one-time interactive `shopify app deploy` mapping step so Shopify generates and manages its required extension `uid`. The repository has not yet been built/deployed through Shopify CLI, so this branch is not yet a released/active app version.
 
-1. Add `write_pixels` and `read_customer_events` to the Shopify app's released configuration and OAuth scope allowlist.
+1. Verify that the callback URL in `shopify.app.toml` exactly matches the configured `SHOPIFY_REDIRECT_URI` secret and the redirect URL allowlist in Shopify Dev Dashboard; then deploy the app configuration with the Shopify CLI.
 2. Implement a tenant-scoped, revocable public pixel key. A public pixel key is not a secret and must be rate-limited, origin-checked where possible, and never grant Admin API access.
 3. Implement the collector endpoint and the identity bridge described above.
 4. Provision the endpoint and key in `webPixelCreate` settings after the merchant grants the required scopes.
