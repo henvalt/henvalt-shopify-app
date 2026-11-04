@@ -48,6 +48,7 @@ register(({ analytics, settings }) => {
 
       const payload = {
         schema_version: 1,
+        public_key: publicKey,
         event_id: asString(event?.id, 160),
         event_type: eventName,
         occurred_at: asString(event?.timestamp, 80),
@@ -74,10 +75,9 @@ register(({ analytics, settings }) => {
 
       fetch(collectorUrl, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-henvalt-pixel-key": publicKey,
-        },
+        // text/plain is a CORS-safelisted content type; avoid a preflight request.
+        // The key is public/revocable and is sent in the body, never an Admin token.
+        headers: { "content-type": "text/plain;charset=UTF-8" },
         body: JSON.stringify(payload),
         keepalive: true,
       }).catch(() => {
