@@ -47,3 +47,9 @@ The integration is not launch-ready until the launch gates above are verified. S
 The OAuth callback requests **expiring offline Admin API tokens** (`expiring=1`); it does not request per-user online tokens. Shopify returns an access token plus a rotating refresh token and both lifetimes. The callback persists both credentials in Supabase Vault and records their expiry metadata in `henvalt.shopify_connections`. The refresh secret is never returned to the browser or n8n.
 
 **Important launch gate:** token refresh/rotation must be wired into the server-side Shopify API execution path before any background Admin API calls rely on these credentials. Refreshes must persist each returned access/refresh pair atomically; a failed or expired refresh requires merchant reauthorization. Do not revert to non-expiring or online per-user tokens.
+
+## Shopify refresh-token rotation service
+
+`henvalt-shopify-token-refresh` is deployed as an internal service-role-only Edge Function. It serializes refresh attempts per shop with a database lease, reads the refresh credential only inside the privileged database claim, calls Shopify with `grant_type=refresh_token`, and persists the returned access/refresh pair together in Vault before clearing the lease. It records reauthorization-required state for invalid/expired refresh credentials and leaves transient network/provider failures retryable. Token values are never returned in the HTTP response or logged.
+
+The refresh service is an infrastructure primitive, not a scheduled job: the current app/dashboard and n8n workflows do not make Admin API calls using stored shop tokens. Any future server-side Admin API caller must check expiry and invoke this service before using an expiring offline token. Do not add per-user online tokens or bypass rotation.
