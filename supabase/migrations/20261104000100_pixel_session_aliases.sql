@@ -161,27 +161,29 @@ begin
   end if;
 
   if v_session_reference is not null then
-    select s.id into session_id
-    from henvalt.sessions s
-    where s.tenant_id = v_tenant_id
-      and s.session_reference = v_session_reference
+    -- Prefer an alias when present. A checkout webhook may have arrived first
+    -- and created a checkout-token session before the pixel could bind the
+    -- token to its anonymous browser session.
+    select sa.session_reference
+      into v_resolved_session_reference
+    from henvalt.session_aliases sa
+    where sa.tenant_id = v_tenant_id
+      and sa.alias_reference = v_session_reference
     limit 1;
 
-    if session_id is null then
-      select sa.session_reference
-        into v_resolved_session_reference
-      from henvalt.session_aliases sa
-      where sa.tenant_id = v_tenant_id
-        and sa.alias_reference = v_session_reference
+    if v_resolved_session_reference is not null then
+      select s.id into session_id
+      from henvalt.sessions s
+      where s.tenant_id = v_tenant_id
+        and s.session_reference = v_resolved_session_reference
       limit 1;
-
-      if v_resolved_session_reference is not null then
-        select s.id into session_id
-        from henvalt.sessions s
-        where s.tenant_id = v_tenant_id
-          and s.session_reference = v_resolved_session_reference
-        limit 1;
-      end if;
+    else
+      v_resolved_session_reference := v_session_reference;
+      select s.id into session_id
+      from henvalt.sessions s
+      where s.tenant_id = v_tenant_id
+        and s.session_reference = v_session_reference
+      limit 1;
     end if;
   end if;
 
