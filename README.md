@@ -41,3 +41,9 @@ Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 - Verify a real recovered order and attribution before claiming recovered revenue or enabling performance billing.
 
 The integration is not launch-ready until the launch gates above are verified. Synthetic webhook tests prove ingress and event persistence only; they do not prove recovery or revenue.
+
+## Shopify OAuth token lifecycle
+
+The OAuth callback requests **expiring offline Admin API tokens** (`expiring=1`); it does not request per-user online tokens. Shopify returns an access token plus a rotating refresh token and both lifetimes. The callback persists both credentials in Supabase Vault and records their expiry metadata in `henvalt.shopify_connections`. The refresh secret is never returned to the browser or n8n.
+
+**Important launch gate:** token refresh/rotation must be wired into the server-side Shopify API execution path before any background Admin API calls rely on these credentials. Refreshes must persist each returned access/refresh pair atomically; a failed or expired refresh requires merchant reauthorization. Do not revert to non-expiring or online per-user tokens.
