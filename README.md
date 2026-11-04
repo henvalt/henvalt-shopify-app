@@ -32,8 +32,11 @@ Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 ## Launch gates still open
 - Reauthorize a real test store with both `read_orders` and `read_customers`; the currently active test connection has only `read_orders`.
 - Request the required protected customer data and email-field access in Shopify Partner Dashboard. A scope alone does not guarantee customer email fields are returned.
-- Migrate the OAuth flow from per-user online tokens to expiring offline access tokens, store the refresh-token pair securely, and implement token rotation before relying on Shopify Admin API calls from background jobs.
+- Reauthorize the test store once through the new expiring-offline-token OAuth flow, then verify that the access-token expiry, refresh-token expiry, refresh-token Vault reference, and required scopes are actually persisted. Existing installations are not migrated automatically.
 - Complete a real merchant OAuth install and verify all nine webhook registrations in that shop.
+- Build, deploy, and activate the Shopify Web Pixel extension for browse tracking. The repository currently has no `shopify.app.toml` or Web Pixel extension; do not treat `carts/create` or `carts/update` webhooks as a substitute for storefront browse events. Add `write_pixels` and `read_customer_events` only when the extension and activation path are ready.
+- Implement customer-reply handling through a MailerSend inbound route, with signed webhook verification, idempotent message storage, safe correlation to the original intervention, and sequence pause/merchant notification. No inbound route or reply processor is currently configured.
+- Add a deterministic, auditable high-intent score gate before recovery sequence creation. Current eligibility checks consent, suppression, paid orders, connection state, and duplicate sequences, but does not enforce an intent-score threshold. Calibrate it only after real merchant events are flowing; the current event set is synthetic and too small for model calibration.
 - Deliver an identifiable, consent-eligible checkout/cart event through Cloudflare → n8n → Supabase. Synthetic payloads without customer identity, checkout value, and consent do not qualify.
 - Verify a legitimate recovery opportunity can be claimed and processed by `HENVALT_RECOVERY`.
 - Re-run tenant MailerSend setup for the test store and verify that the sender domain is stored as verified. The currently stored test configuration has no verified-domain metadata, so the new delivery gateway will fail closed.
