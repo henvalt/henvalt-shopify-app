@@ -30,7 +30,6 @@ Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 - `GET /health`
 
 ## Launch gates still open
-- Reauthorize a real test store with both `read_orders` and `read_customers`; the currently active test connection has only `read_orders`.
 - Request the required protected customer data and email-field access in Shopify Partner Dashboard. A scope alone does not guarantee customer email fields are returned.
 - Reauthorize the test store once through the new expiring-offline-token OAuth flow, then verify that the access-token expiry, refresh-token expiry, refresh-token Vault reference, and required scopes are actually persisted. Existing installations are not migrated automatically.
 - Complete a real merchant OAuth install and verify all nine webhook registrations in that shop.
