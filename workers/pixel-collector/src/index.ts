@@ -59,6 +59,8 @@ async function supabase<T>(env: Env, path: string, init: RequestInit = {}): Prom
       apikey: env.SUPABASE_SERVICE_ROLE_KEY,
       authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
       "content-type": "application/json",
+      "accept-profile": "henvalt",
+      "content-profile": "henvalt",
       ...(init.headers || {}),
     },
   });
