@@ -1,0 +1,61 @@
+name: HENVALT pixel foundation checks
+
+on:
+  push:
+    branches:
+      - feature/web-pixel-foundation
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Web Pixel SDK
+        run: npm install --prefix extensions/henvalt-web-pixel --ignore-scripts
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check extensions/henvalt-web-pixel/src/index.js
+          node --check workers/pixel-collector/src/index.js
+
+      - name: Validate Shopify TOML and privacy configuration
+        run: |
+          python - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          app = tomllib.loads(Path("shopify.app.toml").read_text())
+          pixel = tomllib.loads(Path("extensions/henvalt-web-pixel/shopify.extension.toml").read_text())
+
+          required_scopes = {"write_pixels", "read_customer_events"}
+          actual_scopes = set(app["access_scopes"]["scopes"].split(","))
+          assert required_scopes.issubset(actual_scopes), actual_scopes
+          assert "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev" in app["network_access"]["allowed_sources"]
+          assert pixel["type"] == "web_pixel_extension"
+          assert pixel["runtime_context"] == "strict"
+          assert pixel["customer_privacy"] == {
+              "analytics": True,
+              "marketing": False,
+              "preferences": False,
+              "sale_of_data": "disabled",
+          }
+          assert {"collectorUrl", "publicKey"}.issubset(pixel["settings"]["fields"])
+          print("Shopify app and Web Pixel configuration checks passed.")
+          PY
+
+      - name: Ensure collector has no service-role credential instructions
+        run: |
+          ! grep -R "SUPABASE_SERVICE_ROLE_KEY" workers/pixel-collector/wrangler.toml.example
