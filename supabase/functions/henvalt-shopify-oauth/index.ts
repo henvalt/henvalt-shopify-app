@@ -119,7 +119,7 @@ Deno.serve(async (req: Request) => {
 
     const tokenRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ client_id: SHOPIFY_API_KEY, client_secret: SHOPIFY_API_SECRET, code, expiring: "1" }),
     });
     if (!tokenRes.ok) {
