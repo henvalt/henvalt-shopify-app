@@ -1,0 +1,46 @@
+name: Shopify unreleased app validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-unreleased:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out HENVALT
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify Shopify service-account secret
+        env:
+          SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
+        run: |
+          if [ -z "$SHOPIFY_SERVICE_ACCOUNT_TOKEN" ]; then
+            echo "::error::Missing repository Actions secret SHOPIFY_SERVICE_ACCOUNT_TOKEN"
+            exit 1
+          fi
+
+      - name: Verify Web Pixel UID is mapped
+        run: |
+          if ! grep -Eq '^uid[[:space:]]*=' extensions/henvalt-web-pixel/shopify.extension.toml; then
+            echo "::error::Shopify Web Pixel UID has not been mapped yet. Complete the one-time Shopify CLI interactive mapping before CI deployment."
+            exit 1
+          fi
+
+      - name: Install Shopify CLI
+        run: npm install --global @shopify/cli@latest
+
+      - name: Verify Shopify CLI version
+        run: shopify version
+
+      - name: Create unreleased Shopify app version
+        env:
+          SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
+        run: shopify app deploy --no-release --allow-updates
