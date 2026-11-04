@@ -56,28 +56,40 @@ async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
 }
 
 async function activateShopifyPixel(shop: string, accessToken: string, tenantId: string): Promise<Record<string, unknown>> {
-  // The public key is tenant-scoped and revocable. Only its SHA-256 digest is stored.
   const graphUrl = `https://${shop}/admin/api/2026-10/graphql.json`;
-  const shopResponse = await fetch(graphUrl, {
-    method: "POST",
-    headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ query: "query { shop { primaryDomain { url } } }" }),
-    signal: AbortSignal.timeout(15000),
-  });
-  const shopPayload = await shopResponse.json().catch(() => ({}));
-  if (!shopResponse.ok || shopPayload.errors?.length) {
-    console.error("Pixel activation could not resolve the Shopify primary domain", shopResponse.status);
-    return { activated: false, error: "SHOPIFY_DOMAIN_LOOKUP_FAILED" };
-  }
+  const graph = async (query: string, variables: Record<string, unknown> = {}) => {
+    const response = await fetch(graphUrl, {
+      method: "POST",
+      headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.errors?.length) throw new Error("SHOPIFY_GRAPHQL_REQUEST_FAILED");
+    return payload?.data ?? {};
+  };
 
+  const shopData = await graph("query { shop { primaryDomain { url } } }");
   let primaryOrigin = `https://${shop}`;
   try {
-    const primaryUrl = new URL(String(shopPayload?.data?.shop?.primaryDomain?.url ?? ""));
+    const primaryUrl = new URL(String(shopData?.shop?.primaryDomain?.url ?? ""));
     if (primaryUrl.protocol === "https:") primaryOrigin = primaryUrl.origin;
   } catch {
-    // The canonical myshopify.com origin remains a safe fallback.
+    // Keep the canonical myshopify.com origin if the primary domain is unavailable.
   }
   const allowedOrigins = [...new Set([primaryOrigin, `https://${shop}`])];
+
+  // Reuse the existing Shopify Web Pixel on reauthorization instead of creating duplicates.
+  const existingResponse = await db(
+    `/rest/v1/pixel_keys?select=id,shopify_web_pixel_id&tenant_id=eq.${encodeURIComponent(tenantId)}&active=eq.true&order=created_at.desc&limit=1`,
+  );
+  if (!existingResponse.ok) return { activated: false, error: "EXISTING_PIXEL_LOOKUP_FAILED" };
+  const existingRows = await existingResponse.json().catch(() => []);
+  const existing = Array.isArray(existingRows) ? existingRows[0] : null;
+  if (existing && !existing.shopify_web_pixel_id) {
+    // Do not create a second pixel when an earlier activation lacks its persisted Shopify ID.
+    return { activated: false, error: "EXISTING_PIXEL_ID_NOT_PERSISTED" };
+  }
 
   const keyBytes = crypto.getRandomValues(new Uint8Array(32));
   const publicKey = [...keyBytes].map((value) => value.toString(16).padStart(2, "0")).join("");
@@ -102,39 +114,60 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
     : "";
   if (!keyId) return { activated: false, error: "PIXEL_KEY_ID_MISSING" };
 
-  const mutation = `mutation CreateHenvaltPixel($webPixel: WebPixelInput!) {
-    webPixelCreate(webPixel: $webPixel) {
-      userErrors { field message code }
-      webPixel { id settings }
-    }
-  }`;
-  const pixelResponse = await fetch(graphUrl, {
-    method: "POST",
-    headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      query: mutation,
-      variables: {
-        webPixel: {
-          settings: {
-            collectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
-            publicKey,
-          },
-        },
-      },
-    }),
-    signal: AbortSignal.timeout(15000),
-  });
-  const pixelPayload = await pixelResponse.json().catch(() => ({}));
-  const createdPixel = pixelPayload?.data?.webPixelCreate?.webPixel;
-  const userErrors = pixelPayload?.data?.webPixelCreate?.userErrors ?? [];
-  if (!pixelResponse.ok || pixelPayload.errors?.length || userErrors.length || !createdPixel?.id) {
+  const settings = {
+    collectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    publicKey,
+  };
+  const isUpdate = typeof existing?.shopify_web_pixel_id === "string";
+  const mutation = isUpdate
+    ? `mutation UpdateHenvaltPixel($id: ID!, $webPixel: WebPixelInput!) {
+        webPixelUpdate(id: $id, webPixel: $webPixel) {
+          userErrors { field message code }
+          webPixel { id settings }
+        }
+      }`
+    : `mutation CreateHenvaltPixel($webPixel: WebPixelInput!) {
+        webPixelCreate(webPixel: $webPixel) {
+          userErrors { field message code }
+          webPixel { id settings }
+        }
+      }`;
+  let pixelPayload: any;
+  try {
+    pixelPayload = await graph(mutation, isUpdate
+      ? { id: existing.shopify_web_pixel_id, webPixel: { settings } }
+      : { webPixel: { settings } });
+  } catch {
     await db(`/rest/v1/pixel_keys?id=eq.${encodeURIComponent(keyId)}`, {
       method: "PATCH",
       headers: { prefer: "return=minimal" },
       body: JSON.stringify({ active: false, revoked_at: new Date().toISOString() }),
     });
-    console.error("Shopify Web Pixel activation failed", pixelResponse.status, userErrors.map((item: any) => item.code ?? "USER_ERROR").join(","));
-    return { activated: false, error: "SHOPIFY_PIXEL_CREATE_FAILED" };
+    return { activated: false, error: "SHOPIFY_PIXEL_MUTATION_FAILED" };
+  }
+
+  const result = isUpdate ? pixelPayload?.webPixelUpdate : pixelPayload?.webPixelCreate;
+  const pixel = result?.webPixel;
+  const userErrors = result?.userErrors ?? [];
+  if (userErrors.length || !pixel?.id) {
+    await db(`/rest/v1/pixel_keys?id=eq.${encodeURIComponent(keyId)}`, {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ active: false, revoked_at: new Date().toISOString() }),
+    });
+    console.error("Shopify Web Pixel mutation rejected", userErrors.map((item: any) => item.code ?? "USER_ERROR").join(","));
+    return { activated: false, error: "SHOPIFY_PIXEL_MUTATION_REJECTED" };
+  }
+
+  const persisted = await db(`/rest/v1/pixel_keys?id=eq.${encodeURIComponent(keyId)}`, {
+    method: "PATCH",
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify({ shopify_web_pixel_id: pixel.id }),
+  });
+  if (!persisted.ok) {
+    // Keep the new key active so the successfully updated pixel can still ingest events.
+    console.error("Shopify Web Pixel ID persistence failed", persisted.status);
+    return { activated: true, pixelId: pixel.id, pixelIdPersisted: false, previousKeysRevoked: false };
   }
 
   const revoked = await db(
@@ -149,7 +182,9 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
 
   return {
     activated: true,
-    pixelId: createdPixel.id,
+    pixelId: pixel.id,
+    pixelUpdated: isUpdate,
+    pixelIdPersisted: true,
     allowedOriginCount: allowedOrigins.length,
     previousKeysRevoked: revoked.ok,
   };
