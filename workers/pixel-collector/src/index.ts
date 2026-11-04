@@ -59,8 +59,8 @@ async function supabase<T>(env: Env, path: string, init: RequestInit = {}): Prom
       apikey: env.SUPABASE_PUBLISHABLE_KEY,
       authorization: `Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`,
       "content-type": "application/json",
-      "accept-profile": "henvalt",
-      "content-profile": "henvalt",
+      "accept-profile": "public",
+      "content-profile": "public",
       ...(init.headers || {}),
     },
   });
@@ -152,7 +152,7 @@ export default {
 
     const result = await supabase<{ accepted: boolean; duplicate?: boolean; error?: string }>(
       env,
-      "/rest/v1/rpc/ingest_pixel_event",
+      "/rest/v1/rpc/henvalt_ingest_pixel_event",
       {
         method: "POST",
         body: JSON.stringify({
