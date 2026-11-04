@@ -22,6 +22,7 @@ type PixelPayload = {
   product?: { id?: string | null; title?: string | null; variant_id?: string | null } | null;
   cart_line?: { quantity?: number | null; merchandise_id?: string | null } | null;
   checkout_reference?: string | null;
+  public_key: string;
 };
 
 const json = (body: unknown, status = 200) =>
@@ -75,9 +76,8 @@ export default {
       return json({ error: "not_found" }, 404);
     }
 
-    const suppliedKey = request.headers.get("x-henvalt-pixel-key") || "";
     const origin = request.headers.get("origin") || "";
-    if (!validId(suppliedKey, 300) || !origin || !origin.startsWith("https://")) {
+    if (!origin || !origin.startsWith("https://")) {
       return json({ error: "unauthorized" }, 401);
     }
 
@@ -99,12 +99,13 @@ export default {
       payload.schema_version !== 1 ||
       !validId(payload.event_id, 160) ||
       !ALLOWED_EVENTS.has(payload.event_type) ||
-      !validId(payload.client_id, 160)
+      !validId(payload.client_id, 160) ||
+      !validId(payload.public_key, 300)
     ) {
       return json({ error: "invalid_event" }, 400);
     }
 
-    const digest = await sha256(suppliedKey);
+    const digest = await sha256(payload.public_key);
     const keyRows = await supabase<Array<{
       tenant_id: string;
       allowed_origins: string[];
@@ -115,9 +116,19 @@ export default {
     if (!key || !key.active || !key.allowed_origins.includes(origin)) {
       return json({ error: "unauthorized" }, 401);
     }
+    const corsHeaders = {
+      "access-control-allow-origin": origin,
+      "access-control-allow-methods": "POST",
+      "access-control-allow-headers": "content-type",
+      "vary": "Origin",
+    };
+    const corsJson = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...corsHeaders },
+    });
 
     const rate = await env.RATE_LIMITER.limit({ key: `${digest}:${origin}` });
-    if (!rate.success) return json({ error: "rate_limited" }, 429);
+    if (!rate.success) return corsJson({ error: "rate_limited" }, 429);
 
     const checkoutReference = payload.event_type === "checkout_started" &&
       validId(payload.checkout_reference, 300)
@@ -193,6 +204,6 @@ export default {
       });
     }
 
-    return json({ accepted: true, duplicate: inserted[0].is_duplicate === true }, 202);
+    return corsJson({ accepted: true, duplicate: inserted[0].is_duplicate === true }, 202);
   },
 };
