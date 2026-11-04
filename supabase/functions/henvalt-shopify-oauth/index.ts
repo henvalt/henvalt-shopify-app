@@ -55,6 +55,106 @@ async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
   return constantTimeEqual(await hmacHex(SHOPIFY_API_SECRET, message), supplied.toLowerCase());
 }
 
+async function activateShopifyPixel(shop: string, accessToken: string, tenantId: string): Promise<Record<string, unknown>> {
+  // The public key is tenant-scoped and revocable. Only its SHA-256 digest is stored.
+  const graphUrl = `https://${shop}/admin/api/2026-10/graphql.json`;
+  const shopResponse = await fetch(graphUrl, {
+    method: "POST",
+    headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ query: "query { shop { primaryDomain { url } } }" }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const shopPayload = await shopResponse.json().catch(() => ({}));
+  if (!shopResponse.ok || shopPayload.errors?.length) {
+    console.error("Pixel activation could not resolve the Shopify primary domain", shopResponse.status);
+    return { activated: false, error: "SHOPIFY_DOMAIN_LOOKUP_FAILED" };
+  }
+
+  let primaryOrigin = `https://${shop}`;
+  try {
+    const primaryUrl = new URL(String(shopPayload?.data?.shop?.primaryDomain?.url ?? ""));
+    if (primaryUrl.protocol === "https:") primaryOrigin = primaryUrl.origin;
+  } catch {
+    // The canonical myshopify.com origin remains a safe fallback.
+  }
+  const allowedOrigins = [...new Set([primaryOrigin, `https://${shop}`])];
+
+  const keyBytes = crypto.getRandomValues(new Uint8Array(32));
+  const publicKey = [...keyBytes].map((value) => value.toString(16).padStart(2, "0")).join("");
+  const keyDigest = await sha256(publicKey);
+  const inserted = await db("/rest/v1/pixel_keys?select=id", {
+    method: "POST",
+    headers: { prefer: "return=representation" },
+    body: JSON.stringify({
+      tenant_id: tenantId,
+      key_digest: keyDigest,
+      allowed_origins: allowedOrigins,
+      active: true,
+    }),
+  });
+  if (!inserted.ok) {
+    console.error("Pixel key provisioning failed", inserted.status);
+    return { activated: false, error: "PIXEL_KEY_PROVISIONING_FAILED" };
+  }
+  const insertedRows = await inserted.json().catch(() => []);
+  const keyId = Array.isArray(insertedRows) && typeof insertedRows[0]?.id === "string"
+    ? insertedRows[0].id
+    : "";
+  if (!keyId) return { activated: false, error: "PIXEL_KEY_ID_MISSING" };
+
+  const mutation = `mutation CreateHenvaltPixel($webPixel: WebPixelInput!) {
+    webPixelCreate(webPixel: $webPixel) {
+      userErrors { field message code }
+      webPixel { id settings }
+    }
+  }`;
+  const pixelResponse = await fetch(graphUrl, {
+    method: "POST",
+    headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      query: mutation,
+      variables: {
+        webPixel: {
+          settings: {
+            collectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+            publicKey,
+          },
+        },
+      },
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const pixelPayload = await pixelResponse.json().catch(() => ({}));
+  const createdPixel = pixelPayload?.data?.webPixelCreate?.webPixel;
+  const userErrors = pixelPayload?.data?.webPixelCreate?.userErrors ?? [];
+  if (!pixelResponse.ok || pixelPayload.errors?.length || userErrors.length || !createdPixel?.id) {
+    await db(`/rest/v1/pixel_keys?id=eq.${encodeURIComponent(keyId)}`, {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ active: false, revoked_at: new Date().toISOString() }),
+    });
+    console.error("Shopify Web Pixel activation failed", pixelResponse.status, userErrors.map((item: any) => item.code ?? "USER_ERROR").join(","));
+    return { activated: false, error: "SHOPIFY_PIXEL_CREATE_FAILED" };
+  }
+
+  const revoked = await db(
+    `/rest/v1/pixel_keys?tenant_id=eq.${encodeURIComponent(tenantId)}&active=eq.true&id=neq.${encodeURIComponent(keyId)}`,
+    {
+      method: "PATCH",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({ active: false, revoked_at: new Date().toISOString() }),
+    },
+  );
+  if (!revoked.ok) console.error("Pixel key rotation warning: previous active keys could not be revoked", revoked.status);
+
+  return {
+    activated: true,
+    pixelId: createdPixel.id,
+    allowedOriginCount: allowedOrigins.length,
+    previousKeysRevoked: revoked.ok,
+  };
+}
+
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   if (req.method === "OPTIONS") {
@@ -165,6 +265,19 @@ Deno.serve(async (req: Request) => {
       console.error("OAuth finalization failed", finalized.status, (await finalized.text()).slice(0, 300));
       return json(503, { error: "oauth_install_persistence_failed" });
     }
+    const finalizedData = await finalized.json().catch(() => ({}));
+    const tenantId = typeof finalizedData?.tenant_id === "string" ? finalizedData.tenant_id : "";
+    let pixelActivation: Record<string, unknown> = { activated: false, error: "TENANT_ID_MISSING" };
+    if (tenantId && scopes.includes("write_pixels") && scopes.includes("read_customer_events")) {
+      try {
+        pixelActivation = await activateShopifyPixel(shop, accessToken, tenantId);
+      } catch (error) {
+        console.error("Shopify pixel activation failed unexpectedly", error instanceof Error ? error.message : "unknown_error");
+        pixelActivation = { activated: false, error: "PIXEL_ACTIVATION_UNAVAILABLE" };
+      }
+    } else {
+      pixelActivation = { activated: false, error: "REQUIRED_PIXEL_SCOPES_MISSING" };
+    }
 
     // Registration is intentionally explicit and checked; never silently mark it successful.
     const webhookUri = "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks";
@@ -192,7 +305,18 @@ Deno.serve(async (req: Request) => {
     try{finalNodes=(await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } } }")).webhookSubscriptions?.nodes??[];}catch{}
     for(const r of results){const s=specs.find(x=>x.topic===r.topic);const f=s&&finalNodes.find((x:any)=>x.topic===s.gql&&x.uri===webhookUri);r.verified=!!f;r.ok=r.ok===true&&!!f;if(f)r.id=f.id;}
     const allWebhooksRegistered=results.length===specs.length&&results.every(x=>x.ok===true&&x.verified===true);
-    return json(200,{installed:true,shop,webhooksRegistered:allWebhooksRegistered,webhooks:results,message:allWebhooksRegistered?"HENVALT connected. Webhooks verified; you may close this page.":"Shop connected, but webhook registration needs attention."});
+    const pixelActivated = pixelActivation.activated === true;
+    return json(200,{
+      installed:true,
+      shop,
+      pixelActivated,
+      pixelActivation,
+      webhooksRegistered:allWebhooksRegistered,
+      webhooks:results,
+      message:allWebhooksRegistered && pixelActivated
+        ? "HENVALT connected. Web Pixel activated and webhooks verified; you may close this page."
+        : "Shop connected. Pixel activation or webhook registration needs attention.",
+    });
   }
   return json(404, { error: "not_found" });
 });
