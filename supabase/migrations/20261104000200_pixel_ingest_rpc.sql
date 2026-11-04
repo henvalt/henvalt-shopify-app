@@ -51,11 +51,12 @@ begin
   v_event_source_id := p_payload->>'event_id';
   v_client_id := p_payload->>'client_id';
   v_checkout_reference := case
-    when v_event_type = 'checkout_started' then p_payload->>'checkout_reference'
+    when v_event_type = 'checkout_started' then nullif(btrim(p_payload->>'checkout_reference'), '')
     else null
   end;
 
-  if p_payload->>'schema_version' <> '1'
+  if coalesce(p_payload->>'schema_version', '') <> '1'
+     or v_event_type is null
      or v_event_type not in ('page_viewed','product_viewed','product_added_to_cart','checkout_started')
      or v_event_source_id is null or length(v_event_source_id) < 1 or length(v_event_source_id) > 160
      or v_client_id is null or length(v_client_id) < 1 or length(v_client_id) > 160
