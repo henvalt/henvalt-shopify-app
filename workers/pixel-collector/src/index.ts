@@ -1,6 +1,6 @@
 export interface Env {
   SUPABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
+  SUPABASE_PUBLISHABLE_KEY: string;
   RATE_LIMITER: { limit(input: { key: string }): Promise<{ success: boolean }> };
 }
 
@@ -56,8 +56,8 @@ async function supabase<T>(env: Env, path: string, init: RequestInit = {}): Prom
   const response = await fetch(new URL(path, env.SUPABASE_URL), {
     ...init,
     headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: env.SUPABASE_PUBLISHABLE_KEY,
+      authorization: `Bearer ${env.SUPABASE_PUBLISHABLE_KEY}`,
       "content-type": "application/json",
       "accept-profile": "henvalt",
       "content-profile": "henvalt",
@@ -108,16 +108,6 @@ export default {
     }
 
     const digest = await sha256(payload.public_key);
-    const keyRows = await supabase<Array<{
-      tenant_id: string;
-      allowed_origins: string[];
-      active: boolean;
-    }>>(env, `/rest/v1/pixel_keys?key_digest=eq.${digest}&active=eq.true&select=tenant_id,allowed_origins,active`);
-
-    const key = keyRows[0];
-    if (!key || !key.active || !key.allowed_origins.includes(origin)) {
-      return json({ error: "unauthorized" }, 401);
-    }
     const corsHeaders = {
       "access-control-allow-origin": origin,
       "access-control-allow-methods": "POST",
@@ -141,6 +131,8 @@ export default {
       schema_version: 1,
       event_id: payload.event_id,
       event_type: payload.event_type,
+      occurred_at: safeOccurredAt(payload.occurred_at),
+      client_id: payload.client_id,
       page_url: typeof payload.page_url === "string" ? payload.page_url.slice(0, 1200) : null,
       product: payload.product ? {
         id: validId(payload.product.id, 200) ? payload.product.id : null,
@@ -158,54 +150,22 @@ export default {
       checkout_reference: checkoutReference,
     };
 
-    const eventType = payload.event_type.toUpperCase();
-    const idempotencyKey = `shopify-pixel:${payload.event_id}`;
-    const inserted = await supabase<Array<{ event_id: string; is_duplicate: boolean }>>(
+    const result = await supabase<{ accepted: boolean; duplicate?: boolean; error?: string }>(
       env,
-      "/rest/v1/rpc/upsert_canonical_event",
+      "/rest/v1/rpc/ingest_pixel_event",
       {
         method: "POST",
         body: JSON.stringify({
-          p_tenant_id: key.tenant_id,
-          p_webhook_event_id: null,
-          p_event_type: eventType,
-          p_event_class: "OTHER",
-          p_source: "SHOPIFY_WEB_PIXEL",
-          p_source_event_id: payload.event_id,
-          p_customer_reference: null,
-          p_email: null,
-          p_anonymous_reference: payload.client_id,
-          p_session_reference: payload.client_id,
-          p_occurred_at: safeOccurredAt(payload.occurred_at),
-          p_value_at_risk: null,
-          p_currency: null,
+          p_key_digest: digest,
+          p_origin: origin,
           p_payload: canonicalPayload,
-          p_metadata: { collector_version: 1, consent_context: "shopify_pixel_customer_privacy" },
-          p_idempotency_key: idempotencyKey,
-          p_correlation_id: null,
         }),
       },
     );
 
-    const eventId = inserted[0]?.event_id;
-    if (!eventId) throw new Error("Canonical event insert returned no event ID");
+    if (result.error === "rate_limited") return corsJson({ error: "rate_limited" }, 429);
+    if (!result.accepted) return corsJson({ error: "event_rejected" }, 401);
 
-    await supabase(env, "/rest/v1/rpc/resolve_identity", {
-      method: "POST",
-      body: JSON.stringify({ p_event_id: eventId }),
-    });
-
-    if (checkoutReference) {
-      await supabase(env, "/rest/v1/rpc/bind_session_alias", {
-        method: "POST",
-        body: JSON.stringify({
-          p_tenant_id: key.tenant_id,
-          p_alias_reference: checkoutReference,
-          p_session_reference: payload.client_id,
-        }),
-      });
-    }
-
-    return corsJson({ accepted: true, duplicate: inserted[0].is_duplicate === true }, 202);
+    return corsJson({ accepted: true, duplicate: result.duplicate === true }, 202);
   },
 };
