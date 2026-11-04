@@ -1,0 +1,18 @@
+name = "henvalt-pixel-collector"
+main = "src/index.ts"
+compatibility_date = "2026-11-04"
+
+[vars]
+SUPABASE_URL = "https://ocyplckdojdubyrsxcxa.supabase.co"
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+# Choose a unique positive integer namespace ID for this Cloudflare account.
+namespace_id = "9170401"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# Set the service-role key as a Worker secret; never put it in this file:
+# npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
