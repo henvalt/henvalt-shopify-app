@@ -8,12 +8,12 @@ SUPABASE_PUBLISHABLE_KEY = "sb_publishable_replace_with_project_key"
 
 [[ratelimits]]
 name = "RATE_LIMITER"
-# Choose a unique positive integer namespace ID for this Cloudflare account.
+# Existing namespace configured in the connected Cloudflare account.
 namespace_id = "9170401"
 
   [ratelimits.simple]
   limit = 120
   period = 60
 
-# Set the service-role key as a Worker secret; never put it in this file:
-# npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# This Worker must never receive SUPABASE_SERVICE_ROLE_KEY.
+# It uses only the publishable key and the narrowly scoped ingestion RPC.
