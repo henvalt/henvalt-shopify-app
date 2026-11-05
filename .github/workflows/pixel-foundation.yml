@@ -36,7 +36,7 @@ jobs:
           python - <<'PY'
           import tomllib
           from pathlib import Path
-import re
+          import re
 
           app = tomllib.loads(Path("shopify.app.toml").read_text())
           pixel = tomllib.loads(Path("extensions/henvalt-web-pixel/shopify.extension.toml").read_text())
@@ -46,7 +46,7 @@ import re
           assert required_scopes.issubset(actual_scopes), actual_scopes
           assert "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev" in app["network_access"]["allowed_sources"]
           assert pixel["type"] == "web_pixel_extension"
-assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{20}", pixel.get("uid", "")), pixel.get("uid")
+          assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{20}", pixel.get("uid", "")), pixel.get("uid")
           assert pixel["runtime_context"] == "strict"
           assert pixel["customer_privacy"] == {
               "analytics": True,
