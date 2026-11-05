@@ -1,6 +1,7 @@
 export interface Env {
   SUPABASE_URL: string;
   SUPABASE_PUBLISHABLE_KEY: string;
+  COLLECTOR_SHARED_SECRET: string;
   RATE_LIMITER: { limit(input: { key: string }): Promise<{ success: boolean }> };
 }
 
@@ -170,6 +171,7 @@ export default {
         body: JSON.stringify({
           p_key_digest: digest,
           p_origin: origin,
+          p_collector_secret: env.COLLECTOR_SHARED_SECRET,
           p_payload: canonicalPayload,
         }),
       },
