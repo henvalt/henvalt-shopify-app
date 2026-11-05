@@ -12,6 +12,8 @@ as $function$
 declare
   v_connection_id uuid;
   v_revoked_pixel_keys integer := 0;
+  v_billing_cancelled boolean := false;
+  v_active_connections integer := 0;
 begin
   if p_tenant_id is null or nullif(btrim(p_shop_domain),'') is null then
     raise exception 'Tenant and Shopify shop domain are required';
@@ -27,19 +29,28 @@ begin
     raise exception 'Shopify connection not found for tenant and shop domain';
   end if;
 
+  -- Revoke only keys belonging to the uninstalled shop connection.
   update henvalt.pixel_keys
      set active = false,
          revoked_at = coalesce(revoked_at, now())
-   where tenant_id = p_tenant_id
+   where shopify_connection_id = v_connection_id
      and active = true;
   get diagnostics v_revoked_pixel_keys = row_count;
 
-  update henvalt.billing_accounts
-     set status = 'CANCELLED',
-         cancelled_at = coalesce(cancelled_at, now()),
-         updated_at = now()
-   where tenant_id = p_tenant_id
-     and status <> 'CANCELLED';
+  -- Preserve tenant billing while another Shopify connection remains active.
+  select count(*) into v_active_connections
+    from henvalt.shopify_connections
+   where tenant_id = p_tenant_id and active = true;
+
+  if v_active_connections = 0 then
+    update henvalt.billing_accounts
+       set status = 'CANCELLED',
+           cancelled_at = coalesce(cancelled_at, now()),
+           updated_at = now()
+     where tenant_id = p_tenant_id
+       and status <> 'CANCELLED';
+    v_billing_cancelled := true;
+  end if;
 
   insert into henvalt.audit_log(
     tenant_id,event_name,entity_type,entity_id,actor_type,actor_reference,payload
@@ -49,7 +60,9 @@ begin
     jsonb_build_object(
       'webhook_event_id',p_webhook_event_id,
       'correlation_id',p_correlation_id,
-      'revoked_pixel_key_count',v_revoked_pixel_keys
+      'revoked_pixel_key_count',v_revoked_pixel_keys,
+      'remaining_active_connections',v_active_connections,
+      'billing_cancelled',v_billing_cancelled
     )
   );
 
@@ -58,8 +71,13 @@ begin
     'tenant_id',p_tenant_id,
     'shop_domain',p_shop_domain,
     'connection_id',v_connection_id,
-    'billing_cancelled',true,
+    'billing_cancelled',v_billing_cancelled,
+    'remaining_active_connections',v_active_connections,
     'pixel_keys_revoked',v_revoked_pixel_keys
   );
 end;
 $function$;
+
+revoke all on function henvalt.deactivate_shopify_connection_on_uninstall(uuid, text, uuid, uuid) from public;
+revoke all on function henvalt.deactivate_shopify_connection_on_uninstall(uuid, text, uuid, uuid) from anon, authenticated;
+grant execute on function henvalt.deactivate_shopify_connection_on_uninstall(uuid, text, uuid, uuid) to service_role;
