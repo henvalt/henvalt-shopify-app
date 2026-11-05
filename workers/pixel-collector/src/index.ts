@@ -77,8 +77,12 @@ async function supabase<T>(env: Env, path: string, init: RequestInit = {}): Prom
       ...(init.headers || {}),
     },
   });
-  if (!response.ok) throw new Error(`Supabase request failed: ${response.status}`);
-  return await response.json() as T;
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) return { accepted: false, error: "collector_authentication_failed" } as T;
+    throw new Error(`Pixel ingest proxy failed: ${response.status}`);
+  }
+  return result as T;
 }
 
 export default {
@@ -165,7 +169,7 @@ export default {
 
     const result = await supabase<{ accepted: boolean; duplicate?: boolean; error?: string }>(
       env,
-      "/rest/v1/rpc/henvalt_ingest_pixel_event",
+      "/functions/v1/henvalt-pixel-ingest-proxy",
       {
         method: "POST",
         body: JSON.stringify({
