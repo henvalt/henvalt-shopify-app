@@ -1,5 +1,6 @@
 type = "web_pixel_extension"
 name = "HENVALT Browse Intelligence"
+uid = "74aee161-f3bd-2151-d71a-d4cdd2e0cb0a24bacda8"
 runtime_context = "strict"
 
 [customer_privacy]
