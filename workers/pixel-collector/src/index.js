@@ -151,6 +151,7 @@ export default {
         body: JSON.stringify({
           p_key_digest: digest,
           p_origin: origin,
+          p_collector_secret: env.COLLECTOR_SHARED_SECRET,
           p_payload: canonicalPayload,
         }),
       },
