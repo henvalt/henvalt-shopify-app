@@ -20,7 +20,7 @@ The Shopify OAuth function requires:
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
 - `SHOPIFY_REDIRECT_URI` (must exactly match the Shopify Dev Dashboard callback URL)
-- Optional `SHOPIFY_SCOPES` (the source always requests `read_orders,read_customers`)
+- Optional `SHOPIFY_SCOPES` (the source always requests `read_orders,read_customers,write_pixels,read_customer_events`; pixel activation also requires merchant/user permission for customer events)
 
 Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 
@@ -33,7 +33,7 @@ Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 - Request the required protected customer data and email-field access in Shopify Partner Dashboard. A scope alone does not guarantee customer email fields are returned.
 - Reauthorize the test store once through the new expiring-offline-token OAuth flow, then verify that the access-token expiry, refresh-token expiry, refresh-token Vault reference, and required scopes are actually persisted. Existing installations are not migrated automatically.
 - Complete a real merchant OAuth install and verify all nine webhook registrations in that shop.
-- Build, deploy, and activate the Shopify Web Pixel extension for browse tracking. The repository currently has no `shopify.app.toml` or Web Pixel extension; do not treat `carts/create` or `carts/update` webhooks as a substitute for storefront browse events. Add `write_pixels` and `read_customer_events` only when the extension and activation path are ready.
+- The Web Pixel extension and tenant-keyed Cloudflare collector are implemented on the `feature/web-pixel-foundation` branch; the collector Worker is deployed, and the Supabase ingestion migrations are applied. The root `shopify.app.toml` now contains the HENVALT public client ID, app URL, OAuth callback URL, and scopes. It also declares the Cloudflare pixel collector under `[network_access].allowed_sources`, as required for the app's external storefront event requests. The pixel is not yet installable or active: verify that the configured `SHOPIFY_REDIRECT_URI` secret and Shopify Dev Dashboard redirect allowlist exactly match `shopify.app.toml`, run the one-time interactive Shopify CLI deploy/mapping step to generate the extension UID, release the app version, reauthorize the test store, and perform merchant-side `webPixelCreate` activation. OAuth now requests `write_pixels` and `read_customer_events` alongside the existing order/customer scopes; existing stores must reauthorize. The pixel requires analytics permission but does not require marketing permission merely to measure browse behavior. Email recovery still independently requires verified customer identity, explicit marketing consent, and suppression checks. Do not treat `carts/create` or `carts/update` webhooks as a substitute for storefront browse events.
 - Implement customer-reply handling through a MailerSend inbound route, with signed webhook verification, idempotent message storage, safe correlation to the original intervention, and sequence pause/merchant notification. No inbound route or reply processor is currently configured.
 - Add a deterministic, auditable high-intent score gate before recovery sequence creation. Current eligibility checks consent, suppression, paid orders, connection state, and duplicate sequences, but does not enforce an intent-score threshold. Calibrate it only after real merchant events are flowing; the current event set is synthetic and too small for model calibration.
 - Deliver an identifiable, consent-eligible checkout/cart event through Cloudflare → n8n → Supabase. Synthetic payloads without customer identity, checkout value, and consent do not qualify.
@@ -55,3 +55,17 @@ The OAuth callback requests **expiring offline Admin API tokens** (`expiring=1`)
 `henvalt-shopify-token-refresh` is deployed as an internal service-role-only Edge Function. It serializes refresh attempts per shop with a database lease, reads the refresh credential only inside the privileged database claim, calls Shopify with `grant_type=refresh_token`, and persists the returned access/refresh pair together in Vault before clearing the lease. It records reauthorization-required state for invalid/expired refresh credentials and leaves transient network/provider failures retryable. Token values are never returned in the HTTP response or logged.
 
 The refresh service is an infrastructure primitive, not a scheduled job: the current app/dashboard and n8n workflows do not make Admin API calls using stored shop tokens. Any future server-side Admin API caller must check expiry and invoke this service before using an expiring offline token. Do not add per-user online tokens or bypass rotation.
+
+
+## Mobile-friendly Shopify CLI setup (GitHub Codespaces)
+
+A browser-based Node.js workspace is prepared in `.devcontainer/devcontainer.json`; it installs Shopify CLI and the Web Pixel package automatically. This avoids requiring a local Mac/PC.
+
+1. Open the repository's **Code → Codespaces → Create codespace on `feature/web-pixel-foundation`**.
+2. Wait for the devcontainer setup to finish.
+3. In the terminal, run `shopify auth login` and sign in with the Shopify account that owns the HENVALT app Client ID.
+4. Generate a temporary Shopify-native Web Pixel scaffold so Shopify CLI creates an official UID: `shopify app generate extension --template web_pixel --name henvalt-uid-bootstrap`. Choose JavaScript.
+5. Open `extensions/henvalt-uid-bootstrap/shopify.extension.toml`, copy its generated `uid = "…"` line into `extensions/henvalt-web-pixel/shopify.extension.toml`, then delete the temporary `extensions/henvalt-uid-bootstrap` folder. Keep HENVALT's existing extension code and settings.
+6. Run `shopify app deploy --no-release`. Review the app/extension mapping and any warnings. Stop before releasing the version; the generated UID and CLI validation must be committed and reviewed first.
+
+Do not paste Shopify API secrets or access tokens into chat or commit them to GitHub. If Codespaces asks you to enable paid billing, do not enable it; stop and use another already-available CLI environment.

@@ -1,0 +1,19 @@
+name = "henvalt-pixel-collector"
+main = "src/index.js"
+compatibility_date = "2026-11-04"
+
+[vars]
+SUPABASE_URL = "https://ocyplckdojdubyrsxcxa.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "sb_publishable_replace_with_project_key"
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+# Existing namespace configured in the connected Cloudflare account.
+namespace_id = "9170401"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60
+
+# This Worker must never receive SUPABASE_SERVICE_ROLE_KEY.
+# It uses only the publishable key and the narrowly scoped ingestion RPC.
