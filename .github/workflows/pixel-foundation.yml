@@ -56,6 +56,43 @@ jobs:
           print("Shopify app and Web Pixel configuration checks passed.")
           PY
 
+
+      - name: Verify deployed collector and server-side rejection path
+        env:
+          COLLECTOR_URL: https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev
+        run: |
+          node --input-type=module <<'JS'
+          const base = process.env.COLLECTOR_URL;
+          const health = await fetch(base + "/health");
+          if (!health.ok) throw new Error("Collector health check failed: " + health.status);
+          const healthBody = await health.json();
+          if (healthBody.ok !== true || healthBody.service !== "henvalt-pixel-collector") {
+            throw new Error("Collector health response was invalid");
+          }
+
+          const runId = process.env.GITHUB_RUN_ID || String(Date.now());
+          const response = await fetch(base + "/v1/events", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "origin": "https://ci-" + runId + ".invalid"
+            },
+            body: JSON.stringify({
+              schema_version: 1,
+              event_id: "ci-" + runId,
+              event_type: "page_viewed",
+              occurred_at: new Date().toISOString(),
+              client_id: "ci-smoke-" + runId,
+              page_url: "https://example.invalid/",
+              public_key: "f".repeat(64)
+            })
+          });
+          const body = await response.json().catch(() => ({}));
+          if (response.status !== 401 || body.error !== "event_rejected") {
+            throw new Error("Expected an unauthorized unknown pixel key rejection; got " + response.status + " " + JSON.stringify(body));
+          }
+          console.log("Collector health and authenticated RPC rejection smoke checks passed.");
+          JS
       - name: Ensure collector has no service-role credential assignments
         run: |
           if grep -R -n -E '^[[:space:]]*SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=' workers/pixel-collector; then
