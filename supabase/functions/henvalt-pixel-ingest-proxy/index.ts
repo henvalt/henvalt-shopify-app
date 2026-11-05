@@ -64,8 +64,7 @@ Deno.serve(async (req: Request) => {
     const text = await upstream.text();
     if (!upstream.ok) {
       console.error("Pixel ingest RPC rejected request", upstream.status);
-      if (upstream.status === 401 || upstream.status === 403) return json(401, { error: "collector_authentication_failed" });
-      if (upstream.status === 400 || upstream.status === 422) return json(400, { error: "invalid_or_rejected_event" });
+      if ([400, 401, 403, 422].includes(upstream.status)) return json(401, { error: "pixel_event_rejected" });
       return json(503, { error: "collector_backend_unavailable" });
     }
     return new Response(text || "null", {
