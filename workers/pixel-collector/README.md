@@ -1,62 +1,52 @@
 # HENVALT Pixel Collector Worker
 
-Tenant-keyed ingress for Shopify Web Pixel events. This is separate from the Shopify Admin webhook HMAC ingress.
+Tenant-scoped ingress for Shopify Web Pixel events. This is separate from the Shopify Admin webhook HMAC ingress.
 
 ## Routes
 
 - `GET /health` — static health response; no database access.
 - `POST /v1/events` — accepts only `page_viewed`, `product_viewed`, `product_added_to_cart`, and `checkout_started`.
 
-## Bindings
+## Cloudflare Worker bindings
 
 - `SUPABASE_URL` — HENVALT Supabase project URL.
-- `SUPABASE_PUBLISHABLE_KEY` — public project key; this Worker invokes only `public.henvalt_ingest_pixel_event`.
+- `SUPABASE_PUBLISHABLE_KEY` — public project key used to call the Edge Function proxy.
+- `COLLECTOR_SHARED_SECRET` — secret text binding used only by this Worker when calling the server-side proxy.
 - `RATE_LIMITER` — Cloudflare rate-limit binding (120 requests/minute per digest+origin key).
 
-**Never configure a Supabase service-role key in this Worker.** The database tables are not granted to `anon`; the public wrapper is the only browser-ingestion surface.
+**Never configure a Supabase service-role key in this Worker.** The service-role credential is held only by the `henvalt-pixel-ingest-proxy` Edge Function.
 
-## Current deployment
+## Server-side ingestion path
 
-- Worker: `henvalt-pixel-collector`
-- URL: `https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev`
-- Active version: `e8b331a5-461b-4db3-9f5c-4789f11cd106` (100% traffic)
-- Deployment: `04248d80-b768-421f-9334-ea36460e14ab`
-- Health route has not yet been externally smoke-tested from this runtime.
+1. Shopify Web Pixel sends an allowlisted event and its revocable public pixel key to this Worker.
+2. The Worker validates and normalizes the event, strips URL query strings/fragments, hashes the public key, and applies Cloudflare rate limiting.
+3. The Worker sends the digest, origin, normalized payload, and collector shared secret to `henvalt-pixel-ingest-proxy`.
+4. The Edge Function validates the request and calls `public.henvalt_ingest_pixel_event` with its server-side service-role credential.
+5. The database verifies the collector secret digest, active tenant-scoped pixel key, exact allowed origin, active Shopify connection, tenant state, event schema, and idempotency before writing the canonical event.
 
-## Database foundation
-
-The following migrations are applied to the live Supabase project:
-
-- `pixel_keys`: SHA-256 digest only, tenant association, exact allowed origins, active/revoked state.
-- `pixel_rate_limits`: bounded per-key minute counter.
-- `session_aliases`: tenant-scoped checkout-token-to-anonymous-session mapping.
-- `bind_session_alias`: atomic alias binding; refuses to rebind an existing checkout token to another session.
-- `ingest_pixel_event` and `public.henvalt_ingest_pixel_event`: validate the digest, tenant state, origin, payload, event type and idempotency; write canonical events and resolve anonymous identity.
-- `resolve_identity`: consults the tenant-scoped alias mapping.
-
-The three internal tables have RLS enabled, no client policies, and table grants only for `service_role` and `postgres`. The public ingestion wrapper has EXECUTE grants for `anon`, `service_role`, and `postgres`; `authenticated` and `PUBLIC` are not granted.
+The public PostgREST RPC is not an anonymous browser-ingestion surface. Its execute permission is restricted to `service_role` and `postgres`; the Edge Function proxy is the only intended caller.
 
 ## Privacy and abuse controls
 
-- Maximum request body: 12 KB.
-- Only HTTPS origins are accepted, and the database requires an exact origin match against the tenant key row.
+- Maximum request body: 12 KB at the collector; the proxy applies its own request limit.
+- Only HTTPS origins are accepted, and the database requires an exact match against the pixel key's allowed origins.
+- Pixel keys are stored as SHA-256 digests in the database and scoped to one Shopify connection.
 - Event types are allowlisted; event IDs are idempotent.
-- Page URLs are normalized to HTTPS origin + path; query strings and fragments are stripped both in the pixel and again at the collector.
+- Page URLs are normalized to HTTPS origin + path; query strings and fragments are stripped before persistence.
 - No email, phone, address, cookies, or Shopify customer ID is collected by this pixel.
-- Cloudflare rate limiting is applied before the database call; the database independently enforces a per-key global minute limit.
-- Cloudflare Worker observability has query-string redaction enabled.
-- The public key is revocable and tenant-scoped; it never grants Admin API access.
-- A pixel event never establishes customer identity or marketing consent. Recovery and delivery must independently validate identity, explicit marketing consent, suppression and eligibility.
+- Cloudflare rate limiting is applied before the proxy; the database independently enforces a per-key minute limit.
+- The public key is revocable and never grants Shopify Admin API access.
+- Pixel activity is not proof of customer identity or marketing consent. Recovery and delivery must independently validate identity, explicit marketing consent, suppression, and eligibility.
 
-## Data path
+## Separation from Shopify Admin webhooks
 
-The Worker currently writes directly to the narrow Supabase RPC. It has not been routed through the Shopify-signed webhook branch or added as a separate branch inside `HENVALT_INGEST`. Do not send pixel events through Shopify HMAC verification. Keep the three-workflow architecture; no fourth workflow is needed.
+The pixel collector is not routed through Shopify HMAC verification. Shopify Admin webhooks use the separate signed ingress at `/shopify/webhooks`, which verifies Shopify's HMAC before forwarding to `HENVALT_INGEST`. Keep the existing three-workflow architecture; no fourth workflow is required.
 
 ## Remaining launch gates
 
-1. Generate the official Shopify extension UID using Shopify CLI.
-2. Deploy an unreleased Shopify app version, inspect the mapping, then release after review.
-3. Reauthorize the test store to grant `write_pixels` and `read_customer_events`.
-4. Provision a tenant key with the exact store origin and activate the pixel with `webPixelCreate`.
-5. Verify a real event in Supabase, including duplicate and out-of-order checkout alias cases.
-6. Confirm no browse-only anonymous event can trigger email.
+1. Generate/confirm the official Shopify Web Pixel extension UID using Shopify CLI.
+2. Deploy an unreleased Shopify app version, inspect the extension mapping, then release only after review.
+3. Reauthorize the controlled test store to grant `write_pixels` and `read_customer_events`.
+4. Confirm tenant-scoped pixel key provisioning and Shopify `webPixelCreate` / `webPixelUpdate`.
+5. Verify a real storefront event in Supabase, including duplicate and checkout-session alias cases.
+6. Confirm anonymous browse activity alone cannot trigger email recovery.
