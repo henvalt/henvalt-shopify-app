@@ -72,4 +72,4 @@ register(({ analytics, settings }) => {
       });
     });
   }
-}
+});
