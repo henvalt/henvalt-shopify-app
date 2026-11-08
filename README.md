@@ -56,3 +56,11 @@ The OAuth callback requests **expiring offline Admin API tokens** (`expiring=1`)
 `henvalt-shopify-token-refresh` is deployed as an internal service-role-only Edge Function. It serializes refresh attempts per shop with a database lease, reads the refresh credential only inside the privileged database claim, calls Shopify with `grant_type=refresh_token`, and persists the returned access/refresh pair together in Vault before clearing the lease. It records reauthorization-required state for invalid/expired refresh credentials and leaves transient network/provider failures retryable. Token values are never returned in the HTTP response or logged.
 
 The refresh service is an infrastructure primitive, not a scheduled job: the current app/dashboard and n8n workflows do not make Admin API calls using stored shop tokens. Any future server-side Admin API caller must check expiry and invoke this service before using an expiring offline token. Do not add per-user online tokens or bypass rotation.
+
+
+## Current Web Pixel release gate (2026-11-08)
+
+- The static GitHub Actions check confirms the TOML parses and the app/pixel source contains the expected configuration and event subscriptions. It is not a Shopify CLI build or release.
+- Shopify requires a Shopify-generated `uid` in the Web Pixel extension configuration. The current extension file does not yet contain that UID; do not invent one. Shopify CLI generates/maps it during an authenticated `shopify app deploy` (the first deploy can be run with `--no-release` to avoid releasing an unverified version).
+- The previous Shopify CLI validation job failed because GitHub Actions has no Shopify login. It did not reach the build step. An authenticated Shopify CLI session is therefore still required before validation, UID mapping, deploy, and activation can proceed.
+- Do not reauthorize the test shop until a deployable app version containing this extension is released.
