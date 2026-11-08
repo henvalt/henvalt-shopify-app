@@ -1,3 +1,5 @@
+import { register } from "@shopify/web-pixels-extension";
+
 const ALLOWED_EVENTS = [
   "page_viewed",
   "product_viewed",
@@ -51,7 +53,7 @@ function eventPayload(event, eventType, settings) {
   };
 }
 
-export function register(analytics, settings) {
+register(({ analytics, settings }) => {
   if (!settings?.collectorUrl || !settings?.publicKey) return;
 
   const collector = new URL(settings.collectorUrl);
