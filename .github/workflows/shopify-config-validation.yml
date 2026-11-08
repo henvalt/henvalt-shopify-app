@@ -66,7 +66,7 @@ jobs:
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
         run: |
           mv extensions/henvalt-pixel /tmp/henvalt-pixel
-          printf '1\n' | shopify app generate extension --template web_pixel --name "HENVALT Storefront Signals" --path .
+          shopify app generate extension --template web_pixel --name "HENVALT Storefront Signals" --flavor javascript --path .
           python3 - <<'PY'
           import pathlib, re, shutil
           root = pathlib.Path("extensions")
