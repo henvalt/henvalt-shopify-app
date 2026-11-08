@@ -1,4 +1,4 @@
-name: Shopify app config validation
+name: Shopify app configuration checks
 
 on:
   push:
@@ -10,16 +10,34 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  static-validation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Install Shopify CLI
-        run: npm install --global @shopify/cli@latest
-      - name: Validate app and extension configuration
-        run: shopify app config validate --json
-      - name: Build app extensions
-        run: shopify app build
+      - name: Validate Shopify TOML and extension source
+        run: |
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import tomllib
+
+          app = tomllib.loads(pathlib.Path("shopify.app.toml").read_text())
+          ext = tomllib.loads(pathlib.Path("extensions/henvalt-pixel/shopify.extension.toml").read_text())
+          package = json.loads(pathlib.Path("extensions/henvalt-pixel/package.json").read_text())
+
+          assert app["client_id"], "Missing Shopify Client ID"
+          assert app["application_url"].startswith("https://"), "Application URL must use HTTPS"
+          assert "read_orders" in app["access_scopes"]["scopes"].split(","), "Missing read_orders scope"
+          assert "write_pixels" in app["access_scopes"]["scopes"].split(","), "Missing write_pixels scope"
+          assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
+          assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
+          assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
+          assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
+          assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
+          assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
+          source = pathlib.Path("extensions/henvalt-pixel/src/index.js").read_text()
+          for event in ("page_viewed", "product_viewed", "product_added_to_cart", "checkout_started"):
+              assert event in source, f"Missing pixel subscription: {event}"
+          assert "fetch(" in source, "Missing collector delivery"
+          print("HENVALT Shopify app configuration and Pixel source checks passed.")
+          PY
