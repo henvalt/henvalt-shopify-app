@@ -20,7 +20,7 @@ The Shopify OAuth function requires:
 - `SHOPIFY_API_KEY`
 - `SHOPIFY_API_SECRET`
 - `SHOPIFY_REDIRECT_URI` (must exactly match the Shopify Dev Dashboard callback URL)
-- Optional `SHOPIFY_SCOPES` (the source always requests `read_orders,read_customers`)
+- Optional `SHOPIFY_SCOPES` (the source always includes `read_orders,read_customers,write_pixels,read_customer_events`)
 
 Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
 
