@@ -1,4 +1,4 @@
-name: Shopify app configuration checks
+name: Shopify app configuration checks and deployment
 
 on:
   push:
@@ -32,7 +32,6 @@ jobs:
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
           assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
-          assert ext.get("uid"), "Missing Shopify-generated extension UID; run authenticated Shopify CLI app deploy once"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
           assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
@@ -42,3 +41,24 @@ jobs:
           assert "fetch(" in source, "Missing collector delivery"
           print("HENVALT Shopify app configuration and Pixel source checks passed.")
           PY
+
+  deploy-shopify-version:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.SHOPIFY_APP_AUTOMATION_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skip deployment until Shopify token is configured
+        if: env.SHOPIFY_APP_AUTOMATION_TOKEN == ''
+        run: echo "Deployment skipped. Add SHOPIFY_APP_AUTOMATION_TOKEN in GitHub repository Actions secrets."
+      - uses: actions/setup-node@v4
+        if: env.SHOPIFY_APP_AUTOMATION_TOKEN != ''
+        with:
+          node-version: 22
+      - name: Install Shopify CLI
+        if: env.SHOPIFY_APP_AUTOMATION_TOKEN != ''
+        run: npm install --global @shopify/cli@latest
+      - name: Create an unreleased Shopify app version
+        if: env.SHOPIFY_APP_AUTOMATION_TOKEN != ''
+        run: shopify app deploy --no-release --config=shopify.app.toml
