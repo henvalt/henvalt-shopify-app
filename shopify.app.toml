@@ -8,6 +8,7 @@ automatically_update_urls_on_dev = false
 
 [access_scopes]
 scopes = "read_orders,read_customers,write_pixels,read_customer_events"
+use_legacy_install_flow = true
 
 [auth]
 redirect_urls = [
