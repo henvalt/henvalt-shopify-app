@@ -1,0 +1,25 @@
+type = "web_pixel_extension"
+name = "HENVALT Storefront Signals"
+uid = "8f4c0f7e-7b9a-4e9a-8c4d-2a6d3f7e91b5"
+runtime_context = "strict"
+
+[customer_privacy]
+analytics = true
+marketing = false
+preferences = false
+sale_of_data = "disabled"
+
+[settings]
+type = "object"
+
+[settings.fields.collectorUrl]
+name = "Collector URL"
+description = "HENVALT's event collection endpoint"
+type = "single_line_text_field"
+validations = [{ name = "min", value = "1" }]
+
+[settings.fields.publicKey]
+name = "Public key"
+description = "Store-specific HENVALT public pixel key"
+type = "single_line_text_field"
+validations = [{ name = "min", value = "1" }]
