@@ -1,5 +1,6 @@
 type = "web_pixel_extension"
 name = "HENVALT Storefront Signals"
+uid = "a2b85cac-ea22-7e01-c7a8-907b2878f513d274d07e"
 runtime_context = "strict"
 
 [customer_privacy]
