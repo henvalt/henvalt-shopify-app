@@ -65,16 +65,20 @@ jobs:
       - name: Scaffold Shopify-managed Pixel UID
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
         run: |
-          printf '1\n' | shopify app generate extension --template web_pixel --name "HENVALT UID Bootstrap" --path .
+          mv extensions/henvalt-pixel /tmp/henvalt-pixel
+          printf '1\n' | shopify app generate extension --template web_pixel --name "HENVALT Storefront Signals" --path .
           python3 - <<'PY'
           import pathlib, re, shutil
           root = pathlib.Path("extensions")
           candidates = [p for p in root.glob("*/shopify.extension.toml") if p.parent.name != "henvalt-pixel"]
           candidates = [p for p in candidates if re.search(r'^uid\s*=\s*"([^"]+)"', p.read_text(), re.M)]
           if len(candidates) != 1:
-              raise SystemExit(f"Expected exactly one generated scaffold with UID; found {len(candidates)}")
+              raise SystemExit(f"Expected exactly one Shopify-generated scaffold with UID; found {len(candidates)}")
           match = re.search(r'^uid\s*=\s*"([^"]+)"', candidates[0].read_text(), re.M)
-          target = root / "henvalt-pixel" / "shopify.extension.toml"
+          original = pathlib.Path("/tmp/henvalt-pixel")
+          target_dir = root / "henvalt-pixel"
+          shutil.move(str(original), str(target_dir))
+          target = target_dir / "shopify.extension.toml"
           lines = target.read_text().splitlines()
           if any(line.strip().startswith("uid =") for line in lines):
               raise SystemExit("Target extension already has a UID; refusing to overwrite")
