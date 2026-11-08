@@ -32,6 +32,7 @@ jobs:
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
           assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
+          assert ext.get("uid"), "Missing Shopify-generated extension UID; run authenticated Shopify CLI app deploy once"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
           assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
