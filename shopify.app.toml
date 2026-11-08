@@ -1,0 +1,18 @@
+client_id = "1c0fd15c032fa26cd15ad7a63577a506"
+name = "HENVALT"
+application_url = "https://henvalt-dashboard.pages.dev"
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
+
+[access_scopes]
+scopes = "read_orders,read_customers,write_pixels,read_customer_events"
+
+[auth]
+redirect_urls = [
+  "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth/callback"
+]
+
+[webhooks]
+api_version = "2026-10"
