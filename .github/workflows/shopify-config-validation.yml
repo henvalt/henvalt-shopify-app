@@ -65,24 +65,26 @@ jobs:
       - name: Scaffold Shopify-managed Pixel UID
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
         run: |
-          printf '1\\n' | shopify app generate extension --template web_pixel --name "HENVALT UID Bootstrap" --path .
+          printf '1\n' | shopify app generate extension --template web_pixel --name "HENVALT UID Bootstrap" --path .
           python3 - <<'PY'
           import pathlib, re, shutil
           root = pathlib.Path("extensions")
-          candidates = [p for p in root.glob("*/shopify.extension.toml") if "uid" in p.read_text() and "henvalt-pixel" not in str(p)]
+          candidates = [p for p in root.glob("*/shopify.extension.toml") if p.parent.name != "henvalt-pixel"]
+          candidates = [p for p in candidates if re.search(r'^uid\s*=\s*"([^"]+)"', p.read_text(), re.M)]
           if len(candidates) != 1:
               raise SystemExit(f"Expected exactly one generated scaffold with UID; found {len(candidates)}")
-          match = re.search(r'^uid\\s*=\\s*"([^"]+)"', candidates[0].read_text(), re.M)
-          if not match:
-              raise SystemExit("Shopify CLI scaffold did not produce a UID")
+          match = re.search(r'^uid\s*=\s*"([^"]+)"', candidates[0].read_text(), re.M)
           target = root / "henvalt-pixel" / "shopify.extension.toml"
-          content = target.read_text()
-          if re.search(r'^uid\\s*=', content, re.M):
+          lines = target.read_text().splitlines()
+          if any(line.strip().startswith("uid =") for line in lines):
               raise SystemExit("Target extension already has a UID; refusing to overwrite")
-          content = re.sub(r'^(name\\s*=.*)        if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
-        run: shopify app deploy --no-release --config=shopify.app.toml
-, r'\\1\\nuid = "' + match.group(1) + '"', content, count=1, flags=re.M)
-          target.write_text(content)
+          for index, line in enumerate(lines):
+              if line.strip().startswith("name ="):
+                  lines.insert(index + 1, 'uid = "' + match.group(1) + '"')
+                  break
+          else:
+              raise SystemExit("Target extension name field not found")
+          target.write_text("\n".join(lines) + "\n")
           for candidate in candidates:
               shutil.rmtree(candidate.parent)
           print("Shopify-generated UID applied to HENVALT Pixel extension.")
