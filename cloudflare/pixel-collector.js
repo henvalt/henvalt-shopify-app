@@ -143,6 +143,16 @@ export default {
         id: validId(payload.product.id, 200) ? payload.product.id : null,
         title: typeof payload.product.title === "string" ? payload.product.title.slice(0, 200) : null,
         variant_id: validId(payload.product.variant_id, 200) ? payload.product.variant_id : null,
+        price_amount: typeof payload.product.price_amount === "string"
+          && payload.product.price_amount.length <= 40
+          && Number.isFinite(Number(payload.product.price_amount))
+          && Number(payload.product.price_amount) >= 0
+          ? payload.product.price_amount
+          : null,
+        price_currency: typeof payload.product.price_currency === "string"
+          && /^[A-Z]{3}$/.test(payload.product.price_currency)
+          ? payload.product.price_currency
+          : null,
       } : null,
       cart_line: payload.cart_line ? {
         quantity: Number.isInteger(payload.cart_line.quantity) && Number(payload.cart_line.quantity) >= 0
