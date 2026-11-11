@@ -53,6 +53,8 @@ function eventPayload(event, eventType, settings, customerReference, privacy) {
       id: safeString(product.id, 200),
       title: safeString(product.title, 200),
       variant_id: safeString(productVariant?.id, 200),
+      price_amount: safeString(productVariant?.price?.amount, 40),
+      price_currency: safeString(productVariant?.price?.currencyCode, 3),
     } : null,
     cart_line: cartLine ? {
       quantity: Number.isInteger(cartLine.quantity) ? cartLine.quantity : null,
