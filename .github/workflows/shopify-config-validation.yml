@@ -80,15 +80,17 @@ jobs:
           shutil.move(str(original), str(target_dir))
           target = target_dir / "shopify.extension.toml"
           lines = target.read_text().splitlines()
-          if any(line.strip().startswith("uid =") for line in lines):
-              raise SystemExit("Target extension already has a UID; refusing to overwrite")
-          for index, line in enumerate(lines):
-              if line.strip().startswith("name ="):
-                  lines.insert(index + 1, 'uid = "' + match.group(1) + '"')
-                  break
+          existing_uid = re.search(r'^uid\s*=\s*"([^"]+)"', "\n".join(lines), re.M)
+          if existing_uid:
+              print("Existing Shopify-generated Pixel UID preserved.")
           else:
-              raise SystemExit("Target extension name field not found")
-          target.write_text("\n".join(lines) + "\n")
+              for index, line in enumerate(lines):
+                  if line.strip().startswith("name ="):
+                      lines.insert(index + 1, 'uid = "' + match.group(1) + '"')
+                      break
+              else:
+                  raise SystemExit("Target extension name field not found")
+              target.write_text("\n".join(lines) + "\n")
           for candidate in candidates:
               shutil.rmtree(candidate.parent)
           print("Shopify-generated UID applied to HENVALT Pixel extension.")
