@@ -7,7 +7,7 @@ embedded = false
 automatically_update_urls_on_dev = false
 
 [access_scopes]
-scopes = "read_orders,read_customers,write_pixels,read_customer_events"
+scopes = "read_orders,read_customers,write_pixels,read_pixels,read_customer_events"
 use_legacy_install_flow = true
 
 [auth]
