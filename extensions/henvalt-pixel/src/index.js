@@ -21,7 +21,7 @@ function safeString(value, max = 300) {
     : null;
 }
 
-function eventPayload(event, eventType, settings) {
+function eventPayload(event, eventType, settings, customerReference, privacy) {
   const data = event.data || {};
   const productVariant = data.productVariant || data.product || null;
   const product = productVariant?.product || productVariant || null;
@@ -36,6 +36,9 @@ function eventPayload(event, eventType, settings) {
     event_type: eventType,
     occurred_at: safeString(event.timestamp, 80) || new Date().toISOString(),
     client_id: safeString(event.clientId, 160) || id(),
+    customer_reference: safeString(customerReference, 200),
+    analytics_consent: privacy?.analyticsProcessingAllowed === true,
+    marketing_consent: privacy?.marketingAllowed === true,
     public_key: settings.publicKey,
     page_url: location,
     product: product ? {
@@ -53,15 +56,26 @@ function eventPayload(event, eventType, settings) {
   };
 }
 
-register(({ analytics, settings }) => {
+register(({ analytics, settings, init, customerPrivacy }) => {
   if (!settings?.collectorUrl || !settings?.publicKey) return;
 
   const collector = new URL(settings.collectorUrl);
   if (collector.protocol !== "https:") return;
 
+  let privacy = init?.customerPrivacy || {};
+  try {
+    customerPrivacy?.subscribe("visitorConsentCollected", (event) => {
+      privacy = event?.customerPrivacy || privacy;
+    });
+  } catch {
+    // Keep the initial privacy state if the consent subscription is unavailable.
+  }
+
   for (const eventType of ALLOWED_EVENTS) {
     analytics.subscribe(eventType, (event) => {
-      const payload = eventPayload(event, eventType, settings);
+      if (privacy?.analyticsProcessingAllowed !== true) return;
+      const customerReference = init?.data?.customer?.id || null;
+      const payload = eventPayload(event, eventType, settings, customerReference, privacy);
       fetch(collector.toString(), {
         method: "POST",
         headers: { "content-type": "application/json" },
