@@ -1,0 +1,37 @@
+name: Build HENVALT pixel candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "extensions/henvalt-pixel/**"
+      - "shopify.app.toml"
+      - ".github/workflows/build-henvalt-pixel-candidate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-candidate:
+    runs-on: ubuntu-latest
+    env:
+      SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
+      COMMIT_URL: ${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Require Shopify service account token
+        run: |
+          if [ -z "$SHOPIFY_SERVICE_ACCOUNT_TOKEN" ]; then
+            echo "::error::SHOPIFY_SERVICE_ACCOUNT_TOKEN is not configured."
+            exit 1
+          fi
+      - name: Install pixel extension dependencies
+        run: npm install --prefix extensions/henvalt-pixel
+      - name: Install Shopify CLI
+        run: npm install --global @shopify/cli@latest
+      - name: Build and upload an unreleased app version
+        run: shopify app deploy --config shopify.app.toml --allow-updates --no-release --message "Consent-aware pixel identity enrichment" --source-control-url "$COMMIT_URL"
