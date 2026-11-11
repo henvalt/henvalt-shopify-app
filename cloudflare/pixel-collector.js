@@ -135,6 +135,9 @@ export default {
       event_type: payload.event_type,
       occurred_at: safeOccurredAt(payload.occurred_at),
       client_id: payload.client_id,
+      customer_reference: validId(payload.customer_reference, 200) ? payload.customer_reference : null,
+      analytics_consent: payload.analytics_consent === true,
+      marketing_consent: payload.marketing_consent === true,
       page_url: safePageUrl(payload.page_url),
       product: payload.product ? {
         id: validId(payload.product.id, 200) ? payload.product.id : null,
