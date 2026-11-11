@@ -71,10 +71,6 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ ok: true, service: "henvalt-pixel-collector", version: 1 });
     }
-    if (request.method !== "POST" || url.pathname !== "/v1/events") {
-      return json({ error: "not_found" }, 404);
-    }
-
     const origin = request.headers.get("origin") || "";
     const corsHeaders = {
       "access-control-allow-origin": origin,
@@ -87,9 +83,13 @@ export default {
       status,
       headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...corsHeaders },
     });
+    // Browser preflight must be handled before rejecting non-POST methods.
     if (request.method === "OPTIONS") {
       if (url.pathname !== "/v1/events" || !origin.startsWith("https://")) return json({ error: "unauthorized" }, 403);
       return new Response(null, { status: 204, headers: corsHeaders });
+    }
+    if (request.method !== "POST" || url.pathname !== "/v1/events") {
+      return corsJson({ error: "not_found" }, 404);
     }
     if (!origin || !origin.startsWith("https://")) {
       return corsJson({ error: "unauthorized" }, 401);
