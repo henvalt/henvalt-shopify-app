@@ -1,0 +1,32 @@
+name: Release approved HENVALT Shopify app version
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/release-henvalt-8.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require Shopify service account token
+        run: |
+          if [ -z "$SHOPIFY_SERVICE_ACCOUNT_TOKEN" ]; then
+            echo "::error::SHOPIFY_SERVICE_ACCOUNT_TOKEN is not configured."
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Shopify CLI
+        run: npm install --global @shopify/cli@latest
+      - name: Release the already-built Shopify app version
+        run: shopify app release --version=henvalt-8 --config=shopify.app.toml
