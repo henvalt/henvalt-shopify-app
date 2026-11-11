@@ -21,6 +21,14 @@ function safeString(value, max = 300) {
     : null;
 }
 
+function shopifyCustomerReference(value) {
+  const raw = safeString(value, 200);
+  if (!raw) return null;
+  const gid = raw.match(/^gid:\/\/shopify\/Customer\/(\d+)$/);
+  if (gid) return gid[1];
+  return /^\d+$/.test(raw) ? raw : null;
+}
+
 function eventPayload(event, eventType, settings, customerReference, privacy) {
   const data = event.data || {};
   const productVariant = data.productVariant || data.product || null;
@@ -36,7 +44,7 @@ function eventPayload(event, eventType, settings, customerReference, privacy) {
     event_type: eventType,
     occurred_at: safeString(event.timestamp, 80) || new Date().toISOString(),
     client_id: safeString(event.clientId, 160) || id(),
-    customer_reference: safeString(customerReference, 200),
+    customer_reference: shopifyCustomerReference(customerReference),
     analytics_consent: privacy?.analyticsProcessingAllowed === true,
     marketing_consent: privacy?.marketingAllowed === true,
     public_key: settings.publicKey,
