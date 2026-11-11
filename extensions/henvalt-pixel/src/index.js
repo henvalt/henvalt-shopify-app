@@ -21,6 +21,17 @@ function safeString(value, max = 300) {
     : null;
 }
 
+function safeAmount(value) {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return String(value);
+  }
+  if (typeof value === "string" && value.length > 0 && value.length <= 40
+      && Number.isFinite(Number(value)) && Number(value) >= 0) {
+    return value;
+  }
+  return null;
+}
+
 function shopifyCustomerReference(value) {
   const raw = safeString(value, 200);
   if (!raw) return null;
@@ -53,7 +64,7 @@ function eventPayload(event, eventType, settings, customerReference, privacy) {
       id: safeString(product.id, 200),
       title: safeString(product.title, 200),
       variant_id: safeString(productVariant?.id, 200),
-      price_amount: safeString(productVariant?.price?.amount, 40),
+      price_amount: safeAmount(productVariant?.price?.amount),
       price_currency: safeString(productVariant?.price?.currencyCode, 3),
     } : null,
     cart_line: cartLine ? {
