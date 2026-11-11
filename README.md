@@ -64,3 +64,8 @@ The refresh service is an infrastructure primitive, not a scheduled job: the cur
 - Shopify requires a Shopify-generated `uid` in the Web Pixel extension configuration. The current extension file does not yet contain that UID; do not invent one. Shopify CLI generates/maps it during an authenticated `shopify app deploy` (the first deploy can be run with `--no-release` to avoid releasing an unverified version).
 - The previous Shopify CLI validation job failed because GitHub Actions has no Shopify login. It did not reach the build step. An authenticated Shopify CLI session is therefore still required before validation, UID mapping, deploy, and activation can proceed.
 - Do not reauthorize the test shop until a deployable app version containing this extension is released.
+
+
+## Cloudflare Pages production configuration
+
+The production Pages project `henvalt-dashboard` is connected to this repository's `main` branch. Its build root is `dashboard/` and its output directory is `.`. The Shopify app's configured dashboard URL remains `https://henvalt-dashboard.pages.dev`; do not switch it to the separate `henvalt-dashboard-preview.pages.dev` project.
