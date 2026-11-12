@@ -4,6 +4,7 @@ const ALLOWED_EVENTS = [
   "page_viewed",
   "product_viewed",
   "product_added_to_cart",
+  "product_removed_from_cart",
   "checkout_started",
 ];
 
@@ -43,9 +44,11 @@ function shopifyCustomerReference(value) {
 function eventPayload(event, eventType, settings, customerReference, privacy) {
   const data = event.data || {};
   const productVariant = data.productVariant || data.product || null;
-  const product = productVariant?.product || productVariant || null;
   const cartLine = data.cartLine || null;
   const merchandise = cartLine?.merchandise || cartLine?.variant || null;
+  const variant = productVariant || merchandise || null;
+  const product = variant?.product || variant || null;
+  const lineTotal = cartLine?.cost?.totalAmount || null;
   const checkout = data.checkout || null;
   const location = event.context?.document?.location?.href || null;
 
@@ -63,13 +66,19 @@ function eventPayload(event, eventType, settings, customerReference, privacy) {
     product: product ? {
       id: safeString(product.id, 200),
       title: safeString(product.title, 200),
-      variant_id: safeString(productVariant?.id, 200),
-      price_amount: safeAmount(productVariant?.price?.amount),
-      price_currency: safeString(productVariant?.price?.currencyCode, 3),
+      variant_id: safeString(variant?.id, 200),
+      price_amount: safeAmount(variant?.price?.amount),
+      price_currency: safeString(variant?.price?.currencyCode, 3),
     } : null,
     cart_line: cartLine ? {
       quantity: Number.isInteger(cartLine.quantity) ? cartLine.quantity : null,
       merchandise_id: safeString(merchandise?.id, 200),
+      product_id: safeString(merchandise?.product?.id || product?.id, 200),
+      product_title: safeString(merchandise?.product?.title || product?.title, 200),
+      variant_title: safeString(merchandise?.title, 200),
+      unit_price_amount: safeAmount(merchandise?.price?.amount),
+      line_total_amount: safeAmount(lineTotal?.amount),
+      currency: safeString(lineTotal?.currencyCode || merchandise?.price?.currencyCode, 3),
     } : null,
     checkout_reference: eventType === "checkout_started"
       ? safeString(checkout?.token || checkout?.id, 300)
