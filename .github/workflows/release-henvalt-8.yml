@@ -29,4 +29,4 @@ jobs:
       - name: Install Shopify CLI
         run: npm install --global @shopify/cli@latest
       - name: Release the newly built Shopify app version
-        run: shopify app release --version=henvalt-33 --allow-updates --config=shopify.app.toml
+        run: shopify app release --version=henvalt-37 --allow-updates --config=shopify.app.toml
