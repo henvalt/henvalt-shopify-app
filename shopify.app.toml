@@ -1,6 +1,6 @@
 client_id = "1c0fd15c032fa26cd15ad7a63577a506"
 name = "HENVALT"
-application_url = "https://henvalt-dashboard.pages.dev"
+application_url = "https://henvalt-dashboard.lovable.app"
 embedded = false
 
 [build]
