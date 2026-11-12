@@ -343,7 +343,7 @@ Deno.serve(async (req: Request) => {
     for(const r of results){const s=specs.find(x=>x.topic===r.topic);const f=s&&finalNodes.find((x:any)=>x.topic===s.gql&&x.uri===webhookUri);r.verified=!!f;r.ok=r.ok===true&&!!f;if(f)r.id=f.id;}
     const allWebhooksRegistered=results.length===specs.length&&results.every(x=>x.ok===true&&x.verified===true);
     const pixelActivated = pixelActivation.activated === true;
-    const completionUrl = new URL("https://henvalt-dashboard.pages.dev/settings");
+    const completionUrl = new URL("https://henvalt-dashboard.lovable.app/settings");
     completionUrl.searchParams.set("shopify_status", "connected");
     completionUrl.searchParams.set("shop", shop);
     completionUrl.searchParams.set("pixel_status", pixelActivated ? "active" : "attention");
