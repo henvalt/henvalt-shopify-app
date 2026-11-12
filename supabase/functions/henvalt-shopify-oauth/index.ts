@@ -4,7 +4,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
-const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_customer_events"]))].join(",");
+const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
 
 const json = (status: number, body: Record<string, unknown>) =>
@@ -342,12 +342,41 @@ Deno.serve(async (req: Request) => {
     try{finalNodes=(await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } } }")).webhookSubscriptions?.nodes??[];}catch{}
     for(const r of results){const s=specs.find(x=>x.topic===r.topic);const f=s&&finalNodes.find((x:any)=>x.topic===s.gql&&x.uri===webhookUri);r.verified=!!f;r.ok=r.ok===true&&!!f;if(f)r.id=f.id;}
     const allWebhooksRegistered=results.length===specs.length&&results.every(x=>x.ok===true&&x.verified===true);
+    // Store per-topic verification for support and dashboard diagnostics.
+    const webhookAudit = await db("/rest/v1/audit_log", {
+      method: "POST",
+      headers: { prefer: "return=minimal" },
+      body: JSON.stringify({
+        tenant_id: tenantId,
+        event_name: "SHOPIFY_WEBHOOK_REGISTRATION_VERIFIED",
+        entity_type: "shopify_connection",
+        entity_id: connectionId,
+        actor_type: "SYSTEM",
+        actor_reference: "henvalt-shopify-oauth",
+        payload: {
+          shop_domain: shop,
+          destination: webhookUri,
+          all_registered: allWebhooksRegistered,
+          verified_count: results.filter((item) => item.ok === true && item.verified === true).length,
+          expected_count: specs.length,
+          registrations: results.map((item) => ({
+            topic: item.topic,
+            ok: item.ok === true,
+            verified: item.verified === true,
+            subscription_id: typeof item.id === "string" ? item.id : null,
+            error: typeof item.error === "string" ? item.error : null,
+          })),
+        },
+      }),
+    });
+    const webhookAuditPersisted = webhookAudit.ok;
+    if (!webhookAuditPersisted) console.error("Webhook registration audit persistence failed", webhookAudit.status);
     const pixelActivated = pixelActivation.activated === true;
     const completionUrl = new URL("https://henvalt-dashboard.lovable.app/settings");
     completionUrl.searchParams.set("shopify_status", "connected");
     completionUrl.searchParams.set("shop", shop);
     completionUrl.searchParams.set("pixel_status", pixelActivated ? "active" : "attention");
-    completionUrl.searchParams.set("webhooks_status", allWebhooksRegistered ? "verified" : "attention");
+    completionUrl.searchParams.set("webhooks_status", allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention");
     if (!pixelActivated && typeof pixelActivation.error === "string") {
       completionUrl.searchParams.set("pixel_issue", pixelActivation.error);
     }
