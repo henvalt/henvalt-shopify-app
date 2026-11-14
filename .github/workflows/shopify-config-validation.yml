@@ -64,6 +64,7 @@ jobs:
           for required in ("x-shopify-hmac-sha256", "customers/data_request", "customers/redact", "shop/redact", "invalid_hmac"):
               assert required in privacy_handler, f"Privacy handler missing {required}"
           assert "shopify_privacy_requests" in privacy_handler and "shopify_privacy_requests" in privacy_migration, "Privacy queue schema/handler mismatch"
+          assert "active=eq.true" not in privacy_handler, "Compliance requests must still resolve after app/uninstalled deactivates the connection"
           assert "enable row level security" in privacy_migration.lower(), "Privacy queue must have RLS enabled"
 
           customer_privacy = pathlib.Path("supabase/migrations/202611140003_shopify_customer_privacy_rpcs.sql").read_text().lower()
