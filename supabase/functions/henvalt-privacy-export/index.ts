@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
-const URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const headers = {
@@ -13,7 +13,7 @@ const reply = (status: number, body: unknown, extra: Record<string, string> = {}
   new Response(JSON.stringify(body), { status, headers: { ...headers, "content-type": "application/json; charset=utf-8", ...extra } });
 
 async function rest(path: string, method = "GET", body?: unknown) {
-  return fetch(URL + "/rest/v1/" + path, {
+  return fetch(SUPABASE_URL + "/rest/v1/" + path, {
     method,
     headers: {
       apikey: SERVICE_KEY,
@@ -30,14 +30,14 @@ async function rest(path: string, method = "GET", body?: unknown) {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (req.method !== "GET") return reply(405, { error: "method_not_allowed" });
-  if (!URL || !SERVICE_KEY || !ANON_KEY) return reply(503, { error: "privacy_export_not_configured" });
+  if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) return reply(503, { error: "privacy_export_not_configured" });
 
   try {
     const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\\s+/i, "").trim();
     if (!token) return reply(401, { error: "sign_in_required" });
 
     // Validate the access token with Supabase Auth; never trust decoded JWT claims.
-    const auth = await fetch(URL + "/auth/v1/user", {
+    const auth = await fetch(SUPABASE_URL + "/auth/v1/user", {
       headers: { apikey: ANON_KEY, authorization: "Bearer " + token },
     });
     if (!auth.ok) return reply(401, { error: "invalid_session" });
