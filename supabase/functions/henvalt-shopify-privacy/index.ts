@@ -70,7 +70,7 @@ Deno.serve(async (req: Request) => {
   }
   const connection = await db(
     "/rest/v1/shopify_connections?select=tenant_id,shopify_shop_id&shop_domain=eq." +
-      encodeURIComponent(shop) + "&active=eq.true&limit=1",
+      encodeURIComponent(shop) + "&limit=1",
   );
   if (!connection.ok) return json(503, { error: "tenant_lookup_failed" });
   const rows = await connection.json().catch(() => []);
