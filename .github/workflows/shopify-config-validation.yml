@@ -36,8 +36,10 @@ jobs:
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
           assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
           source = pathlib.Path("extensions/henvalt-pixel/src/index.js").read_text()
-          for event in ("page_viewed", "product_viewed", "product_added_to_cart", "checkout_started"):
+          collector = pathlib.Path("cloudflare/pixel-collector.js").read_text()
+          for event in ("page_viewed", "product_viewed", "product_added_to_cart", "product_removed_from_cart", "checkout_started"):
               assert event in source, f"Missing pixel subscription: {event}"
+              assert event in collector, f"Collector rejects subscribed pixel event: {event}"
           assert "fetch(" in source, "Missing collector delivery"
           print("HENVALT Shopify app configuration and Pixel source checks passed.")
           PY
