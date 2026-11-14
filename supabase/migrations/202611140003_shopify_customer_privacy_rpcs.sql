@@ -163,6 +163,7 @@ declare
   v_updated_sessions integer := 0;
   v_checkout_ids uuid[] := array[]::uuid[];
   v_opportunity_ids uuid[] := array[]::uuid[];
+  v_session_refs text[] := array[]::text[];
 begin
   if p_tenant_id is null
      or (nullif(trim(p_shopify_customer_id), '') is null and v_email is null) then
@@ -194,6 +195,11 @@ begin
   from henvalt.opportunities o
   where o.tenant_id=p_tenant_id
     and (o.customer_id=any(v_customer_ids) or o.checkout_id=any(v_checkout_ids));
+
+  select coalesce(array_agg(distinct x.session_reference) filter (where x.session_reference is not null), array[]::text[])
+    into v_session_refs
+  from henvalt.checkouts x
+  where x.tenant_id=p_tenant_id and x.id=any(v_checkout_ids);
 
   delete from henvalt.canonical_events e
   where e.tenant_id = p_tenant_id
@@ -234,7 +240,7 @@ begin
 
   update henvalt.sessions x
   set customer_id = null, metadata = '{}'::jsonb
-  where x.tenant_id = p_tenant_id and (x.customer_id = any(v_customer_ids) or x.session_reference in (select co.session_reference from henvalt.checkouts co where co.tenant_id=p_tenant_id and co.id=any(v_checkout_ids)));
+  where x.tenant_id = p_tenant_id and (x.customer_id = any(v_customer_ids) or x.session_reference=any(v_session_refs));
   get diagnostics v_updated_sessions = row_count;
 
   delete from henvalt.tracking_tokens tt
