@@ -34,6 +34,7 @@ Both functions use the existing Supabase project environment variables: `SUPABAS
 - Customer exports are retained in a service-role-only JSONB column for up to 30 days and are delivered as an authenticated JSON download. They are not emailed.
 - Export payloads are cleared when expired. Opportunistic cleanup also runs on verified privacy webhooks and owner privacy-page/download requests. Once migration 005 is applied and its Cron job is verified, a scheduled purge runs every 15 minutes; expiry deletion may therefore occur up to 15 minutes after the expiry timestamp.
 - Unmatched shop/customer requests remain in `REVIEW_REQUIRED` instead of being silently discarded.
+- `customers/data_request` supports Shopify payloads containing only a customer email (no customer ID), and resolves matching customer records within the linked tenant.
 - Customer redaction removes linked customer, event, message, delivery, tracking, suppression, and audit/error payloads within the tenant.
 - Shop redaction sanitises and detaches the receipt before deleting the tenant and its tenant-scoped records.
 
