@@ -161,14 +161,14 @@ Deno.serve(async (req: Request) => {
   }
 
   if (topic === "customers/redact") {
-    if (!customerId) {
-      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_id_missing" });
-      return json(200, { received: true, review_required: true, reason: "customer_id_missing" });
+    if (!customerId && !customerEmail) {
+      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_identifier_missing" });
+      return json(200, { received: true, review_required: true, reason: "customer_identifier_missing" });
     }
     const redacted = await rpc("redact_shopify_customer_data", {
       p_tenant_id: row.tenant_id,
       p_shopify_customer_id: customerId,
-      p_customer_email: payload?.customer?.email == null ? null : String(payload.customer.email),
+      p_customer_email: customerEmail,
     });
     if (!redacted.ok) {
       await patch({ status: "FAILED", last_error: "customer_redaction_failed" });
