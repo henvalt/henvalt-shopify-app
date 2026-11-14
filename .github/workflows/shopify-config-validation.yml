@@ -116,7 +116,7 @@ jobs:
           assert "result_payload" in privacy_export and "result_delivered_at" in privacy_export, "Export delivery must audit downloads"
           assert "access-control-expose-headers" in privacy_export and "content-disposition" in privacy_export, "Dashboard must be able to read the export filename header"
           assert "purge_expired_shopify_privacy_exports" in privacy_export, "Dashboard access must also purge expired export data"
-          assert "last_error,status" in privacy_export and "&result_payload=not.is.null" not in privacy_export, "Merchant privacy page must list unmatched requests needing review"
+          assert "status,last_error" in privacy_export and "&result_payload=not.is.null" not in privacy_export, "Merchant privacy page must list unmatched requests needing review"
           assert "Manual review required" in dashboard and "Review required" in dashboard, "Dashboard must distinguish pending review from downloadable exports"
           assert "Export expired" in dashboard and '"Expired"' in dashboard, "Dashboard must distinguish expired exports from requests needing review"
           assert "customer_id: exportFound ? null : customerId" in privacy_handler, "Generated exports must minimise retained request identifiers"
