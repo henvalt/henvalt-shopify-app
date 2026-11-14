@@ -179,8 +179,17 @@ begin
 
   delete from henvalt.messages m
   where m.tenant_id = p_tenant_id
-    and v_email is not null
-    and lower(m.recipient) = v_email;
+    and (
+      (v_email is not null and lower(m.recipient) = v_email)
+      or m.intervention_id in (
+        select ri.id from henvalt.recovery_interventions ri
+        left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
+        where ri.tenant_id=p_tenant_id and (
+          (v_email is not null and lower(ri.recipient_reference)=v_email)
+          or o.customer_id=any(v_customer_ids)
+        )
+      )
+    );
   get diagnostics v_deleted_messages = row_count;
 
   update henvalt.checkouts x
@@ -213,32 +222,76 @@ begin
       )
     );
 
+  update henvalt.delivery_attempts da
+  set provider_response = '{}'::jsonb
+  where da.tenant_id = p_tenant_id
+    and exists (
+      select 1 from henvalt.delivery_requests dr
+      where dr.id = da.delivery_request_id and dr.tenant_id = p_tenant_id
+        and (
+          (v_email is not null and lower(dr.recipient_reference) = v_email)
+          or dr.id in (
+            select cc.delivery_request_id from henvalt.customer_conversations cc
+            where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+          )
+          or dr.opportunity_id in (
+            select o.id from henvalt.opportunities o
+            where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
+          )
+        )
+    );
+
+  update henvalt.provider_events pe
+  set recipient_email = null, payload = '{}'::jsonb, processing_result = '{}'::jsonb
+  where pe.tenant_id=p_tenant_id and (
+    (v_email is not null and lower(pe.recipient_email)=v_email)
+    or pe.delivery_request_id in (
+      select dr.id from henvalt.delivery_requests dr
+      where dr.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(dr.recipient_reference)=v_email)
+        or dr.id in (
+          select cc.delivery_request_id from henvalt.customer_conversations cc
+          where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+        )
+        or dr.opportunity_id in (
+          select o.id from henvalt.opportunities o
+          where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
+        )
+      )
+    )
+  );
+
+  update henvalt.delivery_requests dr
+  set recipient_reference='[redacted]', tracking_token=null
+  where dr.tenant_id=p_tenant_id and (
+    (v_email is not null and lower(dr.recipient_reference)=v_email)
+    or dr.id in (
+      select cc.delivery_request_id from henvalt.customer_conversations cc
+      where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+    )
+    or dr.opportunity_id in (
+      select o.id from henvalt.opportunities o
+      where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
+    )
+  );
+
+  update henvalt.recovery_interventions ri
+  set recipient_reference='[redacted]'
+  where ri.tenant_id=p_tenant_id and (
+    (v_email is not null and lower(ri.recipient_reference)=v_email)
+    or ri.opportunity_id in (
+      select o.id from henvalt.opportunities o
+      where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
+    )
+  );
+
   if v_email is not null then
-    update henvalt.delivery_attempts da
-    set provider_response = '{}'::jsonb
-    where da.tenant_id = p_tenant_id
-      and exists (
-        select 1 from henvalt.delivery_requests dr
-        where dr.id = da.delivery_request_id
-          and dr.tenant_id = p_tenant_id
-          and lower(dr.recipient_reference) = v_email
-      );
-
-    update henvalt.delivery_requests
-    set recipient_reference = '[redacted]', tracking_token = null
-    where tenant_id = p_tenant_id and lower(recipient_reference) = v_email;
-
     update henvalt.conversation_messages x
     set sender_email = '[redacted]', recipient_email = '[redacted]',
         subject = null, body_text = null, body_html = null, headers = '{}'::jsonb,
         attachments = '[]'::jsonb, ai_draft = null
     where x.tenant_id = p_tenant_id
       and (lower(x.sender_email) = v_email or lower(x.recipient_email) = v_email);
-
-    update henvalt.provider_events x
-    set recipient_email = null, payload = '{}'::jsonb, processing_result = '{}'::jsonb
-    where x.tenant_id = p_tenant_id and lower(x.recipient_email) = v_email;
-
   end if;
 
   -- Suppression rows are removed rather than assigned a shared placeholder email,
@@ -274,10 +327,6 @@ begin
   update henvalt.opportunities
   set metadata = '{}'::jsonb
   where tenant_id = p_tenant_id and customer_id = any(v_customer_ids);
-
-  update henvalt.recovery_interventions
-  set recipient_reference = '[redacted]'
-  where tenant_id = p_tenant_id and v_email is not null and lower(recipient_reference) = v_email;
 
   update henvalt.audit_log
   set payload = '{}'::jsonb, actor_reference = null, entity_id = null
