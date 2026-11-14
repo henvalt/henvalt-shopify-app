@@ -86,6 +86,14 @@ jobs:
           assert "purge_expired_shopify_privacy_exports" in export_storage and "purge_expired_shopify_privacy_exports" in privacy_handler, "Expired customer exports must be purged on verified webhook traffic"
           assert "export_shopify_customer_data" in privacy_handler and "redact_shopify_customer_data" in privacy_handler and "redact_shopify_shop_data" in privacy_handler, "Privacy webhook does not invoke all scoped processors"
           assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
+          privacy_export = pathlib.Path("supabase/functions/henvalt-privacy-export/index.ts").read_text()
+          dashboard = pathlib.Path("dashboard/index.html").read_text()
+          for required in ("auth/v1/user", "tenant_memberships", "role=in.(OWNER,ADMIN)", "tenant_id=eq.", "result_expires_at=gt.", "content-disposition"):
+              assert required in privacy_export, f"Secure export endpoint missing {required}"
+          assert "result_payload" in privacy_export and "result_delivered_at" in privacy_export, "Export delivery must audit downloads"
+          assert "PRIVACY_EXPORT_API" in dashboard and "loadPrivacyRequests" in dashboard and "downloadPrivacyExport" in dashboard, "Merchant dashboard missing privacy export UI"
+          assert "data-page=\"privacy\"" in dashboard and "id=\"page-privacy\"" in dashboard, "Merchant dashboard privacy page is missing"
+          assert "service_role" in export_storage, "Export storage must be service-role only"
           print("HENVALT pixel contract and Shopify privacy webhook/export/redaction checks passed.")
           print("HENVALT pixel contract and Shopify privacy webhook configuration checks passed.")
           PY
