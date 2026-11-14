@@ -29,17 +29,21 @@ begin
       or (v_email is not null and lower(c.email) = v_email)
     );
 
-  if cardinality(v_customer_ids) = 0 then
-    return jsonb_build_object('found', false);
-  end if;
-
   select jsonb_build_object(
-    'found', true,
+    'found',
+      cardinality(v_customer_ids) > 0
+      or exists (select 1 from henvalt.checkouts x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.email)=v_email)
+      or exists (select 1 from henvalt.canonical_events x where x.tenant_id=p_tenant_id and ((p_shopify_customer_id is not null and x.customer_reference=p_shopify_customer_id) or (v_email is not null and lower(x.email)=v_email)))
+      or exists (select 1 from henvalt.delivery_requests x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_reference)=v_email)
+      or exists (select 1 from henvalt.messages x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient)=v_email)
+      or exists (select 1 from henvalt.provider_events x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_email)=v_email)
+      or exists (select 1 from henvalt.recovery_interventions x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_reference)=v_email)
+      or exists (select 1 from henvalt.webhook_events x where x.tenant_id=p_tenant_id and ((p_shopify_customer_id is not null and (x.payload #>> '{customer,id}'=p_shopify_customer_id or x.payload #>> '{id}'=p_shopify_customer_id)) or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=v_email))),
     'customer', coalesce((select jsonb_agg(to_jsonb(c) - 'tenant_id') from henvalt.customers c where c.id = any(v_customer_ids)), '[]'::jsonb),
-    'checkouts', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.checkouts x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
-    'orders', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.orders x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
+    'checkouts', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.checkouts x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or (v_email is not null and lower(x.email)=v_email))), '[]'::jsonb),
+    'orders', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.orders x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or x.checkout_id in (select co.id from henvalt.checkouts co where co.tenant_id=p_tenant_id and v_email is not null and lower(co.email)=v_email))), '[]'::jsonb),
     'sessions', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.sessions x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
-    'opportunities', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.opportunities x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
+    'opportunities', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.opportunities x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or x.checkout_id in (select co.id from henvalt.checkouts co where co.tenant_id=p_tenant_id and v_email is not null and lower(co.email)=v_email))), '[]'::jsonb),
     'conversations', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.customer_conversations x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
     'conversation_messages', coalesce((
       select jsonb_agg(to_jsonb(cm) - 'tenant_id')
