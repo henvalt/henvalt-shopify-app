@@ -140,14 +140,20 @@ Deno.serve(async (req: Request) => {
       return json(503, { error: "customer_export_failed" });
     }
     const result = await exported.json();
+    const exportFound = result?.found === true;
     const saved = await patch({
-      result_payload: result,
-      result_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      result_payload: exportFound ? result : null,
+      result_expires_at: exportFound ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
       status: "REVIEW_REQUIRED",
-      last_error: result?.found ? "export_ready_for_secure_merchant_delivery" : "customer_record_not_found",
+      last_error: exportFound ? "export_ready_for_secure_merchant_delivery" : "customer_record_not_found",
     });
     if (!saved.ok) return json(503, { error: "customer_export_persistence_failed" });
-    return json(200, { received: true, export_generated: Boolean(result?.found), awaiting_secure_delivery: true });
+    return json(200, {
+      received: true,
+      export_generated: exportFound,
+      awaiting_secure_delivery: exportFound,
+      review_required: !exportFound,
+    });
   }
 
   if (topic === "customers/redact") {
