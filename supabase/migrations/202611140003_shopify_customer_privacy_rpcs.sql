@@ -213,7 +213,7 @@ begin
         left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
         where ri.tenant_id=p_tenant_id and (
           (v_email is not null and lower(ri.recipient_reference)=v_email)
-          or o.customer_id=any(v_customer_ids)
+          or o.id=any(v_opportunity_ids)
         )
       )
     );
@@ -290,20 +290,14 @@ begin
       select cc.delivery_request_id from henvalt.customer_conversations cc
       where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
     )
-    or dr.opportunity_id in (
-      select o.id from henvalt.opportunities o
-      where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
-    )
+    or dr.opportunity_id=any(v_opportunity_ids)
   );
 
   update henvalt.recovery_interventions ri
   set recipient_reference='[redacted]'
   where ri.tenant_id=p_tenant_id and (
     (v_email is not null and lower(ri.recipient_reference)=v_email)
-    or ri.opportunity_id in (
-      select o.id from henvalt.opportunities o
-      where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
-    )
+    or ri.opportunity_id=any(v_opportunity_ids)
   );
 
   if v_email is not null then
