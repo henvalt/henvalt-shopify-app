@@ -93,5 +93,89 @@ Deno.serve(async (req: Request) => {
     console.error("Privacy request persistence failed", inserted.status);
     return json(503, { error: "privacy_request_persistence_failed" });
   }
+
+  const lookup = await db(
+    "/rest/v1/shopify_privacy_requests?select=id,status&webhook_id=eq." +
+      encodeURIComponent(webhookId) + "&limit=1",
+  );
+  if (!lookup.ok) return json(503, { error: "privacy_request_lookup_failed" });
+  const storedRows = await lookup.json().catch(() => []);
+  const stored = Array.isArray(storedRows) ? storedRows[0] : null;
+  if (!stored?.id) return json(503, { error: "privacy_request_record_missing" });
+  if (stored.status === "COMPLETED") {
+    return json(200, { received: true, processed: true, duplicate: true, topic });
+  }
+  if (!matched) {
+    return json(200, { received: true, queued: true, matched: false, review_required: true, topic });
+  }
+
+  const requestUrl = "/rest/v1/shopify_privacy_requests?id=eq." + encodeURIComponent(stored.id);
+  const patch = async (body: Record<string, unknown>) => db(requestUrl, {
+    method: "PATCH",
+    headers: { prefer: "return=minimal" },
+    body: JSON.stringify(body),
+  });
+  const rpc = async (name: string, body: Record<string, unknown>) => db("/rest/v1/rpc/" + name, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+  if (topic === "customers/data_request") {
+    if (!customerId) {
+      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_id_missing" });
+      return json(200, { received: true, review_required: true, reason: "customer_id_missing" });
+    }
+    const exported = await rpc("export_shopify_customer_data", {
+      p_tenant_id: row.tenant_id,
+      p_shopify_customer_id: customerId,
+    });
+    if (!exported.ok) {
+      await patch({ status: "FAILED", last_error: "customer_export_failed" });
+      return json(503, { error: "customer_export_failed" });
+    }
+    const result = await exported.json();
+    const saved = await patch({
+      result_payload: result,
+      result_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      status: "REVIEW_REQUIRED",
+      last_error: result?.found ? "export_ready_for_secure_merchant_delivery" : "customer_record_not_found",
+    });
+    if (!saved.ok) return json(503, { error: "customer_export_persistence_failed" });
+    return json(200, { received: true, export_generated: Boolean(result?.found), awaiting_secure_delivery: true });
+  }
+
+  if (topic === "customers/redact") {
+    if (!customerId) {
+      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_id_missing" });
+      return json(200, { received: true, review_required: true, reason: "customer_id_missing" });
+    }
+    const redacted = await rpc("redact_shopify_customer_data", {
+      p_tenant_id: row.tenant_id,
+      p_shopify_customer_id: customerId,
+      p_customer_email: payload?.customer?.email == null ? null : String(payload.customer.email),
+    });
+    if (!redacted.ok) {
+      await patch({ status: "FAILED", last_error: "customer_redaction_failed" });
+      return json(503, { error: "customer_redaction_failed" });
+    }
+    const result = await redacted.json();
+    if (!result?.matched) {
+      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_record_not_found" });
+      return json(200, { received: true, review_required: true, reason: "customer_record_not_found" });
+    }
+    const saved = await patch({ status: "COMPLETED", payload: {}, processed_at: new Date().toISOString(), last_error: null });
+    if (!saved.ok) return json(503, { error: "customer_redaction_status_update_failed" });
+    return json(200, { received: true, processed: true, topic });
+  }
+
+  if (topic === "shop/redact") {
+    const redacted = await rpc("redact_shopify_shop_data", { p_privacy_request_id: stored.id });
+    if (!redacted.ok) {
+      await patch({ status: "FAILED", last_error: "shop_redaction_failed" });
+      return json(503, { error: "shop_redaction_failed" });
+    }
+    return json(200, { received: true, processed: true, topic });
+  }
+
   return json(200, { received: true, queued: true, matched, topic });
 });
