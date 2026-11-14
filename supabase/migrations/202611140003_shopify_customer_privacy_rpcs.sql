@@ -254,7 +254,7 @@ begin
 
   -- Detach and sanitize the receipt first; it must survive tenant deletion.
   update henvalt.shopify_privacy_requests
-  set tenant_id=null, payload='{}'::jsonb, status='COMPLETED',
+  set tenant_id=null, customer_id=null, payload='{}'::jsonb, status='COMPLETED',
       processed_at=now(), last_error=null
   where id=p_privacy_request_id;
 
