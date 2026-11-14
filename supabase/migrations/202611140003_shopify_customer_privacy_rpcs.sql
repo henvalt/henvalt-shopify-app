@@ -20,7 +20,7 @@ begin
     raise exception 'tenant_id and either Shopify customer id or customer email are required';
   end if;
 
-  select coalesce(array_agg(c.id), array[]::uuid[]), max(c.email)
+  select coalesce(array_agg(c.id), array[]::uuid[]), coalesce(max(lower(c.email)), v_email)
     into v_customer_ids, v_email
   from henvalt.customers c
   where c.tenant_id = p_tenant_id
