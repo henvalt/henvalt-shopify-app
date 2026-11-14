@@ -42,7 +42,7 @@ begin
     'customer', coalesce((select jsonb_agg(to_jsonb(c) - 'tenant_id') from henvalt.customers c where c.id = any(v_customer_ids)), '[]'::jsonb),
     'checkouts', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.checkouts x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or (v_email is not null and lower(x.email)=v_email))), '[]'::jsonb),
     'orders', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.orders x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or x.checkout_id in (select co.id from henvalt.checkouts co where co.tenant_id=p_tenant_id and v_email is not null and lower(co.email)=v_email))), '[]'::jsonb),
-    'sessions', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.sessions x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
+    'sessions', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.sessions x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or x.session_reference in (select co.session_reference from henvalt.checkouts co where co.tenant_id=p_tenant_id and v_email is not null and lower(co.email)=v_email))), '[]'::jsonb),
     'opportunities', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.opportunities x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or x.checkout_id in (select co.id from henvalt.checkouts co where co.tenant_id=p_tenant_id and v_email is not null and lower(co.email)=v_email))), '[]'::jsonb),
     'conversations', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.customer_conversations x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
     'conversation_messages', coalesce((
@@ -161,6 +161,8 @@ declare
   v_updated_checkouts integer := 0;
   v_updated_orders integer := 0;
   v_updated_sessions integer := 0;
+  v_checkout_ids uuid[] := array[]::uuid[];
+  v_opportunity_ids uuid[] := array[]::uuid[];
 begin
   if p_tenant_id is null
      or (nullif(trim(p_shopify_customer_id), '') is null and v_email is null) then
@@ -180,6 +182,18 @@ begin
   if cardinality(v_customer_ids) = 0 and v_email is null then
     return jsonb_build_object('matched', false, 'reason', 'customer_not_found');
   end if;
+
+  select coalesce(array_agg(x.id), array[]::uuid[])
+    into v_checkout_ids
+  from henvalt.checkouts x
+  where x.tenant_id=p_tenant_id
+    and (x.customer_id=any(v_customer_ids) or (v_email is not null and lower(x.email)=v_email));
+
+  select coalesce(array_agg(o.id), array[]::uuid[])
+    into v_opportunity_ids
+  from henvalt.opportunities o
+  where o.tenant_id=p_tenant_id
+    and (o.customer_id=any(v_customer_ids) or o.checkout_id=any(v_checkout_ids));
 
   delete from henvalt.canonical_events e
   where e.tenant_id = p_tenant_id
@@ -209,18 +223,18 @@ begin
   set customer_id = null, email = null, checkout_token = null, session_reference = null, metadata = '{}'::jsonb,
       updated_at = now()
   where x.tenant_id = p_tenant_id
-    and (x.customer_id = any(v_customer_ids) or (v_email is not null and lower(x.email) = v_email));
+    and (x.id=any(v_checkout_ids) or x.customer_id = any(v_customer_ids) or (v_email is not null and lower(x.email) = v_email));
   get diagnostics v_updated_checkouts = row_count;
 
   update henvalt.orders x
   set customer_id = null, session_reference = null, tracking_token = null, metadata = '{}'::jsonb,
       updated_at = now()
-  where x.tenant_id = p_tenant_id and x.customer_id = any(v_customer_ids);
+  where x.tenant_id = p_tenant_id and (x.customer_id = any(v_customer_ids) or x.checkout_id=any(v_checkout_ids));
   get diagnostics v_updated_orders = row_count;
 
   update henvalt.sessions x
   set customer_id = null, metadata = '{}'::jsonb
-  where x.tenant_id = p_tenant_id and x.customer_id = any(v_customer_ids);
+  where x.tenant_id = p_tenant_id and (x.customer_id = any(v_customer_ids) or x.session_reference in (select co.session_reference from henvalt.checkouts co where co.tenant_id=p_tenant_id and co.id=any(v_checkout_ids)));
   get diagnostics v_updated_sessions = row_count;
 
   delete from henvalt.tracking_tokens tt
@@ -231,7 +245,7 @@ begin
       left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
       where ri.tenant_id=p_tenant_id and (
         (v_email is not null and lower(ri.recipient_reference)=v_email)
-        or o.customer_id=any(v_customer_ids)
+        or o.id=any(v_opportunity_ids)
       )
     );
 
@@ -247,10 +261,7 @@ begin
             select cc.delivery_request_id from henvalt.customer_conversations cc
             where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
           )
-          or dr.opportunity_id in (
-            select o.id from henvalt.opportunities o
-            where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
-          )
+          or dr.opportunity_id=any(v_opportunity_ids)
         )
     );
 
@@ -266,10 +277,7 @@ begin
           select cc.delivery_request_id from henvalt.customer_conversations cc
           where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
         )
-        or dr.opportunity_id in (
-          select o.id from henvalt.opportunities o
-          where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids)
-        )
+        or dr.opportunity_id=any(v_opportunity_ids)
       )
     )
   );
@@ -339,7 +347,7 @@ begin
 
   update henvalt.opportunities
   set metadata = '{}'::jsonb
-  where tenant_id = p_tenant_id and customer_id = any(v_customer_ids);
+  where tenant_id = p_tenant_id and (customer_id = any(v_customer_ids) or id=any(v_opportunity_ids));
 
   update henvalt.audit_log
   set payload = '{}'::jsonb, actor_reference = null, entity_id = null
