@@ -36,6 +36,19 @@ begin
     'sessions', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.sessions x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
     'opportunities', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.opportunities x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
     'conversations', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.customer_conversations x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
+    'conversation_messages', coalesce((
+      select jsonb_agg(to_jsonb(cm) - 'tenant_id')
+      from henvalt.conversation_messages cm
+      join henvalt.customer_conversations cc on cc.id=cm.conversation_id
+      where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+    ), '[]'::jsonb),
+    'delivery_requests', coalesce((
+      select jsonb_agg(to_jsonb(dr) - 'tenant_id')
+      from henvalt.delivery_requests dr
+      join henvalt.customer_conversations cc on cc.delivery_request_id=dr.id
+      where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+    ), '[]'::jsonb),
+    'email_suppressions', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.email_suppressions x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or (v_email is not null and lower(x.email_normalized)=lower(v_email)))), '[]'::jsonb),
     'events', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.canonical_events x where x.tenant_id=p_tenant_id and (x.customer_reference=p_shopify_customer_id or (v_email is not null and lower(x.email)=lower(v_email)))), '[]'::jsonb),
     'generated_at', now()
   ) into v_result;
@@ -109,6 +122,10 @@ begin
   get diagnostics v_updated_sessions = row_count;
 
   if v_email is not null then
+    update henvalt.delivery_requests
+    set recipient_reference = '[redacted]', tracking_token = null
+    where tenant_id = p_tenant_id and lower(recipient_reference) = v_email;
+
     update henvalt.conversation_messages x
     set sender_email = '[redacted]', recipient_email = '[redacted]',
         subject = null, body_text = null, body_html = null, headers = '{}'::jsonb,
@@ -124,6 +141,28 @@ begin
     set email_normalized = '[redacted]', customer_id = null
     where x.tenant_id = p_tenant_id and lower(x.email_normalized) = v_email;
   end if;
+
+  -- Remove raw webhook/error/audit payloads that identify this customer.
+  update henvalt.webhook_events
+  set payload = '{}'::jsonb, metadata = '{}'::jsonb
+  where tenant_id = p_tenant_id
+    and (payload #>> '{customer,id}' = p_shopify_customer_id
+      or payload #>> '{id}' = p_shopify_customer_id
+      or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
+
+  update henvalt.processing_errors
+  set payload = '{}'::jsonb, error_message = 'Customer data redacted'
+  where tenant_id = p_tenant_id
+    and (payload #>> '{customer,id}' = p_shopify_customer_id
+      or payload #>> '{id}' = p_shopify_customer_id
+      or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
+
+  update henvalt.audit_log
+  set payload = '{}'::jsonb, actor_reference = null
+  where tenant_id = p_tenant_id
+    and (payload #>> '{customer,id}' = p_shopify_customer_id
+      or payload #>> '{id}' = p_shopify_customer_id
+      or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
 
   -- Deleting the customer cascades conversations, message history and unsubscribe tokens.
   if cardinality(v_customer_ids) > 0 then
