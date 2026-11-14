@@ -2,7 +2,8 @@
 -- Requests remain pending until the dedicated processor completes export/redaction.
 create table if not exists henvalt.shopify_privacy_requests (
   id uuid primary key default gen_random_uuid(),
-  -- Nullable so Shopify redaction requests remain auditable after a tenant is removed.\n  tenant_id uuid references henvalt.tenants(id) on delete set null,
+  -- Nullable so Shopify redaction requests remain auditable after a tenant is removed.
+  tenant_id uuid references henvalt.tenants(id) on delete set null,
   shop_domain text not null,
   shopify_shop_id text,
   topic text not null check (topic in ('customers/data_request','customers/redact','shop/redact')),
@@ -18,7 +19,10 @@ create table if not exists henvalt.shopify_privacy_requests (
   constraint shopify_privacy_requests_webhook_unique unique (webhook_id)
 );
 
-create index if not exists shopify_privacy_requests_shop_status_idx\n  on henvalt.shopify_privacy_requests (shop_domain, status, received_at);\n\ncreate index if not exists shopify_privacy_requests_pending_idx
+create index if not exists shopify_privacy_requests_shop_status_idx
+  on henvalt.shopify_privacy_requests (shop_domain, status, received_at);
+
+create index if not exists shopify_privacy_requests_pending_idx
   on henvalt.shopify_privacy_requests (status, received_at)
   where status in ('PENDING','FAILED','REVIEW_REQUIRED');
 
