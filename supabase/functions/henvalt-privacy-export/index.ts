@@ -55,6 +55,9 @@ Deno.serve(async (req: Request) => {
       return reply(403, { error: "workspace_owner_required" });
     }
     const tenantId = String(rows[0].tenant_id);
+    // Also expire old export bundles when an owner opens the privacy page or downloads an export.
+    const purge = await rest("rpc/purge_expired_shopify_privacy_exports", "POST", {});
+    if (!purge.ok) console.error("Expired privacy export cleanup failed", purge.status);
     const u = new URL(req.url);
     const requestId = u.searchParams.get("request_id");
 
