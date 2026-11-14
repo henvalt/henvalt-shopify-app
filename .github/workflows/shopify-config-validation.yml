@@ -83,6 +83,7 @@ jobs:
           assert "where c.tenant_id = p_tenant_id" in customer_privacy, "Customer lookup must be tenant scoped"
           assert "result_payload jsonb" in export_storage and "result_expires_at timestamptz" in export_storage, "Customer export storage must be time-limited"
           assert "result_expires_at" in export_storage and "service_role" in export_storage, "Customer export storage must remain service-role only"
+          assert "purge_expired_shopify_privacy_exports" in export_storage and "purge_expired_shopify_privacy_exports" in privacy_handler, "Expired customer exports must be purged on verified webhook traffic"
           assert "export_shopify_customer_data" in privacy_handler and "redact_shopify_customer_data" in privacy_handler and "redact_shopify_shop_data" in privacy_handler, "Privacy webhook does not invoke all scoped processors"
           assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
           print("HENVALT pixel contract and Shopify privacy webhook/export/redaction checks passed.")
