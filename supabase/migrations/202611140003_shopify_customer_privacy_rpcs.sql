@@ -186,4 +186,58 @@ $$;
 revoke all on function henvalt.export_shopify_customer_data(uuid, text) from public, anon, authenticated;
 revoke all on function henvalt.redact_shopify_customer_data(uuid, text, text) from public, anon, authenticated;
 grant execute on function henvalt.export_shopify_customer_data(uuid, text) to service_role;
-grant execute on function henvalt.redact_shopify_customer_data(uuid, text, text) to service_role;
+grant execute on function henvalt.redact_shopify_customer_data(uuid, text, text) to service_role;\n
+-- Shop redaction removes the tenant and all tenant-scoped records through the
+-- schema's ON DELETE CASCADE relationships. The compliance receipt is retained
+-- with its personal payload removed before the tenant is deleted.
+create or replace function henvalt.redact_shopify_shop_data(
+  p_privacy_request_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = henvalt, pg_temp
+as $
+declare
+  v_request henvalt.shopify_privacy_requests%rowtype;
+  v_tenant_id uuid;
+begin
+  if p_privacy_request_id is null then
+    raise exception 'privacy request id is required';
+  end if;
+
+  select * into v_request
+  from henvalt.shopify_privacy_requests
+  where id = p_privacy_request_id
+  for update;
+
+  if not found or v_request.topic <> 'shop/redact' then
+    raise exception 'shop redaction request not found';
+  end if;
+
+  if v_request.status = 'COMPLETED' then
+    return jsonb_build_object('completed', true, 'already_processed', true);
+  end if;
+
+  v_tenant_id := v_request.tenant_id;
+  if v_tenant_id is null then
+    update henvalt.shopify_privacy_requests
+    set status='COMPLETED', payload='{}'::jsonb, processed_at=coalesce(processed_at, now()), last_error=null
+    where id=p_privacy_request_id;
+    return jsonb_build_object('completed', true, 'tenant_found', false);
+  end if;
+
+  -- Detach and sanitize the receipt first; it must survive tenant deletion.
+  update henvalt.shopify_privacy_requests
+  set tenant_id=null, payload='{}'::jsonb, status='COMPLETED',
+      processed_at=now(), last_error=null
+  where id=p_privacy_request_id;
+
+  delete from henvalt.tenants where id=v_tenant_id;
+
+  return jsonb_build_object('completed', true, 'tenant_deleted', found, 'processed_at', now());
+end;
+$;
+
+revoke all on function henvalt.redact_shopify_shop_data(uuid) from public, anon, authenticated;
+grant execute on function henvalt.redact_shopify_shop_data(uuid) to service_role;
+
