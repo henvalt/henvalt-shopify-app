@@ -62,6 +62,7 @@ jobs:
           assert "enable row level security" in privacy_migration.lower(), "Privacy queue must have RLS enabled"
 
           customer_privacy = pathlib.Path("supabase/migrations/202611140003_shopify_customer_privacy_rpcs.sql").read_text().lower()
+          export_storage = pathlib.Path("supabase/migrations/202611140004_shopify_privacy_export_storage.sql").read_text().lower()
           for required in (
               "export_shopify_customer_data",
               "redact_shopify_customer_data",
@@ -80,6 +81,10 @@ jobs:
               assert required in customer_privacy, f"Customer privacy RPC migration missing {required}"
           assert "from public, anon, authenticated" in customer_privacy, "Customer privacy RPCs must not be public"
           assert "where c.tenant_id = p_tenant_id" in customer_privacy, "Customer lookup must be tenant scoped"
+          assert "result_payload jsonb" in export_storage and "result_expires_at timestamptz" in export_storage, "Customer export storage must be time-limited"
+          assert "result_expires_at" in export_storage and "service_role" in export_storage, "Customer export storage must remain service-role only"
+          assert "export_shopify_customer_data" in privacy_handler and "redact_shopify_customer_data" in privacy_handler and "redact_shopify_shop_data" in privacy_handler, "Privacy webhook does not invoke all scoped processors"
+          assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
           print("HENVALT pixel contract and Shopify privacy webhook/export/redaction checks passed.")
           print("HENVALT pixel contract and Shopify privacy webhook configuration checks passed.")
           PY
