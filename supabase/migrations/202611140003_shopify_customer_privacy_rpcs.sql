@@ -211,7 +211,8 @@ $$;
 revoke all on function henvalt.export_shopify_customer_data(uuid, text) from public, anon, authenticated;
 revoke all on function henvalt.redact_shopify_customer_data(uuid, text, text) from public, anon, authenticated;
 grant execute on function henvalt.export_shopify_customer_data(uuid, text) to service_role;
-grant execute on function henvalt.redact_shopify_customer_data(uuid, text, text) to service_role;\n
+grant execute on function henvalt.redact_shopify_customer_data(uuid, text, text) to service_role;
+
 -- Shop redaction removes the tenant and all tenant-scoped records through the
 -- schema's ON DELETE CASCADE relationships. The compliance receipt is retained
 -- with its personal payload removed before the tenant is deleted.
@@ -221,7 +222,7 @@ create or replace function henvalt.redact_shopify_shop_data(
 language plpgsql
 security definer
 set search_path = henvalt, pg_temp
-as $
+as $shop_redact$
 declare
   v_request henvalt.shopify_privacy_requests%rowtype;
   v_tenant_id uuid;
@@ -261,7 +262,7 @@ begin
 
   return jsonb_build_object('completed', true, 'tenant_deleted', found, 'processed_at', now());
 end;
-$;
+$shop_redact$;
 
 revoke all on function henvalt.redact_shopify_shop_data(uuid) from public, anon, authenticated;
 grant execute on function henvalt.redact_shopify_shop_data(uuid) to service_role;
