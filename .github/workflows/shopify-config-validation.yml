@@ -60,6 +60,26 @@ jobs:
               assert required in privacy_handler, f"Privacy handler missing {required}"
           assert "shopify_privacy_requests" in privacy_handler and "shopify_privacy_requests" in privacy_migration, "Privacy queue schema/handler mismatch"
           assert "enable row level security" in privacy_migration.lower(), "Privacy queue must have RLS enabled"
+
+          customer_privacy = pathlib.Path("supabase/migrations/202611140003_shopify_customer_privacy_rpcs.sql").read_text().lower()
+          for required in (
+              "export_shopify_customer_data",
+              "redact_shopify_customer_data",
+              "security definer",
+              "set search_path = henvalt, pg_temp",
+              "revoke all on function",
+              "grant execute on function",
+              "p_tenant_id",
+              "p_shopify_customer_id",
+              "canonical_events",
+              "conversation_messages",
+              "webhook_events",
+              "processing_errors",
+          ):
+              assert required in customer_privacy, f"Customer privacy RPC migration missing {required}"
+          assert "from public, anon, authenticated" in customer_privacy, "Customer privacy RPCs must not be public"
+          assert "where c.tenant_id = p_tenant_id" in customer_privacy, "Customer lookup must be tenant scoped"
+          print("HENVALT pixel contract and Shopify privacy webhook/export/redaction checks passed.")
           print("HENVALT pixel contract and Shopify privacy webhook configuration checks passed.")
           PY
 
