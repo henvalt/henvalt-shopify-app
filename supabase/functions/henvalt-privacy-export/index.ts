@@ -64,10 +64,9 @@ Deno.serve(async (req: Request) => {
 
     if (!requestId) {
       const list = await rest(
-        "shopify_privacy_requests?select=id,shop_domain,request_id,received_at,result_expires_at,result_delivered_at" +
+        "shopify_privacy_requests?select=id,shop_domain,request_id,received_at,result_expires_at,result_delivered_at,status,last_error" +
         "&tenant_id=eq." + encodeURIComponent(tenantId) +
         "&topic=eq.customers/data_request&status=eq.REVIEW_REQUIRED" +
-        "&result_payload=not.is.null&result_expires_at=gt." + encodeURIComponent(new Date().toISOString()) +
         "&order=received_at.desc&limit=50",
       );
       if (!list.ok) return reply(503, { error: "privacy_request_list_failed" });
