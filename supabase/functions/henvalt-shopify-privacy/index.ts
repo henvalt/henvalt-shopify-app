@@ -143,6 +143,8 @@ Deno.serve(async (req: Request) => {
     const exportFound = result?.found === true;
     const saved = await patch({
       result_payload: exportFound ? result : null,
+      payload: exportFound ? {} : payload,
+      customer_id: exportFound ? null : customerId,
       result_expires_at: exportFound ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null,
       status: "REVIEW_REQUIRED",
       last_error: exportFound ? "export_ready_for_secure_merchant_delivery" : "customer_record_not_found",
@@ -175,7 +177,7 @@ Deno.serve(async (req: Request) => {
       await patch({ status: "REVIEW_REQUIRED", last_error: "customer_record_not_found" });
       return json(200, { received: true, review_required: true, reason: "customer_record_not_found" });
     }
-    const saved = await patch({ status: "COMPLETED", payload: {}, processed_at: new Date().toISOString(), last_error: null });
+    const saved = await patch({ status: "COMPLETED", payload: {}, customer_id: null, processed_at: new Date().toISOString(), last_error: null });
     if (!saved.ok) return json(503, { error: "customer_redaction_status_update_failed" });
     return json(200, { received: true, processed: true, topic });
   }
