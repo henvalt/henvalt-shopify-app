@@ -106,6 +106,7 @@ jobs:
           privacy_export = pathlib.Path("supabase/functions/henvalt-privacy-export/index.ts").read_text()
           dashboard = pathlib.Path("dashboard/index.html").read_text()
           for required in ("auth/v1/user", "tenant_memberships", "role=in.(OWNER,ADMIN)", "tenant_id=eq.", "result_expires_at=gt.", "content-disposition"):
+          assert r"replace(/^Bearer\s+/i" in privacy_export, "Privacy export must parse standard Bearer authorization headers"
               assert required in privacy_export, f"Secure export endpoint missing {required}"
           assert "result_payload" in privacy_export and "result_delivered_at" in privacy_export, "Export delivery must audit downloads"
           assert "access-control-expose-headers" in privacy_export and "content-disposition" in privacy_export, "Dashboard must be able to read the export filename header"
