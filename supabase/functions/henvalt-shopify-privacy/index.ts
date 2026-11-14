@@ -57,6 +57,12 @@ Deno.serve(async (req: Request) => {
   const raw = await req.text();
   if (raw.length > 1_000_000) return json(413, { error: "payload_too_large" });
   if (!(await verifyHmac(raw, hmac))) return json(401, { error: "invalid_hmac" });
+  // Opportunistically erase expired export bundles whenever a verified compliance webhook arrives.
+  const purge = await db("/rest/v1/rpc/purge_expired_shopify_privacy_exports", {
+    method: "POST",
+    body: "{}",
+  });
+  if (!purge.ok) console.error("Expired privacy export cleanup failed", purge.status);
   let payload: any;
   try { payload = JSON.parse(raw); } catch { return json(400, { error: "invalid_json" }); }
   if (payload?.shop_domain && String(payload.shop_domain).toLowerCase() !== shop) {
