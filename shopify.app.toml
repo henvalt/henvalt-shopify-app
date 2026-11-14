@@ -17,3 +17,7 @@ redirect_urls = [
 
 [webhooks]
 api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy"
