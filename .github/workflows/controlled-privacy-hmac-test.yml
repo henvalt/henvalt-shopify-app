@@ -1,0 +1,67 @@
+name: Controlled Shopify privacy HMAC test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  signed-data-request:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Sign and send non-destructive test request
+        env:
+          SHOPIFY_API_SECRET: ${{ secrets.SHOPIFY_API_SECRET }}
+        run: |
+          node <<'NODE'
+          const { createHmac } = require('node:crypto');
+
+          const secret = process.env.SHOPIFY_API_SECRET;
+          if (!secret) {
+            console.error('SHOPIFY_API_SECRET repository secret is missing.');
+            process.exit(1);
+          }
+
+          const shop = 'ur4jvw-nz.myshopify.com';
+          const shopId = '86409249010';
+          const webhookId = `henvalt-controlled-data-request-test-${process.env.GITHUB_RUN_ID}`;
+          const payload = {
+            shop_id: Number(shopId),
+            shop_domain: shop,
+            orders_requested: [],
+            customer: {
+              id: 999999999999999999,
+              email: null,
+              phone: null
+            },
+            data_request: {
+              id: Number(process.env.GITHUB_RUN_ID)
+            }
+          };
+          const raw = JSON.stringify(payload);
+          const hmac = createHmac('sha256', secret).update(raw, 'utf8').digest('base64');
+
+          fetch('https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy', {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              'x-shopify-topic': 'customers/data_request',
+              'x-shopify-shop-domain': shop,
+              'x-shopify-shop-id': shopId,
+              'x-shopify-webhook-id': webhookId,
+              'x-shopify-hmac-sha256': hmac
+            },
+            body: raw
+          }).then(async response => {
+            const body = await response.text();
+            console.log('HTTP status:', response.status);
+            console.log('Response:', body);
+            console.log('Test webhook ID:', webhookId);
+            if (!response.ok) process.exitCode = 1;
+          }).catch(error => {
+            console.error('Request failed:', error.message);
+            process.exitCode = 1;
+          });
+          NODE
