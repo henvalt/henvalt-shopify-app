@@ -118,6 +118,7 @@ jobs:
           assert "purge_expired_shopify_privacy_exports" in privacy_export, "Dashboard access must also purge expired export data"
           assert "last_error,status" in privacy_export and "&result_payload=not.is.null" not in privacy_export, "Merchant privacy page must list unmatched requests needing review"
           assert "Manual review required" in dashboard and "Review required" in dashboard, "Dashboard must distinguish pending review from downloadable exports"
+          assert "Export expired" in dashboard and '"Expired"' in dashboard, "Dashboard must distinguish expired exports from requests needing review"
           assert "customer_id: exportFound ? null : customerId" in privacy_handler, "Generated exports must minimise retained request identifiers"
           assert "customer_id: null" in privacy_handler, "Completed redactions must clear the stored customer identifier"
           assert "PRIVACY_EXPORT_API" in dashboard and "loadPrivacyRequests" in dashboard and "downloadPrivacyExport" in dashboard, "Merchant dashboard missing privacy export UI"
