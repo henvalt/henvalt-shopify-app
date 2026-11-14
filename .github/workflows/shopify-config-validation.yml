@@ -82,7 +82,10 @@ jobs:
               "canonical_events",
               "conversation_messages",
               "delivery_attempts",
+              "delivery_requests",
               "provider_events",
+              "messages",
+              "recovery_interventions",
               "tracking_tokens",
               "unsubscribe_tokens",
               "webhook_events",
@@ -94,6 +97,7 @@ jobs:
           assert "where c.tenant_id = p_tenant_id" in customer_privacy, "Customer lookup must be tenant scoped"
           assert "delete from henvalt.email_suppressions" in customer_privacy, "Customer suppression rows must be removed without unique-key collisions"
           assert "delete from henvalt.tracking_tokens" in customer_privacy, "Customer tracking tokens must be removed"
+          assert "dr.opportunity_id in" in customer_privacy and "cc.customer_id=any(v_customer_ids)" in customer_privacy, "Delivery redaction must be linked by customer even when email is absent"
           assert "result_payload jsonb" in export_storage and "result_expires_at timestamptz" in export_storage, "Customer export storage must be time-limited"
           assert "result_expires_at" in export_storage and "service_role" in export_storage, "Customer export storage must remain service-role only"
           assert "purge_expired_shopify_privacy_exports" in export_storage and "purge_expired_shopify_privacy_exports" in privacy_handler, "Expired customer exports must be purged on verified webhook traffic"
