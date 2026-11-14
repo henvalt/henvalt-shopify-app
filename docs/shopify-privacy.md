@@ -20,6 +20,12 @@ This implementation is staged in PR #2. It is not deployed to the production Sup
 
 Both functions use the existing Supabase project environment variables: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_ANON_KEY`; the webhook receiver additionally needs `SHOPIFY_API_SECRET`.
 
+## Scheduler prerequisite
+
+- The connected production database currently has neither `pg_cron` nor the `cron.job` scheduler table enabled. This was confirmed with a read-only extension/catalog query.
+- Do not claim expiry cleanup is scheduled until `pg_cron` is enabled and the purge job is registered and verified in `cron.job` / `cron.job_run_details`.
+- Enabling the extension and registering a recurring job changes production database configuration. Keep this separate from the GitHub PR and obtain explicit approval before doing it.
+
 ## Data handling
 
 - Customer exports are retained in a service-role-only JSONB column for up to 30 days and are delivered as an authenticated JSON download. They are not emailed.
