@@ -64,7 +64,7 @@ jobs:
           customer_privacy = pathlib.Path("supabase/migrations/202611140003_shopify_customer_privacy_rpcs.sql").read_text().lower()
           for required in (
               "export_shopify_customer_data",
-              "redact_shopify_customer_data",
+              "redact_shopify_customer_data",\n              "redact_shopify_shop_data",
               "security definer",
               "set search_path = henvalt, pg_temp",
               "revoke all on function",
