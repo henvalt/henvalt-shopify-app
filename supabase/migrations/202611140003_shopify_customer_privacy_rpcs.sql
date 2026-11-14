@@ -3,7 +3,8 @@
 
 create or replace function henvalt.export_shopify_customer_data(
   p_tenant_id uuid,
-  p_shopify_customer_id text
+  p_shopify_customer_id text,
+  p_customer_email text default null
 ) returns jsonb
 language plpgsql
 security definer
@@ -11,21 +12,25 @@ set search_path = henvalt, pg_temp
 as $$
 declare
   v_customer_ids uuid[];
-  v_email text;
+  v_email text := nullif(lower(trim(p_customer_email)), '');
   v_result jsonb;
 begin
-  if p_tenant_id is null or nullif(trim(p_shopify_customer_id), '') is null then
-    raise exception 'tenant_id and Shopify customer id are required';
+  if p_tenant_id is null
+     or (nullif(trim(p_shopify_customer_id), '') is null and v_email is null) then
+    raise exception 'tenant_id and either Shopify customer id or customer email are required';
   end if;
 
   select coalesce(array_agg(c.id), array[]::uuid[]), max(c.email)
     into v_customer_ids, v_email
   from henvalt.customers c
   where c.tenant_id = p_tenant_id
-    and c.shopify_customer_id = p_shopify_customer_id;
+    and (
+      (nullif(trim(p_shopify_customer_id), '') is not null and c.shopify_customer_id = p_shopify_customer_id)
+      or (v_email is not null and lower(c.email) = v_email)
+    );
 
   if cardinality(v_customer_ids) = 0 then
-    return jsonb_build_object('found', false, 'shopify_customer_id', p_shopify_customer_id);
+    return jsonb_build_object('found', false);
   end if;
 
   select jsonb_build_object(
@@ -355,9 +360,9 @@ begin
 end;
 $$;
 
-revoke all on function henvalt.export_shopify_customer_data(uuid, text) from public, anon, authenticated;
+revoke all on function henvalt.export_shopify_customer_data(uuid, text, text) from public, anon, authenticated;
 revoke all on function henvalt.redact_shopify_customer_data(uuid, text, text) from public, anon, authenticated;
-grant execute on function henvalt.export_shopify_customer_data(uuid, text) to service_role;
+grant execute on function henvalt.export_shopify_customer_data(uuid, text, text) to service_role;
 grant execute on function henvalt.redact_shopify_customer_data(uuid, text, text) to service_role;
 
 -- Shop redaction removes the tenant and all tenant-scoped records through the
