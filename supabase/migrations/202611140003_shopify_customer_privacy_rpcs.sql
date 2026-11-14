@@ -158,15 +158,19 @@ declare
   v_updated_orders integer := 0;
   v_updated_sessions integer := 0;
 begin
-  if p_tenant_id is null or nullif(trim(p_shopify_customer_id), '') is null then
-    raise exception 'tenant_id and Shopify customer id are required';
+  if p_tenant_id is null
+     or (nullif(trim(p_shopify_customer_id), '') is null and v_email is null) then
+    raise exception 'tenant_id and either Shopify customer id or customer email are required';
   end if;
 
   select coalesce(array_agg(c.id), array[]::uuid[]), coalesce(max(lower(c.email)), v_email)
     into v_customer_ids, v_email
   from henvalt.customers c
   where c.tenant_id = p_tenant_id
-    and c.shopify_customer_id = p_shopify_customer_id;
+    and (
+      (nullif(trim(p_shopify_customer_id), '') is not null and c.shopify_customer_id = p_shopify_customer_id)
+      or (v_email is not null and lower(c.email) = v_email)
+    );
 
   -- Never broaden deletion beyond this exact tenant and Shopify customer identifier.
   if cardinality(v_customer_ids) = 0 and v_email is null then
