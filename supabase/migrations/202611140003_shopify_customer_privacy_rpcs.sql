@@ -94,7 +94,10 @@ begin
   delete from henvalt.canonical_events e
   where e.tenant_id = p_tenant_id
     and (e.customer_reference = p_shopify_customer_id
-      or (v_email is not null and lower(e.email) = v_email));
+      or e.payload #>> '{customer,id}' = p_shopify_customer_id
+      or e.payload #>> '{id}' = p_shopify_customer_id
+      or (v_email is not null and lower(e.email) = v_email)
+      or (v_email is not null and lower(coalesce(e.payload #>> '{customer,email}', e.payload #>> '{email}', '')) = v_email));
   get diagnostics v_deleted_events = row_count;
 
   delete from henvalt.messages m
@@ -147,10 +150,14 @@ begin
     set recipient_email = null, payload = '{}'::jsonb, processing_result = '{}'::jsonb
     where x.tenant_id = p_tenant_id and lower(x.recipient_email) = v_email;
 
-    update henvalt.email_suppressions x
-    set email_normalized = '[redacted]', customer_id = null
-    where x.tenant_id = p_tenant_id and lower(x.email_normalized) = v_email;
   end if;
+
+  -- Suppression rows are removed rather than assigned a shared placeholder email,
+  -- which would collide with the active-email unique index.
+  delete from henvalt.email_suppressions x
+  where x.tenant_id = p_tenant_id
+    and (x.customer_id = any(v_customer_ids)
+      or (v_email is not null and lower(x.email_normalized) = v_email));
 
   -- Remove raw webhook/error/audit payloads that identify this customer.
   update henvalt.webhook_events
@@ -161,9 +168,10 @@ begin
       or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
 
   update henvalt.processing_errors
-  set payload = '{}'::jsonb, error_message = 'Customer data redacted'
+  set payload = '{}'::jsonb, error_message = 'Customer data redacted', entity_id = null
   where tenant_id = p_tenant_id
-    and (payload #>> '{customer,id}' = p_shopify_customer_id
+    and (entity_id = any(v_customer_ids)
+      or payload #>> '{customer,id}' = p_shopify_customer_id
       or payload #>> '{id}' = p_shopify_customer_id
       or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
 
@@ -183,9 +191,10 @@ begin
   where tenant_id = p_tenant_id and v_email is not null and lower(recipient_reference) = v_email;
 
   update henvalt.audit_log
-  set payload = '{}'::jsonb, actor_reference = null
+  set payload = '{}'::jsonb, actor_reference = null, entity_id = null
   where tenant_id = p_tenant_id
-    and (payload #>> '{customer,id}' = p_shopify_customer_id
+    and (entity_id = any(v_customer_ids)
+      or payload #>> '{customer,id}' = p_shopify_customer_id
       or payload #>> '{id}' = p_shopify_customer_id
       or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
 
