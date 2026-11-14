@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Shopify TOML and extension source
+      - name: Validate Shopify TOML, Pixel source, collector, and ingest contract
         run: |
           python3 - <<'PY'
           import json
@@ -35,13 +35,16 @@ jobs:
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
           assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
+
           source = pathlib.Path("extensions/henvalt-pixel/src/index.js").read_text()
           collector = pathlib.Path("cloudflare/pixel-collector.js").read_text()
+          ingest = pathlib.Path("supabase/migrations/202611140001_allow_product_removed_from_cart_pixel_event.sql").read_text()
           for event in ("page_viewed", "product_viewed", "product_added_to_cart", "product_removed_from_cart", "checkout_started"):
               assert event in source, f"Missing pixel subscription: {event}"
               assert event in collector, f"Collector rejects subscribed pixel event: {event}"
+              assert event in ingest, f"Supabase ingest rejects subscribed pixel event: {event}"
           assert "fetch(" in source, "Missing collector delivery"
-          print("HENVALT Shopify app configuration and Pixel source checks passed.")
+          print("HENVALT Shopify Pixel-to-collector-to-Supabase event contract checks passed.")
           PY
 
   deploy-shopify-version:
