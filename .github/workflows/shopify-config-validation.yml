@@ -110,6 +110,8 @@ jobs:
           assert "coalesce(max(lower(c.email)), v_email)" in customer_privacy and "or exists (select 1 from henvalt.checkouts" in customer_privacy, "Customer export must preserve email-only identifiers and find checkout-only records"
           assert "x.checkout_id in (select co.id" in customer_privacy, "Customer export must include orders linked through email-matched checkouts"
           assert "v_checkout_ids" in customer_privacy and "v_opportunity_ids" in customer_privacy, "Email-only redaction must cover checkout-linked orders and interventions"
+          assert "raw events and processing records can still be keyed by the shopify customer id" in customer_privacy, "ID-only redaction must continue without a customer row"
+          assert "henvalt.webhook_events x where x.tenant_id=p_tenant_id" in customer_privacy and "henvalt.processing_errors x where x.tenant_id=p_tenant_id" in customer_privacy, "ID-only exports must detect raw webhook and processing records"
           assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
           privacy_export = pathlib.Path("supabase/functions/henvalt-privacy-export/index.ts").read_text()
           dashboard = pathlib.Path("dashboard/index.html").read_text()
