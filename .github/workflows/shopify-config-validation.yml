@@ -44,7 +44,23 @@ jobs:
               assert event in collector, f"Collector rejects subscribed pixel event: {event}"
               assert event in ingest, f"Supabase ingest rejects subscribed pixel event: {event}"
           assert "fetch(" in source, "Missing collector delivery"
-          print("HENVALT Shopify Pixel-to-collector-to-Supabase event contract checks passed.")
+
+          privacy_topics = {"customers/data_request", "customers/redact", "shop/redact"}
+          subscriptions = app.get("webhooks", {}).get("subscriptions", [])
+          configured = set()
+          for subscription in subscriptions:
+              configured.update(subscription.get("compliance_topics", []))
+          assert privacy_topics <= configured, f"Missing Shopify compliance topics: {privacy_topics - configured}"
+          privacy_uri = next((s.get("uri", "") for s in subscriptions if privacy_topics <= set(s.get("compliance_topics", []))), "")
+          assert privacy_uri == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy", "Unexpected privacy webhook destination"
+
+          privacy_handler = pathlib.Path("supabase/functions/henvalt-shopify-privacy/index.ts").read_text()
+          privacy_migration = pathlib.Path("supabase/migrations/202611140002_shopify_privacy_request_queue.sql").read_text()
+          for required in ("x-shopify-hmac-sha256", "customers/data_request", "customers/redact", "shop/redact", "invalid_hmac"):
+              assert required in privacy_handler, f"Privacy handler missing {required}"
+          assert "shopify_privacy_requests" in privacy_handler and "shopify_privacy_requests" in privacy_migration, "Privacy queue schema/handler mismatch"
+          assert "enable row level security" in privacy_migration.lower(), "Privacy queue must have RLS enabled"
+          print("HENVALT pixel contract and Shopify privacy webhook configuration checks passed.")
           PY
 
   deploy-shopify-version:
