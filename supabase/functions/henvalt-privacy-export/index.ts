@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
   if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) return reply(503, { error: "privacy_export_not_configured" });
 
   try {
-    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\\s+/i, "").trim();
+    const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
     if (!token) return reply(401, { error: "sign_in_required" });
 
     // Validate the access token with Supabase Auth; never trust decoded JWT claims.
