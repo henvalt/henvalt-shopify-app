@@ -105,7 +105,7 @@ jobs:
           assert "export_shopify_customer_data" in privacy_handler and "redact_shopify_customer_data" in privacy_handler and "redact_shopify_shop_data" in privacy_handler, "Privacy webhook does not invoke all scoped processors"
           assert "customerEmail" in privacy_handler and "p_customer_email" in privacy_handler, "Privacy data requests must support Shopify email-only customer payloads"
           assert 'if (!customerId && !customerEmail)' in privacy_handler, "Shopify customer redaction must support email-only payloads"
-          assert "either Shopify customer id or customer email are required" in customer_privacy, "Customer redaction RPC must accept email-only identifiers"
+          assert "either shopify customer id or customer email are required" in customer_privacy, "Customer redaction RPC must accept email-only identifiers"
           assert "p_customer_email text default null" in customer_privacy and "lower(c.email) = v_email" in customer_privacy, "Customer export RPC must resolve email-only requests within tenant scope"
           assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
           privacy_export = pathlib.Path("supabase/functions/henvalt-privacy-export/index.ts").read_text()
