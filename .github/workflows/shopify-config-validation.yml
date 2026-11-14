@@ -107,6 +107,9 @@ jobs:
           assert 'if (!customerId && !customerEmail)' in privacy_handler, "Shopify customer redaction must support email-only payloads"
           assert "either shopify customer id or customer email are required" in customer_privacy, "Customer redaction RPC must accept email-only identifiers"
           assert "p_customer_email text default null" in customer_privacy and "lower(c.email) = v_email" in customer_privacy, "Customer export RPC must resolve email-only requests within tenant scope"
+          assert "coalesce(max(lower(c.email)), v_email)" in customer_privacy and "or exists (select 1 from henvalt.checkouts" in customer_privacy, "Customer export must preserve email-only identifiers and find checkout-only records"
+          assert "x.checkout_id in (select co.id" in customer_privacy, "Customer export must include orders linked through email-matched checkouts"
+          assert "v_checkout_ids" in customer_privacy and "v_opportunity_ids" in customer_privacy, "Email-only redaction must cover checkout-linked orders and interventions"
           assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
           privacy_export = pathlib.Path("supabase/functions/henvalt-privacy-export/index.ts").read_text()
           dashboard = pathlib.Path("dashboard/index.html").read_text()
