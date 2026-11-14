@@ -79,6 +79,7 @@ Deno.serve(async (req: Request) => {
   // Returning 200 without persisting would silently discard a compliance request.
   const matched = Boolean(row?.tenant_id);
   const customerId = payload?.customer?.id == null ? null : String(payload.customer.id);
+  const customerEmail = payload?.customer?.email == null ? null : String(payload.customer.email);
   const requestId = payload?.data_request?.id == null ? null : String(payload.data_request.id);
   const inserted = await db("/rest/v1/shopify_privacy_requests?on_conflict=webhook_id", {
     method: "POST",
@@ -127,13 +128,14 @@ Deno.serve(async (req: Request) => {
   });
 
   if (topic === "customers/data_request") {
-    if (!customerId) {
-      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_id_missing" });
-      return json(200, { received: true, review_required: true, reason: "customer_id_missing" });
+    if (!customerId && !customerEmail) {
+      await patch({ status: "REVIEW_REQUIRED", last_error: "customer_identifier_missing" });
+      return json(200, { received: true, review_required: true, reason: "customer_identifier_missing" });
     }
     const exported = await rpc("export_shopify_customer_data", {
       p_tenant_id: row.tenant_id,
       p_shopify_customer_id: customerId,
+      p_customer_email: customerEmail,
     });
     if (!exported.ok) {
       await patch({ status: "FAILED", last_error: "customer_export_failed" });
