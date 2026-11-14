@@ -36,6 +36,7 @@ begin
       or exists (select 1 from henvalt.canonical_events x where x.tenant_id=p_tenant_id and ((p_shopify_customer_id is not null and x.customer_reference=p_shopify_customer_id) or (v_email is not null and lower(x.email)=v_email)))
       or exists (select 1 from henvalt.delivery_requests x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_reference)=v_email)
       or exists (select 1 from henvalt.messages x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient)=v_email)
+      or exists (select 1 from henvalt.email_suppressions x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.email_normalized)=v_email)
       or exists (select 1 from henvalt.provider_events x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_email)=v_email)
       or exists (select 1 from henvalt.recovery_interventions x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_reference)=v_email)
       or exists (select 1 from henvalt.webhook_events x where x.tenant_id=p_tenant_id and ((p_shopify_customer_id is not null and (x.payload #>> '{customer,id}'=p_shopify_customer_id or x.payload #>> '{id}'=p_shopify_customer_id)) or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=v_email)))
