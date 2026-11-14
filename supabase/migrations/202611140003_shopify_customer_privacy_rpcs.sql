@@ -45,8 +45,85 @@ begin
     'delivery_requests', coalesce((
       select jsonb_agg(to_jsonb(dr) - 'tenant_id')
       from henvalt.delivery_requests dr
-      join henvalt.customer_conversations cc on cc.delivery_request_id=dr.id
-      where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+      where dr.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(dr.recipient_reference)=lower(v_email))
+        or dr.id in (
+          select cc.delivery_request_id from henvalt.customer_conversations cc
+          where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+        )
+      )
+    ), '[]'::jsonb),
+    'delivery_attempts', coalesce((
+      select jsonb_agg(to_jsonb(da) - 'tenant_id')
+      from henvalt.delivery_attempts da
+      join henvalt.delivery_requests dr on dr.id=da.delivery_request_id
+      where da.tenant_id=p_tenant_id and dr.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(dr.recipient_reference)=lower(v_email))
+        or dr.id in (
+          select cc.delivery_request_id from henvalt.customer_conversations cc
+          where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+        )
+      )
+    ), '[]'::jsonb),
+    'messages', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.messages x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient)=lower(v_email)), '[]'::jsonb),
+    'provider_events', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.provider_events x where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_email)=lower(v_email)), '[]'::jsonb),
+    'recovery_interventions', coalesce((
+      select jsonb_agg(to_jsonb(ri) - 'tenant_id')
+      from henvalt.recovery_interventions ri
+      left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
+      where ri.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(ri.recipient_reference)=lower(v_email))
+        or o.customer_id=any(v_customer_ids)
+      )
+    ), '[]'::jsonb),
+    'tracking_tokens', coalesce((
+      select jsonb_agg(to_jsonb(tt) - 'tenant_id')
+      from henvalt.tracking_tokens tt
+      join henvalt.recovery_interventions ri on ri.id=tt.intervention_id and ri.tenant_id=p_tenant_id
+      left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
+      where tt.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(ri.recipient_reference)=lower(v_email))
+        or o.customer_id=any(v_customer_ids)
+      )
+    ), '[]'::jsonb),
+    'unsubscribe_tokens', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.unsubscribe_tokens x where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)), '[]'::jsonb),
+    'webhook_events', coalesce((
+      select jsonb_agg(to_jsonb(x) - 'tenant_id')
+      from henvalt.webhook_events x
+      where x.tenant_id=p_tenant_id and (
+        x.payload #>> '{customer,id}'=p_shopify_customer_id
+        or x.payload #>> '{id}'=p_shopify_customer_id
+        or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=lower(v_email))
+      )
+    ), '[]'::jsonb),
+    'processing_errors', coalesce((
+      select jsonb_agg(to_jsonb(x) - 'tenant_id')
+      from henvalt.processing_errors x
+      where x.tenant_id=p_tenant_id and (
+        x.entity_id=any(v_customer_ids)
+        or x.payload #>> '{customer,id}'=p_shopify_customer_id
+        or x.payload #>> '{id}'=p_shopify_customer_id
+        or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=lower(v_email))
+      )
+    ), '[]'::jsonb),
+    'background_jobs', coalesce((
+      select jsonb_agg(to_jsonb(x) - 'tenant_id')
+      from henvalt.background_jobs x
+      where x.tenant_id=p_tenant_id and (
+        x.payload #>> '{customer,id}'=p_shopify_customer_id
+        or x.payload #>> '{id}'=p_shopify_customer_id
+        or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=lower(v_email))
+      )
+    ), '[]'::jsonb),
+    'audit_log', coalesce((
+      select jsonb_agg(to_jsonb(x) - 'tenant_id')
+      from henvalt.audit_log x
+      where x.tenant_id=p_tenant_id and (
+        x.entity_id=any(v_customer_ids)
+        or x.payload #>> '{customer,id}'=p_shopify_customer_id
+        or x.payload #>> '{id}'=p_shopify_customer_id
+        or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=lower(v_email))
+      )
     ), '[]'::jsonb),
     'email_suppressions', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.email_suppressions x where x.tenant_id=p_tenant_id and (x.customer_id=any(v_customer_ids) or (v_email is not null and lower(x.email_normalized)=lower(v_email)))), '[]'::jsonb),
     'events', coalesce((select jsonb_agg(to_jsonb(x) - 'tenant_id') from henvalt.canonical_events x where x.tenant_id=p_tenant_id and (x.customer_reference=p_shopify_customer_id or (v_email is not null and lower(x.email)=lower(v_email)))), '[]'::jsonb),
@@ -123,6 +200,18 @@ begin
   set customer_id = null, metadata = '{}'::jsonb
   where x.tenant_id = p_tenant_id and x.customer_id = any(v_customer_ids);
   get diagnostics v_updated_sessions = row_count;
+
+  delete from henvalt.tracking_tokens tt
+  where tt.tenant_id=p_tenant_id
+    and tt.intervention_id in (
+      select ri.id
+      from henvalt.recovery_interventions ri
+      left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
+      where ri.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(ri.recipient_reference)=v_email)
+        or o.customer_id=any(v_customer_ids)
+      )
+    );
 
   if v_email is not null then
     update henvalt.delivery_attempts da
