@@ -69,6 +69,7 @@ jobs:
 
           customer_privacy = pathlib.Path("supabase/migrations/202611140003_shopify_customer_privacy_rpcs.sql").read_text().lower()
           export_storage = pathlib.Path("supabase/migrations/202611140004_shopify_privacy_export_storage.sql").read_text().lower()
+          export_scheduler = pathlib.Path("supabase/migrations/202611140005_schedule_privacy_export_purge.sql").read_text().lower()
           for required in (
               "export_shopify_customer_data",
               "redact_shopify_customer_data",
@@ -116,6 +117,9 @@ jobs:
           assert "PRIVACY_EXPORT_API" in dashboard and "loadPrivacyRequests" in dashboard and "downloadPrivacyExport" in dashboard, "Merchant dashboard missing privacy export UI"
           assert "data-page=\"privacy\"" in dashboard and "id=\"page-privacy\"" in dashboard, "Merchant dashboard privacy page is missing"
           assert "service_role" in export_storage, "Export storage must be service-role only"
+          assert "cron.schedule" in export_scheduler and "henvalt-privacy-export-expiry-purge" in export_scheduler, "Privacy export expiry must have a named recurring Cron job"
+          assert "*/15 * * * *" in export_scheduler and "purge_expired_shopify_privacy_exports" in export_scheduler, "Privacy export purge must run every 15 minutes"
+          assert "to_regnamespace('cron')" in export_scheduler, "Scheduler migration must fail clearly when Supabase Cron is not enabled"
           print("HENVALT pixel contract and Shopify privacy webhook/export/redaction checks passed.")
           print("HENVALT pixel contract and Shopify privacy webhook configuration checks passed.")
           PY
