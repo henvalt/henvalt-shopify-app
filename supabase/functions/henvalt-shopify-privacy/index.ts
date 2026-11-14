@@ -69,7 +69,7 @@ Deno.serve(async (req: Request) => {
   if (!connection.ok) return json(503, { error: "tenant_lookup_failed" });
   const rows = await connection.json().catch(() => []);
   const row = Array.isArray(rows) ? rows[0] : null;
-  if (!row?.tenant_id) return json(200, { received: true, matched: false });
+  // Preserve valid Shopify requests even when the shop is no longer linked.\n  // Returning 200 without persisting would silently discard a compliance request.\n  const matched = Boolean(row?.tenant_id);
   const customerId = payload?.customer?.id == null ? null : String(payload.customer.id);
   const requestId = payload?.data_request?.id == null ? null : String(payload.data_request.id);
   const inserted = await db("/rest/v1/shopify_privacy_requests?on_conflict=webhook_id", {
@@ -84,12 +84,12 @@ Deno.serve(async (req: Request) => {
       customer_id: customerId,
       request_id: requestId,
       payload,
-      status: "PENDING",
+      status: matched ? "PENDING" : "REVIEW_REQUIRED",
     }),
   });
   if (!inserted.ok) {
     console.error("Privacy request persistence failed", inserted.status);
     return json(503, { error: "privacy_request_persistence_failed" });
   }
-  return json(200, { received: true, queued: true, topic });
+  return json(200, { received: true, queued: true, matched, topic });
 });
