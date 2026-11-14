@@ -76,9 +76,9 @@ Deno.serve(async (req: Request) => {
     method: "POST",
     headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
     body: JSON.stringify({
-      tenant_id: row.tenant_id,
+      tenant_id: row?.tenant_id ?? null,
       shop_domain: shop,
-      shopify_shop_id: shopId || row.shopify_shop_id || null,
+      shopify_shop_id: shopId || row?.shopify_shop_id || null,
       topic,
       webhook_id: webhookId,
       customer_id: customerId,
