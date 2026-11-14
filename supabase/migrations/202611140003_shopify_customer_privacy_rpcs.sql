@@ -157,6 +157,31 @@ begin
       or payload #>> '{id}' = p_shopify_customer_id
       or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
 
+  update henvalt.background_jobs
+  set payload = '{}'::jsonb, last_error = null
+  where tenant_id = p_tenant_id
+    and (payload #>> '{customer,id}' = p_shopify_customer_id
+      or payload #>> '{id}' = p_shopify_customer_id
+      or (v_email is not null and lower(coalesce(payload #>> '{customer,email}', payload #>> '{email}', '')) = v_email));
+
+  update henvalt.opportunities
+  set metadata = '{}'::jsonb
+  where tenant_id = p_tenant_id and customer_id = any(v_customer_ids);
+
+  update henvalt.recovery_interventions
+  set recipient_reference = '[redacted]'
+  where tenant_id = p_tenant_id and v_email is not null and lower(recipient_reference) = v_email;
+
+  update henvalt.delivery_attempts da
+  set provider_response = '{}'::jsonb
+  where da.tenant_id = p_tenant_id
+    and exists (
+      select 1 from henvalt.delivery_requests dr
+      where dr.id = da.delivery_request_id
+        and dr.tenant_id = p_tenant_id
+        and dr.recipient_reference = '[redacted]'
+    );
+
   update henvalt.audit_log
   set payload = '{}'::jsonb, actor_reference = null
   where tenant_id = p_tenant_id
