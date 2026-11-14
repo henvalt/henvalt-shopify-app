@@ -69,7 +69,9 @@ Deno.serve(async (req: Request) => {
   if (!connection.ok) return json(503, { error: "tenant_lookup_failed" });
   const rows = await connection.json().catch(() => []);
   const row = Array.isArray(rows) ? rows[0] : null;
-  // Preserve valid Shopify requests even when the shop is no longer linked.\n  // Returning 200 without persisting would silently discard a compliance request.\n  const matched = Boolean(row?.tenant_id);
+  // Preserve valid Shopify requests even when the shop is no longer linked.
+  // Returning 200 without persisting would silently discard a compliance request.
+  const matched = Boolean(row?.tenant_id);
   const customerId = payload?.customer?.id == null ? null : String(payload.customer.id);
   const requestId = payload?.data_request?.id == null ? null : String(payload.data_request.id);
   const inserted = await db("/rest/v1/shopify_privacy_requests?on_conflict=webhook_id", {
