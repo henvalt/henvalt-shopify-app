@@ -80,12 +80,19 @@ jobs:
               "p_shopify_customer_id",
               "canonical_events",
               "conversation_messages",
+              "delivery_attempts",
+              "provider_events",
+              "tracking_tokens",
+              "unsubscribe_tokens",
               "webhook_events",
+              "audit_log",
               "processing_errors",
           ):
               assert required in customer_privacy, f"Customer privacy RPC migration missing {required}"
           assert "from public, anon, authenticated" in customer_privacy, "Customer privacy RPCs must not be public"
           assert "where c.tenant_id = p_tenant_id" in customer_privacy, "Customer lookup must be tenant scoped"
+          assert "delete from henvalt.email_suppressions" in customer_privacy, "Customer suppression rows must be removed without unique-key collisions"
+          assert "delete from henvalt.tracking_tokens" in customer_privacy, "Customer tracking tokens must be removed"
           assert "result_payload jsonb" in export_storage and "result_expires_at timestamptz" in export_storage, "Customer export storage must be time-limited"
           assert "result_expires_at" in export_storage and "service_role" in export_storage, "Customer export storage must remain service-role only"
           assert "purge_expired_shopify_privacy_exports" in export_storage and "purge_expired_shopify_privacy_exports" in privacy_handler, "Expired customer exports must be purged on verified webhook traffic"
