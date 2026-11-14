@@ -7,6 +7,7 @@ const headers = {
   "access-control-allow-origin": "*",
   "access-control-allow-headers": "authorization, apikey, content-type, x-client-info",
   "access-control-allow-methods": "GET, OPTIONS",
+  "access-control-expose-headers": "content-disposition",
   "cache-control": "no-store",
 };
 const reply = (status: number, body: unknown, extra: Record<string, string> = {}) =>
