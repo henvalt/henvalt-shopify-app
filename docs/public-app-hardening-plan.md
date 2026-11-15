@@ -32,7 +32,9 @@ Introduce a stable internal app key (for example, `legacy` and `public_v1`) dist
 
 ## Shopify privacy compliance
 
-The future public app configuration must declare all three mandatory topics:
+The current branch now declares all three mandatory topics in `shopify.app.toml` for the existing merchant-owned app, using its current privacy Edge Function endpoint. This declaration is preparation only and has not been deployed. That endpoint verifies the existing app's single global secret; it must **not** be reused by a future Partner-owned app until app-specific secret routing is implemented.
+
+The future public app configuration must also declare all three mandatory topics:
 
 - `customers/data_request`
 - `customers/redact`
