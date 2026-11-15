@@ -64,3 +64,30 @@ The pixel extension already subscribes to `product_removed_from_cart`. The Supab
 ## Release boundary
 
 This branch is preparation only. Do not merge, deploy Cloudflare, deploy Supabase functions or migrations, change n8n workflows, create a new Shopify app, or release a Shopify version without separate explicit authorization and verified regression results.
+
+
+## Code audit: confirmed implementation gaps (2026-11-15)
+
+Read-only inspection of the current preparation branch confirms these are code-level blockers, not merely future recommendations:
+
+| Component | Current implementation | Required before a second app |
+|---|---|---|
+| `supabase/functions/henvalt-shopify-oauth/index.ts` | Reads one `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`; OAuth state stores shop, expiry, and initiating user only. Callback HMAC and token exchange use those globals. | Resolve a registered app key before creating state; persist it in state; callback must load that same app key and verify/exchange with its credentials. |
+| OAuth finalization RPC | Called with state hash and shop, but no app key. | Add app-aware finalization and transactional conflict protection before changing the function call. |
+| `supabase/functions/henvalt-shopify-token-refresh/index.ts` | Uses one global key/secret; claim, fail, and complete RPCs are shop-domain-only. | Claim must return immutable app identity with the refresh token; use that app's credentials for refresh and pass app identity through all completion/failure RPCs. |
+| `cloudflare/worker.js` | Accepts only `/shopify/webhooks` and verifies every webhook with `env.SHOPIFY_API_SECRET`; forwards the original headers/body to one n8n URL. | Add explicit app-key routes and a server-controlled app-secret registry; verify raw bytes before forwarding; forward a trusted app key only after verification. |
+| OAuth webhook registration | Registers every topic at the same `/shopify/webhooks` URL. | Register legacy and public app subscriptions to distinct explicit routes; do not point both at a single-secret verifier. |
+| n8n ingress verifier | Existing integration calls a single-secret HMAC verifier. | Add app-aware verification using the verified app key and original raw-body bytes before tenant resolution. |
+| Database identity | OAuth state, connection, refresh RPC, and tenant resolution are currently shop-domain-oriented. | Add app identity with transactional constraints and update every shop-keyed security boundary together; fail closed until complete. |
+
+### Safe implementation order
+
+1. Inventory and design the database contract first: app registry, Vault secret references, OAuth state app key, connection app key, one-active-app-per-shop constraint, and app-aware RPC signatures.
+2. Implement and test the database contract in an isolated database branch or migration review; do not apply it to production as part of this PR.
+3. Implement a shared app resolver and update OAuth install/callback and refresh together.
+4. Update webhook Worker routing and n8n verification together. Never forward a second app's event to the legacy single-secret RPC.
+5. Update privacy verification and the future app's TOML route only after the app-aware verifier is deployed and independently tested.
+6. Run legacy regression tests plus dual-app, wrong-key, replay, tampered-body, conflict-install, token-refresh, privacy, tenant-routing, and uninstall tests.
+7. Only then request separate authorization for production rollout and Shopify app distribution.
+
+**Important:** This repository does not contain the live Supabase schema definitions or n8n workflow source needed to safely implement steps 1–4 end-to-end in this branch. The present code audit therefore deliberately stops short of introducing a partial second-app implementation that could falsely appear production-ready.
