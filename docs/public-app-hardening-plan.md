@@ -141,3 +141,15 @@ Therefore, the current webhook chain has two independent single-app assumptions:
 6. Ingress rejects unknown/inactive app keys and missing or mismatched app/shop connections. It does not fall back to the legacy secret.
 
 This workflow inspection confirms that changing only the Worker or only the database would leave a broken or insecure path. The Worker, n8n workflow, Supabase verifier, and tenant resolver must be rolled out as one coordinated boundary.
+
+
+### OAuth finalization and existing-connection overwrite risk
+
+The live database definitions for `control_plane_finalize_shopify_oauth_install_expiring_for_owner` and `control_plane_connect_shop` were inspected read-only.
+
+- The finalization RPC consumes OAuth state by state hash and shop domain, then calls `control_plane_connect_shop(p_shop_domain)`. Neither function accepts an app key.
+- `control_plane_connect_shop` finds or creates one connection by shop domain and reactivates an existing connection. It does not distinguish which HENVALT Shopify app initiated the install.
+- The finalization RPC then updates the existing connection's access-token and refresh-token Vault references, using secret names derived only from the shop domain (for example, the legacy `henvalt_shopify_<shop>_access` / `_refresh` naming pattern).
+- Consequently, if a second app were wired into the current OAuth flow, the finalization path could overwrite the existing shop's token pair and re-use its connection. The current owner-membership check does not solve app identity separation.
+
+**Severity: release-blocking.** The future app-aware finalizer must bind the OAuth state, selected app registry entry, tenant membership/ownership, connection row, and token Vault references in one transaction. It must reject an app-key mismatch or existing connection belonging to another app before writing any Vault secret or changing connection state. Do not reuse the current finalization RPC for the second app.
