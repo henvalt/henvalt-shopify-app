@@ -117,3 +117,27 @@ The live Supabase project was inspected using read-only catalog queries and tabl
 The database change cannot safely be limited to adding an `app_key` column. The OAuth state-consumption path, connection insert/upsert, tenant resolution, webhook HMAC verification, and all three token-refresh RPCs must agree on the same app identity. Shop-specific control-plane and recovery functions that currently look up a connection by `shop_domain` must also be reviewed. The first safe rollout policy should remain **one active HENVALT app identity per shop**, unless and until every dependent operation is explicitly made multi-app aware.
 
 The database audit confirms the existing legacy app can remain intact while a future app identity is added in a coordinated migration. It does not establish that dual-app installation or same-shop coexistence works today.
+
+
+## n8n ingress audit: live workflow findings (2026-11-15)
+
+The active `HENVALT_INGEST` workflow (ID `VTpfGKNtu1CSQ4Rv`, 51 nodes) was inspected read-only. No workflow nodes or credentials were changed.
+
+- The `Event Webhook` trigger accepts raw request bodies.
+- `Validate & Normalize` extracts the Shopify shop domain, topic, webhook ID, HMAC, and raw-body base64. It does not read or validate a trusted HENVALT app-identity header.
+- `Verify Shopify HMAC` calls `henvalt.verify_shopify_webhook_hmac(p_hmac, p_raw_body_base64)`; the call has no app key.
+- `Resolve Shopify Tenant` calls `henvalt.resolve_shopify_tenant(p_shop_domain)`; it also has no app key.
+- The current Cloudflare ingress Worker forwards the original request headers/body to this one n8n endpoint after its own single-secret HMAC check. It does not add a verified internal app-identity header.
+
+Therefore, the current webhook chain has two independent single-app assumptions: Worker HMAC secret selection and n8n/Supabase HMAC verification. A future multi-app route must carry an app key only after Worker verification, validate that key against the app registry again in Supabase, and use the same key for tenant resolution. A caller-supplied public header must never be treated as proof of app identity.
+
+### Coordinated ingress contract required
+
+1. Worker maps a fixed route (not an arbitrary request header) to a configured app key and its server-side secret.
+2. Worker verifies the raw request bytes with that app secret.
+3. Worker removes any inbound copy of the internal identity header and adds its own trusted app key when forwarding.
+4. n8n validates the app key's shape and passes it with the original raw body/HMAC to the app-aware Supabase verifier.
+5. Supabase checks the app is active, selects its Vault secret, verifies HMAC, and resolves the tenant using both app key and shop domain.
+6. Ingress rejects unknown/inactive app keys and missing or mismatched app/shop connections. It does not fall back to the legacy secret.
+
+This workflow inspection confirms that changing only the Worker or only the database would leave a broken or insecure path. The Worker, n8n workflow, Supabase verifier, and tenant resolver must be rolled out as one coordinated boundary.
