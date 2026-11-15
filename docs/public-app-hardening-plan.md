@@ -65,7 +65,6 @@ The pixel extension already subscribes to `product_removed_from_cart`. The Supab
 
 This branch is preparation only. Do not merge, deploy Cloudflare, deploy Supabase functions or migrations, change n8n workflows, create a new Shopify app, or release a Shopify version without separate explicit authorization and verified regression results.
 
-
 ## Code audit: confirmed implementation gaps (2026-11-15)
 
 Read-only inspection of the current preparation branch confirms these are code-level blockers, not merely future recommendations:
@@ -91,3 +90,30 @@ Read-only inspection of the current preparation branch confirms these are code-l
 7. Only then request separate authorization for production rollout and Shopify app distribution.
 
 **Important:** This repository does not contain the live Supabase schema definitions or n8n workflow source needed to safely implement steps 1–4 end-to-end in this branch. The present code audit therefore deliberately stops short of introducing a partial second-app implementation that could falsely appear production-ready.
+
+## Database audit: live read-only findings (2026-11-15)
+
+The live Supabase project was inspected using read-only catalog queries and table metadata. No SQL writes, migrations, secret reads, or production changes were made.
+
+### Confirmed schema contract
+
+- `henvalt.shopify_oauth_states` has `state_hash`, `shop_domain`, `created_at`, `expires_at`, `consumed_at`, `correlation_id`, and `initiated_by_user_id`. It has no `app_key` or Shopify client/app identifier.
+- `henvalt.shopify_connections` has tenant/shop/token-secret-reference/refresh-lease fields, but no `app_key` or Shopify app identifier.
+- `shopify_connections_shop_domain_key` enforces `UNIQUE (shop_domain)`; a second app cannot create a second connection row for the same shop. A second uniqueness rule also exists on `(tenant_id, shopify_shop_id)`.
+- Token secret references are stored as Vault references, not plaintext tokens. Preserve this pattern when introducing app secrets.
+
+### Confirmed database function contracts
+
+| Function | Live signature | App-identity gap |
+|---|---|---|
+| `henvalt.resolve_shopify_tenant` | `(p_shop_domain text) returns uuid` | Resolves only by shop domain; no app key participates in tenant selection. |
+| `henvalt.verify_shopify_webhook_hmac` | `(p_hmac text, p_raw_body_base64 text) returns boolean` | Loads the one Vault secret named `henvalt_shopify_app_secret`; no app key parameter. |
+| `henvalt.claim_shopify_token_refresh` | `(p_shop_domain text, p_force boolean) returns jsonb` | Claims by shop domain and returns a refresh token without an app identity. |
+| `henvalt.complete_shopify_token_refresh` | `(p_shop_domain text, p_access_token text, p_refresh_token text, p_access_expires_in integer, p_refresh_expires_in integer)` | Persists the token pair by shop domain only. |
+| `henvalt.fail_shopify_token_refresh` | Existing Edge Function calls it with shop domain and error fields only. | Failure/lease handling is not bound to an app identity. |
+
+### Design consequence
+
+The database change cannot safely be limited to adding an `app_key` column. The OAuth state-consumption path, connection insert/upsert, tenant resolution, webhook HMAC verification, and all three token-refresh RPCs must agree on the same app identity. Shop-specific control-plane and recovery functions that currently look up a connection by `shop_domain` must also be reviewed. The first safe rollout policy should remain **one active HENVALT app identity per shop**, unless and until every dependent operation is explicitly made multi-app aware.
+
+The database audit confirms the existing legacy app can remain intact while a future app identity is added in a coordinated migration. It does not establish that dual-app installation or same-shop coexistence works today.
