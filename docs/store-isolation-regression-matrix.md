@@ -152,3 +152,28 @@ A public-app rollout is not ready until:
 - the user explicitly authorizes production deployment and Shopify app release.
 
 This matrix is a test specification, not an assertion that these tests have already run.
+
+
+## J. App identity, OAuth collision and secret isolation
+
+| ID | Scenario | Required result |
+|---|---|---|
+| APP-01 | Legacy app receives callback state created by public_v1 route | Reject; state app_key and trusted callback route must match |
+| APP-02 | Public app receives callback state created by legacy route | Reject; no cross-app secret fallback |
+| APP-03 | Legacy HMAC sent to public_v1 ingress | Reject before n8n forwarding |
+| APP-04 | Public_v1 HMAC sent to legacy ingress | Reject before n8n forwarding |
+| APP-05 | Unknown or disabled app_key appears on trusted ingress route | Reject; never default to legacy |
+| APP-06 | Same shop already connected to legacy; public_v1 OAuth begins | Conflict before token exchange/finalization where possible; existing connection unchanged |
+| APP-07 | Same shop already connected to public_v1; legacy OAuth begins | Conflict; existing connection unchanged |
+| APP-08 | Same app repeats a consumed OAuth callback | Reject replay; no Vault token update |
+| APP-09 | Two different shops in one tenant use different app keys | Both connections remain distinct and tenant-consistent |
+| APP-10 | App registry row references missing Vault secret | Fail closed; do not use another app's secret |
+| APP-11 | Caller supplies app_key header/body conflicting with trusted Worker route | Strip/reject caller value; only Worker-authenticated route identity is accepted |
+| APP-12 | Connection app_key differs from OAuth state app_key | Reject before any token/Vault write |
+| APP-13 | App-aware connection resolver finds zero or multiple matches | Structured unresolved/ambiguous failure; never select LIMIT 1 |
+| APP-14 | Token refresh request supplies another shop domain or app key | Reject; refresh is bound to immutable connection ID and lease |
+| APP-15 | App A uninstall webhook targets a store connected under app B | Reject; no cross-app deactivation |
+| APP-16 | Legacy app receives a valid webhook after public_v1 route is enabled | Legacy HMAC and routing continue unchanged |
+| APP-17 | Public app registry entry is inactive | Reject OAuth, refresh and webhook processing; no legacy fallback |
+| APP-18 | Rollback disables public_v1 ingress | Legacy app continues; public_v1 events fail closed and do not enter legacy path |
+
