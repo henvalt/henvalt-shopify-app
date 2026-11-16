@@ -169,7 +169,7 @@ This is tenant deletion, not store deletion. It would destroy the whole HENVALT 
 9. Add regression fixtures for a tenant with two stores that intentionally reuse the same Shopify customer ID, checkout token, session reference and customer email.
 10. Only after all tests pass, prepare a migration for separate human review. No production apply is included in this branch work.
 
-## 11. Required regression scenarios
+## 7. Required regression scenarios
 
 - Two active stores under one tenant; cart event from store A must never be returned with store B's domain.
 - Same Shopify customer ID in A and B must create two distinct HENVALT customer identities.
