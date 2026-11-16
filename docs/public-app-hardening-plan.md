@@ -182,3 +182,25 @@ These functions also reference `shopify_connections`, but their app-key migratio
 The app identity migration is a cross-cutting database change, not a small OAuth patch. It must preserve the existing tenant-scoped recovery and delivery model while ensuring every Shopify credential lookup, uninstall action, dashboard/control-plane read, billing operation, and pixel event resolves the intended connection. Recovery functions may remain tenant-keyed where the tenant already uniquely identifies one shop connection, but that invariant must be asserted and tested rather than assumed.
 
 No RPCs, tables, policies, secrets, or workflows were changed during this audit. The full function inventory is a planning and review artifact; before writing a migration, each listed function must be inspected for its exact connection lookup, authorization checks, and downstream callers.
+
+
+### OAuth-state and connection RLS review (2026-11-16)
+
+Read-only PostgreSQL catalog checks confirmed RLS is enabled on both `henvalt.shopify_oauth_states` and `henvalt.shopify_connections`.
+
+- `shopify_connections` has a tenant-isolation policy for all commands using `henvalt.is_tenant_member(tenant_id)`.
+- `shopify_oauth_states` has no row policy in `pg_policies`; with RLS enabled, ordinary roles have no policy-based row access. The OAuth Edge Function currently accesses it through the service-role REST client.
+- Do not add a broad authenticated-user policy to OAuth state as part of app-key support. Keep state creation, lookup, one-time consumption, and app-key binding behind the trusted server/RPC boundary.
+- The future app-aware finalizer must retain the existing tenant membership checks and must not weaken the connection table's tenant-isolation policy.
+
+This is a catalog-level policy review only; no grants, policies, RLS settings, or table data were changed.
+
+### Validation status
+
+GitHub Actions run `43740216447` completed successfully on commit `dd384181114a3fa32488b160f6d23cdba87c869d`:
+
+- `Test pixel event contract`: success.
+- `Validate Shopify TOML and extension source`: success.
+- `deploy-shopify-version`: skipped by the pull-request guard, as intended.
+
+The subsequent commits add documentation only. No deployment or live system change occurred.
