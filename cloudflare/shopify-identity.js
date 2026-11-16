@@ -56,7 +56,8 @@ export function resolveTrustedShopifyIdentity(input) {
     return { ok: false, code: "SHOP_CONNECTION_NOT_FOUND" };
   }
 
-  if (connection.is_active === false || connection.status === "inactive" ||
+  if (connection.active === false || connection.is_active === false ||
+      connection.reauth_required_at != null || connection.status === "inactive" ||
       connection.status === "disconnected" || connection.status === "reauth_required") {
     return { ok: false, code: "SHOP_CONNECTION_INACTIVE" };
   }
