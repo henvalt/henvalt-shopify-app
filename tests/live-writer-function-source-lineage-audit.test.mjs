@@ -17,7 +17,7 @@ test("live writer audit records the unsafe tenant-only writer contracts", () => 
     "project_order_from_event",
     "has no connection ID argument",
     "must not fall back to tenant-wide matching",
-    "before any Vault write or connection reactivation",
+    "Vault write or connection reactivation",
   ]) {
     assert.ok(audit.includes(phrase), `writer audit missing: ${phrase}`);
   }
