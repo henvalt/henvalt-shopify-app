@@ -1,3 +1,4 @@
+
 name: Shopify app configuration checks and deployment
 
 on:
@@ -24,41 +25,25 @@ jobs:
           import json
           import pathlib
           import tomllib
-
           app = tomllib.loads(pathlib.Path("shopify.app.toml").read_text())
           ext = tomllib.loads(pathlib.Path("extensions/henvalt-pixel/shopify.extension.toml").read_text())
           package = json.loads(pathlib.Path("extensions/henvalt-pixel/package.json").read_text())
-
           assert app["client_id"], "Missing Shopify Client ID"
           assert app["application_url"].startswith("https://"), "Application URL must use HTTPS"
           assert "read_orders" in app["access_scopes"]["scopes"].split(","), "Missing read_orders scope"
           assert "write_pixels" in app["access_scopes"]["scopes"].split(","), "Missing write_pixels scope"
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
           assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
-          required_compliance_topics = {
-              "customers/data_request",
-              "customers/redact",
-              "shop/redact",
-          }
+          required_compliance_topics = {"customers/data_request", "customers/redact", "shop/redact"}
           subscriptions = app["webhooks"].get("subscriptions", [])
-          compliance_subscriptions = [
-              item for item in subscriptions
-              if set(item.get("compliance_topics", [])) == required_compliance_topics
-          ]
+          compliance_subscriptions = [item for item in subscriptions if set(item.get("compliance_topics", [])) == required_compliance_topics]
           assert len(compliance_subscriptions) == 1, "Missing or duplicate mandatory Shopify privacy subscription"
           assert compliance_subscriptions[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy", "Unexpected legacy privacy webhook endpoint"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
           assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Web Pixels API dependency"
-
-          expected_events = {
-              "page_viewed",
-              "product_viewed",
-              "product_added_to_cart",
-              "product_removed_from_cart",
-              "checkout_started",
-          }
+          expected_events = {"page_viewed","product_viewed","product_added_to_cart","product_removed_from_cart","checkout_started"}
           source = pathlib.Path("extensions/henvalt-pixel/src/index.js").read_text()
           collector = pathlib.Path("cloudflare/pixel-collector.js").read_text()
           for event in expected_events:
@@ -67,6 +52,49 @@ jobs:
           assert "fetch(" in source, "Missing collector delivery"
           print("HENVALT Shopify app configuration and Pixel event contract checks passed.")
           PY
+
+  shopify-database-migration-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Create synthetic baseline
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
+      - name: Apply candidate migrations in order
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for migration in \
+            supabase/migrations/202611160001_shopify_webhook_identity_foundation.sql \
+            supabase/migrations/202611160002_shopify_webhook_verified_inbox_rpc.sql \
+            supabase/migrations/202611160003_shopify_oauth_state_app_identity.sql \
+            supabase/migrations/202611160004_shopify_oauth_app_aware_finalizer.sql \
+            supabase/migrations/202611160005_shopify_app_oauth_secret_resolver.sql \
+            supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql; do
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Exercise OAuth, webhook and privacy RPCs
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
 
   deploy-shopify-version:
     permissions:
