@@ -23,7 +23,9 @@ VALUES (
 DO $test$
 DECLARE
   v_finalized jsonb;
+  v_identity jsonb;
   v_connection_id uuid;
+  v_second_connection_id uuid;
   v_route_token text := repeat('a', 64);
   v_rotated_route_token text := repeat('b', 64);
   v_rotated_finalized jsonb;
@@ -32,6 +34,10 @@ DECLARE
   v_result record;
   v_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
   v_privacy_hmac text;
+  v_second_shop_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"2002","customer":{"id":12345},"data_request":{"id":98765}}';
+  v_second_shop_hmac text;
+  v_wrong_shop_id_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
+  v_wrong_shop_id_hmac text;
 BEGIN
   v_finalized := henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
     'synthetic-state-hash',
@@ -55,6 +61,26 @@ BEGIN
   END IF;
 
   v_connection_id := (v_finalized->>'connection_id')::uuid;
+
+  v_identity := henvalt.resolve_shopify_app_oauth_identity('test-client-id');
+  IF v_identity->>'app_key' <> 'test_app'
+     OR v_identity->>'shopify_client_id' <> 'test-client-id'
+     OR v_identity->>'shopify_api_secret' <> 'synthetic-test-secret-never-used-in-production' THEN
+    RAISE EXCEPTION 'App OAuth identity resolver returned an unexpected synthetic identity';
+  END IF;
+
+  INSERT INTO henvalt.shopify_connections (
+    tenant_id, shop_domain, shopify_shop_id, active, app_key
+  )
+  VALUES (
+    (v_finalized->>'tenant_id')::uuid,
+    'store-b.myshopify.com',
+    '2002',
+    true,
+    'test_app'
+  )
+  RETURNING id INTO v_second_connection_id;
+
   IF NOT EXISTS (
     SELECT 1 FROM henvalt.shopify_connections
     WHERE id = v_connection_id AND app_key = 'test_app'
@@ -207,6 +233,50 @@ BEGIN
 
   IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Duplicate privacy webhook was not idempotently acknowledged';
+  END IF;
+
+  -- A shared tenant may contain two stores. The same webhook ID in Store B
+  -- must create a separate receipt, bound to Store B rather than Store A.
+  v_second_shop_hmac := encode(
+    extensions.hmac(convert_to(v_second_shop_body, 'UTF8'), convert_to('synthetic-test-secret-never-used-in-production', 'UTF8'), 'sha256'),
+    'base64'
+  );
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_privacy_webhook_v2(
+    'test_app', 'test-client-id', v_second_shop_hmac,
+    encode(convert_to(v_second_shop_body, 'UTF8'), 'base64'),
+    'store-b.myshopify.com', 'customers/data_request', 'privacy-delivery-001'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Store B privacy receipt collided with Store A delivery identity: %', row_to_json(v_result);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_privacy_webhook_deliveries
+    WHERE app_key = 'test_app'
+      AND shop_domain = 'store-b.myshopify.com'
+      AND webhook_id = 'privacy-delivery-001'
+      AND connection_id = v_second_connection_id
+  ) THEN
+    RAISE EXCEPTION 'Store B privacy receipt was not bound to Store B connection';
+  END IF;
+
+  v_wrong_shop_id_hmac := encode(
+    extensions.hmac(convert_to(v_wrong_shop_id_body, 'UTF8'), convert_to('synthetic-test-secret-never-used-in-production', 'UTF8'), 'sha256'),
+    'base64'
+  );
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_privacy_webhook_v2(
+    'test_app', 'test-client-id', v_wrong_shop_id_hmac,
+    encode(convert_to(v_wrong_shop_id_body, 'UTF8'), 'base64'),
+    'store-b.myshopify.com', 'customers/data_request', 'privacy-delivery-wrong-shop-id'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code <> 'SHOP_ID_MISMATCH' THEN
+    RAISE EXCEPTION 'Privacy webhook with another store ID was not rejected: %', row_to_json(v_result);
   END IF;
 
   SELECT * INTO v_result
