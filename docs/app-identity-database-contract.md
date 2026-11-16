@@ -149,3 +149,85 @@ Avoid a partial rollout where Worker, n8n, Supabase verifier, OAuth, or refresh 
 ## 12. Explicit non-actions
 
 This document is not executable SQL and is not an approval to change production. No database migration has been applied. No live function, secret, RLS policy, n8n workflow, Cloudflare Worker, Shopify app, or billing configuration has been changed. The current PR remains a draft preparation artifact.
+
+
+## 13. Confirmed relationship, uniqueness, and workflow audit (2026-11-16)
+
+The following points were verified against the live `henvalt` schema using read-only catalog queries and against the current active n8n workflow definitions. This section records observed facts, not proposed live changes.
+
+### 13.1 Shopify-originated records are currently tenant-bound, not connection-bound
+
+The inspected tables have tenant foreign keys, but no direct `shopify_connection_id` foreign key:
+
+- `webhook_events`: `tenant_id` only; unique keys include `(tenant_id, idempotency_key)` and `(tenant_id, source, source_event_id)`.
+- `canonical_events`: `tenant_id` and optional `webhook_event_id`; unique `(tenant_id, idempotency_key)`.
+- `customers`: `tenant_id`; unique `(tenant_id, shopify_customer_id)`.
+- `checkouts`: `tenant_id`, optional `customer_id`; unique `(tenant_id, shopify_checkout_id)`; also unique partial `(tenant_id, checkout_token)`.
+- `opportunities`: `tenant_id`, optional FKs to `source_event_id`, `customer_id`, and `checkout_id`; unique `(tenant_id, idempotency_key)`.
+- `recovery_sequences` and `recovery_interventions`: tenant and opportunity/sequence relationships; no direct store-connection FK.
+- `orders`: `tenant_id`, optional customer and checkout FKs; unique `(tenant_id, shopify_order_id)`.
+- `order_attributions`: `tenant_id`, FKs to order/opportunity/recovery/intervention; unique `(tenant_id, order_id)`.
+- `revenue_ledger`: `tenant_id`, FKs to order/attribution/opportunity/recovery; recovery uniqueness is tenant/order scoped.
+- `delivery_requests` and `delivery_attempts`: tenant and recovery/intervention relationships; no direct store-connection FK.
+
+This means two stores belonging to one tenant can collide on Shopify customer, checkout, order, event, and idempotency keys where Shopify IDs or source IDs overlap. A `shop_domain` metadata field is not a database-enforced ownership boundary. New store binding must be carried by a real connection FK and the relevant uniqueness keys must be reviewed to include that connection identity (or an equivalent store-specific natural key).
+
+### 13.2 Billing and provider resources are tenant-scoped in the current schema
+
+- `billing_accounts` primary key is `tenant_id`; Shopify provider subscription ID is separately unique. It cannot represent two independent Shopify billing subscriptions for two stores in one tenant.
+- `billing_measurements` references tenant, billing period, and optional revenue-ledger row; it has one-per-ledger-entry uniqueness by tenant/ledger entry. A measurement linked to a ledger row can inherit store ownership only after that ledger row is deterministically mapped.
+- `billing_usage_charges` references tenant and measurement; unique by tenant/idempotency key and one charge per measurement.
+- `email_usage_measurements` references a delivery attempt and tenant; provider cost attribution should follow the delivery attempt's store binding if/when store-level reporting is required.
+- `provider_configs` and `sending_identities` are tenant-level; sending identity references provider config. This matches the current MailerSend tenant/provider design and should not be coupled to Shopify app secrets.
+- `pixel_keys` are the strong exception: each key has an explicit FK to `shopify_connections(id)`, plus tenant FK, and an index on connection/active state. Preserve this design.
+
+### 13.3 Existing uniqueness/index implications
+
+Observed tenant-scoped unique constraints/indexes include:
+- canonical events: tenant + idempotency key;
+- customers: tenant + Shopify customer ID;
+- checkouts: tenant + Shopify checkout ID, and tenant + checkout token;
+- opportunities: tenant + idempotency key;
+- orders: tenant + Shopify order ID;
+- order attributions: tenant + order ID;
+- revenue ledger: one recovery per tenant/order and adjustment uniqueness using tenant plus order/source-event metadata;
+- delivery requests: tenant + idempotency key;
+- webhook events: tenant + idempotency key and tenant + source + source-event ID.
+
+Do not simply add `shopify_connection_id` columns while leaving these unique constraints unchanged. Otherwise store-specific rows may still conflict or be silently treated as duplicates. Review each idempotency key's semantics and migrate constraints with compatibility wrappers and collision tests. Do not drop constraints until replacement constraints and old-client behavior are covered.
+
+### 13.4 Verified n8n ingest identity path
+
+The active `HENVALT_INGEST` workflow currently:
+1. `Validate & Normalize` extracts `x-shopify-shop-domain` and Shopify HMAC from headers, preserves raw-body base64, and normalizes the event.
+2. `Verify Shopify HMAC` calls the legacy `verify_shopify_webhook_hmac(p_hmac, p_raw_body_base64)` RPC. There is no app key in this call.
+3. `Resolve Shopify Tenant` calls `resolve_shopify_tenant(p_shop_domain)`.
+4. `Bind Tenant Context` binds only the returned tenant UUID. It does not bind a connection ID or app key.
+5. Customer, checkout, canonical event, and opportunity RPCs receive tenant IDs and some metadata containing `shop_domain`; the primary key/idempotency contract remains tenant-scoped.
+6. Order projection, attribution, and ledger posting are invoked by event/order/attribution IDs, with no app-key or connection-ID argument in the workflow calls inspected.
+
+This confirms the identity gap exists in the active workflow, not just in a proposed future workflow. It also means the correct change must be coordinated with the Supabase RPCs and uniqueness model; a workflow-only metadata addition is insufficient.
+
+### 13.5 Verified n8n recovery and delivery identity path
+
+- `HENVALT_RECOVERY` selects expiring Shopify connections by shop domain and calls the legacy token-refresh Edge Function with `shop_domain` only. The token-refresh lifecycle therefore needs app identity and connection/lease binding as a coordinated contract.
+- `HENVALT_DELIVERY` authorizes a delivery request using tenant, delivery/intervention/recovery/opportunity IDs and idempotency key. This is appropriate for the email provider operation only if those records already carry a trusted store FK and the authorization RPC verifies the entire relationship.
+- Delivery scheduling calls `schedule_next_recovery_intervention(p_delivery_request_id)`; it must continue from the delivery request's owning opportunity/connection rather than re-resolving an arbitrary active store in the tenant.
+- MailerSend credential lookup remains tenant/provider-scoped; it must not be switched to Shopify app-key scope.
+
+### 13.6 Migration and rollout consequence
+
+The minimum coherent data migration must cover the event-to-recovery lineage, not only `shopify_connections`:
+
+`webhook_events → canonical_events → customers/checkouts → opportunities → recovery_sequences/recovery_interventions → delivery_requests/attempts → orders → order_attributions → revenue_ledger → billing_measurements/usage charges`.
+
+The exact tables requiring direct `shopify_connection_id` columns, composite uniqueness, or derived ownership must be decided per table after reviewing all writers/readers and existing rows. Child rows may inherit ownership through a required parent FK only if every relevant RPC enforces same-tenant and same-connection consistency. Where direct FK is useful for query performance or security predicates, it must be maintained transactionally and checked against the parent.
+
+Before producing executable migration SQL, complete:
+1. full writer/reader inventory for every table in this lineage;
+2. exact row-level backfill classification (deterministic, ambiguous, or missing);
+3. constraint migration design preserving existing idempotency;
+4. tenant-scoped settings/billing policy decision;
+5. RPC compatibility plan for active n8n and deployed Edge Functions.
+
+No migration SQL is included here yet. No live database, workflow, Edge Function, Worker, secret, or Shopify configuration was changed during this audit.
