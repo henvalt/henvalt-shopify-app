@@ -6,6 +6,12 @@ test("Edge ingress authenticates Worker before using service-role key",()=>{
  assert.match(src,/HENVALT_INGRESS_AUTH_TOKEN/);assert.match(src,/constantTimeEqual\(bearer,INGRESS_AUTH_TOKEN\)/);assert.match(src,/SUPABASE_SERVICE_ROLE_KEY/);
 });
 test("Edge ingress passes validated raw-body metadata to Vault-backed RPC",()=>{
- assert.match(src,/accept_shopify_webhook_v2/);assert.match(src,/p_raw_body_base64:base64\(raw\)/);assert.match(src,/p_hmac_base64:hmac/);assert.match(src,/p_route_token:routeToken/);
+ assert.match(src,/accept_shopify_webhook_v2/);assert.match(src,/p_raw_body_base64:encodedBody/);assert.match(src,/p_hmac_base64:hmac/);assert.match(src,/p_route_token:routeToken/);
  assert.doesNotMatch(src,/console\.(log|error)\([^\n]*(routeToken|raw|hmac|SERVICE_ROLE_KEY)/i);
+});
+
+test("Checkout topics require exact-store verified checkout projection before acknowledgement",()=>{
+ assert.match(src,/topic==="checkouts\/create" \|\| topic==="checkouts\/update"/);
+ assert.match(src,/project_verified_shopify_checkout_v2/);
+ assert.match(src,/checkout_projection_unavailable/);
 });
