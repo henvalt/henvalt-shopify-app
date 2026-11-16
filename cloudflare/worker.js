@@ -1,3 +1,4 @@
+import { verifyShopifyWebhookHmac } from "./shopify-hmac.mjs";
 import { buildVerifiedWebhookHeaders } from "./webhook-forwarding.mjs";
 
 export default {
@@ -13,12 +14,14 @@ export default {
     const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
     const webhookId = request.headers.get("x-shopify-webhook-id") || request.headers.get("x-shopify-event-id") || "";
     if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) || !topic || !hmac || !webhookId) return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
-    const raw = await request.text();
-    if (raw.length > 1_000_000) return Response.json({ error: "body_too_large" }, { status: 413 });
-    const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.SHOPIFY_API_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-    const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw)));
-    const expected = btoa(String.fromCharCode(...sig));
-    if (!constantTimeEqual(expected, hmac)) return Response.json({ error: "invalid_hmac" }, { status: 401 });
+    if (!env.SHOPIFY_API_SECRET || !env.N8N_INGEST_URL) return Response.json({ error: "ingress_not_configured" }, { status: 503 });
+
+    // Read exact bytes once: Shopify signs the raw request body, not a
+    // decoded/re-serialized JSON representation.
+    const raw = new Uint8Array(await request.arrayBuffer());
+    if (raw.byteLength > 1_000_000) return Response.json({ error: "body_too_large" }, { status: 413 });
+    const verified = await verifyShopifyWebhookHmac(raw, env.SHOPIFY_API_SECRET, hmac);
+    if (!verified) return Response.json({ error: "invalid_hmac" }, { status: 401 });
 
     // Only forward Shopify's authenticated webhook metadata. Never pass through
     // arbitrary caller headers such as Authorization, Cookie, or forged
@@ -33,9 +36,3 @@ export default {
     return new Response(text || JSON.stringify({ accepted: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
   }
 };
-function constantTimeEqual(a, b) {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
