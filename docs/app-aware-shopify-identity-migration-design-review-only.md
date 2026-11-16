@@ -185,3 +185,16 @@ This design does not:
 6. Build isolated two-store fixtures and run SQL-level tests before preparing executable migration files.
 
 **Safety note:** this is an engineering design artifact only. It is not a migration and must not be passed to Supabase apply_migration.
+
+
+## 10. Additional live RLS and grant evidence (read-only)
+
+A second catalog pass verified:
+- RLS is enabled on shopify_connections, shopify_oauth_states, webhook_events, canonical_events and pixel_keys.
+- RLS is not forced on those five tables.
+- A tenant_isolation policy exists on shopify_connections, webhook_events and canonical_events, using henvalt.is_tenant_member(tenant_id) for both USING and WITH CHECK.
+- No policy rows were returned for shopify_oauth_states or pixel_keys. This is consistent with their intended server-only access, but the full schema/role and function execution paths must be reviewed before changing grants.
+- The inspected grants showed no anon or authenticated table grants on these five tables. service_role has read access to connections and canonical events; OAuth state has service_role CRUD/administrative grants; pixel_keys has service_role CRUD grants. webhook_events had no direct service_role table grant in this inspection, so existing security-definer writer behavior must be preserved and its effective function ACLs audited.
+- Do not use FORCE ROW LEVEL SECURITY as a casual hardening change: security-definer owners and service-role call paths must be tested first. The registry should be protected by both explicit grants and RLS, with no browser-facing policy.
+
+These findings are a scoped catalog snapshot, not a complete security audit. Default privileges, all overloads, non-security-definer functions, schema USAGE, and function-owner bypass behavior remain separate checks.
