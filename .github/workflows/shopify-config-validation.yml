@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test pixel event contract
-        run: node --test tests/pixel-event-contract.test.mjs
+        run: node --test tests/pixel-event-contract.test.mjs tests/store-identity-preflight-safety.test.mjs
       - name: Validate Shopify TOML and extension source
         run: |
           python3 - <<'PY'
