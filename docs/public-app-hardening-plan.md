@@ -281,3 +281,51 @@ The inspected function definitions show different levels of shop binding:
 The correct invariant is not "one connection per tenant." The database already permits—and currently contains—a tenant with two active connections. The future model should bind each Shopify app installation to a specific connection, preserve tenant isolation, and require shop-specific event/opportunity metadata to resolve to that connection. Candidate selection and any operation that reconstructs a shop from tenant ID must be reviewed and corrected where necessary before claiming multi-shop safety.
 
 The recovery function review is not yet a complete migration specification. Remaining control-plane and billing RPC bodies/callers still require review. No production state was changed.
+
+
+## Control-plane and billing RPC audit (2026-11-16)
+
+A further read-only inspection covered the remaining shop-domain-dependent control-plane and billing functions. No production writes or secret reads were performed.
+
+### Confirmed cross-shop aggregation risk
+
+- `control_plane_dashboard_summary(p_shop_domain, ...)` first selects a connection for the requested shop, but then calculates opportunities, sent messages, recovered orders, revenue, activity, and event breakdowns using `tenant_id` only. It does not filter those records by the requested shop domain. Where a tenant has multiple active connections, a shop-specific dashboard request can include tenant-wide data from other stores.
+- `control_plane_get_app_state(p_shop_domain)` similarly resolves a shop connection, then returns tenant-wide billing, provider, sender, and recovery settings/usage. Some of those settings may be intentionally tenant-wide, but the API's shop-scoped input and tenant-scoped output need an explicit product/data contract.
+- `control_plane_revenue_series(p_shop_domain, ...)` resolves the tenant from the requested shop and then aggregates revenue-ledger rows by tenant. It is not store-filtered.
+- `control_plane_billing_summary(p_shop_domain)` resolves the tenant from the shop and then totals billing measurements and email usage by tenant. The response is therefore tenant-level, not necessarily store-level.
+
+### Billing account ownership and mutation risks
+
+- The live `billing_accounts` table currently contains one row and has no tenant with multiple billing-account rows in the inspected data.
+- `control_plane_sync_billing_account(p_shop_domain, p_account)` resolves a tenant from the requested active shop and upserts on `ON CONFLICT (tenant_id)`. A second store in the same tenant would update the same billing account/subscription record, rather than create an independent store billing account.
+- `control_plane_set_billing_status(p_shop_domain, ...)` resolves tenant by shop and updates that tenant's billing account.
+- `control_plane_claim_billing_usage(p_shop_domain)` selects pending billing measurements by tenant, not by shop. The returned charge includes the requesting shop, but the underlying measurement selection is tenant-wide.
+- `control_plane_record_billing_usage_result(p_shop_domain, p_charge_id, ...)` validates the charge against the tenant resolved from the shop, then updates the associated tenant billing measurement and revenue-ledger status.
+- These behaviors may be intentional if HENVALT billing is shared across all stores owned by one tenant. They are unsafe if each Shopify store is meant to have an independent Shopify subscription. The product contract must decide this explicitly before schema or RPC changes; do not silently assume either model.
+
+### Other shop-scoped control-plane operations
+
+- `control_plane_shop_connection`, `control_plane_get_app_state`, `control_plane_get_sender_profile`, `control_plane_store_shopify_identity_suggestion`, and `control_plane_update_app_preferences` resolve the connection by shop domain. Several then read or update tenant-level data.
+- `control_plane_update_email_branding` and `control_plane_update_sender_profile` resolve a tenant from the shop and write tenant-level settings. Sender-profile completion can re-evaluate previously skipped opportunities across the tenant, not only the requesting shop.
+- `control_plane_disconnect_shop` selects the connection by shop domain and calls the uninstall deactivation function with tenant plus shop. The deactivation function updates that connection, revokes pixel keys for its exact connection ID, and only cancels tenant billing when no active connections remain. This is an important safeguard to preserve.
+- `get_shopify_access_token_for_control_plane(p_shop_domain)` retrieves a token by shop domain, and `control_plane_shop_connection(p_shop_domain)` resolves by shop domain. Since shop domain is unique in the current schema, these are unambiguous for today's single-identity-per-shop model; the future app key still needs to be bound to that connection.
+
+### Current data coverage and caution
+
+A read-only aggregate found 4 active connections across 3 tenants, including one tenant with 2 active connections. The current dataset is small: 5 opportunities (3 with a `shop_domain` in metadata and 2 without) and 2 checkouts (1 with and 1 without a `shop_domain` in metadata). There is 1 billing account row. These counts prove that multi-connection and missing-shop-metadata cases exist in the inspected data, but are not a measure of future merchant traffic or a statistically representative production workload.
+
+### Repository caller search limitation
+
+The GitHub code search for the control-plane RPC names returned no matches in the connected `henvalt/henvalt-shopify-app` repository's default-branch code index. The live database function definitions are verified, but the full Edge Function callers for these control-plane and billing RPCs were not located in that repository. Their actual deployed caller contracts must be inspected in the relevant Supabase function source before changing signatures.
+
+### Migration requirements added by this audit
+
+1. Define whether a tenant represents one merchant account with multiple stores or one Shopify store. The observed schema/data allows multiple active connections per tenant, so do not impose one-connection-per-tenant.
+2. Define whether billing is tenant-wide or store-specific. If tenant-wide, make that explicit in the API/UI and ensure only the authorized tenant owner can create/update the shared Shopify subscription. If store-specific, migrate billing-account and usage-charge ownership to an explicit connection/store key, including idempotency and webhook routing.
+3. Scope dashboard and revenue-series aggregates to the requested connection/shop when the UI is store-specific. If tenant-wide analytics are desired, label them tenant-wide and ensure the UI makes that scope clear.
+4. Require shop attribution on every new opportunity/checkout/revenue-ledger event wherever the source is Shopify. Backfill or quarantine legacy rows with missing shop identity rather than guessing.
+5. Keep tenant-level branding/provider configuration only if it is an intentional shared setting; otherwise move it to a connection/store scope. Document which settings are shared.
+6. Preserve uninstall behavior: deactivate only the exact connection, revoke only its pixel keys, and cancel shared tenant billing only when the last eligible active connection is removed (if shared billing is the chosen model).
+7. Inspect the deployed Supabase Edge Function callers and n8n call sites before changing any RPC signature. Keep all changes coordinated and regression-tested.
+
+No schema, data, grants, RLS policies, functions, Edge Functions, or n8n workflows were changed during this audit.
