@@ -37,6 +37,29 @@ CREATE VIEW vault.decrypted_secrets AS
 SELECT id, name, secret AS decrypted_secret
 FROM vault.secrets;
 
+CREATE TABLE henvalt.tenants (
+  id uuid PRIMARY KEY,
+  status text NOT NULL DEFAULT 'ACTIVE'
+);
+
+CREATE TABLE henvalt.pixel_keys (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  key_digest text NOT NULL UNIQUE,
+  allowed_origins text[] NOT NULL DEFAULT '{}',
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz,
+  shopify_web_pixel_id text,
+  shopify_connection_id uuid NOT NULL
+);
+
+CREATE TABLE henvalt.pixel_rate_limits (
+  key_digest text PRIMARY KEY,
+  bucket_start timestamptz NOT NULL,
+  request_count integer NOT NULL
+);
+
 -- Minimal core identity tables mirror the live tenant-only constraints.
 CREATE TABLE henvalt.customers (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
