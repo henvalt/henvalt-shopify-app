@@ -20,6 +20,11 @@ FROM henvalt.shopify_connections
 GROUP BY lower(btrim(shop_domain))
 HAVING count(*) > 1;
 
+SELECT 'noncanonical_connection_domains' AS check_name,
+       count(*) AS row_count
+FROM henvalt.shopify_connections
+WHERE shop_domain <> lower(btrim(shop_domain));
+
 SELECT 'connections_without_app_identity' AS check_name,
        count(*) FILTER (WHERE to_jsonb(sc)->>'app_key' IS NULL) AS unresolved_connection_count
 FROM henvalt.shopify_connections sc;
