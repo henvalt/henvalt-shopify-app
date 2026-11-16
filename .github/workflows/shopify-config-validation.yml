@@ -100,16 +100,16 @@ jobs:
           import pathlib, re, shutil
           root = pathlib.Path("extensions")
           candidates = [p for p in root.glob("*/shopify.extension.toml") if p.parent.name != "henvalt-pixel"]
-          candidates = [p for p in candidates if re.search(r'^uid\\s*=\\s*"([^"]+)"', p.read_text(), re.M)]
+          candidates = [p for p in candidates if re.search(r'^uid\s*=\s*"([^"]+)"', p.read_text(), re.M)]
           if len(candidates) != 1:
               raise SystemExit(f"Expected exactly one Shopify-generated scaffold with UID; found {len(candidates)}")
-          match = re.search(r'^uid\\s*=\\s*"([^"]+)"', candidates[0].read_text(), re.M)
+          match = re.search(r'^uid\s*=\s*"([^"]+)"', candidates[0].read_text(), re.M)
           original = pathlib.Path("/tmp/henvalt-pixel")
           target_dir = root / "henvalt-pixel"
           shutil.move(str(original), str(target_dir))
           target = target_dir / "shopify.extension.toml"
           lines = target.read_text().splitlines()
-          existing_uid = re.search(r'^uid\\s*=\\s*"([^"]+)"', "\\n".join(lines), re.M)
+          existing_uid = re.search(r'^uid\s*=\s*"([^"]+)"', "\n".join(lines), re.M)
           if existing_uid:
               print("Existing Shopify-generated Pixel UID preserved.")
           else:
@@ -119,7 +119,7 @@ jobs:
                       break
               else:
                   raise SystemExit("Target extension name field not found")
-              target.write_text("\\n".join(lines) + "\\n")
+              target.write_text("\n".join(lines) + "\n")
           for candidate in candidates:
               shutil.rmtree(candidate.parent)
           print("Shopify-generated UID applied to HENVALT Pixel extension.")
