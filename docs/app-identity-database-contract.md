@@ -277,3 +277,71 @@ The inspected `authorize_delivery_request` validates tenant ownership across del
 The recovery candidate functions and order attribution functions must receive the same treatment. Store identity must be preserved through all eligibility, conversion-stop, and attribution decisions—not only at initial webhook ingestion.
 
 No backfill, schema change, function replacement, or workflow edit was performed.
+
+
+## 15. Conversation, consent, and current deployed function boundary (2026-11-16)
+
+### 15.1 Reply/conversation lineage inherits customer and delivery ownership
+
+The current reply pipeline is:
+`delivery_request → customer_conversation → conversation_messages`.
+
+Observed constraints:
+- `customer_conversations` has tenant FK and references customer, delivery request, intervention, opportunity, and recovery; it has a unique tenant/delivery-request key and a tenant/id composite key.
+- `conversation_messages` has tenant FK, a composite FK to `customer_conversations(tenant_id,id)`, and a unique provider event ID.
+- `email_usage_measurements` references the exact delivery attempt; delivery attempts reference the exact delivery request.
+- These parent relationships are useful tenant integrity, but none of the conversation records directly carries a Shopify connection ID.
+
+The active `HENVALT_DELIVERY` inbound-reply path calls `process_mailersend_inbound_reply(payload, raw_body_base64)`, then loads AI context by conversation/message IDs. The context query joins the customer and tenant, and reads tenant-level store name, reply-AI setting, and knowledge base. Conversation history is selected by the conversation and its original delivery request.
+
+Design consequence:
+- Keep the conversation bound to its originating delivery request and recovery lineage.
+- If a customer row is store-scoped, conversation ownership follows that customer and originating opportunity/connection.
+- AI reply context must use the originating store's approved identity/knowledge base if settings become store-specific; do not silently use another store's tenant settings.
+- Human-required and opted-out states must continue to block automated replies. This audit did not alter any reply behavior.
+
+### 15.2 Consent is especially sensitive to customer identity scope
+
+The ingest workflow's `Upsert Customer` call sends email, phone, marketing consent, SMS consent and consent-source metadata to `upsert_customer`; the supplied metadata includes `shop_domain`, but the current lookup key is not store-specific. The separate consent-update event path also resolves the customer in the tenant context.
+
+Shopify customer consent must be scoped to the correct shop/customer identity. A tenant-wide email fallback can join two different Shopify customer records and potentially carry consent or suppression state between stores. The revised customer contract must therefore:
+- key Shopify customer IDs by connection/store;
+- preserve consent provenance and timestamps per store;
+- avoid treating a matching email as proof that two store-specific Shopify customer records are the same legal/consent identity;
+- if HENVALT later supports tenant-wide cross-store contact suppression, implement it as an explicit conservative suppression layer, not by merging source customer rows.
+
+### 15.3 Current deployed Shopify Edge Functions: confirmed legacy-only identity
+
+Read-only retrieval of deployed Edge Function source confirms:
+
+- `henvalt-shopify-oauth` v27 reads one `SHOPIFY_API_KEY` and one `SHOPIFY_API_SECRET`; OAuth state and callback are not app-key aware.
+- `henvalt-shopify-token-refresh` v1 reads the same single key/secret pair and calls refresh claim/fail/complete RPCs with shop domain only.
+- `henvalt-shopify-privacy` v1 verifies with one `SHOPIFY_API_SECRET`, then looks up `shopify_connections` by shop domain. It cannot distinguish two app registrations.
+- `henvalt-control-plane` v24 uses the shared server-side control-plane bearer and shop-domain RPC arguments; the app identity is not part of its authorization context.
+- `henvalt-pixel-ingest-proxy` v3 forwards the pixel key digest and collector secret to `henvalt_ingest_pixel_event`; the database maps the pixel key to its exact connection ID. Preserve this binding.
+- Merchant dashboard, sender profile, recovery settings and email branding functions authenticate the Supabase user, then require exactly one tenant membership and exactly one active shop connection. Multi-store users are rejected rather than being given a store selector.
+- Email branding and reply-AI settings are read/written through tenant settings in the inspected functions. This is a deliberate scope decision still required for product design: either tenant-wide shared defaults with per-store overrides, or fully store-scoped settings. The API must state which.
+
+No Edge Function code or secret was changed.
+
+### 15.4 Current n8n lineage and gaps, verified from active workflow definitions
+
+The active workflow versions were read without executing them:
+
+- `HENVALT_INGEST` version `6368d539-708f-494a-8be8-b9601d0e8607`: verifies the webhook with `verify_shopify_webhook_hmac(p_hmac,p_raw_body_base64)`, resolves via `resolve_shopify_tenant(p_shop_domain)`, and binds only `tenant_id`. Its customer, checkout, opportunity, order projection, attribution, recovery-stop and ledger calls do not receive a connection ID.
+- `HENVALT_RECOVERY` version `32e50bf7-4cbd-4070-bbba-f259ed17b369`: discovers browse/cart/checkout candidates through tenant-level candidate RPCs; refreshes tokens by `shop_domain`; obtains recovery context from intervention ID; creates delivery requests from intervention/message/customer data.
+- `HENVALT_DELIVERY` version `621ae6ce-a006-4fed-a70e-acf774c360fb`: authorizes delivery with tenant, delivery, intervention, recovery, opportunity, recipient and idempotency values. It schedules the next step by delivery request ID. Its inbound reply AI context uses tenant settings as noted above.
+
+These versions are active and unchanged. A safe migration must update the RPC contracts and workflow payloads in a coordinated, backwards-compatible sequence; do not partially add app identity to only one workflow.
+
+### 15.5 Revised rollout gates
+
+Before writing executable migration SQL, close these remaining gates:
+1. Inventory every writer and reader of the event-to-ledger lineage, including scheduled candidate discovery and conversion-stop queries.
+2. Inventory all consent update, unsubscribe, inbound reply, and AI-context readers/writers to decide the customer/contact scope safely.
+3. Decide tenant-shared defaults versus store-specific overrides for sender profile, email branding, recovery settings, AI reply knowledge, and billing.
+4. Define connection-aware RPC signatures and compatibility wrappers for currently active workflow versions.
+5. Define a deterministic migration/backfill report with separate counts for mapped, ambiguous, missing, and conflicting records.
+6. Define tests that prove Store A events, orders, consent, replies, dashboards and billing cannot affect Store B, while preserving tenant membership and shared provider credentials where intended.
+
+No executable migration file is included yet. This is intentional: the writer/reader and settings-scope decisions above are prerequisites, not implementation details to guess.
