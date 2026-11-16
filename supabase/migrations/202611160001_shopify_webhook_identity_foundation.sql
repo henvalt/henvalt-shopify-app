@@ -33,6 +33,9 @@ ALTER TABLE henvalt.shopify_connections
 CREATE UNIQUE INDEX IF NOT EXISTS shopify_connections_id_tenant_app_key_uidx
   ON henvalt.shopify_connections (id, tenant_id, app_key);
 
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_connections_id_tenant_app_key_domain_uidx
+  ON henvalt.shopify_connections (id, tenant_id, app_key, shop_domain);
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -108,9 +111,9 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_webhook_deliveries (
        AND shop_domain_header ~ '^[a-z0-9][a-z0-9.-]*[.]myshopify[.]com$'),
   CONSTRAINT shopify_webhook_deliveries_body_digest_format
     CHECK (raw_body_sha256 ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT shopify_webhook_deliveries_connection_app_fkey
-    FOREIGN KEY (connection_id, tenant_id, app_key)
-    REFERENCES henvalt.shopify_connections (id, tenant_id, app_key)
+  CONSTRAINT shopify_webhook_deliveries_connection_app_domain_fkey
+    FOREIGN KEY (connection_id, tenant_id, app_key, shop_domain_header)
+    REFERENCES henvalt.shopify_connections (id, tenant_id, app_key, shop_domain)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_webhook_deliveries_app_fkey
     FOREIGN KEY (app_key)
