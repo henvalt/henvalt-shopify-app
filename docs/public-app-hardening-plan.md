@@ -118,7 +118,6 @@ The database change cannot safely be limited to adding an `app_key` column. The 
 
 The database audit confirms the existing legacy app can remain intact while a future app identity is added in a coordinated migration. It does not establish that dual-app installation or same-shop coexistence works today.
 
-
 ## n8n ingress audit: live workflow findings (2026-11-15)
 
 The active `HENVALT_INGEST` workflow (ID `VTpfGKNtu1CSQ4Rv`, 51 nodes) was inspected read-only. No workflow nodes or credentials were changed.
@@ -142,7 +141,6 @@ Therefore, the current webhook chain has two independent single-app assumptions:
 
 This workflow inspection confirms that changing only the Worker or only the database would leave a broken or insecure path. The Worker, n8n workflow, Supabase verifier, and tenant resolver must be rolled out as one coordinated boundary.
 
-
 ### OAuth finalization and existing-connection overwrite risk
 
 The live database definitions for `control_plane_finalize_shopify_oauth_install_expiring_for_owner` and `control_plane_connect_shop` were inspected read-only.
@@ -153,7 +151,6 @@ The live database definitions for `control_plane_finalize_shopify_oauth_install_
 - Consequently, if a second app were wired into the current OAuth flow, the finalization path could overwrite the existing shop's token pair and re-use its connection. The current owner-membership check does not solve app identity separation.
 
 **Severity: release-blocking.** The future app-aware finalizer must bind the OAuth state, selected app registry entry, tenant membership/ownership, connection row, and token Vault references in one transaction. It must reject an app-key mismatch or existing connection belonging to another app before writing any Vault secret or changing connection state. Do not reuse the current finalization RPC for the second app.
-
 
 ## Expanded database dependency audit: shop-domain keyed RPCs (2026-11-16)
 
@@ -183,7 +180,6 @@ The app identity migration is a cross-cutting database change, not a small OAuth
 
 No RPCs, tables, policies, secrets, or workflows were changed during this audit. The full function inventory is a planning and review artifact; before writing a migration, each listed function must be inspected for its exact connection lookup, authorization checks, and downstream callers.
 
-
 ### OAuth-state and connection RLS review (2026-11-16)
 
 Read-only PostgreSQL catalog checks confirmed RLS is enabled on both `henvalt.shopify_oauth_states` and `henvalt.shopify_connections`.
@@ -204,3 +200,42 @@ GitHub Actions run `43740216447` completed successfully on commit `dd384181114a3
 - `deploy-shopify-version`: skipped by the pull-request guard, as intended.
 
 The subsequent commits add documentation only. No deployment or live system change occurred.
+
+## Edge Function and database security-boundary audit (2026-11-16)
+
+The live Supabase Edge Function inventory and the checked-in OAuth/token-refresh source were inspected. No Edge Function was deployed or modified.
+
+### OAuth install/callback source
+
+- The deployed `henvalt-shopify-oauth` function is active (version 27). The checked-in source reads one `SHOPIFY_API_KEY` and one `SHOPIFY_API_SECRET` from environment variables.
+- The install route writes OAuth state through the service-role REST client with `state_hash`, `shop_domain`, `expires_at`, and `initiated_by_user_id`; there is no app identity in the inserted state.
+- The authorize URL uses the one global API key. Callback HMAC verification uses the same global secret.
+- This means the callback cannot securely infer which app initiated a flow from current persisted state. App selection must happen before state creation and must be cryptographically/transactionally bound to the one-time state.
+- Pixel provisioning is also attached to the returned `connectionId`; after app-aware connection identity is introduced, pixel-key ownership and uninstall/reinstall behavior must remain bound to that exact connection, not merely the shop domain.
+
+### Token-refresh source and RPC security
+
+- The deployed `henvalt-shopify-token-refresh` function is active (version 1). Its source reads the same global `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET`.
+- The function calls `claim_shopify_token_refresh`, `fail_shopify_token_refresh`, and `complete_shopify_token_refresh` using only `p_shop_domain` plus refresh/result fields. It does not pass an app key.
+- The claim RPC returns the decrypted refresh token to the service-role Edge Function. The function then exchanges it using the one global client ID/secret and writes the replacement token pair through the completion RPC.
+- A refresh failure also clears the lease by shop domain only. If two app identities ever shared a shop connection, a stale or mismatched refresh operation could affect the wrong app's lease/token pair.
+
+### Privileged function properties
+
+Catalog inspection found the reviewed OAuth/connection/token functions are `SECURITY DEFINER`, owned by `postgres`, and have explicit `search_path` settings. Their ACLs in the inspected definitions grant execution to `postgres` and `service_role`, not `PUBLIC`, `anon`, or `authenticated`. Preserve this least-privilege boundary when adding app-aware functions; do not grant direct authenticated access to OAuth-state or token-secret operations.
+
+Specific controls observed:
+
+- `claim_shopify_token_refresh`, `complete_shopify_token_refresh`, and `fail_shopify_token_refresh` explicitly require the JWT role to be `service_role`.
+- The HMAC verifier reads the single Vault secret `henvalt_shopify_app_secret`, computes SHA-256 HMAC over the supplied raw-body bytes, and compares the byte arrays without early exit on differing bytes.
+- `get_shopify_access_token_for_control_plane(p_shop_domain)` returns the active shop's decrypted access token to its service-role caller, with expiry and reauthorization checks, but no app key.
+- `deactivate_shopify_connection_on_uninstall` deactivates by tenant and shop domain, revokes pixel keys attached to that connection, and cancels tenant billing when no active shop connections remain. The app-aware uninstall path must identify the correct connection before invoking this logic.
+- `control_plane_get_app_state(p_shop_domain)` also selects the active connection by shop domain only. The dashboard/control-plane lookup must be bound to the intended connection/app identity or protected by the explicit one-app-per-shop invariant.
+
+### Current safe boundary
+
+The reviewed privileged functions are not publicly executable through their recorded ACLs, and RLS/tenant isolation remains in place. The blocker is not evidence of an unauthenticated public SQL endpoint; it is the mismatch between one global Shopify app identity and a future two-app distribution model. Do not weaken existing grants or RLS to work around it.
+
+### Next audit gate
+
+Before writing a migration draft, inspect the full bodies and callers of the remaining shop-domain-dependent control-plane, recovery, pixel-ingestion, and MailerSend credential functions. Determine which can remain tenant-scoped under a proven one-shop-per-tenant invariant and which require an explicit connection/app key. Only then define the migration and regression tests as a coherent contract.
