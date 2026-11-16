@@ -169,7 +169,7 @@ This is tenant deletion, not store deletion. It would destroy the whole HENVALT 
 9. Add regression fixtures for a tenant with two stores that intentionally reuse the same Shopify customer ID, checkout token, session reference and customer email.
 10. Only after all tests pass, prepare a migration for separate human review. No production apply is included in this branch work.
 
-## 7. Required regression scenarios
+## 11. Required regression scenarios
 
 - Two active stores under one tenant; cart event from store A must never be returned with store B's domain.
 - Same Shopify customer ID in A and B must create two distinct HENVALT customer identities.
@@ -184,7 +184,7 @@ This is tenant deletion, not store deletion. It would destroy the whole HENVALT 
 
 
 
-## 9. Ingress, identity resolution, consent and order-attribution function-body findings
+## 8. Ingress, identity resolution, consent and order-attribution function-body findings
 
 A further read-only pass inspected the deployed customer/checkout upserts, event identity resolver, consent update, browse-advance check, order projection, attribution and recovery-stop functions.
 
@@ -228,7 +228,7 @@ A matching customer email or reused external ID in another store can bind the pr
 
 A connection FK is not sufficient by itself. Every writer and every reader must enforce the invariant. The migration design must include connection-aware lookup and uniqueness semantics for customers, checkouts, canonical events, opportunities and orders; then propagate the same connection through attribution, recovery-stop, billing and revenue adjustments. Email is a contact attribute, never a substitute for Shopify source identity.
 
-## 8. Live data diagnostic snapshot (2026-11-16)
+## 9. Live data diagnostic snapshot (2026-11-16)
 
 The five SELECT-only diagnostics in `docs/sql/candidate-cross-store-ambiguity-review-only.sql` were also executed read-only against production.
 
