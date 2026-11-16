@@ -39,6 +39,8 @@ DECLARE
   v_diff integer := 0;
   v_i integer;
   v_inserted uuid;
+  v_body_digest text;
+  v_existing_digest text;
 BEGIN
   accepted := false;
   duplicate := false;
@@ -150,6 +152,8 @@ BEGIN
     RETURN;
   END IF;
 
+  v_body_digest := encode(extensions.digest(v_body, 'sha256'), 'hex');
+
   INSERT INTO henvalt.shopify_webhook_deliveries (
     tenant_id,
     connection_id,
@@ -171,7 +175,7 @@ BEGIN
     NULLIF(p_event_id, ''),
     p_topic,
     p_shop_domain,
-    encode(extensions.digest(v_body, 'sha256'), 'hex'),
+    v_body_digest,
     now(),
     'RECEIVED',
     jsonb_build_object('ingress_version', 'v2')
@@ -184,6 +188,17 @@ BEGIN
    WHERE id = v_route.route_token_id;
 
   IF v_inserted IS NULL THEN
+    SELECT raw_body_sha256 INTO v_existing_digest
+    FROM henvalt.shopify_webhook_deliveries
+    WHERE connection_id = v_route.connection_id
+      AND shopify_delivery_id = p_delivery_id;
+
+    IF v_existing_digest IS DISTINCT FROM v_body_digest THEN
+      rejection_code := 'DELIVERY_ID_BODY_MISMATCH';
+      RETURN NEXT;
+      RETURN;
+    END IF;
+
     accepted := true;
     duplicate := true;
     receipt_status := 'DUPLICATE';
