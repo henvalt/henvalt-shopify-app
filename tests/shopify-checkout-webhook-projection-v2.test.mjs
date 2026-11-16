@@ -10,7 +10,7 @@ test("checkout identity uses Shopify token, not removed checkout id", () => {
   assert.match(migration, /ALTER COLUMN shopify_checkout_id DROP NOT NULL/);
   assert.match(migration, /ADD COLUMN IF NOT EXISTS shopify_checkout_token text/);
   assert.match(migration, /UNIQUE INDEX shopify_checkout_identity_v2_connection_token_uidx/);
-  assert.match(migration, /p_payload->>'token'/);
+  assert.match(migration, /v_payload->>'token'/);
   assert.match(docs, /removed `id` from `checkouts\/create` and `checkouts\/update`/);
 });
 
