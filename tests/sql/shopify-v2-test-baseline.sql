@@ -37,6 +37,72 @@ CREATE VIEW vault.decrypted_secrets AS
 SELECT id, name, secret AS decrypted_secret
 FROM vault.secrets;
 
+-- Minimal core identity tables mirror the live tenant-only constraints.
+CREATE TABLE henvalt.customers (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  shopify_customer_id text,
+  email text,
+  CONSTRAINT customers_tenant_id_shopify_customer_id_key UNIQUE (tenant_id, shopify_customer_id)
+);
+
+CREATE TABLE henvalt.sessions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  customer_id uuid REFERENCES henvalt.customers(id) ON DELETE SET NULL,
+  session_reference text NOT NULL,
+  CONSTRAINT sessions_tenant_id_session_reference_key UNIQUE (tenant_id, session_reference)
+);
+
+CREATE TABLE henvalt.session_aliases (
+  tenant_id uuid NOT NULL,
+  alias_reference text NOT NULL,
+  session_reference text NOT NULL,
+  CONSTRAINT session_aliases_pkey PRIMARY KEY (tenant_id, alias_reference),
+  CONSTRAINT session_aliases_session_fk
+    FOREIGN KEY (tenant_id, session_reference)
+    REFERENCES henvalt.sessions(tenant_id, session_reference)
+    ON DELETE CASCADE
+);
+
+CREATE TABLE henvalt.checkouts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  customer_id uuid REFERENCES henvalt.customers(id) ON DELETE SET NULL,
+  shopify_checkout_id text,
+  checkout_token text,
+  session_reference text,
+  email text,
+  CONSTRAINT checkouts_tenant_id_shopify_checkout_id_key UNIQUE (tenant_id, shopify_checkout_id)
+);
+CREATE UNIQUE INDEX checkouts_tenant_checkout_token_unique
+  ON henvalt.checkouts (tenant_id, checkout_token)
+  WHERE checkout_token IS NOT NULL;
+
+CREATE TABLE henvalt.canonical_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  webhook_event_id uuid,
+  event_type text NOT NULL,
+  event_class text NOT NULL,
+  source text NOT NULL,
+  source_event_id text,
+  customer_reference text,
+  email text,
+  anonymous_reference text,
+  session_reference text,
+  occurred_at timestamptz,
+  received_at timestamptz NOT NULL DEFAULT now(),
+  value_at_risk numeric,
+  currency character,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  idempotency_key text NOT NULL,
+  correlation_id uuid NOT NULL DEFAULT gen_random_uuid(),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT canonical_events_tenant_id_idempotency_key_key UNIQUE (tenant_id, idempotency_key)
+);
+
 -- Contract-compatible stand-in for the existing production finalizer.
 -- The candidate wrapper is tested against its real signature and JSON keys.
 CREATE FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(
