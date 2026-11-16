@@ -329,3 +329,48 @@ The GitHub code search for the control-plane RPC names returned no matches in th
 7. Inspect the deployed Supabase Edge Function callers and n8n call sites before changing any RPC signature. Keep all changes coordinated and regression-tested.
 
 No schema, data, grants, RLS policies, functions, Edge Functions, or n8n workflows were changed during this audit.
+
+
+## Deployed Edge Function caller audit (2026-11-16)
+
+The live Supabase Edge Function source was retrieved directly through the Supabase management integration (read-only). This resolves the earlier repository-search gap for the deployed callers. No Edge Function was deployed or modified.
+
+### Confirmed merchant resolver behavior
+
+The active deployed functions use several different shop-resolution strategies:
+
+- `henvalt-merchant-dashboard` (version 4) validates the user's access token against Supabase Auth, requires exactly one tenant membership, then queries active connections for that tenant with `limit=2` and requires exactly one connection. If the tenant has multiple active stores, it returns `409 active_shop_connection_required` rather than allowing the user to select a store.
+- `henvalt-merchant-sender-profile` (version 7) follows the same pattern: exactly one tenant membership and exactly one active Shopify connection. A multi-store tenant is rejected with a 403-style `active_shop_membership_required` response.
+- `henvalt-merchant-recovery-settings` (version 2) also requires exactly one membership and exactly one active connection, returning `one_active_shop_membership_required` otherwise.
+- `henvalt-merchant-email-branding` (version 2) likewise requires one membership and one active connection. It reads and writes tenant-level email branding.
+- These functions therefore do not currently support a user selecting among multiple active Shopify stores within the same tenant. This is a confirmed product limitation, not a theoretical future-app issue.
+
+### Dashboard data scope confirmed end-to-end
+
+The deployed `henvalt-merchant-dashboard` function (version 4) calls both `control_plane_dashboard_summary` and `control_plane_revenue_series` using the one resolved shop domain. It then queries `revenue_ledger` directly using only `tenant_id`, date range, and recovery filters; the query does not filter by shop domain or connection. This confirms that the dashboard data model is tenant-wide after the shop is resolved.
+
+The deployed `henvalt-control-plane` function (version 24) accepts a service bearer token verified against the Vault secret `HENVALT_CONTROL_PLANE_TOKEN`, then accepts a validated `x-henvalt-shop` header and passes that shop to its RPCs. The token verifier checks a single shared control-plane secret; it does not bind the bearer token to a specific shop or Shopify app key. This must remain a server-to-server secret and must never be exposed to browser/client code. For public multi-app support, internal authorization should bind the verified app identity and authorized shop/connection, rather than relying solely on the shared token plus caller-supplied shop header.
+
+### Control-plane routes and RPC callers confirmed
+
+The live `henvalt-control-plane` source directly invokes the following shop-domain-keyed RPCs:
+
+- Connection: `control_plane_shop_connection`, `control_plane_connect_shop`, `control_plane_disconnect_shop`.
+- Billing: `control_plane_billing_summary`, `control_plane_sync_billing_account`, `control_plane_set_billing_status`, `control_plane_claim_billing_usage`, `control_plane_record_billing_usage_result`.
+- Dashboard/analytics: `control_plane_dashboard_summary`.
+- Settings: `control_plane_get_app_state`, `control_plane_update_app_preferences`.
+- Sender identity: `control_plane_get_sender_profile`, `control_plane_update_sender_profile`, `control_plane_store_shopify_identity_suggestion`, `get_shopify_access_token_for_control_plane`.
+- Shopify webhook relay: validates the original shop header against the resolved shop, then forwards the raw body and selected Shopify headers to HENVALT_INGEST. The Edge Function itself does not add an app key to the forwarded request.
+
+The control-plane function is a separate service-token route, while the merchant-facing functions validate the Supabase user session and resolve memberships independently. Both paths need to converge on an explicit selected store/connection and, for the new app, an app identity.
+
+### Migration and product requirements updated
+
+1. Add an explicit store/connection selection to merchant-facing APIs for users with multiple active stores. Do not resolve a shop by taking the first row or by relying on `limit=2` and rejecting multiple rows.
+2. Bind the selected connection to the authenticated user's tenant membership on the server. Never trust a client-supplied shop domain without verifying the user's membership in the owning tenant.
+3. Preserve a clear 409/selection-required behavior during transition rather than silently selecting an arbitrary store.
+4. Decide whether dashboard analytics are store-scoped or tenant-wide. If store-scoped, filter all RPC and direct REST revenue-ledger queries by the originating shop/connection. If tenant-wide, expose that scope explicitly in the UI.
+5. Keep the control-plane bearer token server-only. Replace the single global authorization assumption with app-aware, shop/connection-scoped internal authorization as part of the coordinated rollout.
+6. Keep OAuth, Worker, n8n, control-plane, and merchant-facing resolvers consistent: the authenticated/verified app identity must resolve to one connection; the connection must resolve to one tenant; all downstream data access must use that exact connection or an explicitly documented tenant-wide resource.
+
+No production data, schema, secrets, deployed Edge Functions, or n8n workflows were changed during this source audit.
