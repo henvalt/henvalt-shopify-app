@@ -153,3 +153,32 @@ The live database definitions for `control_plane_finalize_shopify_oauth_install_
 - Consequently, if a second app were wired into the current OAuth flow, the finalization path could overwrite the existing shop's token pair and re-use its connection. The current owner-membership check does not solve app identity separation.
 
 **Severity: release-blocking.** The future app-aware finalizer must bind the OAuth state, selected app registry entry, tenant membership/ownership, connection row, and token Vault references in one transaction. It must reject an app-key mismatch or existing connection belonging to another app before writing any Vault secret or changing connection state. Do not reuse the current finalization RPC for the second app.
+
+
+## Expanded database dependency audit: shop-domain keyed RPCs (2026-11-16)
+
+A read-only catalog query enumerated every function in the `henvalt` schema whose definition references `shopify_connections`. This is broader than the initial OAuth/webhook audit and materially changes the migration scope.
+
+### Identity-sensitive functions
+
+These must receive app identity directly or resolve it through a connection ID that is already bound to an app key:
+
+- OAuth and connection lifecycle: `control_plane_connect_shop`, `control_plane_finalize_shopify_oauth_install`, `control_plane_finalize_shopify_oauth_install_for_owner`, `control_plane_finalize_shopify_oauth_install_expiring_for_owner`, `control_plane_disconnect_shop`, `control_plane_shop_connection`, `control_plane_get_app_state`.
+- Tenant and webhook routing: `resolve_shopify_tenant`, `deactivate_shopify_connection_on_uninstall`, `get_shopify_access_token_for_control_plane`.
+- Token refresh: `claim_shopify_token_refresh`, `complete_shopify_token_refresh`, `fail_shopify_token_refresh`.
+- Merchant control-plane operations keyed by shop: `control_plane_billing_summary`, `control_plane_claim_billing_usage`, `control_plane_dashboard_summary`, `control_plane_get_sender_profile`, `control_plane_record_billing_usage_result`, `control_plane_revenue_series`, `control_plane_set_billing_status`, `control_plane_store_shopify_identity_suggestion`, `control_plane_sync_billing_account`, `control_plane_update_app_preferences`, `control_plane_update_email_branding`, `control_plane_update_sender_profile`.
+
+### Functions requiring explicit impact review
+
+These functions also reference `shopify_connections`, but their app-key migration approach must be determined from full function bodies and call sites rather than blindly adding a parameter:
+
+- Recovery candidate selection: `get_abandoned_cart_candidates`, `get_abandoned_checkout_candidates`, `get_browse_abandonment_candidates`.
+- Recovery worker context and delivery authorization: `authorize_delivery_request`, `get_recovery_worker_context`, `get_recovery_worker_context_legacy`, `prepare_one_off_test_delivery`, `schedule_next_recovery_intervention`.
+- Pixel ingestion: `ingest_pixel_event`.
+- MailerSend token lookup: `get_mailersend_token_for_delivery`.
+
+### Migration consequence
+
+The app identity migration is a cross-cutting database change, not a small OAuth patch. It must preserve the existing tenant-scoped recovery and delivery model while ensuring every Shopify credential lookup, uninstall action, dashboard/control-plane read, billing operation, and pixel event resolves the intended connection. Recovery functions may remain tenant-keyed where the tenant already uniquely identifies one shop connection, but that invariant must be asserted and tested rather than assumed.
+
+No RPCs, tables, policies, secrets, or workflows were changed during this audit. The full function inventory is a planning and review artifact; before writing a migration, each listed function must be inspected for its exact connection lookup, authorization checks, and downstream callers.
