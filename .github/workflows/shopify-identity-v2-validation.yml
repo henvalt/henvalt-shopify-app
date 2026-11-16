@@ -36,7 +36,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
       - name: Run identity graph contract tests
-        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs
+        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs
       - name: Create disposable database baseline
         env:
           PGPASSWORD: postgres
