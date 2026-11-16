@@ -35,8 +35,7 @@ state and finalization transaction are bound to a registered app identity.
    token be generated with `crypto.getRandomValues(new Uint8Array(32))`.
    Persist only SHA-256(token); return the raw token once to the server-side
    OAuth function for callback registration. Never log or persist raw token.
-8. V2 webhook subscription registration is gated by a server-side feature flag
-   defaulting to false. With the flag false, preserve the existing legacy
+8. V2 webhook subscription registration is gated by a server-side feature flag defaulting to false. With the flag false, preserve the existing legacy
    callback and existing registration verification behavior exactly.
 
 ## Required data contract
