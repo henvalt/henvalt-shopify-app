@@ -38,7 +38,7 @@ test("customer and session relationships cannot cross a verified store boundary"
 test("legacy tenant-only unique keys are not dropped or replaced in this stage", () => {
   assert.doesNotMatch(migration, /DROP\s+CONSTRAINT/i);
   assert.doesNotMatch(migration, /DROP\s+INDEX/i);
-  assert.match(migration, /Old tenant-only unique constraints remain intentionally active/);
+  assert.match(migration, /Existing V1 ON CONFLICT contracts remain intact/);
   assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS customers_tenant_connection_shopify_id_uidx/);
   assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS checkouts_tenant_connection_shopify_id_uidx/);
 });
