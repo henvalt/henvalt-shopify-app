@@ -98,6 +98,8 @@ DECLARE
   v_connection_id uuid;
   v_connection_shop_id text;
   v_inserted uuid;
+  v_body_digest text;
+  v_existing_digest text;
 BEGIN
   accepted := false;
   duplicate := false;
@@ -201,6 +203,8 @@ BEGIN
     RETURN;
   END IF;
 
+  v_body_digest := encode(extensions.digest(v_body, 'sha256'), 'hex');
+
   INSERT INTO henvalt.shopify_privacy_webhook_deliveries (
     app_key, tenant_id, connection_id, shop_domain, shopify_shop_id,
     topic, webhook_id, customer_id, request_id, raw_body_sha256,
@@ -209,11 +213,25 @@ BEGIN
   VALUES (
     p_app_key, v_tenant_id, v_connection_id, p_shop_domain, v_shop_id,
     p_topic, p_webhook_id, v_customer_id, v_request_id,
-    encode(extensions.digest(v_body, 'sha256'), 'hex'),
+    v_body_digest,
     now(), 'REVIEW_REQUIRED'
   )
   ON CONFLICT (app_key, shop_domain, webhook_id) DO NOTHING
   RETURNING id INTO v_inserted;
+
+  IF v_inserted IS NULL THEN
+    SELECT raw_body_sha256 INTO v_existing_digest
+    FROM henvalt.shopify_privacy_webhook_deliveries
+    WHERE app_key = p_app_key
+      AND shop_domain = p_shop_domain
+      AND webhook_id = p_webhook_id;
+
+    IF v_existing_digest IS DISTINCT FROM v_body_digest THEN
+      rejection_code := 'DELIVERY_ID_BODY_MISMATCH';
+      RETURN NEXT;
+      RETURN;
+    END IF;
+  END IF;
 
   accepted := true;
   duplicate := v_inserted IS NULL;
