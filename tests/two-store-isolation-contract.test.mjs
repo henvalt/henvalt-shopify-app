@@ -23,7 +23,9 @@ const fixture = {
 };
 
 function normalizeShop(shop) {
-  return String(shop).trim().toLowerCase().replace(/^https?:\\/\\//, "").replace(/\\/$/, "");
+  const value = String(shop).trim().toLowerCase();
+  const withoutProtocol = value.startsWith("https://") ? value.slice(8) : value.startsWith("http://") ? value.slice(7) : value;
+  return withoutProtocol.endsWith("/") ? withoutProtocol.slice(0, -1) : withoutProtocol;
 }
 
 function resolveConnection(connections, appKey, shop) {
