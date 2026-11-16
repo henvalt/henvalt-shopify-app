@@ -374,3 +374,33 @@ The control-plane function is a separate service-token route, while the merchant
 6. Keep OAuth, Worker, n8n, control-plane, and merchant-facing resolvers consistent: the authenticated/verified app identity must resolve to one connection; the connection must resolve to one tenant; all downstream data access must use that exact connection or an explicitly documented tenant-wide resource.
 
 No production data, schema, secrets, deployed Edge Functions, or n8n workflows were changed during this source audit.
+
+
+## Final webhook/privacy/pixel caller cross-check (2026-11-16)
+
+The deployed privacy, pixel-ingress, OAuth, and token-refresh Edge Functions were retrieved read-only to cross-check the full ingress boundary. No secrets were read; only environment-variable names and code paths were inspected.
+
+### Shopify privacy webhook
+
+- Deployed `henvalt-shopify-privacy` (version 1) reads one `SHOPIFY_API_SECRET` environment variable and verifies incoming Shopify webhook HMAC with that single secret.
+- It reads the Shopify topic, shop domain, shop ID, webhook ID, and HMAC from the original request headers.
+- It looks up `shopify_connections` by shop domain and maps the event to a tenant. There is no app key or Shopify app identifier in the lookup.
+- Its privacy request processing is therefore legacy single-app only. The future public app must use a distinct app-aware route/secret resolver, and privacy request idempotency must remain keyed by app identity plus Shopify webhook/request identity where appropriate.
+
+### Pixel ingestion
+
+- Deployed `henvalt-pixel-ingest-proxy` (version 3) forwards pixel events to the database pixel-ingestion RPC.
+- The database `ingest_pixel_event` function resolves the tenant through the pixel key's exact `shopify_connection_id`, verifies tenant ownership, and requires the connection to be active.
+- This exact connection binding should be retained. Pixel keys must be created and revoked against the app-aware connection, not just a tenant or shop string.
+
+### OAuth and token refresh re-confirmation
+
+- Deployed `henvalt-shopify-oauth` (version 27) reads one `SHOPIFY_API_KEY` and one `SHOPIFY_API_SECRET`; OAuth state creation stores no app key; callback state lookup returns no app key; token exchange and finalization use the global credentials and shop-only RPC contract.
+- Deployed `henvalt-shopify-token-refresh` (version 1) reads the same global key/secret and calls claim/fail/complete refresh RPCs with shop domain only.
+- These live deployed versions match the earlier read-only audit and confirm that the issue is present in the running functions, not just stale checked-in source.
+
+### Deployment inventory note
+
+The project currently has separate deployed merchant-facing functions for dashboard, sender profile, recovery settings, and email branding, as well as the control-plane, OAuth, token-refresh, privacy, and pixel-ingest functions. Each function that resolves a user to a shop must adopt the same explicit connection-selection contract. A database-only migration would not make these deployed resolvers multi-store aware; conversely, changing the resolvers without updating the database and OAuth/webhook boundary would be incomplete.
+
+No production Edge Function versions, environment variables, secrets, database functions, or pixel keys were changed.
