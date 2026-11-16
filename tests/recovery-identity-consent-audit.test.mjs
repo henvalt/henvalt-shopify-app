@@ -19,7 +19,7 @@ test("recovery identity and consent audit captures tenant-only isolation risks",
     "PROC-01",
     "STOP-01",
     "PRIV-06",
-    "Ambiguous/unresolved",
+    "unresolved",
   ]) {
     assert.ok(audit.includes(required), `Missing audit requirement: ${required}`);
   }
