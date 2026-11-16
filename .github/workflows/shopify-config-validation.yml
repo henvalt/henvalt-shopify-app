@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Test Shopify webhook security boundaries
-        run: node --test tests/webhook-forwarding.test.mjs tests/shopify-hmac.test.mjs tests/worker-to-n8n-auth.test.mjs tests/worker-to-n8n-forwarding.test.mjs
+        run: node --test tests/webhook-forwarding.test.mjs tests/shopify-hmac.test.mjs tests/worker-to-n8n-auth.test.mjs tests/worker-to-n8n-forwarding.test.mjs tests/internal-ingress-replay-claim-safety.test.mjs
       - name: Test pixel event and store identity contracts
         run: node --test tests/pixel-event-contract.test.mjs tests/store-identity-preflight-safety.test.mjs tests/privacy-source-recovery.test.mjs tests/candidate-cross-store-ambiguity-safety.test.mjs tests/secondary-function-lineage-audit.test.mjs tests/multi-store-migration-blueprint-safety.test.mjs tests/store-isolation-regression-matrix.test.mjs tests/recovery-identity-consent-audit.test.mjs tests/supabase-privileged-function-access-audit.test.mjs tests/live-identity-and-rls-audit.test.mjs tests/app-aware-shopify-identity-contract.test.mjs tests/app-aware-identity-migration-design.test.mjs tests/live-writer-function-source-lineage-audit.test.mjs tests/live-shopify-edge-function-app-identity-audit.test.mjs tests/app-aware-source-lineage-preflight-safety.test.mjs tests/app-aware-identity-additive-blueprint.test.mjs tests/two-store-isolation-contract.test.mjs tests/stage-0-shopify-app-identity-migration.test.mjs tests/shopify-identity-validator.test.mjs
       - name: Validate Shopify TOML and extension source
