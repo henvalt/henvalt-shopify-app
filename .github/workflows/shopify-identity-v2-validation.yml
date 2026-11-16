@@ -1,0 +1,67 @@
+name: HENVALT exact-store identity V2 validation
+
+on:
+  push:
+    branches: [prep/public-app-hardening-2026-11-15]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity-v2-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Run identity graph contract tests
+        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs
+      - name: Create disposable database baseline
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
+      - name: Apply candidate migrations 001 through 009
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for migration in \
+            supabase/migrations/202611160001_shopify_webhook_identity_foundation.sql \
+            supabase/migrations/202611160002_shopify_webhook_verified_inbox_rpc.sql \
+            supabase/migrations/202611160003_shopify_oauth_state_app_identity.sql \
+            supabase/migrations/202611160004_shopify_oauth_app_aware_finalizer.sql \
+            supabase/migrations/202611160005_shopify_app_oauth_secret_resolver.sql \
+            supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \
+            supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql \
+            supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql \
+            supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql; do
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Exercise existing Shopify V2 database contracts
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
+      - name: Exercise two-store customer session and alias isolation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-exact-store-identity-graph-v2.test.sql
