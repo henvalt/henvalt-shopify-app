@@ -14,6 +14,7 @@ The current privacy Edge Function uses one global Shopify secret and resolves a 
 - The RPC resolves exactly one active app registry row by app key + configured Shopify client ID, reads the app-specific secret internally from Vault, and verifies HMAC-SHA256 over the raw request body.
 - It requires the payload shop domain to match the signed request's shop-domain header.
 - It resolves a connection only by exact app key + exact shop domain. It never falls back to tenant membership.
+- When a linked connection has a stored immutable Shopify shop ID and the signed payload includes `shop_id`, both must match; mismatches are rejected.
 - It stores a minimal receipt: app, optional exact connection, shop, topic, webhook ID, customer ID, data-request ID, body digest, verification timestamp and status. It does not store raw payload or customer email.
 - Duplicate delivery is idempotent by app + shop + webhook ID.
 
