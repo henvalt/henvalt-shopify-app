@@ -239,3 +239,45 @@ The reviewed privileged functions are not publicly executable through their reco
 ### Next audit gate
 
 Before writing a migration draft, inspect the full bodies and callers of the remaining shop-domain-dependent control-plane, recovery, pixel-ingestion, and MailerSend credential functions. Determine which can remain tenant-scoped under a proven one-shop-per-tenant invariant and which require an explicit connection/app key. Only then define the migration and regression tests as a coherent contract.
+
+
+## Recovery and pixel connection-dependency audit (2026-11-16)
+
+The remaining high-risk recovery and delivery functions were inspected through read-only PostgreSQL catalog queries. No SQL writes, workflow changes, or secret reads were performed.
+
+### Important live-data finding: a tenant already has multiple active Shopify connections
+
+A read-only aggregate over `henvalt.shopify_connections` returned:
+
+- 4 active Shopify connections.
+- 3 tenants with at least one active connection.
+- 1 tenant with 2 active connections.
+
+This disproves the simplifying assumption that every tenant currently has exactly one active Shopify connection. Do **not** add a unique constraint on `tenant_id` or design recovery routing around tenant ID alone. The future migration must preserve existing tenant/shop relationships and make the relevant recovery paths unambiguous.
+
+### Recovery candidate selection
+
+The inspected function definitions show different levels of shop binding:
+
+- `get_abandoned_checkout_candidates` joins the active connection by tenant **and** the checkout metadata's `shop_domain`.
+- `get_abandoned_cart_candidates` has connection joins by tenant and active status in its event/cart snapshot path, then returns a shop domain. With multiple active connections under one tenant, this path needs explicit event-to-shop binding and regression coverage to avoid ambiguous or duplicated candidates.
+- `get_browse_abandonment_candidates` joins active connections by tenant and returns a shop domain; it also needs explicit event-to-shop binding under the observed multi-connection tenant.
+- `authorize_delivery_request`, `get_recovery_worker_context`, and `schedule_next_recovery_intervention` validate shop-domain metadata against a connection for the tenant in several branches. These checks are useful but must be consistently applied to all event types and downstream Shopify calls.
+
+### Delivery and credential boundary
+
+- `authorize_delivery_request` is tenant-scoped and validates the delivery request, intervention, recovery, opportunity, consent eligibility, sender identity, and provider configuration. Its Shopify-specific branches check the opportunity/checkout shop domain against a connection for the tenant.
+- `get_mailersend_token_for_delivery` is intentionally tenant/provider scoped rather than Shopify-app scoped. Its eligibility checks reference the opportunity's shop metadata and the tenant's connection, while MailerSend credentials remain bound to the tenant's provider configuration. Do not couple MailerSend secrets to a Shopify app secret registry.
+- `get_recovery_worker_context` and its legacy counterpart load tenant/opportunity context and validate the opportunity's shop domain against a tenant connection. Keep the tenant-scoped recovery authorization model, but ensure the opportunity's originating shop is explicit.
+- `schedule_next_recovery_intervention` performs tenant-scoped consent, opportunity, checkout, and shop-connection checks. It must continue to enforce these checks after app identity is added.
+- `prepare_one_off_test_delivery` is hard-coded to the existing test tenant and validates its opportunity/checkout shop domain against a connection. Preserve that explicit test-only boundary; do not generalize it into a public tenant operation.
+
+### Pixel ingestion
+
+`ingest_pixel_event` resolves the tenant through the pixel key's exact `shopify_connection_id` and also checks that the connection belongs to the same tenant and is active. This is a stronger connection-level binding than a tenant-only join. Preserve this model and ensure pixel-key provisioning continues to attach keys to the exact app-aware connection.
+
+### Migration design consequence
+
+The correct invariant is not "one connection per tenant." The database already permits—and currently contains—a tenant with two active connections. The future model should bind each Shopify app installation to a specific connection, preserve tenant isolation, and require shop-specific event/opportunity metadata to resolve to that connection. Candidate selection and any operation that reconstructs a shop from tenant ID must be reviewed and corrected where necessary before claiming multi-shop safety.
+
+The recovery function review is not yet a complete migration specification. Remaining control-plane and billing RPC bodies/callers still require review. No production state was changed.
