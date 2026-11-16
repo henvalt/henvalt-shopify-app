@@ -331,4 +331,87 @@ BEGIN
 END;
 $test$;
 
+
+-- Exact-store lineage foundation integration checks (migration 007).
+DO $lineage$
+DECLARE
+  v_tenant uuid := '00000000-0000-4000-8000-000000000001';
+  v_store_a uuid;
+  v_store_b uuid;
+  v_customer_a uuid;
+  v_session_a uuid;
+  v_checkout_a uuid;
+  v_event_a uuid;
+BEGIN
+  SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
+  SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
+
+  IF v_store_a IS NULL OR v_store_b IS NULL THEN
+    RAISE EXCEPTION 'Two-store synthetic connections were not created';
+  END IF;
+
+  INSERT INTO henvalt.customers (tenant_id, shopify_customer_id, email, shopify_connection_id)
+  VALUES (v_tenant, 'shared-shopify-customer-id', 'same@example.invalid', v_store_a)
+  RETURNING id INTO v_customer_a;
+
+  INSERT INTO henvalt.sessions (tenant_id, customer_id, session_reference, shopify_connection_id)
+  VALUES (v_tenant, v_customer_a, 'shared-session-ref', v_store_a)
+  RETURNING id INTO v_session_a;
+
+  INSERT INTO henvalt.session_aliases (tenant_id, alias_reference, session_reference, shopify_connection_id)
+  VALUES (v_tenant, 'store-a-cart-alias', 'shared-session-ref', v_store_a);
+
+  INSERT INTO henvalt.checkouts (tenant_id, customer_id, shopify_checkout_id, checkout_token, session_reference, email, shopify_connection_id)
+  VALUES (v_tenant, v_customer_a, 'store-a-checkout', 'store-a-token', 'shared-session-ref', 'same@example.invalid', v_store_a)
+  RETURNING id INTO v_checkout_a;
+
+  INSERT INTO henvalt.canonical_events (tenant_id, event_type, event_class, source, session_reference, idempotency_key, shopify_connection_id)
+  VALUES (v_tenant, 'PRODUCT_VIEWED', 'OTHER', 'SHOPIFY_WEB_PIXEL', 'shared-session-ref', 'pixel:' || v_store_a::text || ':event-1', v_store_a)
+  RETURNING id INTO v_event_a;
+
+  IF NOT EXISTS (SELECT 1 FROM henvalt.customers WHERE id=v_customer_a AND shopify_connection_id=v_store_a)
+     OR NOT EXISTS (SELECT 1 FROM henvalt.sessions WHERE id=v_session_a AND shopify_connection_id=v_store_a)
+     OR NOT EXISTS (SELECT 1 FROM henvalt.checkouts WHERE id=v_checkout_a AND shopify_connection_id=v_store_a)
+     OR NOT EXISTS (SELECT 1 FROM henvalt.canonical_events WHERE id=v_event_a AND shopify_connection_id=v_store_a) THEN
+    RAISE EXCEPTION 'Exact-store lineage was not persisted on all core records';
+  END IF;
+
+  BEGIN
+    INSERT INTO henvalt.checkouts (tenant_id, customer_id, shopify_checkout_id, shopify_connection_id)
+    VALUES (v_tenant, v_customer_a, 'wrong-store-checkout', v_store_b);
+    RAISE EXCEPTION 'Cross-store customer reference was unexpectedly accepted';
+  EXCEPTION WHEN foreign_key_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO henvalt.session_aliases (tenant_id, alias_reference, session_reference, shopify_connection_id)
+    VALUES (v_tenant, 'store-b-alias-to-a', 'shared-session-ref', v_store_b);
+    RAISE EXCEPTION 'Cross-store session alias was unexpectedly accepted';
+  EXCEPTION WHEN foreign_key_violation THEN
+    NULL;
+  END;
+
+  BEGIN
+    INSERT INTO henvalt.customers (tenant_id, shopify_customer_id, email, shopify_connection_id)
+    VALUES (v_tenant, 'shared-shopify-customer-id', 'same@example.invalid', v_store_b);
+    RAISE EXCEPTION 'Legacy tenant-only customer uniqueness was unexpectedly removed';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+
+  INSERT INTO henvalt.customers (tenant_id, shopify_customer_id, email)
+  VALUES (v_tenant, 'legacy-unresolved-customer', 'legacy@example.invalid');
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.customers
+    WHERE tenant_id=v_tenant
+      AND shopify_customer_id='legacy-unresolved-customer'
+      AND shopify_connection_id IS NULL
+  ) THEN
+    RAISE EXCEPTION 'Legacy unresolved row was unexpectedly assigned a store';
+  END IF;
+END;
+$lineage$;
+
 SELECT 'shopify_v2_database_integration_passed' AS result;
