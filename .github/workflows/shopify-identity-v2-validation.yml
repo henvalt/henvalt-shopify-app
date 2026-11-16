@@ -36,12 +36,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
       - name: Run identity graph contract tests
-        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs
+        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs
       - name: Create disposable database baseline
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
-      - name: Apply candidate migrations 001 through 009
+      - name: Apply candidate migrations 001 through 010
         env:
           PGPASSWORD: postgres
         run: |
@@ -54,7 +54,8 @@ jobs:
             supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \
             supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql \
             supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql \
-            supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql; do
+            supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql \\
+            supabase/migrations/202611160010_shopify_checkout_webhook_projection_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise existing Shopify V2 database contracts
@@ -65,3 +66,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-exact-store-identity-graph-v2.test.sql
+      - name: Exercise verified token-first checkout webhook projection
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-webhook-projection-v2.test.sql
