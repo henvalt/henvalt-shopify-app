@@ -3,10 +3,10 @@
 -- reviewed and tested in a disposable Supabase/Postgres environment.
 --
 -- The Edge Function resolves app_key from its configured client ID and creates
--- a 256-bit route token in memory. This RPC independently verifies that
--- client-ID/app-key/state binding, delegates token persistence to the existing
--- finalizer inside the same transaction, binds the exact connection, and
--- stores only SHA-256(route_token).
+-- a 256-bit route token in memory. This RPC independently verifies the
+-- client-ID/app-key/state binding, delegates established token persistence to
+-- the legacy finalizer inside this transaction, binds the exact connection,
+-- and stores only SHA-256(route_token).
 
 BEGIN;
 
@@ -44,131 +44,17 @@ BEGIN
      OR NULLIF(p_app_key, '') IS NULL
      OR NULLIF(p_shopify_client_id, '') IS NULL
      OR NULLIF(p_route_token, '') IS NULL
-     OR p_route_token !~ '^[0-9a-f]{64}
-  END IF;
-
-  IF lower(p_shop_domain) !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$'
-     OR p_shop_domain <> lower(p_shop_domain) THEN
-    RAISE EXCEPTION 'invalid_shop_domain' USING ERRCODE = '22023';
-  END IF;
-
-  -- Serialize all app-aware installations for this shop using the same
-  -- advisory-lock key as the legacy connection resolver.
-  PERFORM pg_advisory_xact_lock(hashtextextended(p_shop_domain, 0));
-
-  SELECT * INTO v_state
-  FROM henvalt.shopify_oauth_states
-  WHERE state_hash = p_state_hash
-  FOR UPDATE;
-
-  IF NOT FOUND
-     OR v_state.shop_domain <> p_shop_domain
-     OR v_state.initiated_by_user_id IS DISTINCT FROM p_user_id
-     OR v_state.expires_at <= now()
-     OR v_state.consumed_at IS NOT NULL
-     OR v_state.app_key IS DISTINCT FROM p_app_key THEN
-    RAISE EXCEPTION 'invalid_or_expired_app_aware_oauth_state'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT * INTO v_app
-  FROM henvalt.shopify_app_registry
-  WHERE app_key = p_app_key
-    AND shopify_client_id = p_shopify_client_id
-    AND lifecycle_status = 'active'
-  FOR SHARE;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'shopify_app_identity_not_active_or_mismatched'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT app_key INTO v_existing_app_key
-  FROM henvalt.shopify_connections
-  WHERE lower(shop_domain) = p_shop_domain
-  FOR UPDATE;
-
-  IF FOUND AND v_existing_app_key IS NOT NULL
-     AND v_existing_app_key <> p_app_key THEN
-    RAISE EXCEPTION 'shopify_connection_bound_to_different_app'
-      USING ERRCODE = '42501';
-  END IF;
-
-  -- The legacy finalizer performs the established token-vault writes,
-  -- membership/audit work, and state consumption. All changes remain in this
-  -- transaction and roll back if the following identity/token steps fail.
-  v_finalized :=
-    henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(
-      p_state_hash,
-      p_shop_domain,
-      p_access_token,
-      p_refresh_token,
-      p_access_expires_in,
-      p_refresh_expires_in,
-      p_shopify_shop_id,
-      p_scopes,
-      p_user_id
-    );
-
-  v_connection_id := (v_finalized->>'connection_id')::uuid;
-  v_tenant_id := (v_finalized->>'tenant_id')::uuid;
-
-  UPDATE henvalt.shopify_connections
-  SET app_key = p_app_key,
-      updated_at = now()
-  WHERE id = v_connection_id
-    AND tenant_id = v_tenant_id
-    AND (app_key IS NULL OR app_key = p_app_key);
-
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows <> 1 THEN
-    RAISE EXCEPTION 'shopify_connection_app_binding_failed'
-      USING ERRCODE = '42501';
-  END IF;
-
-  v_token_hash := encode(
-    extensions.digest(convert_to(p_route_token, 'UTF8'), 'sha256'),
-    'hex'
-  );
-
-  INSERT INTO henvalt.shopify_webhook_route_tokens (
-    tenant_id, connection_id, app_key, token_hash
-  )
-  VALUES (v_tenant_id, v_connection_id, p_app_key, v_token_hash)
-  ON CONFLICT (token_hash) DO NOTHING;
-
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows <> 1 THEN
-    RAISE EXCEPTION 'shopify_webhook_route_token_collision'
-      USING ERRCODE = '23505';
-  END IF;
-
-  RETURN v_finalized || jsonb_build_object(
-    'app_key', p_app_key,
-    'webhook_route_ready', true
-  );
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
-  text,text,text,text,integer,integer,text,text[],uuid,text,text,text
-) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
-  text,text,text,text,integer,integer,text,text[],uuid,text,text,text
-) TO service_role;
-
-COMMIT;
- THEN
+     OR p_route_token !~ '^[0-9a-f]{64}$' THEN
     RAISE EXCEPTION 'invalid_app_aware_oauth_request' USING ERRCODE = '22023';
   END IF;
 
-  IF lower(p_shop_domain) !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$'
-     OR p_shop_domain <> lower(p_shop_domain) THEN
+  IF p_shop_domain IS NULL
+     OR p_shop_domain <> lower(btrim(p_shop_domain))
+     OR p_shop_domain !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$' THEN
     RAISE EXCEPTION 'invalid_shop_domain' USING ERRCODE = '22023';
   END IF;
 
-  -- Serialize all app-aware installations for this shop using the same
-  -- advisory-lock key as the legacy connection resolver.
+  -- Match the exact shop-level lock used by control_plane_connect_shop.
   PERFORM pg_advisory_xact_lock(hashtextextended(p_shop_domain, 0));
 
   SELECT * INTO v_state
@@ -209,9 +95,8 @@ COMMIT;
       USING ERRCODE = '42501';
   END IF;
 
-  -- The legacy finalizer performs the established token-vault writes,
-  -- membership/audit work, and state consumption. All changes remain in this
-  -- transaction and roll back if the following identity/token steps fail.
+  -- The legacy finalizer performs established Vault writes, membership/audit
+  -- work, and OAuth-state consumption. Any later failure rolls back all of it.
   v_finalized :=
     henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(
       p_state_hash,
@@ -246,235 +131,12 @@ COMMIT;
     'hex'
   );
 
-  INSERT INTO henvalt.shopify_webhook_route_tokens (
-    tenant_id, connection_id, app_key, token_hash
-  )
-  VALUES (v_tenant_id, v_connection_id, p_app_key, v_token_hash)
-  ON CONFLICT (token_hash) DO NOTHING;
-
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows <> 1 THEN
-    RAISE EXCEPTION 'shopify_webhook_route_token_collision'
-      USING ERRCODE = '23505';
-  END IF;
-
-  RETURN v_finalized || jsonb_build_object(
-    'app_key', p_app_key,
-    'webhook_route_ready', true
-  );
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
-  text,text,text,text,integer,integer,text,text[],uuid,text,text,text
-) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
-  text,text,text,text,integer,integer,text,text[],uuid,text,text,text
-) TO service_role;
-
-COMMIT;
- THEN
-    RAISE EXCEPTION 'invalid_app_aware_oauth_request' USING ERRCODE = '22023';
-  END IF;
-
-  IF lower(p_shop_domain) !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$'
-     OR p_shop_domain <> lower(p_shop_domain) THEN
-    RAISE EXCEPTION 'invalid_shop_domain' USING ERRCODE = '22023';
-  END IF;
-
-  -- Serialize all app-aware installations for this shop using the same
-  -- advisory-lock key as the legacy connection resolver.
-  PERFORM pg_advisory_xact_lock(hashtextextended(p_shop_domain, 0));
-
-  SELECT * INTO v_state
-  FROM henvalt.shopify_oauth_states
-  WHERE state_hash = p_state_hash
-  FOR UPDATE;
-
-  IF NOT FOUND
-     OR v_state.shop_domain <> p_shop_domain
-     OR v_state.initiated_by_user_id IS DISTINCT FROM p_user_id
-     OR v_state.expires_at <= now()
-     OR v_state.consumed_at IS NOT NULL
-     OR v_state.app_key IS DISTINCT FROM p_app_key THEN
-    RAISE EXCEPTION 'invalid_or_expired_app_aware_oauth_state'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT * INTO v_app
-  FROM henvalt.shopify_app_registry
-  WHERE app_key = p_app_key
-    AND shopify_client_id = p_shopify_client_id
-    AND lifecycle_status = 'active'
-  FOR SHARE;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'shopify_app_identity_not_active_or_mismatched'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT app_key INTO v_existing_app_key
-  FROM henvalt.shopify_connections
-  WHERE lower(shop_domain) = p_shop_domain
-  FOR UPDATE;
-
-  IF FOUND AND v_existing_app_key IS NOT NULL
-     AND v_existing_app_key <> p_app_key THEN
-    RAISE EXCEPTION 'shopify_connection_bound_to_different_app'
-      USING ERRCODE = '42501';
-  END IF;
-
-  -- The legacy finalizer performs the established token-vault writes,
-  -- membership/audit work, and state consumption. All changes remain in this
-  -- transaction and roll back if the following identity/token steps fail.
-  v_finalized :=
-    henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(
-      p_state_hash,
-      p_shop_domain,
-      p_access_token,
-      p_refresh_token,
-      p_access_expires_in,
-      p_refresh_expires_in,
-      p_shopify_shop_id,
-      p_scopes,
-      p_user_id
-    );
-
-  v_connection_id := (v_finalized->>'connection_id')::uuid;
-  v_tenant_id := (v_finalized->>'tenant_id')::uuid;
-
-  UPDATE henvalt.shopify_connections
-  SET app_key = p_app_key,
-      updated_at = now()
-  WHERE id = v_connection_id
-    AND tenant_id = v_tenant_id
-    AND (app_key IS NULL OR app_key = p_app_key);
-
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows <> 1 THEN
-    RAISE EXCEPTION 'shopify_connection_app_binding_failed'
-      USING ERRCODE = '42501';
-  END IF;
-
-  v_token_hash := encode(
-    extensions.digest(convert_to(p_route_token, 'UTF8'), 'sha256'),
-    'hex'
-  );
-
-  INSERT INTO henvalt.shopify_webhook_route_tokens (
-    tenant_id, connection_id, app_key, token_hash
-  )
-  VALUES (v_tenant_id, v_connection_id, p_app_key, v_token_hash)
-  ON CONFLICT (token_hash) DO NOTHING;
-
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows <> 1 THEN
-    RAISE EXCEPTION 'shopify_webhook_route_token_collision'
-      USING ERRCODE = '23505';
-  END IF;
-
-  RETURN v_finalized || jsonb_build_object(
-    'app_key', p_app_key,
-    'webhook_route_ready', true
-  );
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
-  text,text,text,text,integer,integer,text,text[],uuid,text,text,text
-) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
-  text,text,text,text,integer,integer,text,text[],uuid,text,text,text
-) TO service_role;
-
-COMMIT;
- THEN
-    RAISE EXCEPTION 'invalid_app_aware_oauth_request' USING ERRCODE = '22023';
-  END IF;
-
-  IF lower(p_shop_domain) !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$'
-     OR p_shop_domain <> lower(p_shop_domain) THEN
-    RAISE EXCEPTION 'invalid_shop_domain' USING ERRCODE = '22023';
-  END IF;
-
-  -- Serialize all app-aware installations for this shop using the same
-  -- advisory-lock key as the legacy connection resolver.
-  PERFORM pg_advisory_xact_lock(hashtextextended(p_shop_domain, 0));
-
-  SELECT * INTO v_state
-  FROM henvalt.shopify_oauth_states
-  WHERE state_hash = p_state_hash
-  FOR UPDATE;
-
-  IF NOT FOUND
-     OR v_state.shop_domain <> p_shop_domain
-     OR v_state.initiated_by_user_id IS DISTINCT FROM p_user_id
-     OR v_state.expires_at <= now()
-     OR v_state.consumed_at IS NOT NULL
-     OR v_state.app_key IS DISTINCT FROM p_app_key THEN
-    RAISE EXCEPTION 'invalid_or_expired_app_aware_oauth_state'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT * INTO v_app
-  FROM henvalt.shopify_app_registry
-  WHERE app_key = p_app_key
-    AND shopify_client_id = p_shopify_client_id
-    AND lifecycle_status = 'active'
-  FOR SHARE;
-
-  IF NOT FOUND THEN
-    RAISE EXCEPTION 'shopify_app_identity_not_active_or_mismatched'
-      USING ERRCODE = '42501';
-  END IF;
-
-  SELECT app_key INTO v_existing_app_key
-  FROM henvalt.shopify_connections
-  WHERE lower(shop_domain) = p_shop_domain
-  FOR UPDATE;
-
-  IF FOUND AND v_existing_app_key IS NOT NULL
-     AND v_existing_app_key <> p_app_key THEN
-    RAISE EXCEPTION 'shopify_connection_bound_to_different_app'
-      USING ERRCODE = '42501';
-  END IF;
-
-  -- The legacy finalizer performs the established token-vault writes,
-  -- membership/audit work, and state consumption. All changes remain in this
-  -- transaction and roll back if the following identity/token steps fail.
-  v_finalized :=
-    henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(
-      p_state_hash,
-      p_shop_domain,
-      p_access_token,
-      p_refresh_token,
-      p_access_expires_in,
-      p_refresh_expires_in,
-      p_shopify_shop_id,
-      p_scopes,
-      p_user_id
-    );
-
-  v_connection_id := (v_finalized->>'connection_id')::uuid;
-  v_tenant_id := (v_finalized->>'tenant_id')::uuid;
-
-  UPDATE henvalt.shopify_connections
-  SET app_key = p_app_key,
-      updated_at = now()
-  WHERE id = v_connection_id
-    AND tenant_id = v_tenant_id
-    AND (app_key IS NULL OR app_key = p_app_key);
-
-  GET DIAGNOSTICS v_rows = ROW_COUNT;
-  IF v_rows <> 1 THEN
-    RAISE EXCEPTION 'shopify_connection_app_binding_failed'
-      USING ERRCODE = '42501';
-  END IF;
-
-  v_token_hash := encode(
-    extensions.digest(convert_to(p_route_token, 'UTF8'), 'sha256'),
-    'hex'
-  );
+  -- Reauthorization rotates the route bearer: older tokens for this exact
+  -- connection stop working before the new token becomes active.
+  UPDATE henvalt.shopify_webhook_route_tokens
+  SET revoked_at = now()
+  WHERE connection_id = v_connection_id
+    AND revoked_at IS NULL;
 
   INSERT INTO henvalt.shopify_webhook_route_tokens (
     tenant_id, connection_id, app_key, token_hash
