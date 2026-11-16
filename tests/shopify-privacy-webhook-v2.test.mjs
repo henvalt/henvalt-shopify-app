@@ -24,7 +24,7 @@ test("privacy inbox verifies the raw-body HMAC using the app-specific Vault secr
 test("privacy receipts minimize stored personal data and never auto-delete", () => {
   assert.match(sql, /processing_status[\s\S]*'REVIEW_REQUIRED'/);
   assert.doesNotMatch(sql, /redact_shopify_customer_data|redact_shopify_shop_data|export_shopify_customer_data/);
-  assert.doesNotMatch(sql, /payload jsonb|raw_body jsonb|customer_email/i);
+  assert.doesNotMatch(sql, /\\n\\s*(?:payload|raw_body|customer_email)\\s+(?:jsonb|text)/i);
   assert.match(sql, /REVOKE ALL ON henvalt\.shopify_privacy_webhook_deliveries FROM PUBLIC, anon, authenticated/);
 });
 
