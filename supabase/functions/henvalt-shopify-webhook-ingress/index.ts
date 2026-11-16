@@ -14,6 +14,22 @@ function base64(bytes: Uint8Array): string {
   for (let i=0;i<bytes.length;i+=0x8000) binary += String.fromCharCode(...bytes.subarray(i,i+0x8000));
   return btoa(binary);
 }
+function firstRow(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) return (value[0] && typeof value[0] === "object") ? value[0] as Record<string, unknown> : null;
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+async function rpc(name: string, body: Record<string, unknown>): Promise<{ ok: boolean; row: Record<string, unknown> | null }> {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
+    method: "POST",
+    headers: { apikey: SERVICE_ROLE_KEY, authorization: "Bearer " + SERVICE_ROLE_KEY, "content-type": "application/json", accept: "application/json", "accept-profile": "henvalt", "content-profile": "henvalt" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    console.error("Webhook RPC failed", name, response.status);
+    return { ok: false, row: null };
+  }
+  return { ok: true, row: firstRow(await response.json().catch(() => null)) };
+}
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405,{error:"method_not_allowed"});
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !INGRESS_AUTH_TOKEN) return json(503,{error:"ingress_configuration_missing"});
@@ -30,19 +46,37 @@ Deno.serve(async (req: Request) => {
       deliveryId.length<1 || deliveryId.length>255 || (eventId!==null && eventId.length>255)) return json(400,{error:"invalid_webhook_metadata"});
   const raw=new Uint8Array(await req.arrayBuffer());
   if(raw.length===0 || raw.length>1_000_000) return json(413,{error:"invalid_body_size"});
-  const response=await fetch(SUPABASE_URL+"/rest/v1/rpc/accept_shopify_webhook_v2",{
-    method:"POST",
-    headers:{apikey:SERVICE_ROLE_KEY,authorization:"Bearer "+SERVICE_ROLE_KEY,"content-type":"application/json","accept-profile":"henvalt","content-profile":"henvalt"},
-    body:JSON.stringify({p_route_token:routeToken,p_hmac_base64:hmac,p_raw_body_base64:base64(raw),p_shop_domain:shop,p_topic:topic,p_delivery_id:deliveryId,p_event_id:eventId}),
+  const encodedBody=base64(raw);
+
+  const accepted=await rpc("accept_shopify_webhook_v2",{
+    p_route_token:routeToken,p_hmac_base64:hmac,p_raw_body_base64:encodedBody,p_shop_domain:shop,p_topic:topic,p_delivery_id:deliveryId,p_event_id:eventId,
   });
-  if(!response.ok){console.error("Verified webhook RPC failed",response.status);return json(503,{error:"verified_inbox_unavailable"});}
-  const payload=await response.json().catch(()=>null);
-  const row=Array.isArray(payload)?payload[0]:payload;
-  if(!row || typeof row.accepted!=="boolean") return json(503,{error:"verified_inbox_invalid_response"});
-  if(!row.accepted){
-    const code=typeof row.rejection_code==="string"?row.rejection_code:"webhook_rejected";
+  if(!accepted.ok) return json(503,{error:"verified_inbox_unavailable"});
+  const receipt=accepted.row;
+  if(!receipt || typeof receipt.accepted!=="boolean") return json(503,{error:"verified_inbox_invalid_response"});
+  if(receipt.accepted!==true){
+    const code=typeof receipt.rejection_code==="string"?receipt.rejection_code:"webhook_rejected";
     const status=code==="HMAC_INVALID"||code==="ROUTE_TOKEN_INVALID"?401:code==="SHOP_DOMAIN_MISMATCH"||code==="SHOP_ID_MISMATCH"?403:code==="INVALID_REQUEST"?400:503;
     return json(status,{error:code.toLowerCase()});
   }
-  return json(200,{accepted:true,duplicate:row.duplicate===true,status:row.receipt_status});
+
+  // Project only after the verified receipt exists. The RPC compares the exact
+  // raw-body digest against that receipt and resolves the same install token.
+  // Calling on duplicate retries lets a transient prior projection recover.
+  if(topic==="checkouts/create" || topic==="checkouts/update"){
+    const projected=await rpc("project_verified_shopify_checkout_v2",{
+      p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
+    });
+    if(!projected.ok || !projected.row || projected.row.accepted!==true){
+      return json(503,{error:"checkout_projection_unavailable"});
+    }
+    return json(200,{
+      accepted:true,
+      duplicate:receipt.duplicate===true,
+      status:receipt.receipt_status,
+      checkout_projection:projected.row.status,
+    });
+  }
+
+  return json(200,{accepted:true,duplicate:receipt.duplicate===true,status:receipt.receipt_status});
 });
