@@ -38,11 +38,21 @@ test("receiver preserves raw bytes on a separate branch and rejoins only after r
   assert.match(contract, /binary: \{ data: originalBody \}/);
   assert.match(contract, /false outputs must remain unconnected/i);
   assert.doesNotMatch(contract, /rawBodyBase64\s*:\s*rawBodyBase64/);
+  assert.match(contract, /Do not return `\[\]` to reject an item in this mode/);
 });
 
-test("receiver cutover remains explicitly unverified until n8n Cloud execution", () => {
+test("isolated n8n Cloud test harness verified Merge and fail-closed IF branches", () => {
+  assert.match(contract, /execution `33936` succeeded/);
+  assert.match(contract, /execution `33937` succeeded/);
+  assert.match(contract, /execution `33938` succeeded/);
+  assert.match(contract, /pinned to a deterministic known-answer HMAC/);
+  assert.match(contract, /not actual Crypto node HMAC computation/);
+  assert.match(contract, /isolated test workflow was archived/);
+});
+
+test("receiver cutover remains explicitly unverified until real Crypto and Postgres execution", () => {
   assert.match(contract, /Actual Crypto HMAC execution on this n8n Cloud instance/);
-  assert.match(contract, /Merge's real execution behavior/);
-  assert.match(contract, /No temporary workflow or Crypto credential has been created/);
-  assert.match(contract, /No production workflow, Supabase SQL, Worker, Shopify app or release has been changed/);
+  assert.match(contract, /Postgres credential effective role\/grants/);
+  assert.match(contract, /No Crypto credential was created/);
+  assert.match(contract, /No production workflow, Supabase SQL, Worker, Shopify app, or release has been changed/);
 });
