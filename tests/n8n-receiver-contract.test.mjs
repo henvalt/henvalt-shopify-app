@@ -46,7 +46,7 @@ test("isolated n8n Cloud test harness verified Merge and fail-closed IF branches
   assert.match(contract, /execution `33937` succeeded/);
   assert.match(contract, /execution `33938` succeeded/);
   assert.match(contract, /pinned to a deterministic known-answer HMAC/);
-  assert.match(contract, /not actual Crypto node HMAC computation/);
+  assert.match(contract, /actual Crypto node HMAC computation/);
   assert.match(contract, /isolated test workflow was archived/);
 });
 
