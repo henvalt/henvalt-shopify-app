@@ -231,3 +231,49 @@ Before producing executable migration SQL, complete:
 5. RPC compatibility plan for active n8n and deployed Edge Functions.
 
 No migration SQL is included here yet. No live database, workflow, Edge Function, Worker, secret, or Shopify configuration was changed during this audit.
+
+
+## 14. Writer-function and existing-row backfill findings (2026-11-16)
+
+### 14.1 Current writer RPCs do not enforce store identity
+
+Read-only inspection of the deployed function definitions confirmed:
+
+- `upsert_customer(p_tenant_id, p_shopify_customer_id, ... p_metadata)` searches by `tenant_id + shopify_customer_id`; when no Shopify customer ID is supplied, it can fall back to `tenant_id + normalized email`. The supplied metadata (which may contain `shop_domain`) is not part of the lookup identity. Two stores in one tenant can therefore resolve to the same customer row.
+- `upsert_checkout(p_tenant_id, p_shopify_checkout_id, ..., p_metadata)` accepts tenant and metadata but has no connection ID argument. Its table uniqueness is tenant + Shopify checkout ID (and tenant + checkout token), not store-specific.
+- `upsert_canonical_event` accepts tenant and metadata but no connection ID; its idempotency lookup is tenant + idempotency key.
+- `create_opportunity_idempotent` accepts tenant, event/customer/checkout IDs and an idempotency key, but no connection ID or store metadata parameter. It verifies that customer and checkout belong to the tenant, then uses tenant + idempotency key and tenant + checkout for cycle handling.
+- The active ingest workflow therefore cannot repair this by adding a shop-domain metadata field alone. The writer RPCs, table keys, and downstream readers must change together.
+
+### 14.2 Existing sample data classification (not representative traffic metrics)
+
+A read-only count of current rows and presence of `metadata.shop_domain` returned:
+
+| Table | Rows | With shop domain | Without shop domain |
+|---|---:|---:|---:|
+| `webhook_events` | 132 | 130 | 2 |
+| `canonical_events` | 166 | 130 | 36 |
+| `customers` | 3 | 2 | 1 |
+| `checkouts` | 2 | 1 | 1 |
+| `opportunities` | 5 | 3 | 2 |
+| `orders` | 0 | 0 | 0 |
+| `order_attributions` | 0 | 0 | 0 |
+| `revenue_ledger` | 0 | 0 | 0 |
+
+These are the current database contents only, not production-volume or product-performance metrics. The sample proves that metadata-only backfill cannot be assumed complete: some existing canonical events, customers, checkouts, and opportunities lack a shop-domain marker. Orders/attribution/revenue currently have no rows to backfill in this snapshot, but their future writers still need connection identity.
+
+### 14.3 Safe backfill rules
+
+- Backfill a row to `shopify_connection_id` only if its direct trusted source event, checkout, order, or parent relationship resolves to exactly one connection in the same tenant.
+- A `metadata.shop_domain` value may be used as a candidate mapping key only after checking that exactly one connection in the same tenant matches it and that the record's source lineage agrees.
+- A row with no shop-domain marker, multiple plausible connections, or conflicting parent/source store identities is unresolved. Leave it null/quarantined for review; never infer the store from the tenant's only currently active connection, because the number of active connections can change.
+- Customer identity requires an explicit product decision: customer records should be store-scoped for Shopify IDs and consent state, while any tenant-wide cross-store contact deduplication must be a separate, deliberate identity layer. Do not merge Shopify customer IDs across stores merely because email addresses match.
+- Before adding NOT NULL or composite constraints, inventory all writers and resolve all existing null/ambiguous rows. The current sample is too small to justify assumptions about future completeness.
+
+### 14.4 Additional recovery isolation checks required
+
+The inspected `authorize_delivery_request` validates tenant ownership across delivery request, intervention, sequence, opportunity, customer, and message. For cart/browse/checkout paths it also checks an active connection using `metadata.shop_domain` in several branches. However, the order-paid checks and cart-to-checkout advancement checks include tenant/customer predicates without a consistent exact connection predicate. Once direct connection FKs exist, these checks must compare the same connection ID across the opportunity, checkout, order, and active Shopify connection. Otherwise a purchase in Store A could suppress recovery in Store B when a tenant shares customer identity or customer IDs.
+
+The recovery candidate functions and order attribution functions must receive the same treatment. Store identity must be preserved through all eligibility, conversion-stop, and attribution decisions—not only at initial webhook ingestion.
+
+No backfill, schema change, function replacement, or workflow edit was performed.
