@@ -10,3 +10,5 @@ The GitHub Actions job `shopify-database-migration-validation` creates a fresh P
 - service-role-only RPC permissions.
 
 All data and secrets in the fixture are synthetic. This does not connect to the live Supabase project and does not replace a full replay against a sanitized copy of the production schema. The legacy OAuth finalizer is represented by a signature-compatible test stub, so this job validates the wrapper's contract and transaction behavior but not the internal production finalizer implementation.
+
+The V2 inbox RPCs also reject reuse of the same delivery ID with a different raw-body digest; exact duplicate retries are acknowledged idempotently, while body-mismatch replays are rejected.
