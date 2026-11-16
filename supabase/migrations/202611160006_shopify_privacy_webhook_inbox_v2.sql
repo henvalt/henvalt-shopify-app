@@ -110,6 +110,8 @@ BEGIN
      OR length(p_raw_body_base64) > 1400000
      OR NULLIF(p_shop_domain, '') IS NULL
      OR NULLIF(p_webhook_id, '') IS NULL
+     OR length(p_webhook_id) > 255
+     OR p_topic IS NULL
      OR p_topic NOT IN ('customers/data_request', 'customers/redact', 'shop/redact')
      OR p_shop_domain <> lower(p_shop_domain)
      OR p_shop_domain !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$' THEN
