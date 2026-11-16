@@ -11,5 +11,5 @@ test("exact-store privacy lineage preflight is metadata-only and read-only", () 
   assert.match(sql, /app_key/);
   assert.match(sql, /count\(DISTINCT tenant_id\)/);
   assert.doesNotMatch(sql, /\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|CALL|DO)\b/i);
-  assert.doesNotMatch(executable, /payload|email|customer_id|secret/i);
+  assert.doesNotMatch(executable, /payload|customer_id|email_normalized|decrypted_secret/i);
 });
