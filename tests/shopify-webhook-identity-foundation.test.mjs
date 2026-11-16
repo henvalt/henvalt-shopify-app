@@ -22,9 +22,9 @@ test("identity foundation is additive and preserves legacy webhook constraints",
 });
 
 test("route and inbox records enforce exact connection, tenant and app lineage", () => {
-  assert.equal((migration.match(/FOREIGN KEY \\(connection_id, tenant_id, app_key\\)/g) || []).length, 1);
-  assert.match(migration, /FOREIGN KEY \\(connection_id, tenant_id, app_key, shop_domain_header\\)/);
-  assert.match(migration, /REFERENCES henvalt\\.shopify_connections \\(id, tenant_id, app_key, shop_domain\\)/);
+  assert.equal((migration.match(/FOREIGN KEY \(connection_id, tenant_id, app_key\)/g) || []).length, 1);
+  assert.match(migration, /FOREIGN KEY \(connection_id, tenant_id, app_key, shop_domain_header\)/);
+  assert.match(migration, /REFERENCES henvalt\.shopify_connections \(id, tenant_id, app_key, shop_domain\)/);
   assert.match(migration, /token_hash ~ '\^\[0-9a-f\]\{64\}\$'/);
   assert.match(migration, /raw_body_sha256 ~ '\^\[0-9a-f\]\{64\}\$'/);
   assert.match(migration, /shopify_app_registry_secret_ref_nonempty/);
