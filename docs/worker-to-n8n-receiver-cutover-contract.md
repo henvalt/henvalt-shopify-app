@@ -11,6 +11,15 @@ Status: implementation contract for the preparation branch. No live n8n workflow
 - The Worker branch now requires two independent secrets: `HENVALT_N8N_HMAC_SECRET` and `HENVALT_N8N_INGEST_TOKEN`. Neither is configured by this branch change.
 - The receiver currently does not validate the new internal HMAC headers or claim request IDs. Do not deploy the Worker branch until the receiver cutover and secrets are completed.
 
+## Credential preparation (before editing the graph)
+
+Create these two credentials in the existing n8n workspace. Do not paste their values into workflow JSON, GitHub, SQL, or chat:
+
+- **Header Auth credential**: name it `HENVALT Worker Ingress Auth`; set the header name to `x-henvalt-ingest-auth`; set its value to a new random secret. Configure the existing `Event Webhook` node with `authentication: headerAuth` and attach this credential. Copy the same value into the Cloudflare Worker secret binding `HENVALT_N8N_INGEST_TOKEN`.
+- **Crypto credential**: name it `HENVALT Worker HMAC`; set its HMAC Secret to a different new random secret. Attach it to the Crypto node. Copy the same value into the Worker secret binding `HENVALT_N8N_HMAC_SECRET`.
+
+The active workflow already contains a `Postgres account` credential on the `Deactivate Shopify Connection` node. Reuse that credential for the replay-claim Postgres node; do not create a second database credential. Credential creation and Worker secret configuration are manual cutover prerequisites, not part of this branch change.
+
 ## Required receiver order
 
 The following nodes must be inserted immediately after `Event Webhook`, before `Validate & Normalize`, `Engine Config`, tenant resolution, Shopify HMAC RPCs, and every other side effect:
@@ -22,6 +31,25 @@ The following nodes must be inserted immediately after `Event Webhook`, before `
 5. **Internal HMAC Valid?** — IF node. False path must terminate without reaching any existing processing node. Do not treat a missing header as an internal event.
 6. **Claim Internal Request ID** — use a Postgres Execute Query node with the existing `Postgres account` credential already used by this workflow. Query: `SELECT henvalt.claim_internal_ingress_request($1::uuid, $2::timestamptz) AS claimed`. Bind query parameters as `[request_id, signed_at]`. The function atomically inserts the UUID and returns true only for the first claim.
 7. **Request ID Claimed?** — IF node checking `{{$json.claimed === true}}`. False path terminates without side effects. True path continues to the existing `Validate & Normalize` node.
+
+## Exact graph wiring
+
+Keep the existing business graph intact and insert the following chain between the trigger and the first current business node:
+
+```text
+Event Webhook (Header Auth)
+  → Prepare Internal HMAC Message
+  → Verify Internal HMAC (Crypto)
+  → Compare Signature and Timestamp
+  → Internal HMAC Valid?
+      true  → Claim Internal Request ID
+                → Request ID Claimed?
+                    true  → Validate & Normalize (existing graph)
+                    false → stop
+      false → stop
+```
+
+The false outputs must remain unconnected to all business nodes. Preserve the original `binary.data` property throughout the new nodes because the existing Shopify HMAC verifier later reads the original raw body. Do not place the new nodes after `Validate & Normalize`: normalization parses and transforms the payload, so it is too late to establish the internal signature boundary.
 
 The static Header Auth gate and the body-bound HMAC are separate controls. The static token limits who can start an execution; HMAC proves that the body and request metadata were signed by the Worker. Do not replace Shopify's existing raw-body HMAC verification: both trust boundaries are required.
 
