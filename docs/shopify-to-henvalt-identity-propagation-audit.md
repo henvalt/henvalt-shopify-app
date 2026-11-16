@@ -182,3 +182,18 @@ Not established by this pass:
 - Public app readiness or Shopify review approval.
 
 No production changes were made. This audit is review-only and does not authorize merging, deploying, applying migrations, changing n8n, changing Worker code, or releasing a Shopify version.
+
+
+## 11. OAuth registration confirms the active webhook route
+
+A further read-only inspection of deployed `henvalt-shopify-oauth` version 27 confirms that the active OAuth callback registers the Shopify webhook subscriptions to the exact deployed Worker endpoint:
+
+`https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks`
+
+The deployed OAuth function registers and verifies 12 topics: orders/create, orders/updated, orders/paid, orders/cancelled, refunds/create, order_transactions/create, checkouts/create, checkouts/update, carts/create, carts/update, customers_email_marketing_consent/update, and app/uninstalled.
+
+This resolves the earlier route uncertainty: the deployed OAuth code explicitly points the Shopify app's webhook subscriptions at the clean-ingress Worker, which then forwards to its configured n8n ingest URL. The alternate `henvalt-control-plane/v1/webhooks/shopify` relay exists in the deployed control-plane function, but it is not the webhook URI registered by the inspected OAuth callback.
+
+The OAuth callback also records the verified webhook destination and per-topic subscription IDs in the tenant audit log. This is useful operational evidence, but it records a single fixed Worker destination and does not add an app key to the route or the webhook payload. The future public app must register a distinct trusted app-aware ingress route (or equivalent trusted routing mechanism) while preserving the existing legacy route and secret.
+
+No webhook subscriptions were created, updated or deleted during this inspection.
