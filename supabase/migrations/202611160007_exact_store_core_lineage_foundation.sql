@@ -47,10 +47,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS customers_tenant_connection_shopify_id_uidx
   ON henvalt.customers (tenant_id, shopify_connection_id, shopify_customer_id)
   WHERE shopify_connection_id IS NOT NULL AND shopify_customer_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS sessions_tenant_connection_reference_uidx
-  ON henvalt.sessions (tenant_id, shopify_connection_id, session_reference)
-  WHERE shopify_connection_id IS NOT NULL;
-
 CREATE UNIQUE INDEX IF NOT EXISTS session_aliases_tenant_connection_alias_uidx
   ON henvalt.session_aliases (tenant_id, shopify_connection_id, alias_reference)
   WHERE shopify_connection_id IS NOT NULL;
