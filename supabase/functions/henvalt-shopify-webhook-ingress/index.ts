@@ -78,5 +78,21 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  if(topic==="orders/create"){
+    const projected=await rpc("project_verified_shopify_order_v2",{
+      p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
+    });
+    if(!projected.ok || !projected.row || projected.row.accepted!==true){
+      return json(503,{error:"order_projection_unavailable"});
+    }
+    return json(200,{
+      accepted:true,
+      duplicate:receipt.duplicate===true,
+      status:receipt.receipt_status,
+      order_projection:projected.row.status,
+      checkout_match_status:projected.row.checkout_match_status,
+    });
+  }
+
   return json(200,{accepted:true,duplicate:receipt.duplicate===true,status:receipt.receipt_status});
 });
