@@ -25,6 +25,8 @@ DECLARE
   v_finalized jsonb;
   v_connection_id uuid;
   v_route_token text := repeat('a', 64);
+  v_rotated_route_token text := repeat('b', 64);
+  v_rotated_finalized jsonb;
   v_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001"}';
   v_hmac text;
   v_result record;
@@ -102,6 +104,68 @@ BEGIN
 
   IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Duplicate webhook was not idempotently acknowledged: %', row_to_json(v_result);
+  END IF;
+
+  INSERT INTO henvalt.shopify_oauth_states (
+    state_hash, shop_domain, expires_at, initiated_by_user_id, app_key
+  )
+  VALUES (
+    'synthetic-state-hash-2',
+    'store-a.myshopify.com',
+    now() + interval '10 minutes',
+    '00000000-0000-4000-8000-000000000001',
+    'test_app'
+  );
+
+  v_rotated_finalized := henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
+    'synthetic-state-hash-2',
+    'store-a.myshopify.com',
+    repeat('y', 40),
+    repeat('s', 40),
+    3600,
+    86400,
+    '1001',
+    ARRAY['read_orders']::text[],
+    '00000000-0000-4000-8000-000000000001'::uuid,
+    'test_app',
+    'test-client-id',
+    v_rotated_route_token
+  );
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_webhook_route_tokens
+    WHERE connection_id = v_connection_id
+      AND token_hash = encode(extensions.digest(convert_to(v_route_token, 'UTF8'), 'sha256'), 'hex')
+      AND revoked_at IS NOT NULL
+  ) OR NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_webhook_route_tokens
+    WHERE connection_id = v_connection_id
+      AND token_hash = encode(extensions.digest(convert_to(v_rotated_route_token, 'UTF8'), 'sha256'), 'hex')
+      AND revoked_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'OAuth reauthorization did not rotate the per-install route token';
+  END IF;
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_webhook_v2(
+    v_route_token, v_hmac,
+    encode(convert_to(v_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'orders/create', 'delivery-after-rotation-old', 'event-after-rotation-old'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code <> 'ROUTE_TOKEN_INVALID' THEN
+    RAISE EXCEPTION 'Revoked route token remained usable after reauthorization';
+  END IF;
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_webhook_v2(
+    v_rotated_route_token, v_hmac,
+    encode(convert_to(v_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'orders/create', 'delivery-after-rotation-new', 'event-after-rotation-new'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'New route token did not accept webhook after reauthorization';
   END IF;
 
   v_privacy_hmac := encode(
