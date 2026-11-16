@@ -9,6 +9,8 @@ test("privacy inbox is app- and exact-store-bound with idempotent delivery ident
   assert.match(sql, /UNIQUE \(app_key, shop_domain, webhook_id\)/);
   assert.match(sql, /FOREIGN KEY \(connection_id, tenant_id, app_key, shop_domain\)/);
   assert.match(sql, /sc\.app_key = p_app_key[\s\S]*sc\.shop_domain = p_shop_domain/);
+  assert.match(sql, /v_shop_id <> v_connection_shop_id/);
+  assert.match(sql, /SHOP_ID_MISMATCH/);
   assert.match(sql, /lifecycle_status = 'active'/);
 });
 
