@@ -37,6 +37,8 @@ test("V2 persists verified delivery idempotently before acknowledging", () => {
   assert.match(sql, /hmac_verified_at/);
   assert.match(sql, /receipt_status := 'RECEIVED'/);
   assert.match(sql, /receipt_status := 'DUPLICATE'/);
+  assert.match(sql, /DELIVERY_ID_BODY_MISMATCH/);
+  assert.match(sql, /v_existing_digest IS DISTINCT FROM v_body_digest/);
 });
 
 test("V2 RPC is restricted to service_role and never exposes secret material", () => {
