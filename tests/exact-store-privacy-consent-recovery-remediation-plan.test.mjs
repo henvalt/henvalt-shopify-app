@@ -14,7 +14,7 @@ test("exact-store remediation plan defines fail-closed identity and same-store l
     "shopify_connection_id",
     "Do not silently backfill legacy rows",
     "Shopify consent and an unsubscribe token",
-    "Shop redaction must not delete the HENVALT tenant",
+    "A shop redaction must not delete the HENVALT tenant",
     "same connection",
     "POSSIBLE/customer-only matches remain non-billable",
     "Stage A",
