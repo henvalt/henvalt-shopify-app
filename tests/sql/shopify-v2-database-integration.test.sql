@@ -414,4 +414,155 @@ BEGIN
 END;
 $lineage$;
 
+
+-- Connection-aware Web Pixel V2 inbox integration checks (migration 008).
+DO $pixel_v2$
+DECLARE
+  v_tenant uuid := '00000000-0000-4000-8000-000000000001';
+  v_store_a uuid;
+  v_store_b uuid;
+  v_result jsonb;
+  v_payload_a jsonb;
+  v_payload_b jsonb;
+  v_changed_payload jsonb;
+  v_payload_no_consent jsonb;
+  v_inbox_a uuid;
+  v_inbox_b uuid;
+BEGIN
+  INSERT INTO henvalt.tenants (id, status)
+  VALUES (v_tenant, 'ACTIVE')
+  ON CONFLICT (id) DO UPDATE SET status = 'ACTIVE';
+
+  SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
+  SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
+
+  IF v_store_a IS NULL OR v_store_b IS NULL THEN
+    RAISE EXCEPTION 'Pixel V2 test requires two synthetic stores';
+  END IF;
+
+  INSERT INTO henvalt.pixel_keys (tenant_id, key_digest, allowed_origins, active, revoked_at, shopify_connection_id)
+  VALUES
+    (v_tenant, repeat('a', 64), ARRAY['https://store-a.example'], true, NULL, v_store_a),
+    (v_tenant, repeat('b', 64), ARRAY['https://store-b.example'], true, NULL, v_store_b);
+
+  v_payload_a := jsonb_build_object(
+    'schema_version','1',
+    'event_type','checkout_started',
+    'event_id','shared-pixel-event-id',
+    'client_id','shared-client-reference',
+    'customer_reference','shared-shopify-customer-id',
+    'checkout_reference','shared-checkout-alias',
+    'analytics_consent','true',
+    'marketing_consent','false',
+    'occurred_at',now()
+  );
+
+  v_payload_b := v_payload_a;
+
+  v_result := henvalt.ingest_pixel_event_v2(repeat('a',64), 'https://store-a.example', v_payload_a);
+  IF v_result->>'accepted' <> 'true' OR v_result->>'duplicate' <> 'false'
+     OR v_result->>'status' <> 'PENDING_ADAPTER' THEN
+    RAISE EXCEPTION 'Store A pixel event was not accepted into the isolated inbox: %', v_result;
+  END IF;
+  v_inbox_a := (v_result->>'inbox_id')::uuid;
+
+  v_result := henvalt.ingest_pixel_event_v2(repeat('b',64), 'https://store-b.example', v_payload_b);
+  IF v_result->>'accepted' <> 'true' OR v_result->>'duplicate' <> 'false' THEN
+    RAISE EXCEPTION 'Same event ID in Store B collided with Store A: %', v_result;
+  END IF;
+  v_inbox_b := (v_result->>'inbox_id')::uuid;
+
+  IF v_inbox_a = v_inbox_b
+     OR NOT EXISTS (SELECT 1 FROM henvalt.shopify_pixel_event_inbox_v2 WHERE id=v_inbox_a AND shopify_connection_id=v_store_a)
+     OR NOT EXISTS (SELECT 1 FROM henvalt.shopify_pixel_event_inbox_v2 WHERE id=v_inbox_b AND shopify_connection_id=v_store_b) THEN
+    RAISE EXCEPTION 'Pixel inbox events were not isolated by exact Shopify connection';
+  END IF;
+
+  v_result := henvalt.ingest_pixel_event_v2(repeat('a',64), 'https://store-a.example', v_payload_a);
+  IF v_result->>'accepted' <> 'true' OR v_result->>'duplicate' <> 'true' THEN
+    RAISE EXCEPTION 'Exact Store A retry was not idempotent: %', v_result;
+  END IF;
+
+  v_changed_payload := v_payload_a || jsonb_build_object('marketing_consent','true');
+  v_result := henvalt.ingest_pixel_event_v2(repeat('a',64), 'https://store-a.example', v_changed_payload);
+  IF v_result->>'accepted' <> 'false' OR v_result->>'rejection_code' <> 'EVENT_ID_BODY_MISMATCH' THEN
+    RAISE EXCEPTION 'Changed payload reusing Store A event ID was not rejected: %', v_result;
+  END IF;
+
+  v_payload_no_consent := jsonb_build_object(
+    'schema_version','1',
+    'event_type','product_viewed',
+    'event_id','no-consent-event',
+    'client_id','must-not-be-stored',
+    'customer_reference','must-not-be-stored',
+    'checkout_reference','must-not-be-stored',
+    'analytics_consent','false',
+    'marketing_consent','true',
+    'occurred_at',now()
+  );
+  v_result := henvalt.ingest_pixel_event_v2(repeat('a',64), 'https://store-a.example', v_payload_no_consent);
+  IF v_result->>'accepted' <> 'true' THEN
+    RAISE EXCEPTION 'No-consent event should be received without identity fields: %', v_result;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM henvalt.shopify_pixel_event_inbox_v2
+    WHERE source_event_id='no-consent-event'
+      AND (client_reference IS NOT NULL OR customer_reference IS NOT NULL OR checkout_reference IS NOT NULL
+        OR payload ? 'client_id' OR payload ? 'customer_reference' OR payload ? 'checkout_reference')
+  ) THEN
+    RAISE EXCEPTION 'Analytics-disabled event persisted identity-bearing fields';
+  END IF;
+
+  IF (SELECT count(*) FROM henvalt.canonical_events WHERE source='SHOPIFY_WEB_PIXEL') <> 0
+     OR (SELECT count(*) FROM henvalt.customers) <> 0
+     OR (SELECT count(*) FROM henvalt.sessions) <> 0
+     OR (SELECT count(*) FROM henvalt.session_aliases) <> 0
+     OR (SELECT count(*) FROM henvalt.checkouts) <> 0 THEN
+    RAISE EXCEPTION 'Pixel V2 inbox wrote into a legacy downstream identity/recovery table';
+  END IF;
+
+  UPDATE henvalt.pixel_keys SET revoked_at=now(), active=false WHERE key_digest=repeat('a',64);
+  BEGIN
+    PERFORM henvalt.ingest_pixel_event_v2(
+      repeat('a',64),
+      'https://store-a.example',
+      v_payload_a || jsonb_build_object('event_id','revoked-key-event')
+    );
+    RAISE EXCEPTION 'Revoked pixel key was unexpectedly accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Revoked pixel key was unexpectedly accepted' THEN
+      RAISE;
+    END IF;
+    IF SQLERRM NOT LIKE '%not authorized%' THEN
+      RAISE;
+    END IF;
+  END;
+
+  UPDATE henvalt.shopify_connections SET active=false WHERE id=v_store_b;
+  BEGIN
+    PERFORM henvalt.ingest_pixel_event_v2(
+      repeat('b',64),
+      'https://store-b.example',
+      v_payload_b || jsonb_build_object('event_id','inactive-store-event')
+    );
+    RAISE EXCEPTION 'Inactive store key was unexpectedly accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM = 'Inactive store key was unexpectedly accepted' THEN
+      RAISE;
+    END IF;
+    IF SQLERRM NOT LIKE '%not authorized%' THEN
+      RAISE;
+    END IF;
+  END;
+
+  IF has_function_privilege('anon', 'henvalt.ingest_pixel_event_v2(text,text,jsonb)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'henvalt.ingest_pixel_event_v2(text,text,jsonb)', 'EXECUTE')
+     OR NOT has_function_privilege('service_role', 'henvalt.ingest_pixel_event_v2(text,text,jsonb)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'Pixel V2 RPC privileges are not server-only';
+  END IF;
+END;
+$pixel_v2$;
+
+
 SELECT 'shopify_v2_database_integration_passed' AS result;
