@@ -40,7 +40,7 @@ test("identity tables are not exposed to browser roles", () => {
 
 test("preflight is read-only and flags unresolved legacy and domain ambiguity", () => {
   assert.match(preflight, /lower\(btrim\(shop_domain\)\)/);
-  assert.match(preflight, /app_key IS NULL/);
+  assert.match(preflight, /to_jsonb\(sc\)->>'app_key' IS NULL/);
   assert.match(preflight, /legacy_rows_that_will_remain_unattributed/);
   assert.doesNotMatch(preflight, /\b(INSERT|UPDATE|DELETE|ALTER|DROP|TRUNCATE)\b/i);
 });
