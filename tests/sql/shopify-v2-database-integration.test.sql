@@ -217,7 +217,7 @@ BEGIN
   );
 
   IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code <> 'HMAC_INVALID' THEN
-    RAISE EXCEPTION 'Invalid privacy HMAC was not rejected';
+    RAISE EXCEPTION 'Invalid privacy HMAC was not rejected: %', row_to_json(v_result);
   END IF;
 
   IF has_function_privilege('anon', 'henvalt.accept_shopify_privacy_webhook_v2(text,text,text,text,text,text,text)', 'EXECUTE') THEN
