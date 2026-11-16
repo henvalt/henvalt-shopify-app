@@ -13,7 +13,7 @@ Use synthetic data only:
 - Legacy app identity is `legacy`; future public app identity is `public_v1`.
 - Store A and B deliberately reuse overlapping Shopify customer IDs, checkout IDs, order IDs, source event IDs, email addresses, and idempotency strings where Shopify permits this.
 - Store C uses distinct values.
-- Each store has different store name, sender identity, recovery settings, email branding, and billing subscription fixture.
+- Each store has different store name, sender identity, recovery settings, and email branding. Billing fixtures must cover the explicitly selected commercial principal (per-store, per-tenant, or hybrid); the test suite must not assume that decision before it is approved.
 - Provider credentials for MailerSend remain tenant/provider scoped unless the product explicitly introduces a separate provider account per store.
 
 ## A. App identity and OAuth
@@ -79,10 +79,10 @@ Use synthetic data only:
 | ATTR-02 | Similar order in B follows B intervention | Attribution and ledger entry are attached to B, not A |
 | ATTR-03 | A and B have separate dashboard requests | Each store view reports only its own events, messages, orders and recovered revenue |
 | ATTR-04 | Tenant-wide overview requested | Aggregation is explicit and labelled as tenant-wide; it is not returned accidentally from a store endpoint |
-| BILL-01 | A and B use separate Shopify subscriptions | Separate store-scoped billing accounts/subscription IDs |
+| BILL-01 | A and B use the approved billing principal | Per-store, tenant-wide, or hybrid account/subscription mapping matches the documented product decision; no accidental principal is inferred |
 | BILL-02 | A usage measurement is submitted from B | Reject; charge must resolve to the measurement's store |
 | BILL-03 | Same billing idempotency key appears in A and B | Store-scoped uniqueness; retries in one store remain idempotent |
-| BILL-04 | Tenant-wide billing rollup requested | Sum exact store measurements without duplicating or omitting ledger entries |
+| BILL-04 | Tenant-wide billing rollup requested under the selected model | Sum exact store measurements without duplicating or omitting ledger entries; label tenant scope explicitly |
 | BILL-05 | No recovered revenue | No performance fee is created merely from sent messages or projected value |
 
 ## F. Privacy, consent, unsubscribe and inbound replies
@@ -136,6 +136,10 @@ Use synthetic data only:
 | MIG-05 | New app-aware workflow calls new RPC signature | Exact connection ID is verified server-side |
 | MIG-06 | Rollback to legacy app path | Legacy credentials, connection and workflows remain operational |
 | MIG-07 | Deploy sequence interrupted between DB, Edge Function, Worker and n8n stages | System fails closed without accepting unsigned identity or sending cross-store mail |
+
+## Billing decision gate
+
+Before enabling BILL-01 through BILL-04 as executable acceptance tests, record the approved commercial principal in the billing architecture decision record. The decision must specify who authorizes payment, how multiple Shopify installations map to one or more billing accounts, how recovered revenue is consolidated, and how email costs are allocated. Until that decision is approved, tests must validate isolation and consistency without presuming per-store subscriptions.
 
 ## Release gates
 
