@@ -10,7 +10,7 @@ const contract = readFileSync(
   new URL("../docs/app-aware-shopify-identity-implementation-contract-v1.md", import.meta.url),
   "utf8",
 );
-const preflight = readFileSync(
+const matrix = readFileSync(\n  new URL("../docs/store-isolation-regression-matrix.md", import.meta.url),\n  "utf8",\n);\nconst preflight = readFileSync(
   new URL("../docs/sql/app-aware-shopify-identity-preflight-review-only.sql", import.meta.url),
   "utf8",
 );
@@ -60,5 +60,16 @@ test("app-aware preflight is SELECT-only and does not mutate production", () => 
     "vault.update_secret",
   ]) {
     assert.ok(!normalized.includes(forbidden), `preflight contains forbidden mutation: ${forbidden}`);
+  }
+});
+
+
+test("regression matrix covers cross-app OAuth, HMAC, collision and rollback cases", () => {
+  for (const id of [
+    "APP-01", "APP-02", "APP-03", "APP-04", "APP-05", "APP-06",
+    "APP-07", "APP-08", "APP-09", "APP-10", "APP-11", "APP-12",
+    "APP-13", "APP-14", "APP-15", "APP-16", "APP-17", "APP-18",
+  ]) {
+    assert.ok(matrix.includes(`| ${id} |`), `regression matrix missing: ${id}`);
   }
 });
