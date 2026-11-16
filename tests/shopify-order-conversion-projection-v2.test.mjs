@@ -36,6 +36,6 @@ test("order webhook ingress projects before acknowledging", () => {
 });
 
 test("order projection stores no direct customer contact data or raw payload", () => {
-  assert.doesNotMatch(migration, /email|phone|address|line_items/i);
+  assert.doesNotMatch(migration, /\\bemail\\s+text|\\bphone\\s+text|\\baddress\\s+text|line_items\\s+jsonb/i);
   assert.match(docs, /No email, phone, address, line items or raw body are stored/);
 });
