@@ -12,7 +12,7 @@ test("n8n Cloud receiver contract uses native credential-backed Crypto HMAC", ()
   assert.match(contract, /HMAC Secret/i);
   assert.match(contract, /binaryPropertyName: internalAuthMessage/i);
   assert.match(contract, /computed_internal_signature/i);
-  assert.ok(contract.includes("does not support importing Node.js modules"));
+  assert.ok(contract.includes("not available in n8n Cloud Code nodes"));
   assert.ok(!contract.includes('require("crypto")'));
   assert.ok(!contract.includes("crypto.timingSafeEqual"));
 });
