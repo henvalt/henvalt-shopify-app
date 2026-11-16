@@ -98,7 +98,8 @@ Do not acknowledge successful receipt before durable verified identity and idemp
 - `shopify_connections.app_key`: FK to app registry.
 - `shopify_connections`: normalized canonical shop domain constraint (after duplicate preflight), retain existing unique domain identity.
 - `shopify_webhook_route_tokens`: token hash, connection ID, app key, created/expiry/revocation state, unique token hash.
-- `webhook_events.app_key` and `webhook_events.shopify_connection_id`: nullable initially for legacy records; new verified rows must be non-null.
+- Add a separate `shopify_webhook_deliveries` durable inbox keyed by `(connection_id, shopify_delivery_id)`. Its composite foreign key binds connection + tenant + app + canonical shop domain, preventing a Store A connection from storing a Store B header.
+- Keep the existing tenant-scoped `webhook_events` table and its uniqueness constraints untouched during this foundation stage. A later, separately tested adapter must map verified inbox rows into recovery processing with explicit connection lineage; do not assume the current legacy tenant-level writer is safe for cross-store reuse.
 - New resolver/ingest RPC accepts only the verified route-token hash + app context and returns/uses exact connection ID; tenant is derived from the connection inside SQL.
 - Add a composite FK or equivalent integrity guard so webhook tenant and connection tenant cannot disagree.
 - New unique idempotency constraint/index must be designed with every writer and existing duplicates/ON CONFLICT clauses inventoried first. Do not drop current unique constraints in this design phase.
