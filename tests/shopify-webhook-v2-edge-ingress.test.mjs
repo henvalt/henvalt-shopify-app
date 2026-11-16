@@ -1,0 +1,11 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const src=readFileSync(new URL("../supabase/functions/henvalt-shopify-webhook-ingress/index.ts",import.meta.url),"utf8");
+test("Edge ingress authenticates Worker before using service-role key",()=>{
+ assert.match(src,/HENVALT_INGRESS_AUTH_TOKEN/);assert.match(src,/constantTimeEqual\(bearer,INGRESS_AUTH_TOKEN\)/);assert.match(src,/SUPABASE_SERVICE_ROLE_KEY/);
+});
+test("Edge ingress passes validated raw-body metadata to Vault-backed RPC",()=>{
+ assert.match(src,/accept_shopify_webhook_v2/);assert.match(src,/p_raw_body_base64:base64\(raw\)/);assert.match(src,/p_hmac_base64:hmac/);assert.match(src,/p_route_token:routeToken/);
+ assert.doesNotMatch(src,/console\.(log|error)\([^\n]*(routeToken|raw|hmac|SERVICE_ROLE_KEY)/i);
+});
