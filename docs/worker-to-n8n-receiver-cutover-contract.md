@@ -2,60 +2,52 @@
 
 Status: implementation contract for the preparation branch. No live n8n workflow, Supabase schema, or Cloudflare Worker has been changed by this document. The active `HENVALT_INGEST` workflow remains the source of truth until a separately approved cutover.
 
-## Verified current state
+## Verified live state
 
-- Active workflow: `HENVALT_INGEST`, ID `VTpfGKNtu1CSQ4Rv`.
-- Webhook: POST `/henvalt/ingest`, raw body enabled, response mode `onReceived`.
-- The current first business node is `Validate & Normalize`; Shopify HMAC verification occurs later in the graph.
-- The Worker branch signs exact raw bytes with HMAC-SHA256 over `timestamp.requestId.` followed by the raw request bytes.
-- The Worker branch now requires two independent secrets: `HENVALT_N8N_HMAC_SECRET` and `HENVALT_N8N_INGEST_TOKEN`. Neither is configured by this branch change.
-- The receiver currently does not validate the new internal HMAC headers or claim request IDs. Do not deploy the Worker branch until the receiver cutover and secrets are completed.
+- Active workflow: `HENVALT_INGEST`, ID `VTpfGKNtu1CSQ4Rv`, 51 nodes.
+- Active version: `6368d539-708f-494a-8be8-b9601d0e8607`.
+- Webhook: Webhook v2.1, POST `/henvalt/ingest`, raw body enabled, response mode `onReceived`.
+- The live graph still connects `Event Webhook` directly to `Validate & Normalize`; no internal-auth gate is installed.
+- The existing validator reads the original `binary.data.data` payload for the later Shopify HMAC check.
+- The Worker preparation branch signs exact body bytes with HMAC-SHA256 over UTF-8 `timestamp.requestId.` followed by the raw request bytes. It requires separate `HENVALT_N8N_HMAC_SECRET` and `HENVALT_N8N_INGEST_TOKEN` bindings; neither is configured by this branch change.
+- The receiver does not yet validate these internal headers or claim request IDs. Do not deploy the Worker branch until receiver cutover and both secret configurations are complete.
 
-## Credential preparation (before editing the graph)
+## Credential prerequisites (manual cutover only)
 
-Create these two credentials in the existing n8n workspace. Do not paste their values into workflow JSON, GitHub, SQL, or chat:
+Create dedicated credentials in the existing n8n workspace. Do not paste secret values into workflow JSON, GitHub, SQL, or chat.
 
-- **Header Auth credential**: name it `HENVALT Worker Ingress Auth`; set the header name to `x-henvalt-ingest-auth`; set its value to a new random secret. Configure the existing `Event Webhook` node with `authentication: headerAuth` and attach this credential. Copy the same value into the Cloudflare Worker secret binding `HENVALT_N8N_INGEST_TOKEN`.
-- **Crypto credential**: name it `HENVALT Worker HMAC`; set its HMAC Secret to a different new random secret. Attach it to the Crypto node. Copy the same value into the Worker secret binding `HENVALT_N8N_HMAC_SECRET`.
+1. Header Auth credential named `HENVALT Worker Ingress Auth`: header name `x-henvalt-ingest-auth`, with a new random token. Attach it to the existing `Event Webhook`. Configure the same value as Worker secret binding `HENVALT_N8N_INGEST_TOKEN`.
+2. Crypto credential named `HENVALT Worker HMAC`: set its HMAC Secret to a different new random secret. Attach it to the Crypto node. Configure the same value as Worker secret binding `HENVALT_N8N_HMAC_SECRET`.
 
-The active workflow already contains a `Postgres account` credential on the `Deactivate Shopify Connection` node. Reuse that credential for the replay-claim Postgres node; do not create a second database credential. Credential creation and Worker secret configuration are manual cutover prerequisites, not part of this branch change.
+The active workflow has an existing `Postgres account` credential used by another node. Reuse it for the replay-claim query only after its effective database role and grants have been verified. Do not repurpose either existing generic Header Auth credential: neither is attached to the active webhook and their purpose is unknown. The current credential inventory contains no Crypto credential.
 
-## Required receiver order
+## Required receiver graph
 
-The following nodes must be inserted immediately after `Event Webhook`, before `Validate & Normalize`, `Engine Config`, tenant resolution, Shopify HMAC RPCs, and every other side effect:
-
-1. **Webhook-level Header Auth** — configure the existing `Event Webhook` trigger with n8n Header Auth. Credential header name: `x-henvalt-ingest-auth`. Credential value: the same random secret configured as Worker binding `HENVALT_N8N_INGEST_TOKEN`. This rejects requests before an execution is created. Do not use a query-string token.
-2. **Prepare Internal HMAC Message** — Code node, Run Once for Each Item. Read only the raw binary body and the three internal headers. Construct the signed byte sequence as UTF-8 `<timestamp>.<request-id>.` concatenated with the exact original body bytes. Do not parse and re-serialize JSON for signing.
-3. **Verify Internal HMAC** — native n8n Crypto node, action HMAC, type `SHA256`, binary input enabled, binary property `internalAuthMessage`, output property `computed_internal_signature`, encoding `BASE64`, and a Crypto credential whose HMAC Secret equals Worker binding `HENVALT_N8N_HMAC_SECRET`. Do not place the secret in node parameters or Code-node JSON.
-4. **Compare Signature and Timestamp** — Code node. Require a 10-digit Unix-seconds timestamp, UUIDv4 request ID, strict 44-character Base64 SHA-256 signature, and a timestamp within ±300 seconds. Compare the two fixed-length Base64 strings in a full-length XOR loop; fail closed if any value is missing, malformed, or wrong. This avoids requiring Node.js module imports, which are not available in n8n Cloud Code nodes.
-5. **Internal HMAC Valid?** — IF node. False path must terminate without reaching any existing processing node. Do not treat a missing header as an internal event.
-6. **Claim Internal Request ID** — use a Postgres Execute Query node with the existing `Postgres account` credential already used by this workflow. Query: `SELECT henvalt.claim_internal_ingress_request($1::uuid, $2::timestamptz) AS claimed`. Bind query parameters as `[request_id, signed_at]`. The function atomically inserts the UUID and returns true only for the first claim.
-7. **Request ID Claimed?** — IF node checking `{{$json.claimed === true}}`. False path terminates without side effects. True path continues to the existing `Validate & Normalize` node.
-
-## Exact graph wiring
-
-Keep the existing business graph intact and insert the following chain between the trigger and the first current business node:
+Insert the gate immediately after the webhook and before `Validate & Normalize`, tenant resolution, Shopify HMAC RPCs, or any business side effect:
 
 ```text
 Event Webhook (Header Auth)
   → Prepare Internal HMAC Message
-  → Verify Internal HMAC (Crypto)
-  → Compare Signature and Timestamp
-  → Internal HMAC Valid?
-      true  → Claim Internal Request ID
-                → Request ID Claimed?
-                    true  → Validate & Normalize (existing graph)
-                    false → stop
-      false → stop
+      ├─ branch A → Merge input 1 (preserve original binary)
+      └─ branch B → Verify Internal HMAC (Crypto v2)
+                     → Compare Signature and Timestamp
+                     → Internal HMAC Valid?
+                         true → Claim Internal Request ID
+                                  → Request ID Claimed?
+                                      true → Merge input 2
+                                      false → stop
+                         false → stop
+
+Merge (v3, combine, combineByPosition, 2 inputs)
+  → Strip Internal Auth Binary/Metadata
+  → Validate & Normalize (existing graph)
 ```
 
-The false outputs must remain unconnected to all business nodes. Preserve the original `binary.data` property throughout the new nodes because the existing Shopify HMAC verifier later reads the original raw body. Do not place the new nodes after `Validate & Normalize`: normalization parses and transforms the payload, so it is too late to establish the internal signature boundary.
+The false outputs must remain unconnected to the Merge and every business node. The replay claim is deliberately placed after valid HMAC and before Merge: an invalid or replayed request cannot restore the original branch into the processing path. The Merge waits for both connected inputs and combines matching item positions. Confirm one-item-per-webhook behavior in the test harness before cutover.
 
-The static Header Auth gate and the body-bound HMAC are separate controls. The static token limits who can start an execution; HMAC proves that the body and request metadata were signed by the Worker. Do not replace Shopify's existing raw-body HMAC verification: both trust boundaries are required.
+## Prepare Internal HMAC Message (Code v2)
 
-## Code node: prepare exact signed bytes
-
-Configure this node as JavaScript, Run Once for Each Item:
+Mode: Run Once for Each Item. Read raw bytes through n8n's binary helper; do not depend on inline `binary.data.data`, and do not copy the full raw body into JSON execution data.
 
 ```javascript
 const item = $input.item;
@@ -63,16 +55,19 @@ const headers = item.json?.headers || {};
 const timestamp = String(headers["x-henvalt-internal-timestamp"] || "");
 const requestId = String(headers["x-henvalt-internal-request-id"] || "");
 const suppliedSignature = String(headers["x-henvalt-internal-signature"] || "");
-const rawBodyBase64 = item.binary?.data?.data || "";
 
 const metadataValid =
   /^[0-9]{10}$/.test(timestamp) &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId) &&
   /^[A-Za-z0-9+/]{43}=$/.test(suppliedSignature) &&
-  rawBodyBase64.length > 0 &&
+  !!item.binary?.data &&
   Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) <= 300;
 
-const rawBody = rawBodyBase64 ? Buffer.from(rawBodyBase64, "base64") : Buffer.alloc(0);
+if (!item.binary?.data) {
+  throw new Error("Missing original Shopify raw request body");
+}
+
+const rawBody = await this.helpers.getBinaryDataBuffer($itemIndex, "data");
 const prefix = Buffer.from(timestamp + "." + requestId + ".", "utf8");
 const signedBytes = Buffer.concat([prefix, rawBody]);
 
@@ -97,9 +92,27 @@ return {
 };
 ```
 
-## Code node: compare the Crypto node result
+This node fans its single output to both Merge input 1 and the Crypto node. Branch A must retain the original `binary.data`; branch B is only for HMAC calculation.
 
-Configure the Crypto node with `action: hmac`, `type: SHA256`, `binaryData: true`, `binaryPropertyName: internalAuthMessage`, `dataPropertyName: computed_internal_signature`, and `encoding: base64`. Attach a Crypto credential containing the HMAC Secret. Then use this Code node (no `require()` or `$env` access):
+## Verify Internal HMAC (Crypto v2)
+
+Configure the native Crypto node with:
+
+- `action: hmac`
+- `type: SHA256`
+- `binaryData: true`
+- `binaryPropertyName: internalAuthMessage`
+- `dataPropertyName: computed_internal_signature`
+- `encoding: base64`
+- Dedicated Crypto credential `HENVALT Worker HMAC`
+
+The official Crypto v2 implementation reads the binary bytes and calculates HMAC-SHA256. **It intentionally does not copy the input binary properties to its output.** Do not expect `binary.data` or `binary.internalAuthMessage` to survive this node. The separate Merge input-1 branch is the source of the original raw body.
+
+The installed type registry exposes the Merge v3 configuration below, but the live Crypto HMAC execution has not been tested on this n8n Cloud instance because no dedicated Crypto credential exists.
+
+## Compare Signature and Timestamp (Code v2)
+
+This node runs after Crypto. It returns JSON only; the original binary remains safely on Merge input 1.
 
 ```javascript
 const item = $input.item;
@@ -107,12 +120,12 @@ const metadata = item.json?.__henvalt_internal_auth || {};
 const expected = String(item.json?.computed_internal_signature || "");
 const supplied = String(metadata.supplied_signature || "");
 
-// Both values must be canonical 44-character Base64 SHA-256 HMACs.
-// Iterate the entire fixed-length value rather than returning on first mismatch.
 let signatureValid = false;
-if (metadata.metadata_valid === true &&
-    /^[A-Za-z0-9+/]{43}=$/.test(expected) &&
-    /^[A-Za-z0-9+/]{43}=$/.test(supplied)) {
+if (
+  metadata.metadata_valid === true &&
+  /^[A-Za-z0-9+/]{43}=$/.test(expected) &&
+  /^[A-Za-z0-9+/]{43}=$/.test(supplied)
+) {
   let difference = 0;
   for (let i = 0; i < 44; i++) {
     difference |= expected.charCodeAt(i) ^ supplied.charCodeAt(i);
@@ -131,48 +144,122 @@ return {
         : null,
     },
   },
-  binary: item.binary,
 };
 ```
 
-The Code node must not read the HMAC secret from `$env` or from workflow JSON. The secret belongs only in the n8n Crypto credential. The fixed-length XOR comparison avoids an early-exit string comparison but is not a formal constant-time primitive; the static Header Auth gate is also required.
+The fixed-length XOR loop avoids early-exit comparison but is not a formal constant-time primitive. The independent Header Auth gate remains mandatory. No Code node may read the HMAC secret from `$env`, workflow JSON, or request data.
 
-## Replay-claim RPC contract
+## Replay claim
 
-The review-only SQL companion file defines a private table with a UUID primary key and an atomic `claim_internal_ingress_request` function. The RPC:
+Only the true output of `Internal HMAC Valid?` reaches the Postgres claim node. Use the existing `Postgres account` credential after its role/grants are verified.
 
-- accepts only a UUID and signed timestamp;
-- independently enforces the ±300-second timestamp window;
-- inserts with `ON CONFLICT DO NOTHING`;
-- returns true only when exactly one row was inserted;
-- prunes a bounded batch of records older than seven days;
-- is SECURITY DEFINER with a fixed search path;
-- revokes execution from PUBLIC, anon, and authenticated; grants execution only to service_role;
-- does not expose the table through the Data API.
+Query:
 
-Call this RPC only after HMAC verification. Its result must be checked before the original workflow graph continues. The existing workflow already has a `Postgres account` credential on its uninstall branch; reuse that credential for the replay claim instead of adding a new credential or putting database credentials in Code nodes.
+```sql
+SELECT
+  $1::uuid AS request_id,
+  $2::timestamptz AS signed_at,
+  henvalt.claim_internal_ingress_request(
+    $1::uuid,
+    $2::timestamptz
+  ) AS claimed;
+```
 
-## Response behavior and acknowledgement
+Bind query replacements in this order:
 
-The current webhook uses `responseMode: onReceived`. This means the Worker receives the early acknowledgement before in-workflow HMAC and replay checks finish. The static Header Auth gate still rejects unauthenticated callers before workflow execution, and invalid HMAC/replay requests must be stopped before every side effect. Do not silently change response mode during the security cutover: changing to a wait-for-completion response can increase Shopify webhook latency and must be separately load-tested. The Worker must not interpret the early 200 as proof that the business event was processed; the Supabase event/idempotency ledger remains the processing source of truth.
+1. `request_id` = `__henvalt_internal_auth.request_id`
+2. `signed_at` = `__henvalt_internal_auth.signed_at`
 
-## Cutover acceptance tests
+The returned row deliberately includes `request_id` and `signed_at` so the next Merge input receives a stable item while preserving the claim result. Configure `Request ID Claimed?` to continue only when `{{$json.claimed === true}}`. Its false output must terminate.
 
-- Missing or wrong `x-henvalt-ingest-auth`: rejected by Webhook trigger before workflow execution.
-- Missing timestamp, request ID, or signature: no processing node runs.
-- Stale/future timestamp beyond 300 seconds: no processing node runs.
-- One-byte body change: HMAC fails.
-- Wrong HMAC secret: HMAC fails.
-- Exact same signed request ID replayed twice: first claim true, second claim false.
-- Different request IDs for a Shopify retry: existing Shopify webhook/event idempotency prevents duplicate business effects.
-- Original raw Shopify body and Shopify headers remain intact for the existing Shopify HMAC verifier.
-- A caller cannot set `source=internal` or forge tenant/shop identity to bypass Shopify verification.
-- The static token and HMAC secret are different random values and stored only in Cloudflare secrets and n8n credentials.
+The companion SQL file is review-only and has not been applied. Before any migration, verify function ownership, schema USAGE, effective grants, service-role execution, first claim=true, duplicate=false, stale/future=false, and denial for unauthorized roles.
+
+## Merge and raw-body restoration
+
+Use installed Merge node v3 with:
+
+- `mode: combine`
+- `combineBy: combineByPosition`
+- `numberInputs: 2`
+
+Wire the prepared original item to input 1. Wire only the true output of `Request ID Claimed?` to input 2. Merge waits for both connected inputs and combines items by position. Input 1 carries the original `binary.data`; the Crypto branch is not used for binary restoration.
+
+After Merge, add `Strip Internal Auth Binary/Metadata` (Code v2, Run Once for Each Item):
+
+```javascript
+const item = $input.item;
+const {
+  __henvalt_internal_auth,
+  computed_internal_signature,
+  ...json
+} = item.json || {};
+
+const originalBody = item.binary?.data;
+if (!originalBody) {
+  throw new Error("Original Shopify raw body missing after authenticated merge");
+}
+
+const headers = { ...(json.headers || {}) };
+delete headers["x-henvalt-internal-timestamp"];
+delete headers["x-henvalt-internal-request-id"];
+delete headers["x-henvalt-internal-signature"];
+delete headers["x-henvalt-ingest-auth"];
+
+return {
+  json: { ...json, headers },
+  binary: { data: originalBody },
+};
+```
+
+This strips the temporary HMAC message and internal-auth metadata while preserving the exact original Shopify binary under `binary.data`. Only this node connects to the existing `Validate & Normalize`.
+
+## Response and acknowledgement semantics
+
+Keep the current webhook `responseMode: onReceived` for the initial security cutover. It acknowledges receipt before in-workflow HMAC/replay validation completes. The Worker must not treat the early HTTP 200 as proof that the event was accepted or processed; downstream Supabase event/idempotency state remains the processing source of truth. Any switch to wait-for-completion response mode requires separate latency and Shopify webhook retry testing.
+
+## Acceptance tests required before cutover
+
+- Missing/wrong `x-henvalt-ingest-auth`: rejected by Webhook trigger before workflow execution.
+- Missing/malformed timestamp, UUIDv4 request ID, or signature: no processing node runs.
+- Timestamp outside ±300 seconds: no processing node runs.
+- One-byte body mutation or wrong HMAC secret: HMAC check fails.
+- First request-ID claim succeeds; exact replay claim fails.
+- Invalid signature and duplicate request ID cannot reach Merge input 2 or `Validate & Normalize`.
+- Original `binary.data` bytes and Shopify headers are unchanged after Merge/Strip.
+- Multiple-item input is either explicitly rejected or proven to pair safely; do not assume position pairing is safe for differing branch item counts.
+- Different request IDs on Shopify retries remain protected by existing Shopify event idempotency.
+- Static token and HMAC secret are different random values and exist only in Cloudflare secrets and n8n credentials.
+
+## Verification boundary
+
+Verified by read-only inspection:
+- Active webhook v2.1 has raw body enabled and no authentication configured.
+- Active workflow currently connects webhook directly to normalization.
+- Installed Merge v3 definition supports `combineByPosition`, two inputs, and waits for all connected inputs.
+- Existing validator consumes the raw binary body.
+- Credential inventory has no dedicated Crypto credential; generic Header Auth credentials are not attached to the webhook.
+
+Verified from official n8n source/docs:
+- Code node binary helper: `this.helpers.getBinaryDataBuffer($itemIndex, "data")`.
+- Crypto v2 HMAC field contract and credential field `hmacSecret`.
+- Crypto v2 intentionally drops binary output after processing binary input.
+- Previous-node binary references expose metadata without the underlying `data` payload.
+
+Not yet verified:
+- Actual Crypto HMAC execution on this n8n Cloud instance.
+- Merge's real execution behavior for this exact graph and binary object.
+- Postgres credential effective role/grants and successful replay RPC call.
+- Full n8n Cloud receiver execution with valid, invalid, and replay fixtures.
+
+No temporary workflow or Crypto credential has been created. No production workflow, Supabase SQL, Worker, Shopify app, or release has been changed.
 
 ## References
 
-- n8n Webhook node supports Header Auth and raw-body mode: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/
-- n8n Crypto node supports HMAC over binary data and stores the HMAC secret in Crypto credentials: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.crypto/
+- n8n Webhook node: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/
+- n8n Crypto node: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.crypto/
 - n8n Crypto credentials: https://docs.n8n.io/integrations/builtin/credentials/crypto/
-- n8n Cloud Code nodes do not support importing Node.js modules: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/common-issues/
-- Supabase security guidance: keep private tables out of public Data API access and restrict SECURITY DEFINER function EXECUTE grants.
+- n8n Code node binary helper: https://docs.n8n.io/code/cookbook/binary-data/
+- n8n Code node limitations: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/common-issues/
+- n8n Merge node: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.merge/
+- n8n workflow data proxy source: https://github.com/n8n-io/n8n/blob/master/packages/workflow/src/workflow-data-proxy.ts
+- n8n Crypto v2 source: https://github.com/n8n-io/n8n/blob/master/packages/nodes-base/nodes/Crypto/v2/CryptoV2.node.ts
