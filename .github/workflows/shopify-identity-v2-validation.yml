@@ -54,7 +54,7 @@ jobs:
             supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \
             supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql \
             supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql \
-            supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql \\
+            supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql \
             supabase/migrations/202611160010_shopify_checkout_webhook_projection_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
