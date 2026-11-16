@@ -112,7 +112,7 @@ The installed type registry exposes the Merge v3 configuration below, but the li
 
 ## Compare Signature and Timestamp (Code v2)
 
-This node runs after Crypto. It returns JSON only; the original binary remains safely on Merge input 1.
+This node runs after Crypto. It returns JSON only; the original binary remains safely on Merge input 1. Configure it as Run Once for Each Item and always return one item object. Do not return `[]` to reject an item in this mode: the live n8n test harness produced `A 'json' property isn't an object` when that pattern was tried. Return a boolean `valid` field and use an IF node; leave the false output unconnected.
 
 ```javascript
 const item = $input.item;
@@ -232,6 +232,15 @@ Keep the current webhook `responseMode: onReceived` for the initial security cut
 
 ## Verification boundary
 
+Verified in an isolated n8n Cloud test harness (workflow `JtTRKj3yLVoRnUnq`, created inactive for testing and archived after the runs):
+- The installed Code v2 runtime successfully executed `this.helpers.getBinaryDataBuffer($itemIndex, "data")` against a binary fixture and constructed the signed-message binary property.
+- Merge v3 actually combined the two branches by position and preserved the original 55-byte `binary.data` while Crypto's pinned-output branch had no binary properties.
+- Valid-signature + claimed-request fixture: execution `33936` succeeded; both IF gates took true; Merge emitted one item; the final Code node verified the exact original Base64 body, stripped internal metadata and temporary HMAC binary, and returned only `binary.data`.
+- Invalid-signature fixture: execution `33937` succeeded; HMAC-valid IF took false; Merge emitted zero items; the final restoration node did not execute.
+- Duplicate/replay-denied fixture: execution `33938` succeeded; HMAC-valid IF took true, replay-claim IF took false; Merge emitted zero items; the final restoration node did not execute.
+- The Crypto node output was pinned to a deterministic known-answer HMAC for these tests. Therefore these runs verify the actual n8n Code/Merge/IF/binary-restoration path, **not** actual Crypto node HMAC computation or the Postgres replay RPC.
+- An initial test using `return []` from a Run Once for Each Item Code node failed; the harness was corrected to use explicit IF gates, matching the contract above.
+
 Verified by read-only inspection:
 - Active webhook v2.1 has raw body enabled and no authentication configured.
 - Active workflow currently connects webhook directly to normalization.
@@ -246,12 +255,11 @@ Verified from official n8n source/docs:
 - Previous-node binary references expose metadata without the underlying `data` payload.
 
 Not yet verified:
-- Actual Crypto HMAC execution on this n8n Cloud instance.
-- Merge's real execution behavior for this exact graph and binary object.
+- Actual Crypto HMAC execution on this n8n Cloud instance; no dedicated Crypto credential exists and the connected n8n tools do not expose credential creation/configuration.
 - Postgres credential effective role/grants and successful replay RPC call.
-- Full n8n Cloud receiver execution with valid, invalid, and replay fixtures.
+- Full receiver execution using the real Crypto node, real Postgres replay claim, and actual Worker request.
 
-No temporary workflow or Crypto credential has been created. No production workflow, Supabase SQL, Worker, Shopify app, or release has been changed.
+The isolated test workflow was archived after the runs. No Crypto credential was created. No production workflow, Supabase SQL, Worker, Shopify app, or release has been changed.
 
 ## References
 
