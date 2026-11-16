@@ -10,6 +10,8 @@ test("webhook identity design treats Shopify HMAC as body-only and binds route t
   for (const phrase of [
     "does **not** cryptographically bind",
     "per-connection webhook route token",
+    "every shop receives the exact same static URI",
+    "does not create or persist a per-connection route token",
     "Select that app's Vault secret",
     "changed header B is rejected",
     "tenant is derived from the connection",
