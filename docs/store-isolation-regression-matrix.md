@@ -54,7 +54,7 @@ Use synthetic data only:
 | DATA-06 | Same idempotency key is submitted for A and B | Distinct connection-scoped records; retry within one store remains idempotent |
 | DATA-07 | Event lacks a trusted connection mapping | Quarantine/reject from store-specific recovery; never assign current active store by inference |
 | DATA-08 | Parent event and child checkout/customer point to different connections | Transaction rejected and audited |
-| DATA-09 | Customer, checkout, opportunity and recovery lineage cross connection IDs | Constraint/RPC rejects the write |
+| DATA-09 | Customer, checkout, opportunity and recovery lineage cross connection IDs | Constraint/RPC rejects the write |\n| IDENTITY-01 | Same customer ID and email in A and B | Separate store-bound customers; no cross-store email fallback |\n| IDENTITY-02 | Same session, anonymous reference or alias in A and B | No cross-store session or alias linking |\n| IDENTITY-03 | Checkout resolution from an event in A | Only A's connection-scoped checkout can resolve |
 
 ## D. Recovery eligibility, delivery and conversion stops
 
@@ -69,7 +69,7 @@ Use synthetic data only:
 | REC-07 | Same delivery request retried | Existing idempotency and attempt safeguards prevent duplicate send |
 | REC-08 | Refund/cancel/payment-failure event belongs to B | Only B's matching order/recovery/ledger is updated |
 | REC-09 | Store A delivery request references Store B sender profile | Authorization/rendering rejects mismatch |
-| REC-10 | MailerSend provider token lookup | Remains tenant/provider scoped but only authorizes delivery for a valid store-bound delivery request |
+| REC-10 | MailerSend provider token lookup | Remains tenant/provider scoped but only authorizes delivery for a valid store-bound delivery request |\n| ELIG-01 | Paid order in B shares checkout/customer identifiers with A | Does not suppress A's opportunity |\n| ELIG-02 | Active recovery sequence in B shares customer with A | Does not suppress A by default |\n| CONS-03 | Communication eligibility evaluated for A opportunity | Uses consent evidence tied to A's exact connection |\n| CONS-04 | A suppression exists for shared email | B remains eligible unless explicit tenant-wide suppression policy applies |\n| PROC-01 | Cart/browse candidate generated in A or B | Idempotency includes exact connection identity |\n| STOP-01 | B attribution/order matches A checkout/token text | Cannot stop A's recovery sequence |
 
 ## E. Attribution, dashboard and billing
 
@@ -93,7 +93,7 @@ Use synthetic data only:
 | PRIV-02 | Customer redact request for A | Delete/redact only A's customer identity and dependent personal data |
 | PRIV-03 | Same customer ID/email exists in B | B's records are not accidentally exported or erased |
 | PRIV-04 | Valid compliance webhook for uninstalled shop | Durable unresolved compliance case; no silent discard |
-| PRIV-05 | Compliance webhook signed with other app's secret | Reject |
+| PRIV-05 | Compliance webhook signed with other app's secret | Reject |\n| PRIV-06 | Expired privacy export payload is purged | Sensitive payload cleared; minimal store-bound compliance receipt retained per policy |
 | CONS-01 | Consent update in A | Update A only; retain source and observed timestamp |
 | CONS-02 | Consent update in B with opposite value | B's state changes independently |
 | REPLY-01 | Shopper replies to A's recovery email | Reply maps through exact provider message/delivery/conversation lineage to A |
