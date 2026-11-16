@@ -97,7 +97,8 @@ jobs:
             supabase/migrations/202611160003_shopify_oauth_state_app_identity.sql \
             supabase/migrations/202611160004_shopify_oauth_app_aware_finalizer.sql \
             supabase/migrations/202611160005_shopify_app_oauth_secret_resolver.sql \
-            supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \\\n            supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql; do
+            supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \
+            supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise OAuth, webhook and privacy RPCs
