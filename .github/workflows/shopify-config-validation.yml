@@ -15,6 +15,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parse candidate Edge Functions and Worker source
+        run: |
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-oauth-v2/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-privacy-v2/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-webhook-ingress/index.ts
+          node --check cloudflare/worker.js
       - name: Test Shopify webhook security boundaries
         run: node --test tests/webhook-forwarding.test.mjs tests/shopify-hmac.test.mjs tests/worker-to-n8n-forwarding.test.mjs tests/n8n-receiver-contract.test.mjs
       - name: Test pixel event, store identity and privacy contracts
