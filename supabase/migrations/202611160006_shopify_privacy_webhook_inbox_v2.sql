@@ -96,6 +96,7 @@ DECLARE
   v_request_id text;
   v_tenant_id uuid;
   v_connection_id uuid;
+  v_connection_shop_id text;
   v_inserted uuid;
 BEGIN
   accepted := false;
@@ -183,13 +184,22 @@ BEGIN
 
   -- Exact app + exact shop lookup. A missing link is still durably queued for
   -- review; no tenant-wide fallback is allowed.
-  SELECT sc.tenant_id, sc.id
-    INTO v_tenant_id, v_connection_id
+  SELECT sc.tenant_id, sc.id, sc.shopify_shop_id
+    INTO v_tenant_id, v_connection_id, v_connection_shop_id
   FROM henvalt.shopify_connections sc
   WHERE sc.app_key = p_app_key
     AND sc.shop_domain = p_shop_domain
   LIMIT 1
   FOR SHARE;
+
+  IF v_connection_id IS NOT NULL
+     AND v_shop_id IS NOT NULL
+     AND v_connection_shop_id IS NOT NULL
+     AND v_shop_id <> v_connection_shop_id THEN
+    rejection_code := 'SHOP_ID_MISMATCH';
+    RETURN NEXT;
+    RETURN;
+  END IF;
 
   INSERT INTO henvalt.shopify_privacy_webhook_deliveries (
     app_key, tenant_id, connection_id, shop_domain, shopify_shop_id,
