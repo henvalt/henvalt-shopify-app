@@ -182,6 +182,20 @@ This is tenant deletion, not store deletion. It would destroy the whole HENVALT 
 - Missing/ambiguous/uninstalled store connection must produce a durable review-required privacy result, not tenant deletion.
 - Legacy app requests must continue to resolve to legacy app identity after a new app identity is introduced.
 
+
+## 8. Live data diagnostic snapshot (2026-11-16)
+
+The five SELECT-only diagnostics in `docs/sql/candidate-cross-store-ambiguity-review-only.sql` were also executed read-only against production.
+
+- One tenant currently has **two active Shopify connections**: `hencalt.myshopify.com` and `hencalt.mystore.com`.
+- The current snapshot returned no cart-update canonical events and no browse/product-view or add-to-cart pixel events in that multi-store tenant, so the candidate fan-out query returned no current event rows.
+- The same tenant currently returned no customer, checkout or opportunity rows missing `metadata.shop_domain`.
+- The customer-ID collision diagnostic returned no rows.
+- This does **not** make the deployed function contracts safe. The cart and browse SQL joins still attach every active connection in a tenant to matching tenant-level events even if event metadata contains a shop domain, because that domain is not part of those connection join predicates. The current data snapshot simply has no qualifying cart/pixel source rows to demonstrate the fan-out at this moment.
+- The absence of current collision rows is not evidence that tenant-scoped unique constraints are suitable for multi-store operation. Existing constraints can prevent duplicate same-tenant external IDs from being stored in the first place; they cannot prove source identities are correctly isolated.
+
+The diagnostic SQL was corrected to measure all candidate events in multi-store tenants, not only rows with missing shop markers. It remains SELECT-only and has a Node test guarding against mutation statements.
+
 ## Explicit non-actions
 
 No production function was replaced, no SQL migration was applied, no data was modified, no n8n workflow was changed, no Worker setting or secret was changed, and no Shopify app version was released.
