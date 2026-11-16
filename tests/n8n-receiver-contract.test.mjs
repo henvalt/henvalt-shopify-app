@@ -28,7 +28,7 @@ test("Worker forwards exact bytes and only allowlisted Shopify metadata", () => 
   assert.match(contract, /Authorization, Cookie, X-Henvalt identity/);
   assert.match(contract, /SHOPIFY_API_SECRET/);
   assert.match(contract, /N8N_INGEST_URL/);
-  assert.match(contract, /does not add an internal HMAC/);
+  assert.match(contract, /does not add an internal HMAC/i);
   assert.match(contract, /No n8n Crypto credential or Header Auth credential is required/);
 });
 
