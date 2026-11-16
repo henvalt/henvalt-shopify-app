@@ -31,9 +31,13 @@ DECLARE
   v_rotated_finalized jsonb;
   v_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001"}';
   v_hmac text;
+  v_changed_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","changed":true}';
+  v_changed_hmac text;
   v_result record;
   v_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
   v_privacy_hmac text;
+  v_changed_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765},"changed":true}';
+  v_changed_privacy_hmac text;
   v_second_shop_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"2002","customer":{"id":12345},"data_request":{"id":98765}}';
   v_second_shop_hmac text;
   v_wrong_shop_id_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
@@ -130,6 +134,20 @@ BEGIN
 
   IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Duplicate webhook was not idempotently acknowledged: %', row_to_json(v_result);
+  END IF;
+
+  v_changed_hmac := encode(
+    extensions.hmac(convert_to(v_changed_body, 'UTF8'), convert_to('synthetic-test-secret-never-used-in-production', 'UTF8'), 'sha256'),
+    'base64'
+  );
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_webhook_v2(
+    v_route_token, v_changed_hmac,
+    encode(convert_to(v_changed_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'orders/create', 'delivery-001', 'event-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code <> 'DELIVERY_ID_BODY_MISMATCH' THEN
+    RAISE EXCEPTION 'Webhook delivery ID reuse with changed body was not rejected: %', row_to_json(v_result);
   END IF;
 
   INSERT INTO henvalt.shopify_oauth_states (
@@ -233,6 +251,20 @@ BEGIN
 
   IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'Duplicate privacy webhook was not idempotently acknowledged';
+  END IF;
+
+  v_changed_privacy_hmac := encode(
+    extensions.hmac(convert_to(v_changed_privacy_body, 'UTF8'), convert_to('synthetic-test-secret-never-used-in-production', 'UTF8'), 'sha256'),
+    'base64'
+  );
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_privacy_webhook_v2(
+    'test_app', 'test-client-id', v_changed_privacy_hmac,
+    encode(convert_to(v_changed_privacy_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'customers/data_request', 'privacy-delivery-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code <> 'DELIVERY_ID_BODY_MISMATCH' THEN
+    RAISE EXCEPTION 'Privacy delivery ID reuse with changed body was not rejected: %', row_to_json(v_result);
   END IF;
 
   -- A shared tenant may contain two stores. The same webhook ID in Store B
