@@ -17,11 +17,11 @@ The following nodes must be inserted immediately after `Event Webhook`, before `
 
 1. **Webhook-level Header Auth** — configure the existing `Event Webhook` trigger with n8n Header Auth. Credential header name: `x-henvalt-ingest-auth`. Credential value: the same random secret configured as Worker binding `HENVALT_N8N_INGEST_TOKEN`. This rejects requests before an execution is created. Do not use a query-string token.
 2. **Prepare Internal HMAC Message** — Code node, Run Once for Each Item. Read only the raw binary body and the three internal headers. Construct the signed byte sequence as UTF-8 `<timestamp>.<request-id>.` concatenated with the exact original body bytes. Do not parse and re-serialize JSON for signing.
-3. **Verify Internal HMAC** — native n8n Crypto node, action HMAC, SHA256, Base64 output, binary input from the prepared message, credential HMAC Secret set to the same secret as Worker binding `HENVALT_N8N_HMAC_SECRET`.
-4. **Compare Signature and Timestamp** — Code node. Require a 10-digit Unix-seconds timestamp, UUIDv4 request ID, strict 44-character Base64 SHA-256 signature, and a timestamp within ±300 seconds. Compare the decoded 32-byte signatures with `crypto.timingSafeEqual`; fail closed if any value is missing, malformed, or wrong. n8n Cloud documents the `crypto` built-in as available in Code nodes.
+3. **Verify Internal HMAC** — native n8n Crypto node, action HMAC, type `SHA256`, binary input enabled, binary property `internalAuthMessage`, output property `computed_internal_signature`, encoding `BASE64`, and a Crypto credential whose HMAC Secret equals Worker binding `HENVALT_N8N_HMAC_SECRET`. Do not place the secret in node parameters or Code-node JSON.
+4. **Compare Signature and Timestamp** — Code node. Require a 10-digit Unix-seconds timestamp, UUIDv4 request ID, strict 44-character Base64 SHA-256 signature, and a timestamp within ±300 seconds. Compare the two fixed-length Base64 strings in a full-length XOR loop; fail closed if any value is missing, malformed, or wrong. This avoids requiring Node.js module imports, which are not available in n8n Cloud Code nodes.
 5. **Internal HMAC Valid?** — IF node. False path must terminate without reaching any existing processing node. Do not treat a missing header as an internal event.
-6. **Claim Internal Request ID** — call `henvalt.claim_internal_ingress_request(p_request_id, p_signed_at)` using the existing Supabase service credential. The function must atomically insert the UUID and return true only for the first claim.
-7. **Request ID Claimed?** — IF node. False path terminates without side effects. True path continues to the existing `Validate & Normalize` node.
+6. **Claim Internal Request ID** — use a Postgres Execute Query node with the existing `Postgres account` credential already used by this workflow. Query: `SELECT henvalt.claim_internal_ingress_request($1::uuid, $2::timestamptz) AS claimed`. Bind query parameters as `[request_id, signed_at]`. The function atomically inserts the UUID and returns true only for the first claim.
+7. **Request ID Claimed?** — IF node checking `{{$json.claimed === true}}`. False path terminates without side effects. True path continues to the existing `Validate & Normalize` node.
 
 The static Header Auth gate and the body-bound HMAC are separate controls. The static token limits who can start an execution; HMAC proves that the body and request metadata were signed by the Worker. Do not replace Shopify's existing raw-body HMAC verification: both trust boundaries are required.
 
@@ -71,18 +71,25 @@ return {
 
 ## Code node: compare the Crypto node result
 
-Configure the Crypto node to write its Base64 HMAC result to `computed_internal_signature`. Then use this Code node:
+Configure the Crypto node with `action: hmac`, `type: SHA256`, `binaryData: true`, `binaryPropertyName: internalAuthMessage`, `dataPropertyName: computed_internal_signature`, and `encoding: base64`. Attach a Crypto credential containing the HMAC Secret. Then use this Code node (no `require()` or `$env` access):
 
 ```javascript
-const crypto = require("crypto");
 const item = $input.item;
 const metadata = item.json?.__henvalt_internal_auth || {};
-const expected = Buffer.from(String(item.json?.computed_internal_signature || ""), "base64");
-const supplied = Buffer.from(String(metadata.supplied_signature || ""), "base64");
+const expected = String(item.json?.computed_internal_signature || "");
+const supplied = String(metadata.supplied_signature || "");
 
+// Both values must be canonical 44-character Base64 SHA-256 HMACs.
+// Iterate the entire fixed-length value rather than returning on first mismatch.
 let signatureValid = false;
-if (metadata.metadata_valid === true && expected.length === 32 && supplied.length === 32) {
-  signatureValid = crypto.timingSafeEqual(expected, supplied);
+if (metadata.metadata_valid === true &&
+    /^[A-Za-z0-9+/]{43}=$/.test(expected) &&
+    /^[A-Za-z0-9+/]{43}=$/.test(supplied)) {
+  let difference = 0;
+  for (let i = 0; i < 44; i++) {
+    difference |= expected.charCodeAt(i) ^ supplied.charCodeAt(i);
+  }
+  signatureValid = difference === 0;
 }
 
 return {
@@ -100,7 +107,7 @@ return {
 };
 ```
 
-The Code node must not read the HMAC secret from `$env` or from workflow JSON. The secret belongs only in the n8n Crypto credential.
+The Code node must not read the HMAC secret from `$env` or from workflow JSON. The secret belongs only in the n8n Crypto credential. The fixed-length XOR comparison avoids an early-exit string comparison but is not a formal constant-time primitive; the static Header Auth gate is also required.
 
 ## Replay-claim RPC contract
 
@@ -115,7 +122,7 @@ The review-only SQL companion file defines a private table with a UUID primary k
 - revokes execution from PUBLIC, anon, and authenticated; grants execution only to service_role;
 - does not expose the table through the Data API.
 
-Call this RPC only after HMAC verification. Its result must be checked before the original workflow graph continues.
+Call this RPC only after HMAC verification. Its result must be checked before the original workflow graph continues. The existing workflow already has a `Postgres account` credential on its uninstall branch; reuse that credential for the replay claim instead of adding a new credential or putting database credentials in Code nodes.
 
 ## Response behavior and acknowledgement
 
@@ -139,4 +146,5 @@ The current webhook uses `responseMode: onReceived`. This means the Worker recei
 - n8n Webhook node supports Header Auth and raw-body mode: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/
 - n8n Crypto node supports HMAC over binary data and stores the HMAC secret in Crypto credentials: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.crypto/
 - n8n Crypto credentials: https://docs.n8n.io/integrations/builtin/credentials/crypto/
+- n8n Cloud Code nodes do not support importing Node.js modules: https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.code/common-issues/
 - Supabase security guidance: keep private tables out of public Data API access and restrict SECURITY DEFINER function EXECUTE grants.
