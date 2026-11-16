@@ -7,8 +7,8 @@ DECLARE
   v_tenant uuid := gen_random_uuid();
   v_conn_a uuid := gen_random_uuid();
   v_conn_b uuid := gen_random_uuid();
-  v_key_a text := repeat('a', 64);
-  v_key_b text := repeat('b', 64);
+  v_key_a text;
+  v_key_b text;
   v_domain_a text;
   v_domain_b text;
   v_origin_a text;
@@ -26,6 +26,8 @@ DECLARE
   v_after_sessions integer;
   v_after_aliases integer;
 BEGIN
+  v_key_a := encode(extensions.digest(convert_to(v_tenant::text || ':store-a','UTF8'),'sha256'),'hex');
+  v_key_b := encode(extensions.digest(convert_to(v_tenant::text || ':store-b','UTF8'),'sha256'),'hex');
   v_domain_a := 'store-a-' || left(replace(v_tenant::text,'-',''),12) || '.myshopify.com';
   v_domain_b := 'store-b-' || left(replace(v_tenant::text,'-',''),12) || '.myshopify.com';
   v_origin_a := 'https://' || v_domain_a;
