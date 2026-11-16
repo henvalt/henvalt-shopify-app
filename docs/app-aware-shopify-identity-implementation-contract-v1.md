@@ -14,7 +14,7 @@
 5. App key comes from a trusted route and one-time OAuth state, never from a body/query/header chosen by the merchant/browser.
 6. Connection ID and tenant ID are resolved server-side after HMAC/state verification. Do not accept caller-supplied tenant or connection identity.
 7. Missing, inactive, conflicting or ambiguous identity fails closed. No fallback to legacy.
-8. Plaintext app secrets and Admin API tokens remain in managed secret storage. Ordinary DB columns store references only.
+8. Plaintext app secrets and Admin API tokens remain in managed secret storage. Ordinary DB columns store references only. No app key fallback to legacy is permitted.
 9. No existing writer or reader is switched until additive DB functions and regression coverage are ready.
 10. Legacy traffic remains operational during every stage.
 
