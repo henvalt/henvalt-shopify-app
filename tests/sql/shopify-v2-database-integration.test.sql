@@ -428,6 +428,11 @@ DECLARE
   v_payload_no_consent jsonb;
   v_inbox_a uuid;
   v_inbox_b uuid;
+  v_canonical_before bigint;
+  v_customers_before bigint;
+  v_sessions_before bigint;
+  v_aliases_before bigint;
+  v_checkouts_before bigint;
 BEGIN
   INSERT INTO henvalt.tenants (id, status)
   VALUES (v_tenant, 'ACTIVE')
@@ -439,6 +444,12 @@ BEGIN
   IF v_store_a IS NULL OR v_store_b IS NULL THEN
     RAISE EXCEPTION 'Pixel V2 test requires two synthetic stores';
   END IF;
+
+  SELECT count(*) INTO v_canonical_before FROM henvalt.canonical_events WHERE source='SHOPIFY_WEB_PIXEL';
+  SELECT count(*) INTO v_customers_before FROM henvalt.customers;
+  SELECT count(*) INTO v_sessions_before FROM henvalt.sessions;
+  SELECT count(*) INTO v_aliases_before FROM henvalt.session_aliases;
+  SELECT count(*) INTO v_checkouts_before FROM henvalt.checkouts;
 
   INSERT INTO henvalt.pixel_keys (tenant_id, key_digest, allowed_origins, active, revoked_at, shopify_connection_id)
   VALUES
@@ -514,11 +525,11 @@ BEGIN
     RAISE EXCEPTION 'Analytics-disabled event persisted identity-bearing fields';
   END IF;
 
-  IF (SELECT count(*) FROM henvalt.canonical_events WHERE source='SHOPIFY_WEB_PIXEL') <> 0
-     OR (SELECT count(*) FROM henvalt.customers) <> 0
-     OR (SELECT count(*) FROM henvalt.sessions) <> 0
-     OR (SELECT count(*) FROM henvalt.session_aliases) <> 0
-     OR (SELECT count(*) FROM henvalt.checkouts) <> 0 THEN
+  IF (SELECT count(*) FROM henvalt.canonical_events WHERE source='SHOPIFY_WEB_PIXEL') <> v_canonical_before
+     OR (SELECT count(*) FROM henvalt.customers) <> v_customers_before
+     OR (SELECT count(*) FROM henvalt.sessions) <> v_sessions_before
+     OR (SELECT count(*) FROM henvalt.session_aliases) <> v_aliases_before
+     OR (SELECT count(*) FROM henvalt.checkouts) <> v_checkouts_before THEN
     RAISE EXCEPTION 'Pixel V2 inbox wrote into a legacy downstream identity/recovery table';
   END IF;
 
