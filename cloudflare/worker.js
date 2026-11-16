@@ -1,3 +1,5 @@
+import { buildVerifiedWebhookHeaders } from "./webhook-forwarding.mjs";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -17,7 +19,15 @@ export default {
     const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw)));
     const expected = btoa(String.fromCharCode(...sig));
     if (!constantTimeEqual(expected, hmac)) return Response.json({ error: "invalid_hmac" }, { status: 401 });
-    const upstream = await fetch(env.N8N_INGEST_URL, { method: "POST", headers: request.headers, body: raw });
+
+    // Only forward Shopify's authenticated webhook metadata. Never pass through
+    // arbitrary caller headers such as Authorization, Cookie, or forged
+    // X-Henvalt-* identity/tenant headers to the internal ingest workflow.
+    const upstream = await fetch(env.N8N_INGEST_URL, {
+      method: "POST",
+      headers: buildVerifiedWebhookHeaders(request),
+      body: raw,
+    });
     if (!upstream.ok) return Response.json({ error: "ingest_unavailable" }, { status: 503 });
     const text = await upstream.text();
     return new Response(text || JSON.stringify({ accepted: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
