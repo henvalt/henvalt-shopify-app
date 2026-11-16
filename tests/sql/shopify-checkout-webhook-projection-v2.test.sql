@@ -15,6 +15,9 @@ DECLARE
   v_projection jsonb;
   v_a_count integer;
   v_b_count integer;
+  v_store_b_active boolean;
+  v_app_status text;
+  v_route_found boolean;
 BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
   SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
@@ -48,6 +51,17 @@ BEGIN
   IF v_projection->>'accepted'<>'true' OR v_projection->>'status'<>'PROCESSED' THEN
     RAISE EXCEPTION 'Store A checkout projection failed: %',v_projection;
   END IF;
+
+  SELECT sc.active, ar.lifecycle_status, (rt.id IS NOT NULL)
+    INTO v_store_b_active, v_app_status, v_route_found
+  FROM henvalt.shopify_connections sc
+  JOIN henvalt.shopify_app_registry ar ON ar.app_key=sc.app_key
+  LEFT JOIN henvalt.shopify_webhook_route_tokens rt
+    ON rt.connection_id=sc.id
+   AND rt.token_hash=encode(extensions.digest(convert_to(v_token_b,'UTF8'),'sha256'),'hex')
+   AND rt.revoked_at IS NULL
+  WHERE sc.id=v_store_b;
+  RAISE NOTICE 'Store B adapter preflight active=%, app_status=%, route_found=%',v_store_b_active,v_app_status,v_route_found;
 
   v_hmac := encode(
     extensions.hmac(convert_to(v_body_b,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),
