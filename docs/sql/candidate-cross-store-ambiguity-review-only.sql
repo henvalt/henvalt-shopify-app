@@ -17,9 +17,10 @@ GROUP BY sc.tenant_id
 HAVING count(*) > 1
 ORDER BY active_connection_count DESC, sc.tenant_id;
 
--- 2) Cart snapshots with no explicit shop marker under a multi-store tenant.
--- The deployed cart candidate function joins these events to all active
--- connections belonging to the tenant.
+-- 2) Cart snapshots under a multi-store tenant. The deployed cart candidate
+-- function joins these events to all active connections belonging to the
+-- tenant even when metadata.shop_domain is populated; the domain is selected
+-- later but is not used in the connection join.
 WITH multi_store AS (
   SELECT tenant_id
   FROM henvalt.shopify_connections
@@ -31,6 +32,7 @@ SELECT e.tenant_id,
        e.id AS canonical_event_id,
        e.event_type,
        e.session_reference,
+       e.metadata->>'shop_domain' AS event_shop_domain,
        e.occurred_at,
        count(sc.id) AS active_connections_that_current_join_can_match,
        array_agg(lower(sc.shop_domain) ORDER BY lower(sc.shop_domain)) AS candidate_shop_domains
@@ -41,12 +43,12 @@ JOIN henvalt.shopify_connections sc
 WHERE e.source = 'shopify'
   AND e.event_type = 'carts/update'
   AND e.session_reference IS NOT NULL
-  AND nullif(lower(btrim(e.metadata->>'shop_domain')), '') IS NULL
-GROUP BY e.tenant_id, e.id, e.event_type, e.session_reference, e.occurred_at
+GROUP BY e.tenant_id, e.id, e.event_type, e.session_reference, e.metadata->>'shop_domain', e.occurred_at
 ORDER BY e.occurred_at DESC;
 
--- 3) Browse/pixel events with no explicit shop marker under a multi-store
--- tenant. The deployed browse candidate joins active connections by tenant.
+-- 3) Browse/pixel events under a multi-store tenant. The deployed browse
+-- candidate joins active connections by tenant and does not constrain the
+-- connection join using event metadata.
 WITH multi_store AS (
   SELECT tenant_id
   FROM henvalt.shopify_connections
@@ -59,6 +61,7 @@ SELECT e.tenant_id,
        e.event_type,
        e.session_reference,
        e.customer_reference,
+       e.metadata->>'shop_domain' AS event_shop_domain,
        e.occurred_at,
        count(sc.id) AS active_connections_that_current_join_can_match,
        array_agg(lower(sc.shop_domain) ORDER BY lower(sc.shop_domain)) AS candidate_shop_domains
@@ -69,9 +72,8 @@ JOIN henvalt.shopify_connections sc
 WHERE e.source = 'SHOPIFY_WEB_PIXEL'
   AND upper(e.event_type) IN ('PRODUCT_VIEWED', 'PRODUCT_ADDED_TO_CART')
   AND e.session_reference IS NOT NULL
-  AND nullif(lower(btrim(e.metadata->>'shop_domain')), '') IS NULL
 GROUP BY e.tenant_id, e.id, e.event_type, e.session_reference,
-         e.customer_reference, e.occurred_at
+         e.customer_reference, e.metadata->>'shop_domain', e.occurred_at
 ORDER BY e.occurred_at DESC;
 
 -- 4) Tenant-level customer/checkout/opportunity rows without a shop marker
