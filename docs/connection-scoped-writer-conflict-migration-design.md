@@ -86,6 +86,40 @@ Do not replace the existing unique indexes until the new identity is populated, 
 - Test service-role/security-definer behavior and RLS grants with composite FKs.
 - Decide store-level vs tenant-level billing explicitly; this design does not decide it.
 
+
+## Additional downstream unique-key inventory (live, read-only)
+
+A second `pg_indexes` inspection found these additional uniqueness scopes that must be included in the cutover plan:
+
+| Table | Unique key | Isolation consideration |
+|---|---|---|
+| delivery_requests | tenant_id, idempotency_key | Make request idempotency connection-aware where request identity originates from a store event |
+| delivery_requests | tenant_id, intervention_id | Preserve intervention lineage; verify intervention itself is store-bound |
+| email_suppressions | tenant_id, email_normalized WHERE active | Current suppression is tenant-wide; choose explicit tenant-wide vs per-store policy |
+| recovery_interventions | tenant_id, idempotency_key | Include source opportunity/connection identity in the idempotency contract |
+| recovery_interventions | tenant_id, sequence_id, step_number | Safe only if sequence is already bound to one exact connection |
+| recovery_sequences | tenant_id, opportunity_id | Safe only if opportunity lineage is connection-verified |
+| order_attributions | tenant_id, order_id | Verify order and opportunity connection equality before insert |
+| revenue_ledger | tenant_id, order_id WHERE entry_type='RECOVERY' | Preserve one recovery per order within the correct connection and billing principal |
+| revenue_ledger | tenant_id + order_id + metadata.source_event_id for adjustments | Ensure source event is from the same connection as the order |
+| revenue_ledger | tenant_id + metadata.source_event_id for adjustments | Source-event identity must be connection-aware |
+| customer_conversations | tenant_id, delivery_request_id | Conversation inherits exact store through delivery request |
+| conversation_messages | provider_event_id | Provider event IDs are globally unique only if provider contract guarantees it; verify before changing |
+| customer_conversations | reply_token_hash | Random token hash uniqueness is appropriate; keep opaque |
+| email_usage_measurements | delivery_attempt_id | Inherit store identity through exact delivery attempt |
+| delivery_attempts | delivery_request_id, attempt_number | Inherit store identity through exact delivery request |
+| provider_events | provider, event_hash | Verify provider event-hash semantics; do not add store dimension without provider contract evidence |
+
+Important distinction: not every unique key should mechanically gain `shopify_connection_id`. Random token hashes, provider-global event identifiers, and attempt numbers are governed by different identity contracts. The migration must classify each key by its true namespace before altering it.
+
+### Current migration blockers from this inventory
+
+- Suppression is explicitly tenant/email unique today. Product policy must decide whether an opt-out in Store A suppresses Store B, and the UI must communicate that policy.
+- Recovery and delivery uniqueness is inherited from opportunity/intervention lineage; those parent rows must become connection-safe before downstream constraints change.
+- Attribution and ledger must reject cross-connection order/opportunity pairs before they can contribute to recovered revenue or performance fees.
+- Provider event hashes and message IDs require provider-contract validation, not assumptions.
+
+
 ## Safety boundary
 
 This document records a proposed implementation. It is not a migration and contains no production SQL to apply. No live database, Shopify app, Worker, Edge Function or n8n workflow was changed during this audit.
