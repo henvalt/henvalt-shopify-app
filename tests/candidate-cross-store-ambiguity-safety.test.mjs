@@ -7,7 +7,7 @@ test("candidate cross-store ambiguity diagnostics are read-only", () => {
     new URL("../docs/sql/candidate-cross-store-ambiguity-review-only.sql", import.meta.url),
     "utf8",
   );
-  const withoutComments = sql.replace(/--[^\n]*/g, "").trim();
+  const withoutComments = sql.replace(/--[^\n]*/g, "").replace(/'(?:''|[^'])*'/g, "''").trim();
   const statements = withoutComments
     .split(";")
     .map((statement) => statement.trim())
