@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const sql = readFileSync(new URL("../docs/sql/exact-store-privacy-lineage-preflight-read-only.sql", import.meta.url), "utf8");
-const executable = sql.replace(/^\\s*--.*$/gm, "");
+const executable = sql.replace(/^\s*--.*$/gm, "");
 
 test("exact-store privacy lineage preflight is metadata-only and read-only", () => {
   assert.match(sql, /information_schema\.columns/);
