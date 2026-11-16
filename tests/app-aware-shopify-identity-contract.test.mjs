@@ -10,7 +10,11 @@ const contract = readFileSync(
   new URL("../docs/app-aware-shopify-identity-implementation-contract-v1.md", import.meta.url),
   "utf8",
 );
-const matrix = readFileSync(\n  new URL("../docs/store-isolation-regression-matrix.md", import.meta.url),\n  "utf8",\n);\nconst preflight = readFileSync(
+const matrix = readFileSync(
+  new URL("../docs/store-isolation-regression-matrix.md", import.meta.url),
+  "utf8",
+);
+const preflight = readFileSync(
   new URL("../docs/sql/app-aware-shopify-identity-preflight-review-only.sql", import.meta.url),
   "utf8",
 );
