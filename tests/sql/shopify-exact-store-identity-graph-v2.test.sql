@@ -9,6 +9,10 @@ DECLARE
   v_conn_b uuid := gen_random_uuid();
   v_key_a text := repeat('a', 64);
   v_key_b text := repeat('b', 64);
+  v_domain_a text;
+  v_domain_b text;
+  v_origin_a text;
+  v_origin_b text;
   v_payload jsonb;
   v_result_a jsonb;
   v_result_b jsonb;
@@ -22,16 +26,21 @@ DECLARE
   v_after_sessions integer;
   v_after_aliases integer;
 BEGIN
+  v_domain_a := 'store-a-' || left(replace(v_tenant::text,'-',''),12) || '.myshopify.com';
+  v_domain_b := 'store-b-' || left(replace(v_tenant::text,'-',''),12) || '.myshopify.com';
+  v_origin_a := 'https://' || v_domain_a;
+  v_origin_b := 'https://' || v_domain_b;
+
   INSERT INTO henvalt.tenants(id,status) VALUES (v_tenant,'ACTIVE');
   INSERT INTO henvalt.shopify_connections(id,tenant_id,shop_domain,shopify_shop_id,active)
   VALUES
-    (v_conn_a,v_tenant,'store-a.myshopify.com','1001',true),
-    (v_conn_b,v_tenant,'store-b.myshopify.com','1002',true);
+    (v_conn_a,v_tenant,v_domain_a,'1001',true),
+    (v_conn_b,v_tenant,v_domain_b,'1002',true);
 
   INSERT INTO henvalt.pixel_keys(tenant_id,key_digest,allowed_origins,active,revoked_at,shopify_connection_id)
   VALUES
-    (v_tenant,v_key_a,ARRAY['https://store-a.myshopify.com'],true,NULL,v_conn_a),
-    (v_tenant,v_key_b,ARRAY['https://store-b.myshopify.com'],true,NULL,v_conn_b);
+    (v_tenant,v_key_a,ARRAY[v_origin_a],true,NULL,v_conn_a),
+    (v_tenant,v_key_b,ARRAY[v_origin_b],true,NULL,v_conn_b);
 
   v_payload := jsonb_build_object(
     'schema_version','1',
@@ -45,8 +54,8 @@ BEGIN
     'occurred_at',now()
   );
 
-  v_result_a := henvalt.ingest_pixel_event_v2(v_key_a,'https://store-a.myshopify.com',v_payload);
-  v_result_b := henvalt.ingest_pixel_event_v2(v_key_b,'https://store-b.myshopify.com',v_payload);
+  v_result_a := henvalt.ingest_pixel_event_v2(v_key_a,v_origin_a,v_payload);
+  v_result_b := henvalt.ingest_pixel_event_v2(v_key_b,v_origin_b,v_payload);
 
   IF v_result_a->>'accepted' <> 'true' OR v_result_b->>'accepted' <> 'true'
      OR v_result_a->>'duplicate' <> 'false' OR v_result_b->>'duplicate' <> 'false' THEN
@@ -72,7 +81,7 @@ BEGIN
   END IF;
 
   -- Exact retry stays scoped to the same connection and does not duplicate.
-  v_result_a := henvalt.ingest_pixel_event_v2(v_key_a,'https://store-a.myshopify.com',v_payload);
+  v_result_a := henvalt.ingest_pixel_event_v2(v_key_a,v_origin_a,v_payload);
   IF v_result_a->>'duplicate' <> 'true' THEN
     RAISE EXCEPTION 'Exact retry was not idempotent: %',v_result_a;
   END IF;
@@ -86,7 +95,7 @@ BEGIN
   SELECT count(*) INTO v_before_aliases FROM henvalt.shopify_session_alias_identity_v2 WHERE tenant_id=v_tenant;
 
   -- Marketing consent alone must not create any customer/session/alias identity.
-  v_no_consent := henvalt.ingest_pixel_event_v2(v_key_a,'https://store-a.myshopify.com',
+  v_no_consent := henvalt.ingest_pixel_event_v2(v_key_a,v_origin_a,
     jsonb_build_object(
       'schema_version','1',
       'event_type','checkout_started',
