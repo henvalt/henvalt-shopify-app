@@ -2,7 +2,7 @@
 
 **Status:** read-only inspection of deployed non-internal triggers and their trigger functions. No production changes.
 
-Six user-defined triggers were found in the `henvalt` schema. No views were returned by the same schema inventory query.
+Five user-defined triggers were found in the `henvalt` schema (confirmed by a direct catalog count on 2026-11-16). View inventory is tracked separately.
 
 ## Findings
 
