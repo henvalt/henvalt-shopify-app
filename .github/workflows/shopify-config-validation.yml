@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   static-validation:
@@ -67,6 +67,8 @@ jobs:
           PY
 
   deploy-shopify-version:
+    permissions:
+      contents: write
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     env:
