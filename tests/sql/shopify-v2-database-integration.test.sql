@@ -147,7 +147,7 @@ BEGIN
 
   SELECT * INTO v_result
   FROM henvalt.accept_shopify_privacy_webhook_v2(
-    'test_app', 'test-client-id', repeat('A', 44),
+    'test_app', 'test-client-id', encode(decode(repeat('00', 32), 'hex'), 'base64'),
     encode(convert_to(v_privacy_body, 'UTF8'), 'base64'),
     'store-a.myshopify.com', 'customers/data_request', 'privacy-delivery-002'
   );
