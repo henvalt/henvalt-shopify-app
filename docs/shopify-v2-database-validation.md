@@ -5,6 +5,7 @@ The GitHub Actions job `shopify-database-migration-validation` creates a fresh P
 - raw route-token hashing (no plaintext token persistence);
 - Shopify webhook HMAC acceptance and delivery idempotency;
 - Shopify privacy webhook HMAC acceptance, exact-store linkage, review-only status, and idempotency;
+- two stores sharing one tenant remain distinct, including same delivery IDs across stores and rejection of mismatched immutable shop IDs;
 - rejection of invalid privacy HMAC;
 - service-role-only RPC permissions.
 
