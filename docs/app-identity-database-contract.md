@@ -345,3 +345,87 @@ Before writing executable migration SQL, close these remaining gates:
 6. Define tests that prove Store A events, orders, consent, replies, dashboards and billing cannot affect Store B, while preserving tenant membership and shared provider credentials where intended.
 
 No executable migration file is included yet. This is intentional: the writer/reader and settings-scope decisions above are prerequisites, not implementation details to guess.
+
+
+## 16. Expanded RPC dependency inventory and privacy/consent boundary (2026-11-16)
+
+A read-only catalog scan inspected deployed `henvalt` function definitions that reference the recovery/event/ledger tables. The scan is a source-level inventory, not proof that every dynamic SQL or external caller was found.
+
+### 16.1 Identity-bearing RPCs requiring connection-aware contracts
+
+The following current signatures accept tenant, metadata, or shop domain but no explicit `shopify_connection_id`:
+
+**Ingress and identity**
+- `verify_shopify_webhook_hmac(p_hmac,p_raw_body_base64)`
+- `resolve_shopify_tenant(p_shop_domain)`
+- `upsert_canonical_event(...p_tenant_id,...p_metadata,...p_idempotency_key,...)`
+- `resolve_identity(p_event_id)`
+- `upsert_customer(p_tenant_id,p_shopify_customer_id,...,p_metadata)`
+- `upsert_checkout(p_tenant_id,p_shopify_checkout_id,...,p_metadata)`
+- `create_opportunity_idempotent(p_tenant_id,p_source_event_id,p_customer_id,p_checkout_id,...,p_idempotency_key,...)`
+- `apply_shopify_email_consent_update(p_tenant_id,p_shopify_customer_id,p_email,p_email_consent,p_metadata)`
+
+**Recovery discovery and execution**
+- `get_abandoned_cart_candidates`, `get_abandoned_checkout_candidates`, `get_browse_abandonment_candidates`
+- `process_abandoned_cart_candidates`, `process_abandoned_checkout_candidates`, `process_browse_abandonment_candidates`
+- `get_recovery_worker_context(p_intervention_id)` and legacy counterpart
+- `create_intervention(...)`, `create_delivery_request(...)`
+- `authorize_delivery_request(p_tenant_id,p_delivery_request_id,p_intervention_id,p_recovery_id,p_opportunity_id,p_recipient,p_idempotency_key)`
+- `schedule_next_recovery_intervention(p_delivery_request_id)`
+
+**Orders, attribution and ledger**
+- `project_order_from_event(p_event_id)`
+- `evaluate_order_attribution(p_order_id)`
+- `stop_recovery_after_order(p_attribution_id)`
+- `post_recovery_to_ledger(p_attribution_id)`
+- `post_recovery_to_ledger_and_measure_billing(p_attribution_id)`
+- `process_shopify_revenue_adjustment(p_event_id)`
+- `reconcile_deferred_payment_webhooks(p_limit)`
+- `measure_billing_entry(p_ledger_entry_id,p_henvalt_percentage)` and `measure_billing_period(p_tenant_id,...)`
+
+**Privacy**
+- `export_shopify_customer_data(p_tenant_id,p_shopify_customer_id,p_customer_email)`
+- `redact_shopify_customer_data(p_tenant_id,p_shopify_customer_id,p_customer_email)`
+
+These RPCs must either receive a trusted connection ID or prove ownership by traversing a parent row that is already connection-bound. Metadata-only shop names are not authorization inputs.
+
+### 16.2 Cross-store consent and privacy risk
+
+The consent update RPC receives tenant + Shopify customer ID/email + metadata but no shop/connection ID. The privacy export/redaction RPCs likewise receive tenant + customer ID/email without app or connection identity. Because Shopify customer IDs are only unique within a shop, the current API contract cannot safely distinguish two stores in one tenant when identifiers overlap.
+
+Target contract:
+- Resolve the compliance webhook's app identity and shop to one exact active or historical connection record.
+- Resolve customer records only within that connection.
+- Make export/redaction operations connection-scoped and idempotent by compliance request ID + connection.
+- If Shopify sends a valid privacy request for an unlinked/uninstalled store, persist a durable unresolved compliance request for handling; do not silently discard it or broaden the deletion to all tenant customers.
+- Preserve Shopify's required response behavior and deadlines; app-specific HMAC verification must happen before interpreting or processing the payload.
+- Keep a minimal audit trail that does not retain the personal data the request requires HENVALT to erase.
+
+### 16.3 Delivery chain: where store identity should originate
+
+The recovery worker currently creates an intervention from an opportunity, then a delivery request from that intervention. The delivery authorization function receives all lineage IDs but no connection ID. The safest contract is to derive and validate the store from the opportunity's originating connection, then verify:
+- intervention belongs to the same opportunity and tenant;
+- recovery sequence belongs to the same opportunity and tenant;
+- delivery request belongs to that intervention and tenant;
+- customer, checkout, source event, and order (where applicable) have the same connection;
+- the connection is active and the tenant is active at send time;
+- the selected sending identity/settings are allowed for that store;
+- idempotency keys are scoped to that same connection.
+
+Do not trust a connection ID supplied by n8n or the browser without verifying it against the entire database lineage. The workflow may pass the ID for explicitness, but the RPC must derive/verify the authoritative relationship.
+
+### 16.4 Candidate discovery must partition by store
+
+The scheduled candidate discovery RPCs currently operate without an explicit connection parameter. Their SQL references shop-domain metadata and active connections, but the RPC contract does not guarantee a single-store partition. The next implementation must:
+- return a distinct connection ID with each candidate;
+- join source event/checkout to the exact same connection;
+- reject or quarantine rows with absent/ambiguous store identity;
+- avoid tenant-wide customer matching for Shopify IDs and consent;
+- ensure order-paid, refund, cancellation, and payment-failure stop conditions are checked within the same connection;
+- retain deterministic tenant+connection+source-event idempotency.
+
+### 16.5 Important migration rule
+
+Do not put a default connection ID on old rows, and do not use the current active connection as a backfill shortcut. For rows where the source event or parent chain cannot prove one exact connection, the correct migration result is unresolved and excluded from store-specific recovery until reconciled. This is safer than accidentally sending a recovery message from the wrong merchant store or deleting/altering another store's customer data.
+
+No live RPC, privacy function, workflow, or customer record was changed.
