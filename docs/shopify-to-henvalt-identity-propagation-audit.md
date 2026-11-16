@@ -197,3 +197,35 @@ This resolves the earlier route uncertainty: the deployed OAuth code explicitly 
 The OAuth callback also records the verified webhook destination and per-topic subscription IDs in the tenant audit log. This is useful operational evidence, but it records a single fixed Worker destination and does not add an app key to the route or the webhook payload. The future public app must register a distinct trusted app-aware ingress route (or equivalent trusted routing mechanism) while preserving the existing legacy route and secret.
 
 No webhook subscriptions were created, updated or deleted during this inspection.
+
+
+## 12. Live PostgreSQL webhook/OAuth resolver functions
+
+Read-only `pg_get_functiondef` inspection confirms the deployed database RPC behavior:
+
+### `verify_shopify_webhook_hmac(p_hmac, p_raw_body_base64)`
+- Reads one Vault secret named `henvalt_shopify_app_secret`.
+- Computes HMAC-SHA256 over the decoded raw body and constant-time compares the provided digest.
+- The RPC accepts no app key, shop domain, connection ID or secret reference.
+- EXECUTE is granted to postgres and service_role only.
+
+This confirms the global single-secret limitation at the database verification layer, independently of the Worker environment binding.
+
+### `resolve_shopify_tenant(p_shop_domain)`
+- Normalizes the shop domain.
+- Selects an active connection joined to an ACTIVE tenant by shop domain, with `LIMIT 1`.
+- Returns only the tenant ID; it does not return connection ID or app key.
+- EXECUTE is granted to postgres and service_role only.
+
+The function is suitable for the current one-identity-per-shop lookup but is not a multi-app identity resolver. The future contract must resolve `(app_key, normalized_shop_domain)` to exactly one connection and return its connection ID plus tenant ID. If more than one row or no valid row exists, it must fail closed.
+
+### `control_plane_finalize_shopify_oauth_install_expiring_for_owner(...)`
+- Validates and locks OAuth state, checking state hash, shop domain, expiry, consumed state and initiating user.
+- Calls `control_plane_connect_shop(p_shop_domain)` to resolve/create the connection.
+- Updates the resulting connection's access/refresh Vault references, expiry, scopes and active state.
+- The OAuth state and finalization function accept no app key.
+- EXECUTE is granted to postgres and service_role only.
+
+Important same-store collision risk: because finalization resolves the connection by shop domain and then writes the newly exchanged token pair onto that connection, a future second HENVALT app identity must not be allowed to run this legacy finalization path for a shop already connected under the legacy app. Without app-aware connection uniqueness and OAuth state, the second install could overwrite the legacy connection's stored token references. The new public app must use an app-aware finalization function and a distinct connection identity, or reject the install until that migration is complete.
+
+This does not establish that an overwrite has already occurred. It establishes the behavior of the current function contract. No OAuth install, token exchange, Vault write, database update or production change was performed during this inspection.
