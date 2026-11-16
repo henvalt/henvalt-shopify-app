@@ -1,0 +1,168 @@
+-- Integration tests for migrations 001-006 on a disposable PostgreSQL instance.
+\set ON_ERROR_STOP on
+
+INSERT INTO vault.secrets (name, secret)
+VALUES ('test-shopify-secret', 'synthetic-test-secret-never-used-in-production');
+
+INSERT INTO henvalt.shopify_app_registry (
+  app_key, shopify_client_id, webhook_secret_ref, distribution_class, lifecycle_status
+)
+VALUES ('test_app', 'test-client-id', 'test-shopify-secret', 'test', 'active');
+
+INSERT INTO henvalt.shopify_oauth_states (
+  state_hash, shop_domain, expires_at, initiated_by_user_id, app_key
+)
+VALUES (
+  'synthetic-state-hash',
+  'store-a.myshopify.com',
+  now() + interval '10 minutes',
+  '00000000-0000-4000-8000-000000000001',
+  'test_app'
+);
+
+DO $test$
+DECLARE
+  v_finalized jsonb;
+  v_connection_id uuid;
+  v_route_token text := repeat('a', 64);
+  v_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001"}';
+  v_hmac text;
+  v_result record;
+  v_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
+  v_privacy_hmac text;
+BEGIN
+  v_finalized := henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
+    'synthetic-state-hash',
+    'store-a.myshopify.com',
+    repeat('x', 40),
+    repeat('r', 40),
+    3600,
+    86400,
+    '1001',
+    ARRAY['read_orders']::text[],
+    '00000000-0000-4000-8000-000000000001'::uuid,
+    'test_app',
+    'test-client-id',
+    v_route_token
+  );
+
+  IF v_finalized->>'installed' <> 'true'
+     OR v_finalized->>'webhook_route_ready' <> 'true'
+     OR v_finalized->>'app_key' <> 'test_app' THEN
+    RAISE EXCEPTION 'app-aware OAuth finalizer returned unexpected result: %', v_finalized;
+  END IF;
+
+  v_connection_id := (v_finalized->>'connection_id')::uuid;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_connections
+    WHERE id = v_connection_id AND app_key = 'test_app'
+      AND shop_domain = 'store-a.myshopify.com'
+  ) THEN
+    RAISE EXCEPTION 'OAuth finalizer did not bind the exact connection';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_webhook_route_tokens
+    WHERE connection_id = v_connection_id
+      AND token_hash = encode(extensions.digest(convert_to(v_route_token, 'UTF8'), 'sha256'), 'hex')
+      AND revoked_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'OAuth finalizer did not store the route token hash';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM henvalt.shopify_webhook_route_tokens
+    WHERE token_hash = v_route_token
+  ) THEN
+    RAISE EXCEPTION 'Raw route token was persisted';
+  END IF;
+
+  v_hmac := encode(
+    extensions.hmac(convert_to(v_body, 'UTF8'), convert_to('synthetic-test-secret-never-used-in-production', 'UTF8'), 'sha256'),
+    'base64'
+  );
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_webhook_v2(
+    v_route_token, v_hmac,
+    encode(convert_to(v_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'orders/create', 'delivery-001', 'event-001'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'First webhook was not accepted as a new receipt: %', row_to_json(v_result);
+  END IF;
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_webhook_v2(
+    v_route_token, v_hmac,
+    encode(convert_to(v_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'orders/create', 'delivery-001', 'event-001'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Duplicate webhook was not idempotently acknowledged: %', row_to_json(v_result);
+  END IF;
+
+  v_privacy_hmac := encode(
+    extensions.hmac(convert_to(v_privacy_body, 'UTF8'), convert_to('synthetic-test-secret-never-used-in-production', 'UTF8'), 'sha256'),
+    'base64'
+  );
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_privacy_webhook_v2(
+    'test_app', 'test-client-id', v_privacy_hmac,
+    encode(convert_to(v_privacy_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'customers/data_request', 'privacy-delivery-001'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM true
+     OR v_result.receipt_status <> 'REVIEW_REQUIRED'
+     OR v_result.duplicate IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Privacy request was not durably queued for review: %', row_to_json(v_result);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_privacy_webhook_deliveries
+    WHERE app_key = 'test_app'
+      AND connection_id = v_connection_id
+      AND shop_domain = 'store-a.myshopify.com'
+      AND customer_id = '12345'
+      AND request_id = '98765'
+      AND processing_status = 'REVIEW_REQUIRED'
+  ) THEN
+    RAISE EXCEPTION 'Privacy receipt was not linked to exact store or review-gated';
+  END IF;
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_privacy_webhook_v2(
+    'test_app', 'test-client-id', v_privacy_hmac,
+    encode(convert_to(v_privacy_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'customers/data_request', 'privacy-delivery-001'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Duplicate privacy webhook was not idempotently acknowledged';
+  END IF;
+
+  SELECT * INTO v_result
+  FROM henvalt.accept_shopify_privacy_webhook_v2(
+    'test_app', 'test-client-id', repeat('A', 44),
+    encode(convert_to(v_privacy_body, 'UTF8'), 'base64'),
+    'store-a.myshopify.com', 'customers/data_request', 'privacy-delivery-002'
+  );
+
+  IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code <> 'HMAC_INVALID' THEN
+    RAISE EXCEPTION 'Invalid privacy HMAC was not rejected';
+  END IF;
+
+  IF has_function_privilege('anon', 'henvalt.accept_shopify_privacy_webhook_v2(text,text,text,text,text,text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'Anonymous role can execute the privacy RPC';
+  END IF;
+  IF NOT has_function_privilege('service_role', 'henvalt.accept_shopify_privacy_webhook_v2(text,text,text,text,text,text,text)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'service_role cannot execute the privacy RPC';
+  END IF;
+END;
+$test$;
+
+SELECT 'shopify_v2_database_integration_passed' AS result;
