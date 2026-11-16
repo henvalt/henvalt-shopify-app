@@ -183,6 +183,51 @@ This is tenant deletion, not store deletion. It would destroy the whole HENVALT 
 - Legacy app requests must continue to resolve to legacy app identity after a new app identity is introduced.
 
 
+
+## 9. Ingress, identity resolution, consent and order-attribution function-body findings
+
+A further read-only pass inspected the deployed customer/checkout upserts, event identity resolver, consent update, browse-advance check, order projection, attribution and recovery-stop functions.
+
+### Customer and checkout identity
+
+- `upsert_customer` resolves an existing row by tenant + Shopify customer ID; when the external ID is absent it falls back to tenant + normalized email. It has no connection argument. This permits a customer from one shop to be merged with a tenant customer originally created from another shop when email is the fallback identity.
+- `resolve_identity` resolves Shopify customer IDs and email by tenant; session aliases and sessions are also keyed by tenant. The same session/alias string in two shops can collide or be reused across stores.
+- `upsert_checkout` is tenant-scoped and has no connection argument. Its uniqueness/idempotency is tenant-based, with metadata carrying shop domain. The external checkout ID/token is not structurally scoped to a Shopify connection.
+- `upsert_canonical_event` deduplicates by tenant + idempotency key. It records metadata but does not require an exact connection.
+
+### Consent update
+
+`apply_shopify_email_consent_update` selects a customer by tenant and either Shopify customer ID or email, orders Shopify ID matches first, then takes one row with `LIMIT 1`. It calls tenant-scoped `upsert_customer`. When consent is revoked, it suppresses tenant-scoped opportunities, pending deliveries, interventions and sequences for the resolved customer.
+
+This combines two risks: a same-email match may resolve the wrong store's customer, and the subsequent suppression is tenant-wide for that HENVALT customer. The exact Shopify connection must be resolved from the verified webhook before selecting the customer; consent and recovery suppression must follow the documented store/tenant policy.
+
+### Browse advancement
+
+`browse_opportunity_advanced` checks later pixel events and checkouts by tenant + session reference (and tenant-scoped session aliases), without a connection predicate. A later add-to-cart or checkout event from another shop sharing a tenant/session value can mark the browse opportunity as advanced.
+
+### Order projection
+
+`project_order_from_event` resolves the source event by event ID, but subsequent order/customer/checkout lookups are tenant-scoped:
+
+- Existing order is selected by tenant + Shopify order ID.
+- Customer is selected by tenant and Shopify customer ID or email.
+- Checkout is selected by tenant + Shopify checkout ID.
+- Metadata records the source event ID but does not enforce a same-connection FK.
+
+A matching customer email or reused external ID in another store can bind the projected order to the wrong customer/checkout within the tenant.
+
+### Attribution and conversion stop
+
+`evaluate_order_attribution` matches tracking token within tenant (token lineage), checkout opportunities by tenant + checkout ID, and fallback customer attribution by tenant + customer ID. It has no connection check between order and opportunity/intervention. Customer-only matches are marked POSSIBLE/non-billable, but even diagnostic attribution must not cross stores.
+
+`browse_opportunity_advanced`, `authorize_delivery_request`, and `get_recovery_worker_context` all use tenant-scoped customer/session/order checks for conversion or advancement. `stop_recovery_after_order` resolves attribution/order by tenant and then stops a recovery sequence by recovery ID or tenant-scoped checkout/tracking token. These functions must all consume the same trusted connection identity, not independently infer it from metadata.
+
+`process_shopify_revenue_adjustment` resolves orders and ledger rows by tenant + Shopify order ID. It also needs the source event's connection ID and must update only the matching store's order/ledger entry.
+
+### Consequence for implementation
+
+A connection FK is not sufficient by itself. Every writer and every reader must enforce the invariant. The migration design must include connection-aware lookup and uniqueness semantics for customers, checkouts, canonical events, opportunities and orders; then propagate the same connection through attribution, recovery-stop, billing and revenue adjustments. Email is a contact attribute, never a substitute for Shopify source identity.
+
 ## 8. Live data diagnostic snapshot (2026-11-16)
 
 The five SELECT-only diagnostics in `docs/sql/candidate-cross-store-ambiguity-review-only.sql` were also executed read-only against production.
