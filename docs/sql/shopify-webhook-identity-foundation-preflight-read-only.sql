@@ -21,18 +21,12 @@ GROUP BY lower(btrim(shop_domain))
 HAVING count(*) > 1;
 
 SELECT 'connections_without_app_identity' AS check_name,
-       count(*) AS unresolved_connection_count
-FROM henvalt.shopify_connections
-WHERE app_key IS NULL;
+       count(*) FILTER (WHERE to_jsonb(sc)->>'app_key' IS NULL) AS unresolved_connection_count
+FROM henvalt.shopify_connections sc;
 
 SELECT 'legacy_webhook_event_rows' AS check_name,
        count(*) AS legacy_rows_that_will_remain_unattributed
 FROM henvalt.webhook_events;
 
-SELECT 'webhook_delivery_id_duplicates_within_connection' AS check_name,
-       connection_id,
-       shopify_delivery_id,
-       count(*) AS duplicate_count
-FROM henvalt.shopify_webhook_deliveries
-GROUP BY connection_id, shopify_delivery_id
-HAVING count(*) > 1;
+-- New inbox table does not exist until the candidate migration is applied.
+-- Its connection-scoped delivery uniqueness is enforced by the migration itself.
