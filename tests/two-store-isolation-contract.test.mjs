@@ -56,7 +56,7 @@ function canAttributeRecovery(order, opportunity) {
 }
 
 function suppressionApplies(suppression, target) {
-  return suppression.connectionId === target.connectionId &&
+  return sameConnection(suppression, target) &&
     suppression.customerId === target.customerId;
 }
 
