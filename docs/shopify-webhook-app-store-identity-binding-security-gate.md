@@ -26,6 +26,12 @@ Therefore a valid HMAC proves the body was signed with the app secret. By itself
 - It forwards the original raw body and allowlisted Shopify headers to n8n.
 - It has no per-app key registry or per-connection ingress identity in the current contract.
 
+### Shopify OAuth callback (branch source; not deployed by this preparation)
+- The OAuth Edge Function uses one global `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` for install, callback verification and token exchange.
+- After OAuth, it registers webhook subscriptions through each shop's Admin GraphQL API, but every shop receives the exact same static URI: `https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks`.
+- It does not create or persist a per-connection route token.
+- This confirms that a per-shop opaque callback route is a feasible design change in the existing registration point, but it must be additive and tested before subscription cutover.
+
 ### Active n8n `HENVALT_INGEST`
 - The workflow independently calls `henvalt.verify_shopify_webhook_hmac`, which reads one Vault secret named `henvalt_shopify_app_secret`.
 - If that verifier returns false, the false output of `HMAC Verified?` is unconnected.
@@ -47,8 +53,9 @@ Therefore a valid HMAC proves the body was signed with the app secret. By itself
 1. **Header/body routing substitution:** A captured valid signed body can be replayed with a changed `X-Shopify-Shop-Domain` header. The HMAC still verifies because the header is outside the signed bytes. If the target shop is another active connection, current tenant resolution can route the event using the altered header.
 2. **Same-tenant store collision:** The two stores can share a tenant. Current webhook idempotency and canonical event keys are tenant-scoped; identical event/event IDs can collapse or suppress one another.
 3. **App identity ambiguity:** One global secret and no app identity on connections cannot safely support the existing merchant-owned app and a future Partner-owned public app with different secrets.
-4. **False-verification acknowledgement:** n8n acknowledges at receipt time. If Worker and Vault secrets ever diverge, Worker can return 200 after forwarding even though n8n's second verification fails. Shopify may stop retrying a delivery that HENVALT did not process.
-5. **Case-normalization ambiguity:** The resolver lowercases for lookup while the unique index is case-sensitive. If case-variant duplicates exist, `LIMIT 1` can choose an arbitrary connection's tenant.
+4. **Shared callback route:** Every connected shop currently registers the same Worker URL. There is no per-install route token to bind a delivery to its exact connection before using the unsigned shop-domain header.
+5. **False-verification acknowledgement:** n8n acknowledges at receipt time. If Worker and Vault secrets ever diverge, Worker can return 200 after forwarding even though n8n's second verification fails. Shopify may stop retrying a delivery that HENVALT did not process.
+6. **Case-normalization ambiguity:** The resolver lowercases for lookup while the unique index is case-sensitive. If case-variant duplicates exist, `LIMIT 1` can choose an arbitrary connection's tenant.
 
 ## 4. Required V2 identity contract
 
