@@ -83,3 +83,18 @@ The repository README includes historical launch statements and explicitly lists
 ## Safety
 
 No Edge Function source was deployed or modified in Supabase. No Cloudflare Worker was changed. No n8n workflow was edited. This document records repository/runtime parity findings only.
+
+
+## Source recovery completed (branch-only)
+
+The exact deployed `henvalt-shopify-privacy` version 1 source has now been recovered into:
+`supabase/functions/henvalt-shopify-privacy/index.ts`
+
+Snapshot metadata:
+- Deployed version: `1`
+- Deployed source SHA-256 reported by Supabase: `213af659378fd3da90b8edbfce12347445e4f5ce633ca6bf6705f8d3cae3e5f4`
+- GitHub commit: `cd782c8f710afca0b304c3b9421930327187afdc`
+
+The file has a prominent header stating that it is a source snapshot and is not deployed by this commit. A Node test now checks that the source snapshot metadata, raw-body HMAC check, all three compliance topics and unresolved-shop review path remain present. The CI workflow runs this test alongside the existing pixel and SQL preflight tests.
+
+This resolves the repository source-absence gap for the currently deployed privacy function. It does **not** resolve the app-identity/store-scope gaps inside that function. The deployed function remains unchanged and still uses one global Shopify secret and tenant-only privacy RPC calls.
