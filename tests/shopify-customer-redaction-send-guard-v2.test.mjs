@@ -25,6 +25,7 @@ test("guard expires only unconsumed permits and cancels only untouched intervent
   assert.match(migration, /i\.status = 'READY_FOR_AUTHORIZATION'[\s\S]*NOT EXISTS \([\s\S]*shopify_recovery_send_attempt_v2/);
   assert.match(migration, /a\.status IN \('AUTHORIZED', 'AMBIGUOUS'\)/);
   assert.match(migration, /'safe_to_complete_privacy_request', false/);
+  assert.match(migration, /prepare_shopify_customer_redaction_send_stop_v2/);
   assert.match(migration, /'customer_data_deleted', false/);
 });
 
@@ -42,6 +43,7 @@ test("guard preserves suppression, provider, cost and financial records", () => 
 test("SQL integration test covers store isolation and blocked authorization", () => {
   assert.match(integration, /redaction-guard-customer-9001/);
   assert.match(integration, /shopify_customer_redaction_guards_v2/);
+  assert.match(integration, /prepare_shopify_customer_redaction_send_stop_v2/);
   assert.match(integration, /new delivery permit was allowed/i);
   assert.match(integration, /new send attempt was allowed/i);
   assert.match(integration, /mismatched claim token/i);
