@@ -78,6 +78,22 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  if(topic==="customers_email_marketing_consent/update"){
+    const projected=await rpc("project_verified_shopify_email_consent_v2",{
+      p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
+    });
+    if(!projected.ok || !projected.row || projected.row.accepted!==true){
+      return json(503,{error:"consent_projection_unavailable"});
+    }
+    return json(200,{
+      accepted:true,
+      duplicate:receipt.duplicate===true,
+      status:receipt.receipt_status,
+      consent_projection:projected.row.status,
+      consent_state:projected.row.consent_state,
+    });
+  }
+
   if(topic==="orders/create"){
     const projected=await rpc("project_verified_shopify_order_v2",{
       p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
