@@ -20,7 +20,7 @@ Read-only inspection on 17 November 2026 found:
 - 1 tenant membership.
 - 3 customers, 2 checkouts, 5 opportunities and 5 recovery interventions.
 - 3 delivery requests and 5 delivery attempts.
-- 0 Shopify orders, 0 order attributions, 0 revenue-ledger rows and 0 Shopify privacy requests.
+- 0 Shopify orders, 0 order attributions, 0 revenue-ledger rows and 0 Shopify privacy requests.\n- One billing account is PENDING in test mode, with a zero recurring amount and zero performance percentage; no billing measurements exist. The live configuration is not a production billing setup.
 - Candidate V2 app registry, verified inbox, exact-store identity, order and recovery-candidate tables are not present in live schema. Candidate migrations 001–012 have not been applied.
 
 These are point-in-time aggregate counts, not proof of customer recovery.
@@ -130,7 +130,7 @@ Required:
 
 Exit evidence: a real test order is matched to one exact-store recovery, appears once in dashboard, and creates the correct fee only after attribution is confirmed.
 
-### F. Merchant dashboard and onboarding
+### E2. Performance billing\n\nStatus: the live billing account is pending/test-mode and has no measured usage or revenue. The database supports a percentage fee and Shopify usage-charge dispatch, but the current configuration is 0% and must not be mistaken for an approved commercial rate.\n\nRequired:\n1. Confirm the commercial performance percentage and whether the billing principal is merchant-wide or store-specific.\n2. Keep recurring subscription amount at zero for the performance-only model; charge only from confirmed recovered revenue.\n3. Require confirmed attribution and a posted revenue-ledger entry before creating a fee measurement.\n4. Make fee calculation, currency, refunds, caps, idempotency and Shopify usage-charge reconciliation auditable.\n5. Ensure the merchant can see the basis and amount before any usage charge is submitted.\n\nExit evidence: a test confirmed recovery creates exactly one correctly calculated fee; a probable or unconfirmed recovery creates no fee; refund/cancellation adjustments reconcile exactly once.\n\n### F. Merchant dashboard and onboarding
 
 Status: existing UI exists; multi-store selection and store-scoped data contracts remain incomplete.
 
