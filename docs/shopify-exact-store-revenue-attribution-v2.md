@@ -1,6 +1,6 @@
 # HENVALT exact-store recovered-revenue attribution V2
 
-**Status:** design gate only. Current order projection records exact-store checkout matching, but it does not yet create a recovery attribution or a performance-fee ledger. No billing or production changes are authorized by this document.
+**Status:** design gate only. Current order/refund projection records exact-store checkout matching and refund adjustments, but it does not yet create a recovery attribution or a performance-fee ledger. No billing or production changes are authorized by this document.
 
 ## 1. Verified source chain
 
@@ -11,7 +11,7 @@ The candidate V2 chain already provides:
 - interventions and send attempts with exact connection, customer and provider identity;
 - MailerSend provider event correlation to a send attempt.
 
-The order projection matches only the checkout token within the same connection. A tenant-wide or same-email match is not sufficient evidence of recovery.
+The order projection matches only the checkout token within the same connection. A tenant-wide or same-email match is not sufficient evidence of recovery. Migrations 021–022 now project exact-store order create/update/paid/cancelled topics and successful `refunds/create` transactions into an idempotent refund adjustment ledger; CI #293 passed the disposable-PostgreSQL coverage.
 
 ## 2. Attribution eligibility
 
