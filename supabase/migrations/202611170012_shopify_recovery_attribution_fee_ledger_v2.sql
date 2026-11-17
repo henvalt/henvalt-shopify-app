@@ -440,7 +440,7 @@ BEGIN
   WHERE ba.tenant_id=NEW.tenant_id;
   IF NOT FOUND OR v_billing.billing_status<>'ACTIVE'
      OR v_billing.test_mode IS DISTINCT FROM false
-     OR v_billing.henvalt_percentage IS NULL OR v_billing.henvalt_percentage<=0
+     OR v_billing.henvalt_percentage IS NULL OR v_billing.henvalt_percentage<=0 OR v_billing.henvalt_percentage>100
      OR v_billing.billing_currency<>NEW.currency THEN
     RETURN NEW;
   END IF;
@@ -548,7 +548,7 @@ SET search_path = ''
 AS $function$
 BEGIN
   IF NEW.status::text='ACTIVE' AND NEW.test_mode IS FALSE
-     AND NEW.henvalt_percentage>0 THEN
+     AND NEW.henvalt_percentage>0 AND NEW.henvalt_percentage<=100 THEN
     INSERT INTO henvalt.shopify_recovery_fee_measurements_v2(
       tenant_id,shopify_connection_id,attribution_id,recovered_amount,
       henvalt_percentage,fee_amount,currency,status
