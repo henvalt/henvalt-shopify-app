@@ -218,7 +218,7 @@ BEGIN
   UPDATE henvalt.billing_accounts SET usage_cap_amount=0.02 WHERE tenant_id=v_tenant;
   v_failed:=false;
   BEGIN
-    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,10,'cost-cap-cross-store-a',v_provider_key);
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-cap-cross-store-a',v_provider_key);
   EXCEPTION WHEN raise_exception THEN v_failed:=true;
   END;
   IF NOT v_failed OR EXISTS(
@@ -231,7 +231,7 @@ BEGIN
     SET email_unit_cost_amount=NULL,email_unit_cost_currency=NULL WHERE provider_account_key=v_provider_key;
   v_failed:=false;
   BEGIN
-    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,11,'cost-missing-unit-a',v_provider_key);
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-missing-unit-a',v_provider_key);
   EXCEPTION WHEN raise_exception THEN v_failed:=true;
   END;
   IF NOT v_failed THEN RAISE EXCEPTION 'Missing provider unit cost was unexpectedly accepted'; END IF;
@@ -240,7 +240,7 @@ BEGIN
     SET email_unit_cost_amount=0.01,email_unit_cost_currency='EUR' WHERE provider_account_key=v_provider_key;
   v_failed:=false;
   BEGIN
-    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,12,'cost-currency-mismatch-a',v_provider_key);
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-currency-mismatch-a',v_provider_key);
   EXCEPTION WHEN raise_exception THEN v_failed:=true;
   END;
   IF NOT v_failed THEN RAISE EXCEPTION 'Provider currency mismatch was unexpectedly accepted'; END IF;
@@ -250,25 +250,25 @@ BEGIN
   UPDATE henvalt.billing_accounts SET monthly_email_limit=2 WHERE tenant_id=v_tenant;
   v_failed:=false;
   BEGIN
-    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,13,'cost-monthly-limit-a',v_provider_key);
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-monthly-limit-a',v_provider_key);
   EXCEPTION WHEN raise_exception THEN v_failed:=true;
   END;
   IF NOT v_failed THEN RAISE EXCEPTION 'Merchant monthly email limit was unexpectedly exceeded'; END IF;
   UPDATE henvalt.billing_accounts SET monthly_email_limit=10 WHERE tenant_id=v_tenant;
 
-  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,14,'cost-failed-a',v_provider_key);
+  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-failed-a',v_provider_key);
   UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='FAILED' WHERE id=v_attempt;
   IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE send_attempt_id=v_attempt AND status='RELEASED') THEN
     RAISE EXCEPTION 'FAILED send did not release its cost reservation';
   END IF;
 
-  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,15,'cost-ambiguous-a',v_provider_key);
+  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,2,'cost-ambiguous-a',v_provider_key);
   UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='AMBIGUOUS' WHERE id=v_attempt;
   IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE send_attempt_id=v_attempt AND status='RESERVED') THEN
     RAISE EXCEPTION 'AMBIGUOUS send did not retain its cost reservation';
   END IF;
 
-  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,16,'cost-submitted-a',v_provider_key);
+  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,3,'cost-submitted-a',v_provider_key);
   UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='SUBMITTED' WHERE id=v_attempt;
   IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE send_attempt_id=v_attempt AND status='SETTLED') THEN
     RAISE EXCEPTION 'SUBMITTED send did not settle its cost reservation';
