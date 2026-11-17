@@ -292,7 +292,7 @@ DECLARE
   v_intervention uuid; v_attempt uuid; v_order_id uuid; v_attribution_id uuid;
   v_ordered_at timestamptz; v_body text; v_hmac text; v_refund_body text;
   v_result record; v_projection jsonb; v_policy_result jsonb;
-  v_net numeric(18,4); v_fee numeric(18,4); v_status text;
+  v_net numeric(18,4); v_fee numeric(18,4); v_status text; v_fee_status text;
 BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
   SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2
@@ -404,9 +404,9 @@ BEGIN
   );
   IF v_projection->>'accepted'<>'true' THEN RAISE EXCEPTION 'Full attribution refund not projected: %',v_projection; END IF;
   SELECT net_recovered_amount,status INTO v_net,v_status FROM henvalt.shopify_recovery_attributions_v2 WHERE id=v_attribution_id;
-  SELECT fee_amount,status INTO v_fee,v_status FROM henvalt.shopify_recovery_fee_measurements_v2 WHERE attribution_id=v_attribution_id;
-  IF v_net<>0 OR v_status<>'VOIDED' OR v_fee<>0 THEN
-    RAISE EXCEPTION 'Full refund did not void the performance fee measurement: net %, fee status %, fee %',v_net,v_status,v_fee;
+  SELECT fee_amount,status INTO v_fee,v_fee_status FROM henvalt.shopify_recovery_fee_measurements_v2 WHERE attribution_id=v_attribution_id;
+  IF v_net<>0 OR v_status<>'REVERSED' OR v_fee_status<>'VOIDED' OR v_fee<>0 THEN
+    RAISE EXCEPTION 'Full refund did not reverse attribution and void fee measurement: net %, attribution status %, fee status %, fee %',v_net,v_status,v_fee_status,v_fee;
   END IF;
 
   IF EXISTS(
