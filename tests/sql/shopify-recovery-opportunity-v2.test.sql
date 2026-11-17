@@ -13,6 +13,9 @@ DECLARE
   v_checkout_a uuid;
   v_checkout_b uuid;
   v_result jsonb;
+  v_hmac text;
+  v_receipt record;
+  v_order text := '{"shop_id":"1001","id":889001,"checkout_token":"opportunity-shared-token","customer":{"id":12345},"total_price":"125.50","currency":"USD","financial_status":"paid","created_at":"2026-11-17T00:02:00Z"}';
   v_a integer;
   v_b integer;
 BEGIN
@@ -77,6 +80,43 @@ BEGIN
     WHERE shopify_connection_id=v_store_b AND status<>'CONTACT_RESOLUTION_PENDING'
   ) THEN
     RAISE EXCEPTION 'Expected exact-store customer opportunities to await contact resolution';
+  END IF;
+
+  -- A verified order in Store A converts only Store A's opportunity.
+  v_hmac := encode(
+    extensions.hmac(convert_to(v_order,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),
+    'base64'
+  );
+  SELECT * INTO v_receipt FROM henvalt.accept_shopify_webhook_v2(
+    repeat('b',64),v_hmac,encode(convert_to(v_order,'UTF8'),'base64'),
+    'store-a.myshopify.com','orders/create','opportunity-order-a','opportunity-order-event-a'
+  );
+  IF v_receipt.accepted IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Store A opportunity order receipt rejected';
+  END IF;
+  v_result := henvalt.project_verified_shopify_order_v2(
+    repeat('b',64),'opportunity-order-a',encode(convert_to(v_order,'UTF8'),'base64')
+  );
+  IF v_result->>'checkout_match_status'<>'MATCHED' THEN
+    RAISE EXCEPTION 'Store A opportunity order did not match its checkout: %',v_result;
+  END IF;
+  v_result := henvalt.promote_shopify_checkout_recovery_candidates_v2(100);
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE shopify_connection_id=v_store_a
+      AND candidate_id IN (SELECT id FROM henvalt.shopify_checkout_recovery_candidate_v2 WHERE checkout_token='opportunity-shared-token')
+      AND status='CONVERTED'
+  ) THEN
+    RAISE EXCEPTION 'Store A opportunity was not converted by its own order';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE shopify_connection_id=v_store_b
+      AND candidate_id IN (SELECT id FROM henvalt.shopify_checkout_recovery_candidate_v2 WHERE checkout_token='opportunity-shared-token')
+      AND status='CONTACT_RESOLUTION_PENDING'
+  ) THEN
+    RAISE EXCEPTION 'Store A order incorrectly converted Store B opportunity';
   END IF;
 
   -- Repeated promotion must not create duplicate opportunities.
