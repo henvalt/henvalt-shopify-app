@@ -225,12 +225,19 @@ BEGIN
     RETURN jsonb_build_object('accepted',false,'code','PROVIDER_ACCOUNT_INACTIVE');
   END IF;
 
-  SELECT decrypted_secret INTO v_signing_secret FROM vault.decrypted_secrets
-  WHERE name=v_provider.webhook_secret_ref LIMIT 1;
-  SELECT decrypted_secret INTO v_fingerprint_secret FROM vault.decrypted_secrets
-  WHERE name=v_provider.recipient_fingerprint_secret_ref LIMIT 1;
-  IF v_signing_secret IS NULL OR v_signing_secret='' OR v_fingerprint_secret IS NULL OR length(v_fingerprint_secret)<32 THEN
-    RETURN jsonb_build_object('accepted',false,'code','PROVIDER_SECRET_NOT_CONFIGURED');
+  v_event_type:=NULLIF(v_payload->>'type','');
+  IF v_event_type='webhook.test' THEN
+    -- MailerSend signs its webhook URL-validation ping with this documented
+    -- fixed test secret. It is intentionally accepted without persisting an event.
+    v_signing_secret:='test_Am3L3GuOIc4blLUuHqAPxxwkZaJyEk5';
+  ELSE
+    SELECT decrypted_secret INTO v_signing_secret FROM vault.decrypted_secrets
+    WHERE name=v_provider.webhook_secret_ref LIMIT 1;
+    SELECT decrypted_secret INTO v_fingerprint_secret FROM vault.decrypted_secrets
+    WHERE name=v_provider.recipient_fingerprint_secret_ref LIMIT 1;
+    IF v_signing_secret IS NULL OR v_signing_secret='' OR v_fingerprint_secret IS NULL OR length(v_fingerprint_secret)<32 THEN
+      RETURN jsonb_build_object('accepted',false,'code','PROVIDER_SECRET_NOT_CONFIGURED');
+    END IF;
   END IF;
 
   v_expected:=extensions.hmac(v_body,pg_catalog.convert_to(v_signing_secret,'UTF8'),'sha256');
@@ -238,8 +245,11 @@ BEGIN
     v_diff:=v_diff | (pg_catalog.get_byte(v_expected,v_i) # pg_catalog.get_byte(v_provided,v_i));
   END LOOP;
   IF v_diff<>0 THEN RETURN jsonb_build_object('accepted',false,'code','SIGNATURE_INVALID'); END IF;
+  IF v_event_type='webhook.test' THEN
+    RETURN jsonb_build_object('accepted',true,'status','WEBHOOK_TEST_VERIFIED','event_persisted',false);
+  END IF;
 
-  v_event_type:=NULLIF(v_payload->>'type','');
+
   v_event_id:=NULLIF(v_payload->'data'->>'id','');
   v_message_id:=NULLIF(v_payload->'data'->>'message_id','');
   v_email_id:=NULLIF(v_payload->'data'->>'email_id','');
