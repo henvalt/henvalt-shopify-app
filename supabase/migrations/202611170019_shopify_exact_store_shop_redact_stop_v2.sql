@@ -16,6 +16,14 @@ BEGIN
   END IF;
 
   -- Bind the verified receipt to the immutable installation before any stop.
+  IF NEW.connection_id IS NULL
+     OR NEW.tenant_id IS NULL
+     OR NEW.app_key IS NULL
+     OR NEW.shop_domain IS NULL THEN
+    -- Preserve an unlinked receipt for manual review; never guess a store.
+    RETURN NEW;
+  END IF;
+
   PERFORM 1
   FROM henvalt.shopify_connections sc
   WHERE sc.id = NEW.connection_id
@@ -25,7 +33,9 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'verified shop redact receipt has no exact connection';
+    -- A verified but unbound receipt remains queued for review. Do not stop
+    -- any other installation based on partial or conflicting identity.
+    RETURN NEW;
   END IF;
 
   -- Fail closed for this store only while the full retention-safe redaction
