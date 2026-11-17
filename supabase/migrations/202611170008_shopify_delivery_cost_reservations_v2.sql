@@ -243,8 +243,8 @@ BEGIN
   IF v_row.provider_status<>'ACTIVE' OR v_row.api_token_secret_ref IS NULL OR v_row.recipient_fingerprint_secret_ref IS NULL
      OR v_row.email_unit_cost_amount IS NULL OR v_row.email_unit_cost_amount<=0
      OR v_row.email_unit_cost_currency IS NULL
-     OR v_row.email_unit_cost_currency !~ '^[A-Z]{3}
-
+     OR length(v_row.email_unit_cost_currency) <> 3
+     OR v_row.email_unit_cost_currency ~ '[^A-Z]'
      OR v_row.email_unit_cost_currency <> pg_catalog.upper(pg_catalog.btrim(v_row.billing_currency::text))
      OR v_row.sender_status<>'ACTIVE' OR v_row.verified_at IS NULL
      OR v_row.billing_status<>'ACTIVE' OR v_row.test_mode IS DISTINCT FROM false
