@@ -33,3 +33,8 @@ Status: candidate migration 018 and Edge Function are branch-only. Not applied o
 ## Non-actions
 
 No production SQL, Edge Function, Cloudflare Worker, n8n workflow, Shopify app or MailerSend account was changed. No secret values were read, created or copied. No customer email was sent.
+
+
+## Additional fail-closed condition
+
+The resolver currently returns MONETARY_USAGE_RESERVATION_REQUIRED before disclosing any Vault-held credentials. The existing positive cap amount is not a reservation. No delivery can proceed until an atomic monetary cap reservation and reconciliation workflow is implemented and tested.
