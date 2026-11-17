@@ -26,6 +26,20 @@ if [[ "$status_a" -ne 0 && "$status_b" -ne 0 ]]; then
   exit 1
 fi
 
+if [[ "$status_a" -ne 0 ]]; then
+  grep -q "merchant monetary usage cap would be exceeded" /tmp/henvalt-race-a.log || {
+    cat /tmp/henvalt-race-a.log
+    echo "Store A failed for a reason other than the serialized merchant cap." >&2
+    exit 1
+  }
+else
+  grep -q "merchant monetary usage cap would be exceeded" /tmp/henvalt-race-b.log || {
+    cat /tmp/henvalt-race-b.log
+    echo "Store B failed for a reason other than the serialized merchant cap." >&2
+    exit 1
+  }
+fi
+
 count=$("${psql_cmd[@]}" -Atc "SELECT count(*) FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE tenant_id='00000000-0000-4000-8000-000000000001' AND send_attempt_id IN (SELECT id FROM henvalt.shopify_recovery_send_attempt_v2 WHERE idempotency_key IN ('race-store-a-myshopify-com','race-store-b-myshopify-com')) AND status='RESERVED'")
 if [[ "$count" != "1" ]]; then
   cat /tmp/henvalt-race-a.log /tmp/henvalt-race-b.log
