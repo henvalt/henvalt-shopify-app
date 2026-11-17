@@ -1,6 +1,6 @@
 # Verified Shopify order conversion projection V2
 
-**Status:** branch-only candidate; migrations 001–021 passed disposable PostgreSQL CI run #276. Not applied or deployed.
+**Status:** branch-only candidate; migrations 001–022 passed disposable PostgreSQL CI run #293. Not applied or deployed.
 **Depends on:** candidate migrations 001–021.
 
 ## Purpose
@@ -24,5 +24,5 @@ An order created after checkout must suppress further abandoned-checkout recover
 - No legacy `orders`, `checkouts`, `customers`, `canonical_events`, recovery or billing table is written.
 - Existing tenant-only order uniqueness and V1 functions are unchanged.
 - A checkout webhook arriving after its order will require a follow-up reconciliation adapter; this migration does not infer or backfill an order-to-checkout relation.
-- Refunds (`refunds/create`) and order transaction events are still durably received but do not yet have a V2 projection/adjustment ledger. Refund-aware recovered-revenue attribution is therefore not ready.
+- Migration 022 adds an exact-store refund adjustment ledger from successful refund transactions, validates transaction currency against the matched order, and updates partial/full refund financial status. CI #293 passed duplicate-delivery and cumulative-refund tests. Order transaction events remain inbox-only; refund-aware attribution still needs a policy and fee ledger.
 - The V2 order table is not yet consumed by a recovery candidate reader. That reader must require exact connection lineage and should treat an order with a matching checkout token as conversion suppression.
