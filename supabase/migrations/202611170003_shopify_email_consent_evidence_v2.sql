@@ -100,7 +100,9 @@ DECLARE
   v_consent_at timestamptz;
   v_customer_id uuid;
   v_existing_at timestamptz;
-  v_received_at timestamptz;
+  v_existing_state text;
+  v_existing_observed_at timestamptz;
+  v_event_inserted integer;
 BEGIN
   IF p_route_token IS NULL OR length(p_route_token) < 40 OR length(p_route_token) > 128
      OR p_delivery_id IS NULL OR length(btrim(p_delivery_id)) = 0
@@ -176,8 +178,20 @@ BEGIN
   VALUES(v_route.tenant_id,v_route.connection_id,v_customer_id,v_route.receipt_id,
          v_state,v_opt_in,v_consent_at,v_route.received_at)
   ON CONFLICT(shopify_connection_id,source_delivery_id) DO NOTHING;
+  GET DIAGNOSTICS v_event_inserted = ROW_COUNT;
 
-  SELECT consent_updated_at INTO v_existing_at
+  -- A replay of an already-projected receipt must never re-apply stale consent.
+  IF v_event_inserted = 0 THEN
+    UPDATE henvalt.shopify_webhook_deliveries
+       SET processing_status='PROCESSED',processed_at=COALESCE(processed_at,pg_catalog.now()),
+           failure_code=NULL
+     WHERE id=v_route.receipt_id;
+    RETURN jsonb_build_object('accepted',true,'status','DUPLICATE',
+      'consent_state','UNCHANGED','recipient_pii_stored',false);
+  END IF;
+
+  SELECT consent_updated_at,marketing_state,observed_at
+    INTO v_existing_at,v_existing_state,v_existing_observed_at
   FROM henvalt.shopify_customer_email_consent_v2
   WHERE shopify_connection_id=v_route.connection_id AND customer_identity_id=v_customer_id
   FOR UPDATE;
@@ -190,12 +204,19 @@ BEGIN
     VALUES(v_route.tenant_id,v_route.connection_id,v_customer_id,
            CASE WHEN v_consent_at IS NULL THEN 'UNKNOWN' ELSE v_state END,
            v_opt_in,v_consent_at,v_route.received_at,v_route.receipt_id);
-  ELSIF v_consent_at IS NOT NULL AND (v_existing_at IS NULL OR v_consent_at>=v_existing_at) THEN
+  ELSIF v_consent_at IS NOT NULL AND (v_existing_at IS NULL OR v_consent_at>v_existing_at) THEN
     UPDATE henvalt.shopify_customer_email_consent_v2
        SET marketing_state=v_state,opt_in_level=v_opt_in,consent_updated_at=v_consent_at,
            observed_at=v_route.received_at,source_delivery_id=v_route.receipt_id
      WHERE shopify_connection_id=v_route.connection_id AND customer_identity_id=v_customer_id;
-  ELSIF v_consent_at IS NULL THEN
+  ELSIF v_consent_at IS NOT NULL AND v_consent_at=v_existing_at
+        AND v_state IS DISTINCT FROM v_existing_state THEN
+    -- Conflicting evidence at the same timestamp is ambiguous: fail closed.
+    UPDATE henvalt.shopify_customer_email_consent_v2
+       SET marketing_state='UNKNOWN',opt_in_level=NULL,observed_at=GREATEST(observed_at,v_route.received_at),
+           source_delivery_id=v_route.receipt_id
+     WHERE shopify_connection_id=v_route.connection_id AND customer_identity_id=v_customer_id;
+  ELSIF v_consent_at IS NULL AND v_route.received_at>=v_existing_observed_at THEN
     -- An event without an authoritative timestamp cannot establish current
     -- consent; fail closed rather than retaining a stale SUBSCRIBED state.
     UPDATE henvalt.shopify_customer_email_consent_v2
