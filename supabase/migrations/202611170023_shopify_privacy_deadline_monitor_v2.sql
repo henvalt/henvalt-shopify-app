@@ -23,8 +23,11 @@ SELECT
   j.lease_until,
   (sc.id IS NOT NULL) AS connection_binding_valid,
   (
-    r.topic = 'shop/redact'
-    OR (r.topic IN ('customers/data_request', 'customers/redact') AND r.customer_id IS NOT NULL)
+    sc.id IS NOT NULL
+    AND (
+      r.topic = 'shop/redact'
+      OR (r.topic IN ('customers/data_request', 'customers/redact') AND r.customer_id IS NOT NULL)
+    )
   ) AS customer_scope_complete,
   CASE
     WHEN j.state = 'COMPLETED' THEN 'COMPLETED'
