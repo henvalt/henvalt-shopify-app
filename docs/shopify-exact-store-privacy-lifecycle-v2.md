@@ -1,6 +1,6 @@
 # HENVALT exact-store privacy lifecycle V2
 
-**Status:** design gate only; no export, deletion, redaction or uninstall processor is implemented by this document. All work remains branch-only. The verified privacy webhook inbox currently records requests as `REVIEW_REQUIRED`.
+**Status:** customer export, customer redaction and shop redaction remain design-only. A separate candidate migration 020 now adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion; its disposable-PostgreSQL integration test is pending. All work remains branch-only. The privacy webhook inbox continues to record compliance requests as `REVIEW_REQUIRED`.
 
 ## 1. Non-negotiable scope
 
@@ -8,7 +8,7 @@
 - A customer request applies to that exact Shopify customer ID in that exact connection. A shop-redact request applies to that exact connection, not the tenant or its other stores.
 - Rows with `shopify_connection_id IS NULL`, missing connection lineage, or ambiguous legacy provenance are unresolved. Do not infer ownership from email, matching IDs across stores, checkout token, or JSON metadata.
 - A 200 from the privacy ingress currently means only that a verified receipt was durably recorded. It does not mean export or deletion completed.
-- Uninstall must immediately stop new processing and delivery for that connection; it is not a substitute for the separate privacy redaction request.
+- Uninstall must immediately stop new processing and delivery for that connection; it is not a substitute for the separate privacy redaction request. Candidate migration 020 implements the stop-only path after a verified `app/uninstalled` receipt, without deleting historical customer or accounting data.
 
 ## 2. Exact-store data inventory
 
@@ -101,4 +101,4 @@ Therefore a customer delete cannot safely be implemented as a single `DELETE FRO
 
 ## 7. Explicit non-actions
 
-No processor, export artifact, deletion function, retention migration, uninstall cutover, or production change is implemented here. The existing privacy ingress remains review-only. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
+No customer export, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only and remains unvalidated until its SQL integration test passes. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
