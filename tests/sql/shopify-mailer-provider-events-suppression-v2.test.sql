@@ -121,7 +121,7 @@ BEGIN
   ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention_late,v_provider_key,
     'store-b-send-late-002',NULL,'AUTHORIZED',NULL)
   RETURNING id INTO v_attempt_late;
-  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='SUBMITTED',provider_message_id='provider-message-late-002',submitted_at=now() WHERE id=v_attempt_late;
+  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='AMBIGUOUS',provider_message_id='provider-message-late-002',submitted_at=now() WHERE id=v_attempt_late;
 
   -- The exact same signed event can now correlate without creating a duplicate inbox row.
   v_result:=henvalt.ingest_mailersend_webhook_v2(
@@ -137,7 +137,10 @@ BEGIN
   ) OR NOT EXISTS(
     SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
     WHERE id=v_attempt_late AND status='DELIVERED' AND delivered_at IS NOT NULL
-  ) THEN RAISE EXCEPTION 'Late provider event correlation did not update exact send attempt'; END IF;
+  ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
+    WHERE send_attempt_id=v_attempt_late AND status='SETTLED'
+  ) THEN RAISE EXCEPTION 'Late provider event did not reconcile the ambiguous send and settle its cost'; END IF;
 
   IF EXISTS(
     SELECT 1 FROM information_schema.columns
