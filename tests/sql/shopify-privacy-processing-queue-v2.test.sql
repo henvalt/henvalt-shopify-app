@@ -213,6 +213,39 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'unlinked privacy receipt was incorrectly claimed';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_privacy_deadline_monitor_v2
+    WHERE receipt_id = v_unlinked_id
+      AND connection_binding_valid = false
+      AND customer_scope_complete = false
+      AND requires_attention = true
+      AND deadline_status = 'IDENTITY_REVIEW_REQUIRED'
+  ) THEN
+    RAISE EXCEPTION 'privacy deadline monitor did not flag unlinked customer request for review';
+  END IF;
+
+  UPDATE henvalt.shopify_privacy_webhook_deliveries
+     SET received_at = now() - interval '31 days'
+   WHERE id = v_unlinked_id;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_privacy_deadline_monitor_v2
+    WHERE receipt_id = v_unlinked_id
+      AND deadline_status = 'OVERDUE'
+      AND requires_attention = true
+      AND deadline_seconds_remaining < 0
+  ) THEN
+    RAISE EXCEPTION 'privacy deadline monitor did not flag overdue request';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_privacy_deadline_monitor_v2
+    WHERE receipt_id = v_a_id
+      AND deadline_status = 'COMPLETED'
+      AND requires_attention = false
+  ) THEN
+    RAISE EXCEPTION 'completed privacy request remained in the attention queue';
+  END IF;
 END;
 $test$;
 
