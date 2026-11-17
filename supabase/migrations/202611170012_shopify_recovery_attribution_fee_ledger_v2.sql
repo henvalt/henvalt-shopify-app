@@ -7,6 +7,17 @@ BEGIN;
 ALTER TABLE henvalt.shopify_recovery_send_attempt_v2
   ADD COLUMN IF NOT EXISTS delivered_at timestamptz;
 
+UPDATE henvalt.shopify_recovery_send_attempt_v2 a
+   SET delivered_at=e.occurred_at
+  FROM henvalt.shopify_mailer_provider_events_v2 e
+ WHERE e.send_attempt_id=a.id
+   AND e.tenant_id=a.tenant_id
+   AND e.shopify_connection_id=a.shopify_connection_id
+   AND e.processing_status='PROCESSED'
+   AND e.event_type='activity.delivered'
+   AND a.delivered_at IS NULL
+   AND e.occurred_at IS NOT NULL;
+
 CREATE UNIQUE INDEX IF NOT EXISTS shopify_recovery_intervention_v2_id_tenant_connection_uidx
   ON henvalt.shopify_recovery_intervention_v2(id,tenant_id,shopify_connection_id);
 
@@ -36,9 +47,9 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_recovery_attribution_policies_v2 (
     CHECK(revenue_basis IS NULL OR revenue_basis='SHOPIFY_TOTAL_PRICE'),
   CONSTRAINT shopify_recovery_attribution_policies_v2_enabled_check
     CHECK(NOT enabled OR (
-      attribution_window_hours BETWEEN 1 AND 720
-      AND touch_model IN ('FIRST_ELIGIBLE_TOUCH','LAST_ELIGIBLE_TOUCH')
-      AND revenue_basis='SHOPIFY_TOTAL_PRICE'
+      attribution_window_hours IS NOT NULL AND attribution_window_hours BETWEEN 1 AND 720
+      AND touch_model IS NOT NULL AND touch_model IN ('FIRST_ELIGIBLE_TOUCH','LAST_ELIGIBLE_TOUCH')
+      AND revenue_basis IS NOT NULL AND revenue_basis='SHOPIFY_TOTAL_PRICE'
       AND require_delivery_confirmation IS NOT NULL
     )),
   CONSTRAINT shopify_recovery_attribution_policies_v2_id_lineage_uidx
@@ -87,6 +98,8 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_recovery_attributions_v2 (
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_recovery_attributions_v2_order_uidx
     UNIQUE(shopify_connection_id,order_identity_id),
+  CONSTRAINT shopify_recovery_attributions_v2_opportunity_uidx
+    UNIQUE(shopify_connection_id,opportunity_id),
   CONSTRAINT shopify_recovery_attributions_v2_id_lineage_uidx
     UNIQUE(id,tenant_id,shopify_connection_id)
 );
@@ -147,8 +160,9 @@ BEGIN
   END IF;
   IF p_enabled IS TRUE AND (
     p_attribution_window_hours IS NULL OR p_attribution_window_hours NOT BETWEEN 1 AND 720
-    OR p_touch_model NOT IN ('FIRST_ELIGIBLE_TOUCH','LAST_ELIGIBLE_TOUCH')
-    OR p_revenue_basis<>'SHOPIFY_TOTAL_PRICE'
+    OR p_attribution_window_hours IS NULL
+    OR p_touch_model IS NULL OR p_touch_model NOT IN ('FIRST_ELIGIBLE_TOUCH','LAST_ELIGIBLE_TOUCH')
+    OR p_revenue_basis IS NULL OR p_revenue_basis<>'SHOPIFY_TOTAL_PRICE'
     OR p_require_delivery_confirmation IS NULL
   ) THEN
     RETURN jsonb_build_object('accepted',false,'code','ATTRIBUTION_POLICY_INCOMPLETE');
@@ -234,7 +248,8 @@ BEGIN
     v_status:='REVIEW_REQUIRED';
   END IF;
 
-  IF v_order.currency IS NULL OR pg_catalog.upper(v_order.currency)<>v_attr.currency THEN
+  IF v_order.total_value IS NULL OR v_order.total_value<=0
+     OR v_order.currency IS NULL OR pg_catalog.upper(v_order.currency)<>v_attr.currency THEN
     v_net:=0;
     v_status:='REVIEW_REQUIRED';
   END IF;
@@ -255,7 +270,9 @@ BEGIN
            WHEN v_status='REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED'
            WHEN v_status='REVERSED' AND f.status IN ('INVOICED','PAID','CREDIT_REQUIRED') THEN 'CREDIT_REQUIRED'
            WHEN v_status='REVERSED' THEN 'VOIDED'
+           WHEN f.status='CREDIT_REQUIRED' THEN 'CREDIT_REQUIRED'
            WHEN f.status IN ('INVOICED','PAID') AND f.fee_amount<>pg_catalog.round(v_net*f.henvalt_percentage/100,4) THEN 'CREDIT_REQUIRED'
+           WHEN f.status IN ('INVOICED','PAID') THEN f.status
            ELSE 'PENDING'
          END,
          updated_at=pg_catalog.now()
@@ -307,6 +324,7 @@ BEGIN
      OR length(v_order.currency)<>3
      OR v_order.currency ~ '[^A-Z]'
      OR v_order.cancelled_at IS NOT NULL
+     OR v_order.financial_status IS NULL
      OR v_order.financial_status NOT IN ('paid','partially_refunded') THEN
     RETURN jsonb_build_object('accepted',false,'code','ORDER_NOT_ATTRIBUTABLE');
   END IF;
@@ -331,6 +349,8 @@ BEGIN
     AND o.shopify_connection_id=v_order.shopify_connection_id
     AND o.checkout_identity_id=v_checkout.id
     AND o.status IN ('CONTACT_RESOLUTION_PENDING','CONVERTED')
+    AND (o.customer_identity_id IS NULL OR o.customer_identity_id=v_checkout.customer_identity_id)
+    AND (v_order.customer_identity_id IS NULL OR v_order.customer_identity_id=v_checkout.customer_identity_id)
   ORDER BY o.created_at DESC LIMIT 1;
   IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','RECOVERY_OPPORTUNITY_NOT_FOUND'); END IF;
 
