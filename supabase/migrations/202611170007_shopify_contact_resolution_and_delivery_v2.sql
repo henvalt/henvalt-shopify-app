@@ -72,6 +72,9 @@ BEGIN
   IF v_row.access_token_expires_at IS NULL OR v_row.access_token_expires_at<=pg_catalog.now()+interval '2 minutes'
     THEN RETURN jsonb_build_object('ready',false,'code','SHOPIFY_TOKEN_REFRESH_REQUIRED','shop_domain',v_row.shop_domain,'shopify_client_id',v_row.shopify_client_id); END IF;
 
+  -- Monetary provider-cost reservation is not implemented yet. Keep this boundary closed.
+  RETURN jsonb_build_object('ready',false,'code','MONETARY_USAGE_RESERVATION_REQUIRED');
+
   SELECT ds.decrypted_secret INTO v_access_token FROM vault.decrypted_secrets ds WHERE ds.id=v_row.access_token_secret_ref::uuid;
   SELECT ds.decrypted_secret INTO v_api_token FROM vault.decrypted_secrets ds WHERE ds.name=v_row.api_token_secret_ref OR ds.id::text=v_row.api_token_secret_ref LIMIT 1;
   SELECT ds.decrypted_secret INTO v_fingerprint_secret FROM vault.decrypted_secrets ds WHERE ds.name=v_row.recipient_fingerprint_secret_ref OR ds.id::text=v_row.recipient_fingerprint_secret_ref LIMIT 1;
