@@ -290,7 +290,7 @@ DECLARE
   v_tenant uuid:='00000000-0000-4000-8000-000000000001';
   v_store_a uuid; v_store_b uuid; v_customer_a uuid; v_opportunity_a uuid;
   v_intervention uuid; v_sender uuid; v_provider_key text;
-  v_route_a text:=repeat('c',64); v_route_b text:=repeat('d',64);
+  v_route_a text:=repeat('c',63)||'1'; v_route_b text:=repeat('d',63)||'2';
   v_body_a text:='{"shop_id":"1001","id":777001}';
   v_body_b text:='{"shop_id":"2002","id":777002}';
   v_hmac text; v_result record; v_delivery_id uuid;
