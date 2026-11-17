@@ -36,9 +36,14 @@ BEGIN
     RAISE EXCEPTION 'MailerSend suppression prerequisites missing';
   END IF;
 
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,status,test_mode,monthly_email_limit)
+  VALUES(v_tenant,'SHOPIFY','STARTER',0,5,10,'USD','ACTIVE',false,10)
+  ON CONFLICT(tenant_id) DO UPDATE SET status='ACTIVE',test_mode=false,henvalt_percentage=5,usage_cap_amount=10,currency='USD',monthly_email_limit=10;
+
   INSERT INTO henvalt.shopify_mailer_provider_registry_v2(
-    tenant_id,provider_account_key,mailersend_domain_id,webhook_secret_ref,recipient_fingerprint_secret_ref,status
-  ) VALUES(v_tenant,v_provider_key,'domain-123','test-mailersend-webhook-secret','test-recipient-fingerprint-key','PENDING');
+    tenant_id,provider_account_key,mailersend_domain_id,webhook_secret_ref,recipient_fingerprint_secret_ref,
+    email_unit_cost_amount,email_unit_cost_currency,status
+  ) VALUES(v_tenant,v_provider_key,'domain-123','test-mailersend-webhook-secret','test-recipient-fingerprint-key',0.01,'USD','PENDING');
 
   -- MailerSend URL validation uses its documented fixed test signing secret.
   v_signature:=encode(extensions.hmac(convert_to(v_test_body,'UTF8'),
@@ -62,8 +67,9 @@ BEGIN
     tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
     provider_account_key,idempotency_key,provider_message_id,status,submitted_at
   ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention,v_provider_key,
-    'store-b-send-001','provider-message-001','SUBMITTED',now())
+    'store-b-send-001',NULL,'AUTHORIZED',NULL)
   RETURNING id INTO v_attempt;
+  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='SUBMITTED',provider_message_id='provider-message-001',submitted_at=now() WHERE id=v_attempt;
 
   v_signature:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
   v_result:=henvalt.ingest_mailersend_webhook_v2(
@@ -113,8 +119,9 @@ BEGIN
     tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
     provider_account_key,idempotency_key,provider_message_id,status,submitted_at
   ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention_late,v_provider_key,
-    'store-b-send-late-002','provider-message-late-002','SUBMITTED',now())
+    'store-b-send-late-002',NULL,'AUTHORIZED',NULL)
   RETURNING id INTO v_attempt_late;
+  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='SUBMITTED',provider_message_id='provider-message-late-002',submitted_at=now() WHERE id=v_attempt_late;
 
   -- The exact same signed event can now correlate without creating a duplicate inbox row.
   v_result:=henvalt.ingest_mailersend_webhook_v2(
