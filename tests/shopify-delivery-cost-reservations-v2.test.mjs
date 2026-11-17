@@ -40,4 +40,5 @@ test('verified provider outcomes settle previously ambiguous send reservations',
   assert.match(reconciliationMigration, /NEW\.status IN \([\s\S]*?'SUBMITTED','DELIVERED','SOFT_BOUNCED','HARD_BOUNCED',[\s\S]*?'UNSUBSCRIBED','COMPLAINED'[\s\S]*?\) THEN 'SETTLED'/);
   assert.match(reconciliationMigration, /WHEN NEW\.status='FAILED' THEN 'RELEASED'/);
   assert.match(reconciliationMigration, /WHEN NEW\.status='AMBIGUOUS' THEN 'RESERVED'/);
+  assert.match(reconciliationMigration, /status IN \('RESERVED','SETTLED','RELEASED'\)/);
 });
