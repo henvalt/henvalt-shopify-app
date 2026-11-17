@@ -1,6 +1,6 @@
 # HENVALT exact-store privacy lifecycle V2
 
-**Status:** customer export, customer redaction and shop redaction remain design-only. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion; CI #259 passed its disposable-PostgreSQL integration test. All work remains branch-only. The privacy webhook inbox continues to record compliance requests as `REVIEW_REQUIRED`.
+**Status:** customer export, customer redaction and shop redaction remain design-only. Migration 025 adds a service-role-only, leased processing queue for verified privacy receipts, with exact-store claim validation, retry leases, hashed claim tokens and confirmed-completion gating. It does not export or delete data. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion. All work remains branch-only.
 
 ## 1. Non-negotiable scope
 
@@ -102,3 +102,17 @@ Therefore a customer delete cannot safely be implemented as a single `DELETE FRO
 ## 7. Explicit non-actions
 
 No customer export, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only; migrations 001–020 and the exact-store uninstall integration test passed CI #259. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
+
+## 8. Processing queue added (migration 025)
+
+The queue is deliberately an orchestration boundary, not a privacy processor:
+
+- Each verified receipt gets one job keyed by the immutable receipt UUID. The queue does not duplicate the customer ID.
+- Only receipts with a non-null exact connection/tenant link and the required topic fields become READY. Missing/ambiguous lineage stays REVIEW_REQUIRED.
+- Claims join the receipt to the exact connection on connection ID, tenant ID, app key and shop domain; there is no tenant-wide or shop-domain-only fallback.
+- Claims use `FOR UPDATE SKIP LOCKED`, a bounded 60–900 second lease, a one-time random claim token, and SHA-256-only token storage. Expired claims can be reclaimed; attempts are capped at ten.
+- Completion requires an explicit processor-confirmed boolean, a current unexpired claim and matching token. The receipt's raw customer ID is cleared only after confirmed completion; the body digest and routing audit remain.
+- Retryable failures return to READY; non-retryable failures remain FAILED. Unlinked receipts cannot be claimed.
+- Queue table and RPCs are inaccessible to browser roles; only service_role can execute claim/complete/fail functions.
+
+The queue does **not** prove an export was delivered or a redaction was performed. The future processor must perform and verify the relevant operation before calling completion. Export delivery, customer anonymization, suppression-retention decisions, shop-redact deletion ordering and the associated end-to-end tests remain open.
