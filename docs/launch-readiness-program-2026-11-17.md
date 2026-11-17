@@ -87,7 +87,7 @@ Exit evidence: two real test stores can reuse checkout/customer/order identifier
 
 ### C. Recovery eligibility, contact resolution and consent
 
-Status: eligibility candidate in migration 012 and exact-store opportunity promotion candidate in migration 013; contact resolution and V2 recovery sequence are not implemented. A branch-only exact-store consent evidence projector (migration 014) and checkout-country projector (migration 015) are now prepared; neither is applied or deployed.
+Status: eligibility candidate in migration 012 and exact-store opportunity promotion candidate in migration 013; contact resolution and V2 recovery sequence are not implemented. Branch-only candidates now include exact-store consent evidence (migration 014), checkout-country projection (015), and MailerSend provider-event/suppression foundation (016); none is applied or deployed.
 
 Required:
 1. Use the V2 exact-store candidate and opportunity layers, not legacy tenant-wide candidate readers.
@@ -108,6 +108,7 @@ Required:
 1. Keep exactly three n8n workflows.
 2. Add a V2 adapter only after the full opportunity/intervention/contact chain is store-safe.
 3. Authorize each send server-side immediately before provider submission, verifying same-store lineage, current consent, suppression, idempotency and active entitlement.
+4. Use MailerSend webhook version 2 only; MailerSend documents version 1 stops working on 1 December 2026. Verify the raw-body Signature header and map provider events through exact send-attempt IDs.
 4. Keep provider credentials server-side and merchant sender identity verified.
 5. Prove delivery, bounce, complaint, unsubscribe and provider-event idempotency.
 6. Keep customer replies as human-reviewed drafts for initial launch; do not auto-send AI replies.
@@ -213,3 +214,14 @@ No production Supabase migration, database write, Edge Function deployment, Clou
 - Added disposable SQL integration coverage for consent replay/order/timestamp conflicts and known/unknown checkout country.
 - Added recipient resolution and single-use delivery authorization contract. The existing deployed MailerSend endpoint is explicitly excluded from V2 because it trusts caller-supplied recipient email and legacy tenant-scoped authorization.
 - Shopify public app must request Level 2 protected customer data approval for email field before public production use. Development-store field selection is not production approval.
+
+
+## Additional provider-event work — 17 November 2026
+
+- Migration 016 adds exact-store intervention and send-attempt lineage, a MailerSend provider registry with Vault secret references, minimal provider-event inbox and exact-store unsubscribe/complaint/hard-bounce suppression.
+- Candidate MailerSend webhook Edge Function verifies the raw-body `Signature` HMAC through the Vault-backed SQL RPC. It stores only provider IDs, event type, timestamps, body digest and exact-store mapping; recipient email is never persisted.
+- Recipient address fingerprint uses a separate keyed HMAC secret, not an unsalted email hash. The two required Vault secrets are not provisioned yet.
+- Provider events that arrive before a send attempt is correlated remain UNMATCHED; same-body retries may resolve later; changed-body reuse of an event ID is rejected.
+- MailerSend V1 webhook deprecation deadline is 1 December 2026. HENVALT must use V2 for new webhook configuration.
+- GitHub Actions run #139 passed all static contract tests, disposable PostgreSQL migrations 001–016, and all SQL integration tests including cross-store suppression. Shopify configuration run #417 passed static checks and its database migration validation; Shopify deployment was skipped.
+- No provider webhook was created, no Vault secret was seeded, and no production function or database was changed.
