@@ -34,9 +34,9 @@ DECLARE
   v_changed_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","changed":true}';
   v_changed_hmac text;
   v_result record;
-  v_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
+  v_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765},"orders_requested":[299938,280263,220458]}';
   v_privacy_hmac text;
-  v_changed_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765},"changed":true}';
+  v_changed_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765},"orders_requested":[299938,280263,220458],"changed":true}';
   v_changed_privacy_hmac text;
   v_second_shop_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"2002","customer":{"id":12345},"data_request":{"id":98765}}';
   v_second_shop_hmac text;
