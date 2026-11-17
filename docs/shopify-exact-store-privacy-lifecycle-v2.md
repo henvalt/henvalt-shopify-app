@@ -1,6 +1,6 @@
 # HENVALT exact-store privacy lifecycle V2
 
-**Status:** customer export, customer redaction and shop redaction remain design-only. A separate candidate migration 020 now adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion; its disposable-PostgreSQL integration test is pending. All work remains branch-only. The privacy webhook inbox continues to record compliance requests as `REVIEW_REQUIRED`.
+**Status:** customer export, customer redaction and shop redaction remain design-only. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion; CI #259 passed its disposable-PostgreSQL integration test. All work remains branch-only. The privacy webhook inbox continues to record compliance requests as `REVIEW_REQUIRED`.
 
 ## 1. Non-negotiable scope
 
@@ -101,4 +101,4 @@ Therefore a customer delete cannot safely be implemented as a single `DELETE FRO
 
 ## 7. Explicit non-actions
 
-No customer export, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only and remains unvalidated until its SQL integration test passes. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
+No customer export, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only; migrations 001–020 and the exact-store uninstall integration test passed CI #259. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
