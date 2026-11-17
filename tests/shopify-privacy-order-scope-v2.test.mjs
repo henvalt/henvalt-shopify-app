@@ -9,7 +9,7 @@ test("privacy order scope is minimal, exact-receipt-bound and inaccessible to cl
   assert.match(migration, /FOREIGN KEY \(receipt_id\)[\s\S]*shopify_privacy_webhook_deliveries\(id\)/);
   assert.match(migration, /REVOKE ALL ON henvalt\.shopify_privacy_webhook_order_scope_v2[\s\S]*FROM PUBLIC, anon, authenticated, service_role/);
   assert.match(migration, /GRANT SELECT, INSERT ON henvalt\.shopify_privacy_webhook_order_scope_v2 TO service_role/);
-  const tableDdl = migration.slice(migration.indexOf("CREATE TABLE IF NOT EXISTS henvalt.shopify_privacy_webhook_order_scope_v2"), migration.indexOf("CREATE INDEX IF NOT EXISTS henvalt.shopify_privacy_webhook_order_scope_v2_lookup_idx"));
+  const tableDdl = migration.slice(migration.indexOf("CREATE TABLE IF NOT EXISTS henvalt.shopify_privacy_webhook_order_scope_v2"), migration.indexOf("CREATE INDEX IF NOT EXISTS shopify_privacy_webhook_order_scope_v2_lookup_idx"));
   assert.doesNotMatch(tableDdl, /email|phone|raw_body|payload/i);
 });
 
