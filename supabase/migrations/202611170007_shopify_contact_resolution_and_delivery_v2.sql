@@ -51,9 +51,10 @@ BEGIN
      OR v_row.connection_app_key IS DISTINCT FROM v_row.app_key OR v_row.tenant_status<>'ACTIVE'
     THEN RETURN jsonb_build_object('ready',false,'code','APP_STORE_OR_TENANT_INACTIVE'); END IF;
   IF v_row.shop_domain !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$' OR v_row.token_type<>'offline_expiring'
-     OR v_row.reauth_required_at IS NOT NULL OR NOT ('read_customers'=ANY(v_row.scopes))
+     OR v_row.reauth_required_at IS NOT NULL OR coalesce('read_customers'=ANY(v_row.scopes),false) IS NOT TRUE
     THEN RETURN jsonb_build_object('ready',false,'code','SHOPIFY_CUSTOMER_ACCESS_UNAVAILABLE'); END IF;
   IF v_row.checkout_status<>'OPEN' OR v_row.shopify_checkout_token IS DISTINCT FROM v_row.checkout_token
+     OR v_row.jurisdiction_country_code IS NULL
      OR v_row.jurisdiction_country_code NOT IN ('GB','US','CA','AU')
     THEN RETURN jsonb_build_object('ready',false,'code','CHECKOUT_OR_JURISDICTION_INELIGIBLE'); END IF;
   IF EXISTS(SELECT 1 FROM henvalt.shopify_order_identity_v2 o WHERE o.tenant_id=v_row.tenant_id AND o.shopify_connection_id=v_row.shopify_connection_id AND o.checkout_token=v_row.checkout_token)
