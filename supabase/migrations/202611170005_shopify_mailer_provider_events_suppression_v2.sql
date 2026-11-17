@@ -214,6 +214,7 @@ BEGIN
   IF pg_catalog.octet_length(v_body)=0 OR pg_catalog.octet_length(v_body)>2097152 THEN
     RETURN jsonb_build_object('accepted',false,'code','INVALID_BODY_SIZE');
   END IF;
+  v_event_type:=NULLIF(v_payload->>'type','');
 
   SELECT r.id,r.tenant_id,r.mailersend_domain_id,r.webhook_secret_ref,
          r.recipient_fingerprint_secret_ref,r.status
@@ -221,7 +222,7 @@ BEGIN
   FROM henvalt.shopify_mailer_provider_registry_v2 r
   WHERE r.provider_account_key=p_provider_account_key
   FOR UPDATE;
-  IF NOT FOUND OR v_provider.status<>'ACTIVE' THEN
+  IF NOT FOUND OR (v_provider.status<>'ACTIVE' AND NOT (v_provider.status='PENDING' AND v_event_type='webhook.test')) THEN
     RETURN jsonb_build_object('accepted',false,'code','PROVIDER_ACCOUNT_INACTIVE');
   END IF;
 
