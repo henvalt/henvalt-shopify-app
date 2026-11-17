@@ -116,3 +116,20 @@ The queue is deliberately an orchestration boundary, not a privacy processor:
 - Queue table and RPCs are inaccessible to browser roles; only service_role can execute claim/complete/fail functions.
 
 The queue does **not** prove an export was delivered or a redaction was performed. The future processor must perform and verify the relevant operation before calling completion. Export delivery, customer anonymization, suppression-retention decisions, shop-redact deletion ordering and the associated end-to-end tests remain open.
+
+## 9. Exact-store customer export draft (migration 026)
+
+Migration 026 adds `henvalt.build_shopify_customer_privacy_export_v2(receipt_id, claim_token)`:
+
+- It accepts only a live, unexpired claim for a verified `customers/data_request` receipt.
+- It re-binds receipt → connection using immutable connection ID, tenant ID, app key and shop domain, then resolves the customer identity by exact connection + Shopify customer reference.
+- It exports the V2 records positively linked to that customer: sessions and aliases, pixel activity, checkouts, recovery candidates/opportunities, consent state/history, interventions, delivery attempts/permits/suppressions, provider events, orders/refunds, recovered-revenue attribution and associated fee measurements.
+- It does not export recipient fingerprint bytes, permit-token hashes, provider credentials, Vault references or unrelated merchant/store data.
+- A customer reference existing in another store in the same tenant is not included.
+- The export is a JSON draft returned only to `service_role`. It is not emailed, downloaded by a customer, or marked complete by this function.
+- It deliberately sets `legacy_scope_review_required=true` and `completion_eligible=false`. Historical tenant-scoped records without immutable store lineage remain unresolved and must be reviewed before HENVALT can claim the request is complete.
+- No delete or completion operation is called.
+
+CI includes a two-store test where both stores use the same Shopify customer ID but have distinct sessions and aliases. The export for Store A must not contain Store B's session or alias, and a Store B claim token must not access Store A's export.
+
+Open before launch: reconcile legacy tenant-scoped customer/session/checkout/event records, review the exported field list with applicable privacy requirements, implement secure export delivery/retention, and only then permit completion.
