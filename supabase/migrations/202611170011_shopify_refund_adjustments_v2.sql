@@ -236,7 +236,7 @@ BEGIN
 
   IF v_order.total_value IS NOT NULL AND v_order.total_value>0
      AND pg_catalog.upper(v_order.currency)=v_currency
-     AND v_order.financial_status NOT IN ('voided','cancelled') THEN
+     AND COALESCE(v_order.financial_status,'') NOT IN ('voided','cancelled') THEN
     UPDATE henvalt.shopify_order_identity_v2
        SET financial_status=CASE
          WHEN v_total_refunded>=v_order.total_value THEN 'refunded'
