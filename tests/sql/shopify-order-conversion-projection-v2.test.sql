@@ -142,3 +142,69 @@ BEGIN
   ) THEN RAISE EXCEPTION 'Order cancellation did not preserve exact-store checkout lineage and update state'; END IF;
 END;
 $order_lifecycle_v2$;
+
+
+-- Refund transactions reduce exact-store recovered-order value idempotently.
+DO $refund_v2$
+DECLARE
+  v_token text:=repeat('c',64);
+  v_body text;
+  v_hmac text;
+  v_result record;
+  v_projection jsonb;
+  v_order_id uuid;
+  v_count integer;
+  v_total numeric(18,4);
+BEGIN
+  v_body:='{"id":333,"order_id":987654,"created_at":"2026-11-17T11:00:00Z","transactions":[{"id":1,"kind":"refund","status":"success","amount":"25.00","currency":"GBP"}]}';
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-b.myshopify.com','refunds/create','refund-delivery-b-001','refund-event-b-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Refund receipt rejected: %',row_to_json(v_result); END IF;
+  v_projection:=henvalt.project_verified_shopify_refund_v2(v_token,'refund-delivery-b-001',encode(convert_to(v_body,'UTF8'),'base64'));
+  IF v_projection->>'accepted'<>'true' OR v_projection->>'status'<>'PROCESSED' THEN
+    RAISE EXCEPTION 'Refund transaction not projected: %',v_projection;
+  END IF;
+
+  SELECT id INTO v_order_id FROM henvalt.shopify_order_identity_v2
+   WHERE shopify_connection_id=(SELECT id FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com')
+     AND shopify_order_id='987654';
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_order_identity_v2
+    WHERE id=v_order_id AND financial_status='partially_refunded'
+  ) THEN RAISE EXCEPTION 'Partial refund did not update order financial status'; END IF;
+
+  -- Duplicate delivery of the same refund cannot double-count the adjustment.
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-b.myshopify.com','refunds/create','refund-delivery-b-001','refund-event-b-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Duplicate refund receipt was not idempotent: %',row_to_json(v_result);
+  END IF;
+  v_projection:=henvalt.project_verified_shopify_refund_v2(v_token,'refund-delivery-b-001',encode(convert_to(v_body,'UTF8'),'base64'));
+
+  v_body:='{"id":334,"order_id":987654,"created_at":"2026-11-17T11:30:00Z","transactions":[{"id":2,"kind":"refund","status":"success","amount":"50.00","currency":"GBP"}]}';
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-b.myshopify.com','refunds/create','refund-delivery-b-002','refund-event-b-002'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Second refund receipt rejected: %',row_to_json(v_result); END IF;
+  v_projection:=henvalt.project_verified_shopify_refund_v2(v_token,'refund-delivery-b-002',encode(convert_to(v_body,'UTF8'),'base64'));
+  IF v_projection->>'accepted'<>'true' THEN RAISE EXCEPTION 'Second refund not projected: %',v_projection; END IF;
+
+  SELECT count(*),sum(refund_amount) INTO v_count,v_total
+  FROM henvalt.shopify_order_refund_adjustments_v2
+  WHERE order_identity_id=v_order_id;
+  IF v_count<>2 OR v_total<>75.00 THEN
+    RAISE EXCEPTION 'Refund adjustment ledger is not idempotent: count %, total %',v_count,v_total;
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_order_identity_v2
+    WHERE id=v_order_id AND financial_status='refunded'
+  ) THEN RAISE EXCEPTION 'Full refund did not update order financial status'; END IF;
+END;
+$refund_v2$;
