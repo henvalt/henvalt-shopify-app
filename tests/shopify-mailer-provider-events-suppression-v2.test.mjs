@@ -7,6 +7,8 @@ const docs=readFileSync("docs/v2-mailersend-provider-events-and-suppression.md",
 test("MailerSend webhook uses raw-body V2 signature and Vault-backed verification",()=>{
  assert.match(migration,/vault\.decrypted_secrets/);
  assert.match(migration,/extensions\.hmac\(v_body/);
+ assert.match(migration,/WEBHOOK_TEST_VERIFIED/);
+ assert.match(migration,/test_Am3L3GuOIc4blLUuHqAPxxwkZaJyEk5/);
  assert.match(edge,/req\.headers\.get\("signature"\)/);
  assert.match(edge,/p_raw_body_base64/);
 });
@@ -29,4 +31,5 @@ test("provider event retries are idempotent and unmatched events can later be co
  const sql=readFileSync("tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql","utf8");
  assert.match(sql,/Unmatched provider event did not correlate on retry/);
  assert.match(sql,/Late provider event correlation did not update exact send attempt/);
+ assert.match(sql,/MailerSend URL-validation test was not safely accepted/);
 });
