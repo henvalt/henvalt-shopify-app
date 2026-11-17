@@ -33,6 +33,13 @@ test("missing customer identity or amount/currency is quarantined for review", (
   assert.match(migration, /ELSE 'REVIEW_REQUIRED'/);
 });
 
+test("a later order or inactive checkout closes only its same-store opportunity", () => {
+  assert.match(migration, /o\\.shopify_connection_id = c\\.shopify_connection_id/);
+  assert.match(migration, /o\\.checkout_token = c\\.checkout_token/);
+  assert.match(migration, /SET status = 'CONVERTED'/);
+  assert.match(migration, /SET status = 'CLOSED'/);
+});
+
 test("promotion is bounded, idempotent, service-only and cannot authorize delivery", () => {
   assert.match(migration, /p_limit < 1 OR p_limit > 500/);
   assert.match(migration, /UNIQUE \(candidate_id\)/);
