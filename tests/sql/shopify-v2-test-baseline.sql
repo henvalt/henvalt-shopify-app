@@ -42,6 +42,25 @@ CREATE TABLE henvalt.tenants (
   status text NOT NULL DEFAULT 'ACTIVE'
 );
 
+CREATE TABLE henvalt.billing_accounts (
+  tenant_id uuid PRIMARY KEY REFERENCES henvalt.tenants(id),
+  provider text NOT NULL DEFAULT 'SHOPIFY',
+  plan_key text NOT NULL DEFAULT 'STARTER',
+  recurring_amount numeric NOT NULL DEFAULT 0,
+  henvalt_percentage numeric NOT NULL DEFAULT 0,
+  usage_cap_amount numeric NOT NULL DEFAULT 0,
+  currency character(3) NOT NULL DEFAULT 'USD',
+  provider_subscription_id text UNIQUE,
+  usage_line_item_id text,
+  status text NOT NULL DEFAULT 'PENDING',
+  test_mode boolean NOT NULL DEFAULT false,
+  activated_at timestamptz,
+  cancelled_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  monthly_email_limit integer NOT NULL DEFAULT 2000
+);
+
 CREATE TABLE henvalt.pixel_keys (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
