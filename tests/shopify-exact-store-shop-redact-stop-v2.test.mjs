@@ -31,7 +31,7 @@ test("shop/redact remains queued for review and never claims deletion completed"
   assert.match(migration, /SET processing_status = 'PROCESSING'/);
   assert.match(migration, /AND processing_status = 'REVIEW_REQUIRED'/);
   assert.match(integration, /shop-redact-stop-store-a-2026-11-17/);
-  assert.match(integration, /shop\\/redact stop leaked into another store/i);
+  assert.match(integration, /shop\/redact stop leaked into another store/i);
   assert.match(integration, /v_processed_at IS NOT NULL/);
   assert.match(integration, /ROLLBACK/);
 });
