@@ -73,7 +73,7 @@ Exit evidence: a real Partner-owned app installation completes OAuth, persists c
 
 ### B. Verified Shopify ingestion and exact-store identity
 
-Status: candidate migrations 001–012 passed disposable-database validation; migration 013 opportunity promotion is undergoing its first integration run; none are live.
+Status: candidate migrations 001–013 passed disposable-database validation and two-store SQL integration tests; none are live.
 
 Required:
 1. Apply only after production-schema parity review and separate approval.
