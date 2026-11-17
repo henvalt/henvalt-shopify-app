@@ -99,17 +99,12 @@ BEGIN
 
   UPDATE henvalt.shopify_privacy_webhook_deliveries
      SET processing_status = 'PROCESSING',
-         failure_code = NULL,
-         metadata = COALESCE(metadata, '{}'::jsonb)
-           || jsonb_build_object(
-             'shop_redact_stop_processor', 'EXACT_STORE_V2',
-             'shop_redact_data_deleted', false,
-             'shop_redact_requires_review', true
-           )
+         failure_code = NULL
    WHERE id = NEW.id
      AND connection_id = NEW.connection_id
      AND tenant_id = NEW.tenant_id
-     AND app_key = NEW.app_key;
+     AND app_key = NEW.app_key
+     AND processing_status = 'REVIEW_REQUIRED';
 
   RETURN NEW;
 END;
