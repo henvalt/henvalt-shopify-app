@@ -23,6 +23,7 @@ jobs:
           node --experimental-strip-types --check supabase/functions/henvalt-shopify-oauth-v2/index.ts
           node --experimental-strip-types --check supabase/functions/henvalt-shopify-privacy-v2/index.ts
           node --experimental-strip-types --check supabase/functions/henvalt-shopify-webhook-ingress/index.ts
+  node --experimental-strip-types --check supabase/functions/henvalt-mailersend-webhook-v2/index.ts
           node --check cloudflare/worker.js
       - name: Test Shopify webhook security boundaries
         run: node --test tests/webhook-forwarding.test.mjs tests/shopify-hmac.test.mjs tests/worker-to-n8n-forwarding.test.mjs tests/n8n-receiver-contract.test.mjs
