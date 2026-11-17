@@ -297,9 +297,14 @@ BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
   SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2
     WHERE shopify_connection_id=v_store_a AND external_customer_reference='12345';
-  SELECT id INTO v_opportunity_a FROM henvalt.shopify_recovery_opportunity_v2
-    WHERE shopify_connection_id=v_store_a AND customer_identity_id=v_customer_a
-    ORDER BY created_at DESC LIMIT 1;
+  SELECT o.id INTO v_opportunity_a
+  FROM henvalt.shopify_recovery_opportunity_v2 o
+  JOIN henvalt.shopify_checkout_identity_v2 c
+    ON c.id=o.checkout_identity_id AND c.tenant_id=o.tenant_id
+   AND c.shopify_connection_id=o.shopify_connection_id
+  WHERE o.shopify_connection_id=v_store_a AND o.customer_identity_id=v_customer_a
+    AND c.shopify_checkout_token='shared-checkout-token'
+  ORDER BY o.created_at DESC LIMIT 1;
   SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
     WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
   IF v_store_a IS NULL OR v_customer_a IS NULL OR v_opportunity_a IS NULL OR v_provider_key IS NULL THEN
