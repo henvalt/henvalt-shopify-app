@@ -55,13 +55,13 @@ BEGIN
     RAISE EXCEPTION 'redaction guard prerequisites missing';
   END IF;
 
-  SELECT candidate INTO v_step
-  FROM generate_series(1,10) AS candidate
+  SELECT steps.n INTO v_step
+  FROM generate_series(1,10) AS steps(n)
   WHERE NOT EXISTS (
     SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
     WHERE i.opportunity_id=v_opportunity_b AND i.step_number=candidate
   )
-  ORDER BY candidate
+  ORDER BY steps.n
   LIMIT 1;
   IF v_step IS NULL THEN
     RAISE EXCEPTION 'no unused intervention step available for redaction guard test';
