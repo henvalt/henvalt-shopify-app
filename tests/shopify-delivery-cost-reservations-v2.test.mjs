@@ -28,5 +28,5 @@ test('delivery context preflights configured provider cost before releasing secr
   assert.match(migration, /pr\.email_unit_cost_currency/);
   assert.match(migration, /email_unit_cost_currency <> pg_catalog\.upper/);
   assert.doesNotMatch(migration, /MONETARY_USAGE_RESERVATION_REQUIRED/);
-  assert.match(migration, /consume inserts[\s\S]*?migration-019 trigger reserves merchant-wide cost atomically/);
+  assert.match(migration, /consume inserts[\s\S]*?migration-019 trigger reserves merchant-wide cost[\s\S]*?atomically/);
 });
