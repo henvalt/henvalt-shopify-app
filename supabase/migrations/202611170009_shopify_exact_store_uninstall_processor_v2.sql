@@ -1,5 +1,5 @@
 -- HENVALT exact-store Shopify app/uninstalled processor V2.
--- PREPARATION ONLY. Depends on candidate migrations 001, 006, 009, 012, 015 and 017.
+-- PREPARATION ONLY. Depends on candidate migrations 001-019 and the baseline pixel_keys table.
 -- Runs only after the route-token + app-secret HMAC inbox has inserted a verified receipt.
 -- It stops one connection; it does not delete merchant data or other stores.
 
