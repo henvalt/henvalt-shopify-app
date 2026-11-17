@@ -52,3 +52,10 @@ The current V2 receipt schema records the exact connection, app, shop, topic, we
 ## Release gate
 
 Do not submit or release the public app until the three compliance topics are configured on the Partner-owned app, bad HMAC behavior is verified, the secure export path works, exact-store customer/shop redaction is implemented and tested, unresolved legacy records have a documented disposition, and the 30-day operational process is staffed. No production rollout is authorized by this document.
+
+
+## Verified order-scope preservation (candidate migration 021)
+
+The candidate migration `202611170021_shopify_privacy_order_scope_v2.sql` adds a service-role-only child table keyed by the verified privacy receipt. It stores `orders_requested[]` as `REQUESTED` and `orders_to_redact[]` as `TO_REDACT`, preserving array order and numeric Shopify IDs while rejecting malformed, duplicate, zero, negative, oversized, or over-limit arrays. The receipt's body digest remains the idempotency evidence; repeated identical deliveries do not create duplicate order rows, and changed-body reuse remains rejected.
+
+This is scope preservation only. It does not yet prove that HENVALT owns every requested order record, does not fetch or export Shopify order data, does not execute deletion, and does not authorize completion. Exact-store processors must separately verify each requested order against the same immutable connection before acting. Email-only customer requests remain review-only.
