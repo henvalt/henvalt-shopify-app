@@ -130,6 +130,6 @@ Migration 026 adds `henvalt.build_shopify_customer_privacy_export_v2(receipt_id,
 - It deliberately sets `legacy_scope_review_required=true` and `completion_eligible=false`. Historical tenant-scoped records without immutable store lineage remain unresolved and must be reviewed before HENVALT can claim the request is complete.
 - No delete or completion operation is called.
 
-CI includes a two-store test where both stores use the same Shopify customer ID but have distinct sessions and aliases. The export for Store A must not contain Store B's session or alias, and a Store B claim token must not access Store A's export.
+Identity V2 CI run #393 passed migrations 001–026 and the full disposable PostgreSQL suite, including the two-store export test where both stores use the same Shopify customer ID but have distinct sessions and aliases. The export for Store A did not contain Store B's session or alias, and a Store B claim token could not access Store A's export.
 
 Open before launch: reconcile legacy tenant-scoped customer/session/checkout/event records, review the exported field list with applicable privacy requirements, implement secure export delivery/retention, and only then permit completion.
