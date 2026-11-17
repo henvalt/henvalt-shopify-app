@@ -282,3 +282,135 @@ BEGIN
   END IF;
 END;
 $reservation_v2$;
+
+
+-- Exact-store app/uninstalled processing (migration 020).
+DO $uninstall_v2$
+DECLARE
+  v_tenant uuid:='00000000-0000-4000-8000-000000000001';
+  v_store_a uuid; v_store_b uuid; v_customer_a uuid; v_opportunity_a uuid;
+  v_intervention uuid; v_sender uuid; v_provider_key text;
+  v_route_a text:=repeat('c',64); v_route_b text:=repeat('d',64);
+  v_body_a text:='{"shop_id":"1001","id":777001}';
+  v_body_b text:='{"shop_id":"2002","id":777002}';
+  v_hmac text; v_result record; v_delivery_id uuid;
+BEGIN
+  SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
+  SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
+  SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2
+    WHERE shopify_connection_id=v_store_a AND external_customer_reference='12345';
+  SELECT id INTO v_opportunity_a FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE shopify_connection_id=v_store_a AND customer_identity_id=v_customer_a
+    ORDER BY created_at DESC LIMIT 1;
+  SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
+    WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
+  IF v_store_a IS NULL OR v_store_b IS NULL OR v_customer_a IS NULL
+     OR v_opportunity_a IS NULL OR v_provider_key IS NULL THEN
+    RAISE EXCEPTION 'Uninstall integration prerequisites missing';
+  END IF;
+
+  -- Re-enable Store B only as a synthetic isolation control for this final test.
+  UPDATE henvalt.shopify_connections SET active=true WHERE id=v_store_b AND tenant_id=v_tenant;
+  UPDATE henvalt.shopify_pixel_keys_v2 SET active=true WHERE false;
+  UPDATE henvalt.pixel_keys SET active=true,revoked_at=NULL
+   WHERE tenant_id=v_tenant AND shopify_connection_id IN (v_store_a,v_store_b);
+
+  INSERT INTO henvalt.pixel_keys(tenant_id,key_digest,allowed_origins,active,revoked_at,shopify_connection_id)
+  VALUES
+    (v_tenant,repeat('c',64),ARRAY['https://store-a.example'],true,NULL,v_store_a),
+    (v_tenant,repeat('d',64),ARRAY['https://store-b.example'],true,NULL,v_store_b);
+
+  INSERT INTO henvalt.shopify_webhook_route_tokens(tenant_id,connection_id,app_key,token_hash)
+  VALUES
+    (v_tenant,v_store_a,'test_app',encode(extensions.digest(convert_to(v_route_a,'UTF8'),'sha256'),'hex')),
+    (v_tenant,v_store_b,'test_app',encode(extensions.digest(convert_to(v_route_b,'UTF8'),'sha256'),'hex'));
+
+  UPDATE henvalt.shopify_checkout_recovery_candidate_v2
+     SET state='READY_FOR_CONTACT_RESOLUTION'
+   WHERE shopify_connection_id=v_store_a AND tenant_id=v_tenant;
+  UPDATE henvalt.shopify_recovery_opportunity_v2
+     SET status='CONTACT_RESOLUTION_PENDING'
+   WHERE id=v_opportunity_a AND tenant_id=v_tenant AND shopify_connection_id=v_store_a;
+
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,
+    step_number,status,scheduled_at
+  ) VALUES(v_tenant,v_store_a,v_opportunity_a,v_customer_a,10,'READY_FOR_AUTHORIZATION',now())
+  RETURNING id INTO v_intervention;
+
+  INSERT INTO henvalt.shopify_sender_profiles_v2(
+    tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,status,verified_at
+  ) VALUES(v_tenant,v_store_a,v_provider_key,'recovery@henvalt.test','HENVALT','ACTIVE',now())
+  RETURNING id INTO v_sender;
+
+  INSERT INTO henvalt.shopify_delivery_permits_v2(
+    tenant_id,shopify_connection_id,intervention_id,customer_identity_id,
+    provider_account_key,sender_profile_id,permit_token_sha256,recipient_fingerprint,expires_at
+  ) VALUES(
+    v_tenant,v_store_a,v_intervention,v_customer_a,v_provider_key,v_sender,
+    encode(extensions.digest(convert_to(repeat('e',64),'UTF8'),'sha256'),'hex'),
+    decode(repeat('ab',32),'hex'),now()+interval '3 minutes'
+  );
+
+  v_hmac:=encode(extensions.hmac(convert_to(v_body_a,'UTF8'),
+    convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_route_a,v_hmac,encode(convert_to(v_body_a,'UTF8'),'base64'),
+    'store-a.myshopify.com','app/uninstalled','uninstall-store-a-001','uninstall-event-a-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM true OR v_result.duplicate IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'Verified Store A uninstall was not accepted: %',row_to_json(v_result);
+  END IF;
+
+  SELECT id INTO v_delivery_id FROM henvalt.shopify_webhook_deliveries
+   WHERE connection_id=v_store_a AND shopify_delivery_id='uninstall-store-a-001';
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_webhook_deliveries
+    WHERE id=v_delivery_id AND processing_status='PROCESSED'
+      AND metadata->>'uninstall_processor'='EXACT_STORE_V2'
+  ) THEN RAISE EXCEPTION 'Uninstall receipt was not synchronously marked processed'; END IF;
+
+  IF EXISTS(SELECT 1 FROM henvalt.shopify_connections WHERE id=v_store_a AND active IS TRUE)
+     OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_connections WHERE id=v_store_b AND active IS TRUE) THEN
+    RAISE EXCEPTION 'Uninstall did not disable only Store A';
+  END IF;
+  IF EXISTS(
+    SELECT 1 FROM henvalt.shopify_webhook_route_tokens
+    WHERE connection_id=v_store_a AND token_hash=encode(extensions.digest(convert_to(v_route_a,'UTF8'),'sha256'),'hex') AND revoked_at IS NULL
+  ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_webhook_route_tokens
+    WHERE connection_id=v_store_b AND token_hash=encode(extensions.digest(convert_to(v_route_b,'UTF8'),'sha256'),'hex') AND revoked_at IS NULL
+  ) THEN RAISE EXCEPTION 'Uninstall route-token revocation crossed store boundary'; END IF;
+  IF EXISTS(SELECT 1 FROM henvalt.pixel_keys WHERE shopify_connection_id=v_store_a AND key_digest=repeat('c',64) AND active IS TRUE)
+     OR NOT EXISTS(SELECT 1 FROM henvalt.pixel_keys WHERE shopify_connection_id=v_store_b AND key_digest=repeat('d',64) AND active IS TRUE) THEN
+    RAISE EXCEPTION 'Uninstall pixel-key revocation crossed store boundary';
+  END IF;
+  IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_checkout_recovery_candidate_v2 WHERE shopify_connection_id=v_store_a AND state='STORE_INACTIVE')
+     OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_recovery_opportunity_v2 WHERE id=v_opportunity_a AND status='CLOSED')
+     OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 WHERE id=v_intervention AND status='CANCELLED')
+     OR EXISTS(SELECT 1 FROM henvalt.shopify_delivery_permits_v2 WHERE shopify_connection_id=v_store_a) THEN
+    RAISE EXCEPTION 'Uninstall did not stop pending exact-store recovery and remove permit material';
+  END IF;
+
+  -- A revoked Store A route cannot accept another delivery; Store B remains routable.
+  v_hmac:=encode(extensions.hmac(convert_to(v_body_a,'UTF8'),
+    convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_route_a,v_hmac,encode(convert_to(v_body_a,'UTF8'),'base64'),
+    'store-a.myshopify.com','orders/create','uninstall-after-revoke-a','uninstall-after-revoke-event-a'
+  );
+  IF v_result.accepted IS DISTINCT FROM false OR v_result.rejection_code<>'ROUTE_TOKEN_INVALID' THEN
+    RAISE EXCEPTION 'Revoked Store A route token remained usable';
+  END IF;
+
+  v_hmac:=encode(extensions.hmac(convert_to(v_body_b,'UTF8'),
+    convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_route_b,v_hmac,encode(convert_to(v_body_b,'UTF8'),'base64'),
+    'store-b.myshopify.com','orders/create','uninstall-after-revoke-b','uninstall-after-revoke-event-b'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'Store B route was incorrectly disabled by Store A uninstall: %',row_to_json(v_result);
+  END IF;
+END;
+$uninstall_v2$;
