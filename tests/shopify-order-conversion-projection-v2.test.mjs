@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql", import.meta.url), "utf8");
+const lifecycleMigration = readFileSync(new URL("../supabase/migrations/202611170010_shopify_order_lifecycle_projection_v2.sql", import.meta.url), "utf8");
 const edge = readFileSync(new URL("../supabase/functions/henvalt-shopify-webhook-ingress/index.ts", import.meta.url), "utf8");
 const docs = readFileSync(new URL("../docs/shopify-order-conversion-projection-v2.md", import.meta.url), "utf8");
 
@@ -29,8 +30,12 @@ test("order projection verifies exact receipt digest and server-derived install"
   assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.project_verified_shopify_order_v2\(text,text,text\)\s+TO service_role/);
 });
 
-test("order webhook ingress projects before acknowledging", () => {
-  assert.match(edge, /topic==="orders\/create"/);
+test("order lifecycle topics project before acknowledgement", () => {
+  assert.match(lifecycleMigration, /NOT IN \\(\x27orders\/create\x27,\x27orders\/updated\x27,\x27orders\/paid\x27,\x27orders\/cancelled\x27\\)/);
+  assert.match(edge, /orders\/create/);
+  assert.match(edge, /orders\/updated/);
+  assert.match(edge, /orders\/paid/);
+  assert.match(edge, /orders\/cancelled/);
   assert.match(edge, /project_verified_shopify_order_v2/);
   assert.match(edge, /order_projection_unavailable/);
 });
