@@ -15,6 +15,7 @@ DECLARE
   v_receipt uuid;
   v_claim record;
   v_guard jsonb;
+  v_prepared jsonb;
   v_blocked boolean;
   v_permit_id uuid;
   v_step integer;
@@ -120,6 +121,14 @@ BEGIN
      OR v_guard->>'cost_reservations_mutated' <> 'false'
      OR v_guard->>'order_refund_attribution_fee_records_mutated' <> 'false' THEN
     RAISE EXCEPTION 'redaction guard did not return fail-closed preservation result: %', v_guard;
+  END IF;
+
+  v_prepared := henvalt.prepare_shopify_customer_redaction_send_stop_v2(v_receipt, v_claim.claim_token);
+  IF v_prepared->>'prepared' <> 'true'
+     OR v_prepared->>'exact_store_scope_confirmed' <> 'true'
+     OR v_prepared->>'customer_data_deleted' <> 'false'
+     OR v_prepared->>'safe_to_complete_privacy_request' <> 'false' THEN
+    RAISE EXCEPTION 'post-commit redaction send-stop preparation failed: %', v_prepared;
   END IF;
 
   IF NOT EXISTS (
