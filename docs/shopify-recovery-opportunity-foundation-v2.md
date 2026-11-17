@@ -19,7 +19,7 @@ A candidate with no exact-store customer identity or missing value/currency is r
 - Create a delivery request or authorize a send.
 - Attribute an order or create a billable revenue entry.
 
-The function is bounded, idempotent and service_role-only. Its response always reports delivery_authorized=false.
+The function is bounded, idempotent and service_role-only. It also reconciles a later same-store order to CONVERTED and a closed/inactive checkout or installation to CLOSED; a Store A order cannot convert Store B's opportunity even when checkout tokens match. Its response always reports delivery_authorized=false.
 
 ## Next dependency
 
