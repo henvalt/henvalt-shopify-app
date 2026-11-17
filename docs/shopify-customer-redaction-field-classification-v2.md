@@ -53,3 +53,18 @@ Translate the exact-store V2 data graph into separate handling classes before im
 - No secure export delivery workflow for `customers/data_request`.
 
 Until these blockers are resolved, the system must continue to return `safe_to_execute=false` and keep privacy requests in review. Do not call legacy tenant-wide redaction functions.
+
+
+## Send-guard implementation — migration 029
+
+Migration 029 adds `shopify_customer_redaction_guards_v2`, keyed by the immutable tuple `(tenant_id, shopify_connection_id, customer_identity_id)`. A claim-bound `customers/redact` processor can activate the guard only while the exact-store privacy receipt has a live queue lease and matching claim-token digest.
+
+- Permit creation and send-attempt creation now pass through BEFORE INSERT guards. Each trigger takes a key-share lock on the exact customer identity; guard activation takes an UPDATE lock on that same identity row. This serializes concurrent authorization against privacy-guard activation.
+- Existing unconsumed permits are expired, not deleted. Interventions are cancelled only when they remain `READY_FOR_AUTHORIZATION` and have no send-attempt row.
+- Existing `AUTHORIZED` and `AMBIGUOUS` attempts remain untouched and are counted as unresolved. A provider request may already be in flight; it must be reconciled before any customer evidence is scrubbed.
+- Suppression rows/fingerprints, provider events, cost reservations, orders, refunds, attributions and fee measurements are not modified. The guard returns `safe_to_complete_privacy_request=false` and does not release itself.
+- A released guard can only be reactivated by a later valid claim. No public release operation is provided; release requires a separately reviewed policy and processor design.
+
+The migration does **not** solve in-flight HTTP race windows by itself: the delivery worker must still treat a blocked consume/authorization as final and must not send on stale context. The current V2 delivery path is fail-closed for monetary reservation and has not been production-enabled. The guard is preparation code until CI validates migration 029 and a future reviewed worker integration proves the pre-send recheck.
+
+The SQL integration test covers same external customer reference in two stores, exact-store guard activation, permit expiry, cancellation of untouched intervention, denial of new permit and attempt inserts, and mismatched claim-token rejection. It does not claim a full concurrent provider HTTP test or a completed privacy request.
