@@ -101,7 +101,7 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  if(topic==="orders/create"){
+  if(["orders/create","orders/updated","orders/paid","orders/cancelled"].includes(topic)){
     const projected=await rpc("project_verified_shopify_order_v2",{
       p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
     });
