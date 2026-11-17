@@ -349,6 +349,7 @@ BEGIN
      OR v_row.connection_app_key IS DISTINCT FROM v_row.app_key
      OR v_row.tenant_status<>'ACTIVE'
      OR v_row.checkout_status<>'OPEN'
+     OR v_row.jurisdiction_country_code IS NULL
      OR v_row.jurisdiction_country_code NOT IN ('GB','US','CA','AU')
      OR v_row.shopify_checkout_token IS DISTINCT FROM v_row.checkout_token
      OR v_row.marketing_state<>'SUBSCRIBED'
