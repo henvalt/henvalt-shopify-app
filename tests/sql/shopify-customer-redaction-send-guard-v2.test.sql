@@ -17,6 +17,7 @@ DECLARE
   v_guard jsonb;
   v_blocked boolean;
   v_permit_id uuid;
+  v_step integer;
 BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
   SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
@@ -36,11 +37,6 @@ BEGIN
   ) VALUES (v_tenant, v_store_b, 'redaction-guard-customer-9001')
   RETURNING id INTO v_customer_b;
 
-  SELECT id INTO v_customer_a
-  FROM henvalt.shopify_customer_identity_v2
-  WHERE tenant_id=v_tenant AND shopify_connection_id=v_store_a
-    AND external_customer_reference='redaction-guard-customer-9001';
-
   SELECT id INTO v_opportunity_b
   FROM henvalt.shopify_recovery_opportunity_v2
   WHERE tenant_id=v_tenant AND shopify_connection_id=v_store_b
@@ -58,12 +54,24 @@ BEGIN
     RAISE EXCEPTION 'redaction guard prerequisites missing';
   END IF;
 
+  SELECT candidate INTO v_step
+  FROM generate_series(1,10) AS candidate
+  WHERE NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
+    WHERE i.opportunity_id=v_opportunity_b AND i.step_number=candidate
+  )
+  ORDER BY candidate
+  LIMIT 1;
+  IF v_step IS NULL THEN
+    RAISE EXCEPTION 'no unused intervention step available for redaction guard test';
+  END IF;
+
   INSERT INTO henvalt.shopify_recovery_intervention_v2(
     tenant_id, shopify_connection_id, opportunity_id, customer_identity_id,
     step_number, status, scheduled_at
   ) VALUES (
     v_tenant, v_store_b, v_opportunity_b, v_customer_b,
-    9, 'READY_FOR_AUTHORIZATION', now()
+    v_step, 'READY_FOR_AUTHORIZATION', now()
   ) RETURNING id INTO v_intervention;
 
   INSERT INTO henvalt.shopify_sender_profiles_v2(
