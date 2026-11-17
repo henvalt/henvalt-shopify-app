@@ -28,7 +28,7 @@ MailerSend documents that webhook version 1 stops working on **1 December 2026**
 
 ## Critical implementation boundary
 
-The provider registry requires two separately provisioned Vault secrets: MailerSend webhook signing secret and recipient-fingerprint key. The candidate does not seed either secret or configure MailerSend. It does not create interventions from opportunities or authorize sends. The existing deployed MailerSend sender function remains legacy and is not safe for V2 because it accepts caller-supplied recipient email and uses tenant-scoped authorization.
+The provider registry requires two separately provisioned Vault secrets: MailerSend webhook signing secret and recipient-fingerprint key. The candidate does not seed either secret or configure MailerSend. It does not create interventions from opportunities or authorize sends. During setup, the provider registry may remain PENDING while MailerSend performs its URL-validation ping; the documented fixed test secret is accepted only for `webhook.test`, and that ping is not persisted. Real provider events require ACTIVE status and the account-specific Vault signing secret. The existing deployed MailerSend sender function remains legacy and is not safe for V2 because it accepts caller-supplied recipient email and uses tenant-scoped authorization.
 
 ## Acceptance tests
 
