@@ -148,3 +148,22 @@ Migration 027 adds `henvalt.preview_shopify_customer_redaction_v2(receipt_id, cl
 The disposable PostgreSQL test exercises the preview using two stores with the same Shopify customer ID. Store A's preview must count only Store A's session/alias, and the customer identity must still exist after the preview. CI runs the full migration chain through 027 and static security contracts.
 
 This is not a redaction processor. It is a safe inventory that informs the required FK/retention migration before any destructive operation is designed.
+
+## 11. Recursive foreign-key dependency inventory (migration 028)
+
+Migration 028 adds the service-role-only read-only catalog function `henvalt.shopify_customer_redaction_fk_dependency_map_v2()`. Starting at `shopify_customer_identity_v2`, it recursively follows every referencing foreign key (bounded to 12 levels) and reports:
+
+- referencing and referenced table names
+- exact referencing and referenced column lists
+- PostgreSQL `ON DELETE` behavior (NO ACTION, RESTRICT, CASCADE, SET NULL or SET DEFAULT)
+- constraint validation/deferrability metadata and graph depth
+
+It reads PostgreSQL catalog metadata only; it does not inspect customer rows, return identifiers, or mutate anything.
+
+### Findings that prevent a naive DELETE
+
+The current graph is deliberately not a simple cascade. Customer identity references include nullable links that can be detached (for example sessions/checkouts/opportunities use targeted SET NULL), alongside restrictive consent, intervention and suppression links. Session aliases cascade from their session. The downstream graph also reaches provider events, delivery-cost reservations, order/refund records, attributions and fee measurements.
+
+This means deleting a customer identity could either be blocked by restrictive audit/consent/suppression links or cascade away session aliases; deleting deeper recovery/send/order records risks destroying provider evidence and financial history. The FK inventory is now exercised in the two-store SQL privacy test, including assertions for SET NULL, CASCADE and RESTRICT semantics and the downstream fee-measurement link.
+
+No retention rule has been chosen. The next redaction design must separate (1) direct personal identifiers and checkout/session/pixel payload data, (2) durable unsubscribe/complaint/hard-bounce suppression evidence, (3) provider delivery/cost audit, and (4) order/refund/attribution/fee accounting. No delete/anonymize executor is included in migration 028.
