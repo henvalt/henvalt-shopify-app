@@ -76,14 +76,15 @@ jobs:
             supabase/migrations/202611170017_shopify_customer_redaction_fk_inventory_v2.sql \
             supabase/migrations/202611170018_shopify_customer_redaction_send_guard_v2.sql \
             supabase/migrations/202611170019_shopify_exact_store_shop_redact_stop_v2.sql \
-            supabase/migrations/202611170020_shopify_redacted_store_oauth_tombstone_v2.sql; do
+            supabase/migrations/202611170020_shopify_redacted_store_oauth_tombstone_v2.sql \\
+            supabase/migrations/202611170021_shopify_privacy_order_scope_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise existing Shopify V2 database contracts
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
-      - name: Exercise exact-store privacy processing queue and lease safety
+      - name: Exercise Shopify privacy order-scope preservation\n        env:\n          PGPASSWORD: postgres\n        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-order-scope-v2.test.sql\n      - name: Exercise exact-store privacy processing queue and lease safety
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-processing-queue-v2.test.sql
