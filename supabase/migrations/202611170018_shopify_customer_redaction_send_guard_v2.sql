@@ -188,12 +188,9 @@ BEGIN
     RETURN jsonb_build_object('guarded', false, 'code', 'GUARD_STATE_CONFLICT');
   END IF;
 
-  -- Do not mutate permits/interventions in this transaction. A concurrent
-  -- consume may already hold a permit row while waiting for the customer lock;
-  -- changing permit rows here would create a lock-order deadlock. The guard is
-  -- committed first. A second claim-bound RPC performs cleanup without taking
-  -- the customer identity lock; new consumes will see the guard and abort.
-
+  -- Commit the serialization guard before touching permit/intervention rows.
+  -- This avoids a lock-order cycle with consume, which may already hold a permit
+  -- row while waiting for the customer identity key-share lock.
   SELECT count(*) INTO v_pending_permits
   FROM henvalt.shopify_delivery_permits_v2 p
   WHERE p.tenant_id = v_receipt.tenant_id
@@ -209,8 +206,7 @@ BEGIN
     AND i.customer_identity_id = v_customer.id
     AND i.status = 'READY_FOR_AUTHORIZATION'
     AND NOT EXISTS (
-      SELECT 1
-      FROM henvalt.shopify_recovery_send_attempt_v2 a
+      SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2 a
       WHERE a.intervention_id = i.id
         AND a.tenant_id = i.tenant_id
         AND a.shopify_connection_id = i.shopify_connection_id
@@ -267,15 +263,7 @@ DECLARE
 BEGIN
   IF p_receipt_id IS NULL
      OR p_claim_token IS NULL
-     OR p_claim_token !~ '^[0-9a-f]{64}
-  'Exact-store per-customer fail-closed send guard during Shopify customers/redact processing. Does not implement a retention policy or data deletion.';
-COMMENT ON FUNCTION henvalt.begin_shopify_customer_redaction_guard_v2(uuid, text) IS
-  'Activates a claim-bound exact-store customer send guard. It commits the serialization lock before cleanup to avoid lock-order deadlocks. Never deletes customer data.';
-COMMENT ON FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v2(uuid, text) IS
-  'After guard activation, expires unconsumed permits and cancels only interventions with no send attempt. Preserves unresolved attempts and all suppression/provider/cost/financial records.';
-
-COMMIT;
- THEN
+     OR p_claim_token !~ '^[0-9a-f]{64}$' THEN
     RETURN jsonb_build_object('prepared', false, 'code', 'INVALID_CLAIM');
   END IF;
 
@@ -300,7 +288,8 @@ COMMIT;
     AND r.customer_id IS NOT NULL
     AND j.state = 'CLAIMED'
     AND j.lease_until > pg_catalog.now()
-    AND j.claim_token_sha256 = v_claim_hash;
+    AND j.claim_token_sha256 = v_claim_hash
+  FOR UPDATE OF j, r;
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('prepared', false, 'code', 'CLAIM_OR_STORE_BINDING_INVALID');
@@ -325,7 +314,7 @@ COMMIT;
   END IF;
 
   -- The guard is already committed. Do not lock the customer identity here:
-  -- insert triggers can now fail fast on the guard without a lock cycle.
+  -- inserts now fail fast on the committed guard, avoiding a lock-order cycle.
   UPDATE henvalt.shopify_delivery_permits_v2 p
      SET expires_at = LEAST(p.expires_at, pg_catalog.now())
    WHERE p.tenant_id = v_receipt.tenant_id
@@ -382,6 +371,8 @@ GRANT EXECUTE ON FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v
 COMMENT ON TABLE henvalt.shopify_customer_redaction_guards_v2 IS
   'Exact-store per-customer fail-closed send guard during Shopify customers/redact processing. Does not implement a retention policy or data deletion.';
 COMMENT ON FUNCTION henvalt.begin_shopify_customer_redaction_guard_v2(uuid, text) IS
-  'Activates a claim-bound exact-store customer send guard, expires unconsumed permits, cancels only interventions with no send attempt, and reports unresolved attempts. Never deletes suppression, provider, cost or financial records.';
+  'Activates a claim-bound exact-store customer send guard and commits the serialization lock before cleanup. Never deletes customer data.';
+COMMENT ON FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v2(uuid, text) IS
+  'After guard activation, expires unconsumed permits and cancels only interventions with no send attempt. Preserves unresolved attempts and all suppression/provider/cost/financial records.';
 
 COMMIT;
