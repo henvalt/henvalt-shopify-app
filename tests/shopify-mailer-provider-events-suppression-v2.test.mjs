@@ -8,6 +8,7 @@ test("MailerSend webhook uses raw-body V2 signature and Vault-backed verificatio
  assert.match(migration,/vault\.decrypted_secrets/);
  assert.match(migration,/extensions\.hmac\(v_body/);
  assert.match(migration,/WEBHOOK_TEST_VERIFIED/);
+ assert.match(migration,/v_provider.status=\x27PENDING\x27 AND v_event_type=\x27webhook.test\x27/);
  assert.match(migration,/test_Am3L3GuOIc4blLUuHqAPxxwkZaJyEk5/);
  assert.match(edge,/req\.headers\.get\("signature"\)/);
  assert.match(edge,/p_raw_body_base64/);
