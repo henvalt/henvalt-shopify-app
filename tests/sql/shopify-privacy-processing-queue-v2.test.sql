@@ -92,7 +92,11 @@ BEGIN
      OR jsonb_array_length(v_export #> '{records,sessions}') <> 1
      OR jsonb_array_length(v_export #> '{records,session_aliases}') <> 1
      OR v_export::text LIKE '%privacy-session-store-b%'
-     OR v_export::text LIKE '%privacy-alias-store-b%' THEN
+     OR v_export::text LIKE '%privacy-alias-store-b%'
+     OR v_export #>> '{requested_order_scope,scope_kind}' <> 'REQUESTED'
+     OR jsonb_array_length(v_export #> '{requested_order_scope,requested_order_ids}') <> 3
+     OR jsonb_array_length(v_export #> '{requested_order_scope,unmatched_order_ids}') <> 3
+     OR v_export #>> '{requested_order_scope,export_data_complete}' <> 'false' THEN
     RAISE EXCEPTION 'customer export was not exact-store scoped or did not require legacy review: %', v_export;
   END IF;
 
@@ -108,7 +112,10 @@ BEGIN
      OR (v_preview #>> '{record_counts,sessions}')::integer <> 1
      OR (v_preview #>> '{record_counts,session_aliases}')::integer <> 1
      OR v_preview::text LIKE '%privacy-session-store-b%'
-     OR v_preview::text LIKE '%privacy-alias-store-b%' THEN
+     OR v_preview::text LIKE '%privacy-alias-store-b%'
+     OR v_preview #>> '{requested_order_scope,scope_kind}' <> 'REQUESTED'
+     OR jsonb_array_length(v_preview #> '{requested_order_scope,requested_order_ids}') <> 3
+     OR jsonb_array_length(v_preview #> '{requested_order_scope,unmatched_order_ids}') <> 3 THEN
     RAISE EXCEPTION 'customer redaction preview was not read-only and exact-store scoped: %', v_preview;
   END IF;
 
