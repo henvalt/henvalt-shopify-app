@@ -26,7 +26,7 @@ BEGIN
     WHERE send_attempt_id=NEW.id
       AND tenant_id=NEW.tenant_id
       AND shopify_connection_id=NEW.shopify_connection_id
-      AND status IN ('RESERVED','SETTLED');
+      AND status IN ('RESERVED','SETTLED','RELEASED');
   END IF;
   RETURN NEW;
 END;
