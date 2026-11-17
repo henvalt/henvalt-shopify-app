@@ -34,8 +34,8 @@ test("missing customer identity or amount/currency is quarantined for review", (
 });
 
 test("a later order or inactive checkout closes only its same-store opportunity", () => {
-  assert.match(migration, /o\\.shopify_connection_id = c\\.shopify_connection_id/);
-  assert.match(migration, /o\\.checkout_token = c\\.checkout_token/);
+  assert.match(migration, /o\.shopify_connection_id = c\.shopify_connection_id/);
+  assert.match(migration, /o\.checkout_token = c\.checkout_token/);
   assert.match(migration, /SET status = 'CONVERTED'/);
   assert.match(migration, /SET status = 'CLOSED'/);
 });
