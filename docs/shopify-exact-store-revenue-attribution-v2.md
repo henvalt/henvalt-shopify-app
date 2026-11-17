@@ -1,77 +1,66 @@
 # HENVALT exact-store recovered-revenue attribution V2
 
-**Status:** design gate only. Current order/refund projection records exact-store checkout matching and refund adjustments, but it does not yet create a recovery attribution or a performance-fee ledger. No billing or production changes are authorized by this document.
+**Status:** candidate implementation in migrations 021–024; disposable PostgreSQL integration passed in CI run #335 for migrations 001–023. Migration 024 adds provider-event reconciliation for ambiguous delivery costs and is under current-head validation. All work is branch-only; no production billing or data changed.
 
-## 1. Verified source chain
+## 1. Implemented evidence chain
 
-The candidate V2 chain already provides:
+The candidate V2 chain now includes:
 - verified Shopify order receipt and immutable connection identity;
-- order identity with exact `shopify_connection_id`, checkout token, total value, currency, financial status and timestamps;
-- checkout identity and opportunity with exact connection and customer lineage;
-- interventions and send attempts with exact connection, customer and provider identity;
-- MailerSend provider event correlation to a send attempt.
+- exact-store checkout-token matching and order lifecycle projection;
+- exact-store recovery opportunity, intervention and send-attempt lineage;
+- provider acceptance and delivery timestamps from MailerSend event correlation;
+- successful refund transaction adjustments tied to the exact matched order.
 
-The order projection matches only the checkout token within the same connection. A tenant-wide or same-email match is not sufficient evidence of recovery. Migrations 021–022 now project exact-store order create/update/paid/cancelled topics and successful `refunds/create` transactions into an idempotent refund adjustment ledger; CI #293 passed the disposable-PostgreSQL coverage.
+Migrations 021–022 project exact-store order create/update/paid/cancelled topics and successful refunds/create transactions. Migration 023 creates the attribution and fee-measurement ledgers. The SQL integration test verified a paid order attributed to its eligible recovery send, followed by partial and full refund reconciliation.
 
-## 2. Attribution eligibility
+## 2. Explicit per-store attribution policy
 
-An order can become a recovered-order candidate only when all are true:
-1. The order receipt is HMAC-verified and projected for an active, exact Shopify connection.
-2. The order has a non-empty checkout token and `checkout_match_status='MATCHED'`.
-3. The matched checkout belongs to the same connection and tenant as the recovery opportunity.
-4. At least one exact-store send attempt for that opportunity was provider-accepted (`SUBMITTED` or a later confirmed delivery state) before the order's creation time.
-5. The order falls inside an explicitly configured merchant attribution window.
-6. The order is in a billable paid state under the chosen policy; pending, authorized-only, voided, cancelled and fully refunded orders are not recovered revenue.
-7. Order currency and value are valid. No foreign-exchange conversion or inferred currency is allowed.
+shopify_recovery_attribution_policies_v2 is disabled by default. A server-role-only policy setter requires:
+- an explicit attribution window (1–720 hours);
+- FIRST_ELIGIBLE_TOUCH or LAST_ELIGIBLE_TOUCH;
+- SHOPIFY_TOTAL_PRICE as the recorded revenue basis;
+- an explicit choice whether provider delivery confirmation is required.
 
-An order that predates the email, lacks a checkout token, cannot be matched to the exact store, or has no eligible accepted send attempt remains unattributed.
+Policy changes increment a version so each attribution records the policy version used. There is no default attribution window or default touch model. Policy activation is not performed automatically by the migration.
 
-## 3. Policies that must be explicit
+An order is eligible only when its verified projection matches a checkout in the same store, its customer identity matches that checkout/opportunity, it is in a paid or partially-refunded state with valid value and currency, and an eligible provider-accepted send occurred before the order inside the configured window. With delivery confirmation required, a DELIVERED state and timestamp are required; otherwise provider submission is the touch. Unmatched, pending, cancelled, voided, fully-refunded, unknown-currency, pre-send or out-of-window orders are not billable.
 
-Do not hardcode these decisions:
-- Attribution window (for example, a merchant-configured number of hours/days).
-- Touch model when multiple accepted interventions precede the same order (last eligible touch, first eligible touch, or another explicit model).
-- Revenue basis: gross order total versus net merchandise revenue, and treatment of discounts, tax, shipping, duties and tips.
-- Treatment of partial payments, partial refunds, full refunds, chargebacks and cancellations.
-- Whether provider delivery confirmation is required or provider acceptance is sufficient.
-- Currency and precision rules for the merchant's performance fee.
+## 3. Refund reconciliation
 
-If the policy is missing, the system may record a matched order but must not create a billable attribution.
+The attribution row is unique per exact-store order. Refund adjustments are aggregated only for the same order, tenant, connection and currency. Partial refunds reduce net recovered revenue; full refunds reverse the attribution. The fee-measurement row is recalculated from the net amount:
+- pending fees are reduced when a partial refund changes the amount;
+- a full refund voids a pending fee;
+- a refund after an invoiced/paid fee marks CREDIT_REQUIRED for manual financial reconciliation.
 
-## 4. Proposed ledger model
+The current projection covers successful refunds/create transactions. Chargebacks and disputes are not yet projected, and no FX conversion is attempted.
 
-Use separate immutable evidence and mutable reconciliation state:
+## 4. Non-charging performance-fee ledger
 
-- `shopify_recovery_attributions_v2`: one row per exact-store order attribution; unique on `(shopify_connection_id, order_identity_id)`; stores tenant, connection, opportunity, checkout, selected intervention/send attempt, attribution policy version, method, order currency, eligible revenue, timestamps and evidence references.
-- `shopify_recovery_revenue_adjustments_v2`: idempotent positive/negative adjustments for refunds, chargebacks and cancellations; each source Shopify event is unique per connection.
-- `shopify_recovery_fee_measurements_v2`: immutable fee calculation snapshot only after a merchant-approved positive performance percentage and confirmed net recovered revenue; stores currency, percentage snapshot, fee amount and external billing transaction reference when one exists.
+shopify_recovery_fee_measurements_v2 records a measurement snapshot only when:
+- the attribution is CONFIRMED with positive net recovered revenue;
+- the tenant billing account is ACTIVE, not test mode, and has an explicit positive percentage;
+- billing currency matches the recovered order currency.
 
-Keep the source order and send-attempt evidence exact-store scoped. Do not duplicate the same order into more than one store's attribution ledger. A tenant may have a merchant-wide reporting aggregate, but it must be derived from store-attributed rows and never relabelled as per-store revenue.
+The percentage is read from the merchant billing record; the migration does not choose 3%, 5%, 10% or any other rate. The ledger stores the percentage snapshot, recovered amount, fee amount, currency and optional Paddle transaction reference. No Paddle transaction or Shopify charge is created by these functions. The live billing account remains PENDING/test-mode with a zero performance percentage, so it remains non-billable.
 
-## 5. Performance-fee safeguards
+Merchant email-provider cost reservations are a separate ledger from HENVALT's performance fee.
 
-- Do not choose 3%, 5%, 10%, or any other percentage by default. The merchant-approved percentage must be explicit.
-- The current live billing account is PENDING/test-mode with a zero performance percentage; it must remain non-billable.
-- No fee is created from a checkout value-at-risk, an email send, an open/click, a provider acceptance, or an order that is not in the agreed paid state.
-- Refunds and chargebacks must reduce eligible recovered revenue and reverse or credit the corresponding fee idempotently.
-- Do not create a Paddle/Shopify charge until the attribution and adjustment ledger is reconciled and the merchant billing entitlement is active.
-- Merchant email-provider cost reservations remain a separate ledger from HENVALT's performance fee.
+## 5. Acceptance coverage and remaining work
 
-## 6. Required acceptance tests
+Verified in CI run #335 (migrations 001–023):
+1. a paid exact-store order matched to the correct recovery opportunity and send attempt;
+2. a pending 5% fee measurement with no Paddle transaction;
+3. a partial refund reducing net recovered revenue and fee;
+4. a full refund reversing the attribution and voiding the pending fee.
 
-1. Same checkout token in Store A and Store B never cross-attributes.
-2. Order created before the accepted recovery send is not attributed.
-3. Order outside the configured attribution window is not attributed.
-4. Missing checkout token or unmatched checkout remains unattributed.
-5. Pending/authorized-only order is not billable; paid order follows the configured revenue basis.
-6. Partial/full refund, cancellation and chargeback create idempotent negative adjustments.
-7. Duplicate order/refund webhook deliveries do not duplicate attribution or adjustments.
-8. Multiple accepted touches follow the explicit merchant touch policy.
-9. Unknown currency or missing policy fails closed.
-10. Zero or missing performance percentage produces no fee.
-11. A fee snapshot is unique per attribution and billing period; retries cannot double-charge.
-12. Multi-store merchant aggregate equals the sum of exact-store rows, with no duplicate order across connections.
+Still required before launch:
+- test first-touch and last-touch selection with multiple eligible sends;
+- test delivery-confirmation-required policy and out-of-window/pre-send rejection;
+- test same checkout token across stores and duplicate order/refund replay specifically against the attribution ledger;
+- add chargeback/dispute projection and its fee-credit behavior;
+- obtain the merchant's explicit approved performance percentage and fee basis;
+- implement and reconcile actual billing collection only after legal/merchant approval.
 
-## 7. Explicit non-actions
+## 6. Explicit non-actions
 
-No attribution, fee, billing or refund processor is implemented here. No performance percentage is selected. No production billing record, Paddle transaction, Shopify charge, or live database row is changed.
+No production attribution policy was enabled. No production Supabase migration/function or billing row was changed. No performance percentage was selected. No Paddle transaction, Shopify charge, customer email or provider send was initiated by this work.
