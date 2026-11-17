@@ -1,6 +1,6 @@
 # HENVALT exact-store privacy lifecycle V2
 
-**Status:** customer export, customer redaction and shop redaction remain design-only. Migration 025 adds a service-role-only, leased processing queue for verified privacy receipts, with exact-store claim validation, retry leases, hashed claim tokens and confirmed-completion gating. Identity V2 CI run #375 passed the migration and disposable PostgreSQL queue tests. It does not export or delete data. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion. All work remains branch-only.
+**Status:** a service-role-only exact-store customer export draft now exists in migration 026 and passed Identity V2 CI run #393. It does not deliver exports or complete requests; historical tenant-scoped records remain unresolved and force manual review. Customer redaction and shop redaction remain design-only pending retention rules and FK-safe anonymization. Migration 025 provides the verified receipt queue. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion. All work remains branch-only.
 
 ## 1. Non-negotiable scope
 
@@ -101,7 +101,7 @@ Therefore a customer delete cannot safely be implemented as a single `DELETE FRO
 
 ## 7. Explicit non-actions
 
-No customer export, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only; migrations 001–020 and the exact-store uninstall integration test passed CI #259. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
+A customer export draft is implemented in candidate migration 026, but no export delivery, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
 
 ## 8. Processing queue added (migration 025)
 
