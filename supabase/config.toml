@@ -1,0 +1,2 @@
+[functions.henvalt-mailersend-webhook-v2]
+verify_jwt = false
