@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 
 const migration=readFileSync("supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql","utf8");
-const contract=readFileSync("docs/v2-mailersend-provider-events-and-suppression.md","utf8");
+const deliveryContract=readFileSync("docs/shopify-v2-contact-consent-delivery-contract.md","utf8");
+const providerContract=readFileSync("docs/v2-mailersend-provider-events-and-suppression.md","utf8");
 
 test("delivery permit is opaque, short-lived, single-use and hash-only at rest",()=>{
  assert.match(migration,/permit_token_sha256 text NOT NULL UNIQUE/);
@@ -48,6 +49,7 @@ test("permit consumption rechecks every critical gate and creates one idempotent
 });
 
 test("delivery remains blocked from legacy n8n/browser path and documents remaining provider handoff",()=>{
- assert.match(contract,/Do not send V2 work through this endpoint/);
- assert.match(contract,/never returned to the browser, n8n, logs/);
+ assert.match(deliveryContract,/Do not send V2 work through this endpoint/);
+ assert.match(deliveryContract,/never returned to the browser, n8n, logs/);
+ assert.match(providerContract,/does not create interventions|does not authorize sends/i);
 });
