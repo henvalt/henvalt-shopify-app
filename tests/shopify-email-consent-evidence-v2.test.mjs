@@ -27,7 +27,7 @@ test("unknown, pending, revoked, invalid and redacted consent cannot be treated 
   assert.match(migration, /'SUBSCRIBED','NOT_SUBSCRIBED','UNSUBSCRIBED','PENDING','INVALID','REDACTED','UNKNOWN'/);
   assert.match(migration, /CASE WHEN v_consent_at IS NULL THEN 'UNKNOWN' ELSE v_state END/);
   assert.match(migration, /marketing_state='UNKNOWN'/);
-  assert.match(migration, /consent_updated_at>=v_existing_at/);
+  assert.match(migration, /v_consent_at>=v_existing_at/);
 });
 
 test("checkout jurisdiction is explicitly nullable and must remain fail-closed downstream", () => {
