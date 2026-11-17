@@ -71,7 +71,7 @@ jobs:
             supabase/migrations/202611170012_shopify_recovery_attribution_fee_ledger_v2.sql \
             supabase/migrations/202611170013_shopify_ambiguous_delivery_reconciliation_v2.sql \
             supabase/migrations/202611170014_shopify_privacy_processing_queue_v2.sql \
-            supabase/migrations/202611170015_shopify_customer_privacy_export_v2.sql \\
+            supabase/migrations/202611170015_shopify_customer_privacy_export_v2.sql \
             supabase/migrations/202611170016_shopify_customer_redaction_impact_preview_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
