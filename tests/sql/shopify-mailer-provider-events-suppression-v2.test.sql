@@ -152,3 +152,133 @@ BEGIN
 END;
 $mailer_v2$;
 SELECT 'shopify_mailer_provider_events_suppression_v2_passed' AS result;
+
+
+-- Merchant-wide provider-cost reservation integration checks (migration 019).
+CREATE OR REPLACE FUNCTION pg_temp.make_cost_test_attempt(
+  p_tenant uuid,p_connection uuid,p_customer uuid,p_opportunity uuid,
+  p_step integer,p_idempotency_key text,p_provider_key text
+) RETURNS uuid
+LANGUAGE plpgsql
+AS $cost_test$
+DECLARE v_intervention uuid; v_attempt uuid;
+BEGIN
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,
+    step_number,status,scheduled_at
+  ) VALUES(p_tenant,p_connection,p_opportunity,p_customer,p_step,'SUBMITTED',now())
+  RETURNING id INTO v_intervention;
+  INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
+    tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
+    provider_account_key,idempotency_key,status
+  ) VALUES(p_tenant,p_connection,p_customer,v_intervention,p_provider_key,p_idempotency_key,'AUTHORIZED')
+  RETURNING id INTO v_attempt;
+  RETURN v_attempt;
+END;
+$cost_test$;
+
+DO $reservation_v2$
+DECLARE
+  v_tenant uuid:='00000000-0000-4000-8000-000000000001';
+  v_store_a uuid; v_store_b uuid; v_customer_a uuid; v_customer_b uuid;
+  v_opportunity_a uuid; v_opportunity_b uuid; v_provider_key text;
+  v_attempt uuid; v_failed boolean; v_count bigint; v_total numeric(18,6);
+BEGIN
+  SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
+  SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
+  SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2
+    WHERE shopify_connection_id=v_store_a AND external_customer_reference='12345';
+  SELECT id INTO v_customer_b FROM henvalt.shopify_customer_identity_v2
+    WHERE shopify_connection_id=v_store_b AND external_customer_reference='12345';
+  SELECT id INTO v_opportunity_a FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE shopify_connection_id=v_store_a AND customer_identity_id=v_customer_a
+    ORDER BY created_at DESC LIMIT 1;
+  SELECT id INTO v_opportunity_b FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE shopify_connection_id=v_store_b AND customer_identity_id=v_customer_b
+    ORDER BY created_at DESC LIMIT 1;
+  SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
+    WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
+
+  IF v_store_a IS NULL OR v_store_b IS NULL OR v_customer_a IS NULL OR v_customer_b IS NULL
+     OR v_opportunity_a IS NULL OR v_opportunity_b IS NULL OR v_provider_key IS NULL THEN
+    RAISE EXCEPTION 'Cost reservation integration prerequisites missing';
+  END IF;
+
+  SELECT count(*),coalesce(sum(amount),0) INTO v_count,v_total
+  FROM henvalt.shopify_delivery_cost_reservations_v2
+  WHERE tenant_id=v_tenant AND status IN ('RESERVED','SETTLED');
+  IF v_count<>2 OR v_total<>0.02 OR EXISTS(
+    SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
+    WHERE tenant_id=v_tenant AND shopify_connection_id<>v_store_b
+  ) THEN
+    RAISE EXCEPTION 'Expected two settled Store B reservations before cross-store cap test: count %, total %',v_count,v_total;
+  END IF;
+
+  -- The two Store B sends already consume the merchant-wide cap for Store A.
+  UPDATE henvalt.billing_accounts SET usage_cap_amount=0.02 WHERE tenant_id=v_tenant;
+  v_failed:=false;
+  BEGIN
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,10,'cost-cap-cross-store-a',v_provider_key);
+  EXCEPTION WHEN raise_exception THEN v_failed:=true;
+  END;
+  IF NOT v_failed OR EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
+    WHERE shopify_connection_id=v_store_a AND idempotency_key='cost-cap-cross-store-a'
+  ) THEN RAISE EXCEPTION 'Cross-store monetary cap did not reject Store A attempt'; END IF;
+  UPDATE henvalt.billing_accounts SET usage_cap_amount=10 WHERE tenant_id=v_tenant;
+
+  UPDATE henvalt.shopify_mailer_provider_registry_v2
+    SET email_unit_cost_amount=NULL,email_unit_cost_currency=NULL WHERE provider_account_key=v_provider_key;
+  v_failed:=false;
+  BEGIN
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,11,'cost-missing-unit-a',v_provider_key);
+  EXCEPTION WHEN raise_exception THEN v_failed:=true;
+  END;
+  IF NOT v_failed THEN RAISE EXCEPTION 'Missing provider unit cost was unexpectedly accepted'; END IF;
+
+  UPDATE henvalt.shopify_mailer_provider_registry_v2
+    SET email_unit_cost_amount=0.01,email_unit_cost_currency='EUR' WHERE provider_account_key=v_provider_key;
+  v_failed:=false;
+  BEGIN
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,12,'cost-currency-mismatch-a',v_provider_key);
+  EXCEPTION WHEN raise_exception THEN v_failed:=true;
+  END;
+  IF NOT v_failed THEN RAISE EXCEPTION 'Provider currency mismatch was unexpectedly accepted'; END IF;
+  UPDATE henvalt.shopify_mailer_provider_registry_v2
+    SET email_unit_cost_amount=0.01,email_unit_cost_currency='USD' WHERE provider_account_key=v_provider_key;
+
+  UPDATE henvalt.billing_accounts SET monthly_email_limit=2 WHERE tenant_id=v_tenant;
+  v_failed:=false;
+  BEGIN
+    PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,13,'cost-monthly-limit-a',v_provider_key);
+  EXCEPTION WHEN raise_exception THEN v_failed:=true;
+  END;
+  IF NOT v_failed THEN RAISE EXCEPTION 'Merchant monthly email limit was unexpectedly exceeded'; END IF;
+  UPDATE henvalt.billing_accounts SET monthly_email_limit=10 WHERE tenant_id=v_tenant;
+
+  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,14,'cost-failed-a',v_provider_key);
+  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='FAILED' WHERE id=v_attempt;
+  IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE send_attempt_id=v_attempt AND status='RELEASED') THEN
+    RAISE EXCEPTION 'FAILED send did not release its cost reservation';
+  END IF;
+
+  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,15,'cost-ambiguous-a',v_provider_key);
+  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='AMBIGUOUS' WHERE id=v_attempt;
+  IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE send_attempt_id=v_attempt AND status='RESERVED') THEN
+    RAISE EXCEPTION 'AMBIGUOUS send did not retain its cost reservation';
+  END IF;
+
+  v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,16,'cost-submitted-a',v_provider_key);
+  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='SUBMITTED' WHERE id=v_attempt;
+  IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE send_attempt_id=v_attempt AND status='SETTLED') THEN
+    RAISE EXCEPTION 'SUBMITTED send did not settle its cost reservation';
+  END IF;
+
+  SELECT count(*),coalesce(sum(amount),0) INTO v_count,v_total
+  FROM henvalt.shopify_delivery_cost_reservations_v2
+  WHERE tenant_id=v_tenant AND status IN ('RESERVED','SETTLED');
+  IF v_count<>4 OR v_total<>0.04 THEN
+    RAISE EXCEPTION 'Merchant-wide reserved/settled ledger mismatch: count %, total %',v_count,v_total;
+  END IF;
+END;
+$reservation_v2$;
