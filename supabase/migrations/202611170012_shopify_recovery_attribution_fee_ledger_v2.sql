@@ -406,15 +406,16 @@ BEGIN
     v_policy.attribution_window_hours,v_policy.revenue_basis,v_order.total_value,
     v_refunded,v_net,pg_catalog.upper(v_order.currency),'CONFIRMED',pg_catalog.now()
   )
-  ON CONFLICT(shopify_connection_id,order_identity_id) DO NOTHING
+  ON CONFLICT DO NOTHING
   RETURNING id INTO v_attribution_id;
 
   IF v_attribution_id IS NULL THEN
     SELECT id INTO v_attribution_id FROM henvalt.shopify_recovery_attributions_v2
     WHERE shopify_connection_id=v_order.shopify_connection_id AND order_identity_id=v_order.id;
-    IF v_attribution_id IS NOT NULL THEN
-      PERFORM henvalt.reconcile_shopify_recovery_attribution_v2(v_attribution_id);
+    IF v_attribution_id IS NULL THEN
+      RETURN jsonb_build_object('accepted',false,'code','OPPORTUNITY_ALREADY_ATTRIBUTED');
     END IF;
+    PERFORM henvalt.reconcile_shopify_recovery_attribution_v2(v_attribution_id);
   END IF;
 
   RETURN jsonb_build_object('accepted',v_attribution_id IS NOT NULL,
@@ -533,7 +534,7 @@ BEGIN
      WHERE id=NEW.send_attempt_id
        AND tenant_id=NEW.tenant_id
        AND shopify_connection_id=NEW.shopify_connection_id
-       AND status='DELIVERED';
+       AND status IN ('SUBMITTED','DELIVERED','AMBIGUOUS');
   END IF;
   RETURN NEW;
 END;
