@@ -84,10 +84,51 @@ DECLARE
   v_created integer := 0;
   v_contact_pending integer := 0;
   v_review_required integer := 0;
+  v_converted integer := 0;
+  v_closed integer := 0;
 BEGIN
   IF p_limit IS NULL OR p_limit < 1 OR p_limit > 500 THEN
     RETURN jsonb_build_object('accepted', false, 'code', 'INVALID_LIMIT');
   END IF;
+
+  UPDATE henvalt.shopify_recovery_opportunity_v2 opp
+     SET status = 'CONVERTED', updated_at = pg_catalog.now()
+    FROM henvalt.shopify_checkout_recovery_candidate_v2 c
+    JOIN henvalt.shopify_order_identity_v2 o
+      ON o.tenant_id = c.tenant_id
+     AND o.shopify_connection_id = c.shopify_connection_id
+     AND o.checkout_token = c.checkout_token
+   WHERE opp.candidate_id = c.id
+     AND opp.tenant_id = c.tenant_id
+     AND opp.shopify_connection_id = c.shopify_connection_id
+     AND opp.status IN ('CONTACT_RESOLUTION_PENDING','REVIEW_REQUIRED');
+  GET DIAGNOSTICS v_converted = ROW_COUNT;
+
+  UPDATE henvalt.shopify_recovery_opportunity_v2 opp
+     SET status = 'CLOSED', updated_at = pg_catalog.now()
+    FROM henvalt.shopify_checkout_recovery_candidate_v2 c
+    JOIN henvalt.shopify_checkout_identity_v2 ch
+      ON ch.id = c.checkout_identity_id
+     AND ch.tenant_id = c.tenant_id
+     AND ch.shopify_connection_id = c.shopify_connection_id
+    JOIN henvalt.shopify_connections sc
+      ON sc.id = c.shopify_connection_id
+     AND sc.tenant_id = c.tenant_id
+    JOIN henvalt.shopify_app_registry ar
+      ON ar.app_key = sc.app_key
+    JOIN henvalt.tenants t
+      ON t.id = c.tenant_id
+   WHERE opp.candidate_id = c.id
+     AND opp.tenant_id = c.tenant_id
+     AND opp.shopify_connection_id = c.shopify_connection_id
+     AND opp.status IN ('CONTACT_RESOLUTION_PENDING','REVIEW_REQUIRED')
+     AND (
+       ch.checkout_status <> 'OPEN'
+       OR sc.active IS DISTINCT FROM true
+       OR ar.lifecycle_status <> 'active'
+       OR t.status <> 'ACTIVE'
+     );
+  GET DIAGNOSTICS v_closed = ROW_COUNT;
 
   WITH selected AS (
     SELECT
@@ -174,6 +215,8 @@ BEGIN
     'opportunities_created', v_created,
     'contact_resolution_pending', v_contact_pending,
     'review_required', v_review_required,
+    'converted_marked', v_converted,
+    'closed_marked', v_closed,
     'delivery_authorized', false
   );
 END;
