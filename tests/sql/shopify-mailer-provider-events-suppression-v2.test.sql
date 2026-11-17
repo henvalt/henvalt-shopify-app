@@ -284,6 +284,140 @@ END;
 $reservation_v2$;
 
 
+-- Explicit-policy exact-store recovered revenue and fee measurement (migration 023).
+DO $attribution_v2$
+DECLARE
+  v_tenant uuid:='00000000-0000-4000-8000-000000000001';
+  v_store_a uuid; v_customer_a uuid; v_opportunity_a uuid; v_provider_key text;
+  v_intervention uuid; v_attempt uuid; v_order_id uuid; v_attribution_id uuid;
+  v_ordered_at timestamptz; v_body text; v_hmac text; v_refund_body text;
+  v_result record; v_projection jsonb; v_policy_result jsonb;
+  v_net numeric(18,4); v_fee numeric(18,4); v_status text;
+BEGIN
+  SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
+  SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2
+    WHERE shopify_connection_id=v_store_a AND external_customer_reference='12345';
+  SELECT id INTO v_opportunity_a FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE shopify_connection_id=v_store_a AND customer_identity_id=v_customer_a
+    ORDER BY created_at DESC LIMIT 1;
+  SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
+    WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
+  IF v_store_a IS NULL OR v_customer_a IS NULL OR v_opportunity_a IS NULL OR v_provider_key IS NULL THEN
+    RAISE EXCEPTION 'Attribution integration prerequisites missing';
+  END IF;
+
+  v_policy_result:=henvalt.set_shopify_recovery_attribution_policy_v2(
+    v_store_a,true,24,'LAST_ELIGIBLE_TOUCH','SHOPIFY_TOTAL_PRICE',false
+  );
+  IF v_policy_result->>'accepted'<>'true' THEN RAISE EXCEPTION 'Explicit attribution policy rejected: %',v_policy_result; END IF;
+
+  UPDATE henvalt.shopify_checkout_recovery_candidate_v2
+     SET state='READY_FOR_CONTACT_RESOLUTION'
+   WHERE shopify_connection_id=v_store_a AND tenant_id=v_tenant;
+  UPDATE henvalt.shopify_recovery_opportunity_v2
+     SET status='CONTACT_RESOLUTION_PENDING'
+   WHERE id=v_opportunity_a AND tenant_id=v_tenant AND shopify_connection_id=v_store_a;
+
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,
+    step_number,status,scheduled_at
+  ) VALUES(v_tenant,v_store_a,v_opportunity_a,v_customer_a,4,'SUBMITTED',now())
+  RETURNING id INTO v_intervention;
+
+  INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
+    tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
+    provider_account_key,idempotency_key,status
+  ) VALUES(v_tenant,v_store_a,v_customer_a,v_intervention,v_provider_key,'attribution-send-store-a-001','AUTHORIZED')
+  RETURNING id INTO v_attempt;
+  UPDATE henvalt.shopify_recovery_send_attempt_v2
+     SET status='SUBMITTED',provider_message_id='attribution-message-store-a-001',submitted_at=now()
+   WHERE id=v_attempt;
+
+  v_ordered_at:=now()+interval '1 minute';
+  v_body:=jsonb_build_object(
+    'shop_id','1001','id',987655,'checkout_token','shared-checkout-token',
+    'customer',jsonb_build_object('id',12345),'total_price','100.00',
+    'currency','USD','financial_status','paid','created_at',v_ordered_at
+  )::text;
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),
+    convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    repeat('b',64),v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-a.myshopify.com','orders/create','attribution-order-store-a-001','attribution-order-event-a-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Attribution order receipt rejected: %',row_to_json(v_result); END IF;
+  v_projection:=henvalt.project_verified_shopify_order_v2(
+    repeat('b',64),'attribution-order-store-a-001',encode(convert_to(v_body,'UTF8'),'base64')
+  );
+  IF v_projection->>'accepted'<>'true' THEN RAISE EXCEPTION 'Attribution order not projected: %',v_projection; END IF;
+
+  SELECT o.id,a.id,a.net_recovered_amount,a.status
+    INTO v_order_id,v_attribution_id,v_net,v_status
+  FROM henvalt.shopify_order_identity_v2 o
+  JOIN henvalt.shopify_recovery_attributions_v2 a
+    ON a.order_identity_id=o.id AND a.tenant_id=o.tenant_id AND a.shopify_connection_id=o.shopify_connection_id
+  WHERE o.shopify_connection_id=v_store_a AND o.shopify_order_id='987655';
+  IF v_attribution_id IS NULL OR v_net<>100 OR v_status<>'CONFIRMED'
+     OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_recovery_attributions_v2 WHERE id=v_attribution_id AND send_attempt_id=v_attempt) THEN
+    RAISE EXCEPTION 'Paid exact-store order did not attribute to the eligible send: net %, status %',v_net,v_status;
+  END IF;
+  SELECT fee_amount INTO v_fee FROM henvalt.shopify_recovery_fee_measurements_v2 WHERE attribution_id=v_attribution_id;
+  IF v_fee<>5 OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_fee_measurements_v2
+    WHERE attribution_id=v_attribution_id AND status='PENDING' AND paddle_transaction_reference IS NULL
+  ) THEN RAISE EXCEPTION 'Performance fee measurement did not snapshot the configured 5 percent without charging'; END IF;
+
+  v_refund_body:=jsonb_build_object(
+    'id',335,'order_id',987655,'created_at',now()+interval '2 minutes',
+    'transactions',jsonb_build_array(jsonb_build_object('id',3,'kind','refund','status','success','amount','20.00','currency','USD'))
+  )::text;
+  v_hmac:=encode(extensions.hmac(convert_to(v_refund_body,'UTF8'),
+    convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    repeat('b',64),v_hmac,encode(convert_to(v_refund_body,'UTF8'),'base64'),
+    'store-a.myshopify.com','refunds/create','attribution-refund-store-a-001','attribution-refund-event-a-001'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Attribution refund receipt rejected: %',row_to_json(v_result); END IF;
+  v_projection:=henvalt.project_verified_shopify_refund_v2(
+    repeat('b',64),'attribution-refund-store-a-001',encode(convert_to(v_refund_body,'UTF8'),'base64')
+  );
+  IF v_projection->>'accepted'<>'true' THEN RAISE EXCEPTION 'Attribution refund not projected: %',v_projection; END IF;
+  SELECT net_recovered_amount,status INTO v_net,v_status FROM henvalt.shopify_recovery_attributions_v2 WHERE id=v_attribution_id;
+  SELECT fee_amount INTO v_fee FROM henvalt.shopify_recovery_fee_measurements_v2 WHERE attribution_id=v_attribution_id;
+  IF v_net<>80 OR v_status<>'CONFIRMED' OR v_fee<>4 THEN
+    RAISE EXCEPTION 'Partial refund did not reduce net recovered revenue and fee: net %, status %, fee %',v_net,v_status,v_fee;
+  END IF;
+
+  v_refund_body:=jsonb_build_object(
+    'id',336,'order_id',987655,'created_at',now()+interval '3 minutes',
+    'transactions',jsonb_build_array(jsonb_build_object('id',4,'kind','refund','status','success','amount','80.00','currency','USD'))
+  )::text;
+  v_hmac:=encode(extensions.hmac(convert_to(v_refund_body,'UTF8'),
+    convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    repeat('b',64),v_hmac,encode(convert_to(v_refund_body,'UTF8'),'base64'),
+    'store-a.myshopify.com','refunds/create','attribution-refund-store-a-002','attribution-refund-event-a-002'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Full attribution refund receipt rejected: %',row_to_json(v_result); END IF;
+  v_projection:=henvalt.project_verified_shopify_refund_v2(
+    repeat('b',64),'attribution-refund-store-a-002',encode(convert_to(v_refund_body,'UTF8'),'base64')
+  );
+  IF v_projection->>'accepted'<>'true' THEN RAISE EXCEPTION 'Full attribution refund not projected: %',v_projection; END IF;
+  SELECT net_recovered_amount,status INTO v_net,v_status FROM henvalt.shopify_recovery_attributions_v2 WHERE id=v_attribution_id;
+  SELECT fee_amount,status INTO v_fee,v_status FROM henvalt.shopify_recovery_fee_measurements_v2 WHERE attribution_id=v_attribution_id;
+  IF v_net<>0 OR v_status<>'VOIDED' OR v_fee<>0 THEN
+    RAISE EXCEPTION 'Full refund did not void the performance fee measurement: net %, fee status %, fee %',v_net,v_status,v_fee;
+  END IF;
+
+  IF EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_attributions_v2 a
+    JOIN henvalt.shopify_order_identity_v2 o ON o.id=a.order_identity_id
+    WHERE o.shopify_connection_id<>(SELECT id FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com')
+      AND o.checkout_token='shared-checkout-token'
+  ) THEN RAISE EXCEPTION 'Attribution crossed exact-store boundary'; END IF;
+END;
+$attribution_v2$;
+
 -- Exact-store app/uninstalled processing (migration 020).
 DO $uninstall_v2$
 DECLARE
