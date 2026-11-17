@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+export PGPASSWORD="${PGPASSWORD:-postgres}"
+psql_cmd=(psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1)
+
+set +e
+"${psql_cmd[@]}" -c "SELECT henvalt.test_cost_reservation_race_v2('store-a.myshopify.com')" >/tmp/henvalt-race-a.log 2>&1 &
+pid_a=$!
+"${psql_cmd[@]}" -c "SELECT henvalt.test_cost_reservation_race_v2('store-b.myshopify.com')" >/tmp/henvalt-race-b.log 2>&1 &
+pid_b=$!
+wait "$pid_a"
+status_a=$?
+wait "$pid_b"
+status_b=$?
+set -e
+
+if [[ "$status_a" -eq 0 && "$status_b" -eq 0 ]]; then
+  cat /tmp/henvalt-race-a.log /tmp/henvalt-race-b.log
+  echo "Both concurrent stores exceeded the merchant-wide cap." >&2
+  exit 1
+fi
+if [[ "$status_a" -ne 0 && "$status_b" -ne 0 ]]; then
+  cat /tmp/henvalt-race-a.log /tmp/henvalt-race-b.log
+  echo "Both concurrent reservations failed; expected exactly one winner." >&2
+  exit 1
+fi
+
+count=$("${psql_cmd[@]}" -Atc "SELECT count(*) FROM henvalt.shopify_delivery_cost_reservations_v2 WHERE tenant_id='00000000-0000-4000-8000-000000000001' AND send_attempt_id IN (SELECT id FROM henvalt.shopify_recovery_send_attempt_v2 WHERE idempotency_key IN ('race-store-a-myshopify-com','race-store-b-myshopify-com')) AND status='RESERVED'")
+if [[ "$count" != "1" ]]; then
+  cat /tmp/henvalt-race-a.log /tmp/henvalt-race-b.log
+  echo "Expected exactly one reservation to win the cap race; got $count." >&2
+  exit 1
+fi
+
+"${psql_cmd[@]}" -c "DROP FUNCTION henvalt.test_cost_reservation_race_v2(text); UPDATE henvalt.billing_accounts SET usage_cap_amount=10,monthly_email_limit=10 WHERE tenant_id='00000000-0000-4000-8000-000000000001';"
+echo "shopify_delivery_cost_reservation_concurrency_v2_passed"
