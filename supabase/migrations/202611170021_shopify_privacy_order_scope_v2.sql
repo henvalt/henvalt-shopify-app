@@ -166,8 +166,12 @@ BEGIN
   END IF;
 
   IF p_topic IN ('customers/data_request', 'customers/redact') THEN
-    IF jsonb_typeof(v_order_array) IS DISTINCT FROM 'array'
-       OR jsonb_array_length(v_order_array) > 10000 THEN
+    IF jsonb_typeof(v_order_array) IS DISTINCT FROM 'array' THEN
+      rejection_code := 'INVALID_ORDER_SCOPE';
+      RETURN NEXT;
+      RETURN;
+    END IF;
+    IF jsonb_array_length(v_order_array) > 10000 THEN
       rejection_code := 'INVALID_ORDER_SCOPE';
       RETURN NEXT;
       RETURN;
