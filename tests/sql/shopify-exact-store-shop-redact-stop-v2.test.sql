@@ -21,6 +21,8 @@ DECLARE
   v_processing_status text;
   v_processed_at timestamptz;
   v_job_state text;
+  v_old_oauth_state_blocked boolean := false;
+  v_new_oauth_state_blocked boolean := false;
 BEGIN
   SELECT id, active INTO v_store_a, v_active_a
   FROM henvalt.shopify_connections
@@ -37,6 +39,14 @@ BEGIN
      OR v_active_b IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'shop redact stop test requires two active synthetic stores';
   END IF;
+
+  -- This state predates shop/redact and must not be consumable afterwards.
+  INSERT INTO henvalt.shopify_oauth_states(
+    state_hash, shop_domain, expires_at, initiated_by_user_id, app_key
+  ) VALUES (
+    'shop-redact-stale-oauth-state', 'store-a.myshopify.com',
+    now() + interval '10 minutes', v_tenant, 'test_app'
+  );
 
   INSERT INTO henvalt.shopify_privacy_webhook_deliveries(
     app_key, tenant_id, connection_id, shop_domain, topic, webhook_id,
@@ -57,8 +67,48 @@ BEGIN
   SELECT state INTO v_job_state
   FROM henvalt.shopify_privacy_processing_jobs_v2 WHERE receipt_id = v_receipt;
 
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_redacted_store_tombstones_v2
+    WHERE app_key = 'test_app'
+      AND shop_domain = 'store-a.myshopify.com'
+      AND tenant_id = v_tenant
+      AND connection_id = v_store_a
+      AND receipt_id = v_receipt
+  ) THEN
+    RAISE EXCEPTION 'verified shop/redact receipt did not create exact-store OAuth tombstone';
+  END IF;
+
+  BEGIN
+    UPDATE henvalt.shopify_oauth_states
+       SET consumed_at = now()
+     WHERE state_hash = 'shop-redact-stale-oauth-state';
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    v_old_oauth_state_blocked := true;
+  END;
+
+  BEGIN
+    INSERT INTO henvalt.shopify_oauth_states(
+      state_hash, shop_domain, expires_at, initiated_by_user_id, app_key
+    ) VALUES (
+      'shop-redact-new-oauth-state', 'store-a.myshopify.com',
+      now() + interval '10 minutes', v_tenant, 'test_app'
+    );
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    v_new_oauth_state_blocked := true;
+  END;
+
+  IF NOT v_old_oauth_state_blocked OR NOT v_new_oauth_state_blocked THEN
+    RAISE EXCEPTION 'shop/redact did not block stale and new OAuth states';
+  END IF;
+
   IF v_active_a IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'shop/redact did not disable its exact store';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM henvalt.shopify_redacted_store_tombstones_v2
+    WHERE app_key = 'test_app' AND shop_domain = 'store-b.myshopify.com'
+  ) THEN
+    RAISE EXCEPTION 'shop/redact tombstone leaked into another store in the same tenant';
   END IF;
   IF v_active_b IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'shop/redact stop leaked into another store in the same tenant';
