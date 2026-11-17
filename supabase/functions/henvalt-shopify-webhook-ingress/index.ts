@@ -117,5 +117,21 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  if(topic==="refunds/create"){
+    const projected=await rpc("project_verified_shopify_refund_v2",{
+      p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
+    });
+    if(!projected.ok || !projected.row || projected.row.accepted!==true){
+      return json(503,{error:"refund_projection_unavailable"});
+    }
+    return json(200,{
+      accepted:true,
+      duplicate:receipt.duplicate===true,
+      status:receipt.receipt_status,
+      refund_projection:projected.row.status,
+      refund_adjustment_id:projected.row.refund_adjustment_id,
+    });
+  }
+
   return json(200,{accepted:true,duplicate:receipt.duplicate===true,status:receipt.receipt_status});
 });
