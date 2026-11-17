@@ -62,7 +62,8 @@ jobs:
             supabase/migrations/202611170003_shopify_email_consent_evidence_v2.sql \
             supabase/migrations/202611170004_shopify_checkout_jurisdiction_projection_v2.sql \
             supabase/migrations/202611170005_shopify_mailer_provider_events_suppression_v2.sql \
-            supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql \\\n            supabase/migrations/202611170007_shopify_contact_resolution_and_delivery_v2.sql; do
+            supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql \
+            supabase/migrations/202611170007_shopify_contact_resolution_and_delivery_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise existing Shopify V2 database contracts
