@@ -107,3 +107,11 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql
+      - name: Prepare concurrent merchant-wide cost reservation test
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-delivery-cost-reservation-concurrency-setup-v2.test.sql
+      - name: Exercise parallel two-store merchant-wide cost cap
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/sql/shopify-delivery-cost-reservation-concurrency-v2.test.sh
