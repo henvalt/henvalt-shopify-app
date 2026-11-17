@@ -21,3 +21,12 @@ test('delivery cost reservations are merchant-wide, explicit-currency, and fail 
   assert.match(migration, /WHEN NEW\.status='AMBIGUOUS' THEN 'RESERVED'/);
   assert.doesNotMatch(migration, /UPDATE henvalt\.shopify_delivery_cost_reservations_v2[\s\S]{0,300}WHEN NEW\.status='AMBIGUOUS' THEN 'RELEASED'/);
 });
+
+test('delivery context preflights configured provider cost before releasing secrets', () => {
+  assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\.resolve_shopify_delivery_context_v2/);
+  assert.match(migration, /pr\.email_unit_cost_amount/);
+  assert.match(migration, /pr\.email_unit_cost_currency/);
+  assert.match(migration, /email_unit_cost_currency <> pg_catalog\.upper/);
+  assert.doesNotMatch(migration, /MONETARY_USAGE_RESERVATION_REQUIRED/);
+  assert.match(migration, /consume inserts[\s\S]*?migration-019 trigger reserves merchant-wide cost atomically/);
+});
