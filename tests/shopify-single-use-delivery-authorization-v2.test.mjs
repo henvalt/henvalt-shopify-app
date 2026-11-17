@@ -6,7 +6,7 @@ const migration=readFileSync("supabase/migrations/202611170006_shopify_single_us
 const deliveryContract=readFileSync("docs/shopify-single-use-delivery-authorization-v2.md","utf8");
 const contactContract=readFileSync("docs/shopify-v2-contact-consent-delivery-contract.md","utf8");
 
-test("delivery permit is opaque, short-lived, single-use and hash-only at rest",()=>{
+test("delivery permit is opaque, short-lived, single-use and hash-only at rest",()=>{assert.match(migration,/jurisdiction_country_code IS NULL/);
  assert.match(migration,/permit_token_sha256 text NOT NULL UNIQUE/);
  assert.match(migration,/extensions\.digest\(pg_catalog\.convert_to\(v_token,'UTF8'\),'sha256'\)/);
  assert.match(migration,/pg_catalog\.now\(\)\+interval '3 minutes'/);
