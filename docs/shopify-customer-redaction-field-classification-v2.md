@@ -59,12 +59,13 @@ Until these blockers are resolved, the system must continue to return `safe_to_e
 
 Migration 029 adds `shopify_customer_redaction_guards_v2`, keyed by the immutable tuple `(tenant_id, shopify_connection_id, customer_identity_id)`. A claim-bound `customers/redact` processor can activate the guard only while the exact-store privacy receipt has a live queue lease and matching claim-token digest.
 
-- Permit creation and send-attempt creation now pass through BEFORE INSERT guards. Each trigger takes a key-share lock on the exact customer identity; guard activation takes an UPDATE lock on that same identity row. This serializes concurrent authorization against privacy-guard activation.
-- Existing unconsumed permits are expired, not deleted. Interventions are cancelled only when they remain `READY_FOR_AUTHORIZATION` and have no send-attempt row.
+- Permit creation and send-attempt creation pass through BEFORE INSERT guards. Each trigger takes a key-share lock on the exact customer identity; guard activation takes an UPDATE lock on that same identity row. This serializes concurrent authorization against privacy-guard activation.
+- Activation and cleanup are deliberately two transactions/RPC calls. The first commits the identity lock and guard row only. A second claim-bound RPC expires unconsumed permits and cancels only interventions with no send-attempt row. This avoids a lock-order deadlock with a concurrent permit consumer that may already hold a permit row while waiting for the customer lock.
 - Existing `AUTHORIZED` and `AMBIGUOUS` attempts remain untouched and are counted as unresolved. A provider request may already be in flight; it must be reconciled before any customer evidence is scrubbed.
-- Suppression rows/fingerprints, provider events, cost reservations, orders, refunds, attributions and fee measurements are not modified. The guard returns `safe_to_complete_privacy_request=false` and does not release itself.
-- A released guard can only be reactivated by a later valid claim. No public release operation is provided; release requires a separately reviewed policy and processor design.
+- Suppression rows/fingerprints, provider events, cost reservations, orders, refunds, attributions and fee measurements are not modified. Both RPCs return `safe_to_complete_privacy_request=false`; no release operation is provided.
+- A second active privacy receipt for a customer already guarded by another receipt is held for review rather than silently taking over the existing guard.
 
 The migration does **not** solve in-flight HTTP race windows by itself: the delivery worker must still treat a blocked consume/authorization as final and must not send on stale context. The current V2 delivery path is fail-closed for monetary reservation and has not been production-enabled. The guard is preparation code until CI validates migration 029 and a future reviewed worker integration proves the pre-send recheck.
 
 The SQL integration test covers same external customer reference in two stores, exact-store guard activation, permit expiry, cancellation of untouched intervention, denial of new permit and attempt inserts, and mismatched claim-token rejection. It does not claim a full concurrent provider HTTP test or a completed privacy request.
+
