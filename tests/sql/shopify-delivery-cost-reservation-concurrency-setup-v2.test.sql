@@ -31,7 +31,7 @@ BEGIN
   INSERT INTO henvalt.shopify_recovery_intervention_v2(
     tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,
     step_number,status,scheduled_at
-  ) VALUES(v_tenant,v_connection,v_opportunity,v_customer,99,'SUBMITTED',now())
+  ) VALUES(v_tenant,v_connection,v_opportunity,v_customer,9,'SUBMITTED',now())
   RETURNING id INTO v_intervention;
 
   INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
