@@ -28,20 +28,17 @@ BEGIN
   -- stores; only Store B receives the privacy guard.
   INSERT INTO henvalt.shopify_customer_identity_v2(
     tenant_id, shopify_connection_id, external_customer_reference
-  ) VALUES
-    (v_tenant, v_store_a, 'redaction-guard-customer-9001'),
-    (v_tenant, v_store_b, 'redaction-guard-customer-9001')
+  ) VALUES (v_tenant, v_store_a, 'redaction-guard-customer-9001')
+  RETURNING id INTO v_customer_a;
+
+  INSERT INTO henvalt.shopify_customer_identity_v2(
+    tenant_id, shopify_connection_id, external_customer_reference
+  ) VALUES (v_tenant, v_store_b, 'redaction-guard-customer-9001')
   RETURNING id INTO v_customer_b;
 
   SELECT id INTO v_customer_a
   FROM henvalt.shopify_customer_identity_v2
   WHERE tenant_id=v_tenant AND shopify_connection_id=v_store_a
-    AND external_customer_reference='redaction-guard-customer-9001';
-
-  -- RETURNING above yields the last inserted row on PostgreSQL VALUES input.
-  SELECT id INTO v_customer_b
-  FROM henvalt.shopify_customer_identity_v2
-  WHERE tenant_id=v_tenant AND shopify_connection_id=v_store_b
     AND external_customer_reference='redaction-guard-customer-9001';
 
   SELECT id INTO v_opportunity_b
