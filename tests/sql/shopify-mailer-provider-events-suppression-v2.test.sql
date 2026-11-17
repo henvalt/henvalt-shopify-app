@@ -14,6 +14,9 @@ DECLARE
   v_opportunity_b uuid;
   v_intervention uuid;
   v_attempt uuid;
+  v_intervention_late uuid;
+  v_attempt_late uuid;
+  v_late_body text:='{"type":"activity.delivered","created_at":"2026-11-17T04:35:00Z","data":{"id":"provider-event-late-002","domain_id":"domain-123","message_id":"provider-message-late-002","email_id":"provider-email-late-002","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
   v_provider_key text:=repeat('p',32);
   v_secret text:='synthetic-mailersend-webhook-secret';
   v_body text:='{"type":"activity.unsubscribed","created_at":"2026-11-17T04:30:00Z","data":{"id":"provider-event-001","domain_id":"domain-123","message_id":"provider-message-001","email_id":"provider-email-001","type":"unsubscribed","recipient":"shared@example.invalid","meta":{"unsubscribe_reason":"NO_LONGER_WANT"}}}';
@@ -78,6 +81,42 @@ BEGIN
   IF v_result->>'accepted'<>'false' OR v_result->>'code'<>'EVENT_ID_BODY_MISMATCH' THEN
     RAISE EXCEPTION 'Provider event ID reuse with changed body not rejected: %',v_result;
   END IF;
+
+  -- A provider event may arrive before the sender persists its provider message ID.
+  v_signature:=encode(extensions.hmac(convert_to(v_late_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_late_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'UNMATCHED' THEN
+    RAISE EXCEPTION 'Uncorrelated provider event was not retained as UNMATCHED: %',v_result;
+  END IF;
+
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
+  ) VALUES(v_tenant,v_store_b,v_opportunity_b,v_customer_b,2,'SUBMITTED',now())
+  RETURNING id INTO v_intervention_late;
+  INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
+    tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
+    provider_account_key,idempotency_key,provider_message_id,status,submitted_at
+  ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention_late,v_provider_key,
+    'store-b-send-late-002','provider-message-late-002','SUBMITTED',now())
+  RETURNING id INTO v_attempt_late;
+
+  -- The exact same signed event can now correlate without creating a duplicate inbox row.
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_late_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED' THEN
+    RAISE EXCEPTION 'Unmatched provider event did not correlate on retry: %',v_result;
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
+    WHERE provider_account_key=v_provider_key AND provider_event_id='provider-event-late-002'
+      AND processing_status='PROCESSED' AND send_attempt_id=v_attempt_late
+  ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
+    WHERE id=v_attempt_late AND status='DELIVERED'
+  ) THEN RAISE EXCEPTION 'Late provider event correlation did not update exact send attempt'; END IF;
 
   IF EXISTS(
     SELECT 1 FROM information_schema.columns
