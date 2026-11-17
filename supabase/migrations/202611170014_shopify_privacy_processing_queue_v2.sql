@@ -141,7 +141,7 @@ BEGIN
 
   v_token := pg_catalog.encode(extensions.gen_random_bytes(32), 'hex');
 
-  UPDATE henvalt.shopify_privacy_processing_jobs_v2
+  UPDATE henvalt.shopify_privacy_processing_jobs_v2 AS j
      SET state = 'CLAIMED',
          attempt_count = attempt_count + 1,
          claim_token_sha256 = pg_catalog.encode(
@@ -151,8 +151,8 @@ BEGIN
          lease_until = pg_catalog.now() + pg_catalog.make_interval(secs => p_lease_seconds),
          last_failure_code = NULL,
          updated_at = pg_catalog.now()
-   WHERE receipt_id = v_job.receipt_id
-  RETURNING * INTO v_job;
+   WHERE j.receipt_id = v_job.receipt_id
+  RETURNING j.* INTO v_job;
 
   UPDATE henvalt.shopify_privacy_webhook_deliveries
      SET processing_status = 'PROCESSING',
