@@ -297,19 +297,43 @@ BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
   SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2
     WHERE shopify_connection_id=v_store_a AND external_customer_reference='12345';
+  SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
+    WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
+  IF v_store_a IS NULL OR v_customer_a IS NULL OR v_provider_key IS NULL THEN
+    RAISE EXCEPTION 'Attribution integration prerequisites missing';
+  END IF;
+
+  INSERT INTO henvalt.shopify_checkout_identity_v2(
+    tenant_id,shopify_connection_id,shopify_checkout_id,shopify_checkout_token,
+    total_value,currency,customer_identity_id,source_delivery_id,checkout_status,
+    created_at,updated_at
+  )
+  SELECT v_tenant,v_store_a,NULL,'attribution-checkout-token',100,'USD',v_customer_a,d.id,
+    'OPEN',now()-interval '2 hours',now()-interval '2 hours'
+  FROM henvalt.shopify_webhook_deliveries d
+  WHERE d.shopify_delivery_id='eligibility-checkout-a'
+  ON CONFLICT(shopify_connection_id,shopify_checkout_token) DO NOTHING;
+
+  INSERT INTO henvalt.shopify_checkout_recovery_candidate_v2(
+    tenant_id,shopify_connection_id,checkout_identity_id,checkout_token,source_delivery_id,
+    last_activity_at,eligible_after,state
+  )
+  SELECT v_tenant,v_store_a,c.id,'attribution-checkout-token',c.source_delivery_id,
+    now()-interval '2 hours',now()-interval '1 minute','READY_FOR_CONTACT_RESOLUTION'
+  FROM henvalt.shopify_checkout_identity_v2 c
+  WHERE c.shopify_connection_id=v_store_a AND c.shopify_checkout_token='attribution-checkout-token'
+  ON CONFLICT(shopify_connection_id,checkout_token) DO NOTHING;
+
+  PERFORM henvalt.promote_shopify_checkout_recovery_candidates_v2(100);
   SELECT o.id INTO v_opportunity_a
   FROM henvalt.shopify_recovery_opportunity_v2 o
   JOIN henvalt.shopify_checkout_identity_v2 c
     ON c.id=o.checkout_identity_id AND c.tenant_id=o.tenant_id
    AND c.shopify_connection_id=o.shopify_connection_id
   WHERE o.shopify_connection_id=v_store_a AND o.customer_identity_id=v_customer_a
-    AND c.shopify_checkout_token='shared-checkout-token'
+    AND c.shopify_checkout_token='attribution-checkout-token'
   ORDER BY o.created_at DESC LIMIT 1;
-  SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
-    WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
-  IF v_store_a IS NULL OR v_customer_a IS NULL OR v_opportunity_a IS NULL OR v_provider_key IS NULL THEN
-    RAISE EXCEPTION 'Attribution integration prerequisites missing';
-  END IF;
+  IF v_opportunity_a IS NULL THEN RAISE EXCEPTION 'Could not create Store A attribution opportunity'; END IF;
 
   v_policy_result:=henvalt.set_shopify_recovery_attribution_policy_v2(
     v_store_a,true,24,'LAST_ELIGIBLE_TOUCH','SHOPIFY_TOTAL_PRICE',false
@@ -340,7 +364,7 @@ BEGIN
 
   v_ordered_at:=now()+interval '1 minute';
   v_body:=jsonb_build_object(
-    'shop_id','1001','id',987655,'checkout_token','shared-checkout-token',
+    'shop_id','1001','id',987655,'checkout_token','attribution-checkout-token',
     'customer',jsonb_build_object('id',12345),'total_price','100.00',
     'currency','USD','financial_status','paid','created_at',v_ordered_at
   )::text;
@@ -418,7 +442,7 @@ BEGIN
     SELECT 1 FROM henvalt.shopify_recovery_attributions_v2 a
     JOIN henvalt.shopify_order_identity_v2 o ON o.id=a.order_identity_id
     WHERE o.shopify_connection_id<>(SELECT id FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com')
-      AND o.checkout_token='shared-checkout-token'
+      AND o.checkout_token='attribution-checkout-token'
   ) THEN RAISE EXCEPTION 'Attribution crossed exact-store boundary'; END IF;
 END;
 $attribution_v2$;
