@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_mailer_provider_registry_v2 (
     CHECK(length(btrim(webhook_secret_ref))>0 AND length(btrim(recipient_fingerprint_secret_ref))>0)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_mailer_provider_registry_v2_key_tenant_uidx
+  ON henvalt.shopify_mailer_provider_registry_v2(provider_account_key,tenant_id);
+
 CREATE TABLE IF NOT EXISTS henvalt.shopify_recovery_send_attempt_v2 (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -70,6 +73,12 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_recovery_send_attempt_v2 (
   CONSTRAINT shopify_recovery_send_attempt_v2_intervention_fkey
     FOREIGN KEY(intervention_id,tenant_id,shopify_connection_id,customer_identity_id)
     REFERENCES henvalt.shopify_recovery_intervention_v2(id,tenant_id,shopify_connection_id,customer_identity_id)
+    ON UPDATE RESTRICT ON DELETE RESTRICT,
+  CONSTRAINT shopify_recovery_send_attempt_v2_id_lineage_uidx
+    UNIQUE(id,tenant_id,shopify_connection_id),
+  CONSTRAINT shopify_recovery_send_attempt_v2_provider_tenant_fkey
+    FOREIGN KEY(provider_account_key,tenant_id)
+    REFERENCES henvalt.shopify_mailer_provider_registry_v2(provider_account_key,tenant_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_recovery_send_attempt_v2_idempotency_uidx
     UNIQUE(shopify_connection_id,idempotency_key),
@@ -95,6 +104,8 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_mailer_provider_events_v2 (
   created_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT shopify_mailer_provider_events_v2_delivery_uidx
     UNIQUE(provider_account_key,provider_event_id),
+  CONSTRAINT shopify_mailer_provider_events_v2_id_lineage_uidx
+    UNIQUE(id,tenant_id,shopify_connection_id),
   CONSTRAINT shopify_mailer_provider_events_v2_send_attempt_fkey
     FOREIGN KEY(send_attempt_id,tenant_id,shopify_connection_id)
     REFERENCES henvalt.shopify_recovery_send_attempt_v2(id,tenant_id,shopify_connection_id)
@@ -122,8 +133,8 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_delivery_suppressions_v2 (
     REFERENCES henvalt.shopify_recovery_send_attempt_v2(id,tenant_id,shopify_connection_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_delivery_suppressions_v2_event_fkey
-    FOREIGN KEY(source_provider_event_id)
-    REFERENCES henvalt.shopify_mailer_provider_events_v2(id)
+    FOREIGN KEY(source_provider_event_id,tenant_id,shopify_connection_id)
+    REFERENCES henvalt.shopify_mailer_provider_events_v2(id,tenant_id,shopify_connection_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_delivery_suppressions_v2_unique
     UNIQUE(shopify_connection_id,customer_identity_id,suppression_type,source_provider_event_id)
