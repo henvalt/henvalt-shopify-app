@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+const reconciliationMigration = readFileSync(
+  new URL('../supabase/migrations/202611170013_shopify_ambiguous_delivery_reconciliation_v2.sql', import.meta.url),
+  'utf8'
+);
+
 const migration = readFileSync(
   new URL('../supabase/migrations/202611170008_shopify_delivery_cost_reservations_v2.sql', import.meta.url),
   'utf8'
@@ -29,4 +34,10 @@ test('delivery context preflights configured provider cost before releasing secr
   assert.match(migration, /email_unit_cost_currency <> pg_catalog\.upper/);
   assert.doesNotMatch(migration, /MONETARY_USAGE_RESERVATION_REQUIRED/);
   assert.match(migration, /consume inserts[\s\S]*?migration-019 trigger reserves merchant-wide cost[\s\S]*?atomically/);
+});
+
+test('verified provider outcomes settle previously ambiguous send reservations', () => {
+  assert.match(reconciliationMigration, /NEW\.status IN \([\s\S]*?'SUBMITTED','DELIVERED','SOFT_BOUNCED','HARD_BOUNCED',[\s\S]*?'UNSUBSCRIBED','COMPLAINED'[\s\S]*?\) THEN 'SETTLED'/);
+  assert.match(reconciliationMigration, /WHEN NEW\.status='FAILED' THEN 'RELEASED'/);
+  assert.match(reconciliationMigration, /WHEN NEW\.status='AMBIGUOUS' THEN 'RESERVED'/);
 });
