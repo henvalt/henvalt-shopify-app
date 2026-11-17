@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql", import.meta.url), "utf8");
 const lifecycleMigration = readFileSync(new URL("../supabase/migrations/202611170010_shopify_order_lifecycle_projection_v2.sql", import.meta.url), "utf8");
+const refundMigration = readFileSync(new URL("../supabase/migrations/202611170011_shopify_refund_adjustments_v2.sql", import.meta.url), "utf8");
 const edge = readFileSync(new URL("../supabase/functions/henvalt-shopify-webhook-ingress/index.ts", import.meta.url), "utf8");
 const docs = readFileSync(new URL("../docs/shopify-order-conversion-projection-v2.md", import.meta.url), "utf8");
 
@@ -47,4 +48,13 @@ test("order lifecycle topics project before acknowledgement", () => {
 test("order projection stores no direct customer contact data or raw payload", () => {
   assert.doesNotMatch(migration, /\\bemail\\s+text|\\bphone\\s+text|\\baddress\\s+text|line_items\\s+jsonb/i);
   assert.match(docs, /No email, phone, address, line items or raw body are stored/);
+});
+
+test("refund projection stores exact-store idempotent financial adjustments", () => {
+  assert.match(refundMigration, /shopify_order_refund_adjustments_v2/);
+  assert.match(refundMigration, /UNIQUE \(shopify_connection_id,shopify_refund_id\)/);
+  assert.match(refundMigration, /REFUND_AMOUNT_OR_CURRENCY_UNVERIFIED/);
+  assert.match(refundMigration, /project_verified_shopify_refund_v2/);
+  assert.match(edge, /topic==="refunds\/create"/);
+  assert.match(edge, /project_verified_shopify_refund_v2/);
 });
