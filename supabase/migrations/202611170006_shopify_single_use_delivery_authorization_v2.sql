@@ -180,6 +180,7 @@ BEGIN
   END IF;
   IF v_row.checkout_status<>'OPEN'
      OR v_row.shopify_checkout_token IS DISTINCT FROM v_row.checkout_token
+     OR v_row.jurisdiction_country_code IS NULL
      OR v_row.jurisdiction_country_code NOT IN ('GB','US','CA','AU')
      OR v_row.checkout_customer_id IS NULL THEN
     RETURN jsonb_build_object('authorized',false,'code','CHECKOUT_OR_JURISDICTION_INELIGIBLE');
