@@ -12,6 +12,7 @@ DECLARE
   v_active_a boolean;
   v_active_b boolean;
   v_processing_status text;
+  v_processed_at timestamptz;
   v_job_state text;
 BEGIN
   SELECT id, active INTO v_store_a, v_active_a
@@ -44,7 +45,7 @@ BEGIN
   SELECT active INTO v_active_b
   FROM henvalt.shopify_connections WHERE id = v_store_b AND tenant_id = v_tenant;
 
-  SELECT processing_status INTO v_processing_status
+  SELECT processing_status, processed_at INTO v_processing_status, v_processed_at
   FROM henvalt.shopify_privacy_webhook_deliveries WHERE id = v_receipt;
   SELECT state INTO v_job_state
   FROM henvalt.shopify_privacy_processing_jobs_v2 WHERE receipt_id = v_receipt;
@@ -55,16 +56,9 @@ BEGIN
   IF v_active_b IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'shop/redact stop leaked into another store in the same tenant';
   END IF;
-  IF v_processing_status <> 'PROCESSING' OR v_job_state <> 'READY' THEN
+  IF v_processing_status <> 'PROCESSING' OR v_job_state <> 'READY'
+     OR v_processed_at IS NOT NULL THEN
     RAISE EXCEPTION 'shop/redact receipt was not retained for privacy processing review';
-  END IF;
-  IF NOT EXISTS (
-    SELECT 1 FROM henvalt.shopify_privacy_webhook_deliveries
-    WHERE id = v_receipt
-      AND metadata->>'shop_redact_data_deleted' = 'false'
-      AND metadata->>'shop_redact_requires_review' = 'true'
-  ) THEN
-    RAISE EXCEPTION 'shop/redact stop incorrectly represented deletion as complete';
   END IF;
 END;
 $shop_redact_stop_v2$;
