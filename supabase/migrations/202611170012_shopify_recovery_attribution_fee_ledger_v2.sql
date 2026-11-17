@@ -8,15 +8,20 @@ ALTER TABLE henvalt.shopify_recovery_send_attempt_v2
   ADD COLUMN IF NOT EXISTS delivered_at timestamptz;
 
 UPDATE henvalt.shopify_recovery_send_attempt_v2 a
-   SET delivered_at=e.occurred_at
-  FROM henvalt.shopify_mailer_provider_events_v2 e
+   SET delivered_at=e.first_delivered_at
+  FROM (
+    SELECT send_attempt_id,tenant_id,shopify_connection_id,min(occurred_at) AS first_delivered_at
+    FROM henvalt.shopify_mailer_provider_events_v2
+    WHERE processing_status='PROCESSED'
+      AND event_type='activity.delivered'
+      AND occurred_at IS NOT NULL
+      AND send_attempt_id IS NOT NULL
+    GROUP BY send_attempt_id,tenant_id,shopify_connection_id
+  ) e
  WHERE e.send_attempt_id=a.id
    AND e.tenant_id=a.tenant_id
    AND e.shopify_connection_id=a.shopify_connection_id
-   AND e.processing_status='PROCESSED'
-   AND e.event_type='activity.delivered'
-   AND a.delivered_at IS NULL
-   AND e.occurred_at IS NOT NULL;
+   AND a.delivered_at IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS shopify_recovery_intervention_v2_id_tenant_connection_uidx
   ON henvalt.shopify_recovery_intervention_v2(id,tenant_id,shopify_connection_id);
