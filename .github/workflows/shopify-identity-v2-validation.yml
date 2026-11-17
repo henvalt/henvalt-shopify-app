@@ -56,7 +56,8 @@ jobs:
             supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql \
             supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql \
             supabase/migrations/202611160010_shopify_checkout_webhook_projection_v2.sql \
-            supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql \\\n            supabase/migrations/202611170001_shopify_checkout_recovery_eligibility_v2.sql; do
+            supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql \\
+            supabase/migrations/202611170001_shopify_checkout_recovery_eligibility_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise existing Shopify V2 database contracts
@@ -75,3 +76,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-order-conversion-projection-v2.test.sql
+      - name: Exercise exact-store checkout recovery eligibility
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-recovery-eligibility-v2.test.sql
