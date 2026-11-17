@@ -38,7 +38,7 @@ BEGIN
 
   INSERT INTO henvalt.shopify_mailer_provider_registry_v2(
     tenant_id,provider_account_key,mailersend_domain_id,webhook_secret_ref,recipient_fingerprint_secret_ref,status
-  ) VALUES(v_tenant,v_provider_key,'domain-123','test-mailersend-webhook-secret','test-recipient-fingerprint-key','ACTIVE');
+  ) VALUES(v_tenant,v_provider_key,'domain-123','test-mailersend-webhook-secret','test-recipient-fingerprint-key','PENDING');
 
   -- MailerSend URL validation uses its documented fixed test signing secret.
   v_signature:=encode(extensions.hmac(convert_to(v_test_body,'UTF8'),
@@ -50,6 +50,8 @@ BEGIN
      OR v_result->>'event_persisted'<>'false' THEN
     RAISE EXCEPTION 'MailerSend URL-validation test was not safely accepted: %',v_result;
   END IF;
+
+  UPDATE henvalt.shopify_mailer_provider_registry_v2 SET status='ACTIVE' WHERE provider_account_key=v_provider_key;
 
   INSERT INTO henvalt.shopify_recovery_intervention_v2(
     tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
