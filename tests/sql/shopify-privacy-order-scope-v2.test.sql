@@ -1,5 +1,7 @@
 \set ON_ERROR_STOP on
 
+BEGIN;
+
 DO $test$
 DECLARE
   v_a uuid;
@@ -97,5 +99,7 @@ BEGIN
   END IF;
 END;
 $test$;
+
+ROLLBACK;
 
 SELECT 'privacy order scope tests passed' AS result;
