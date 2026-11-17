@@ -66,3 +66,10 @@ This is scope preservation only. It does not yet prove that HENVALT owns every r
 Candidate migration `202611170022_shopify_privacy_order_scope_report_v2.sql` now surfaces the preserved order IDs in both the customer export draft and the read-only redaction impact preview. It reports requested IDs, exact-store/customer identity matches, and unmatched IDs separately. A match means only that HENVALT has an order-identity row for the same tenant, immutable Shopify connection, order ID, and customer identity.
 
 **An identity match is not a complete Shopify order export.** HENVALT's current order projection stores summary fields, not full line items or every Shopify order/customer field. The report therefore explicitly returns `export_data_complete=false` and `requires_manual_review=true`. Neither the export draft nor redaction preview can complete a request, deliver data, or delete/anonymize records.
+
+
+## Deadline monitor view (candidate migration 023)
+
+Candidate migration `202611170023_shopify_privacy_deadline_monitor_v2.sql` adds a service-role-only read view over privacy receipts and queue state. It computes the 30-day deadline, remaining time, exact-store binding status, customer-scope completeness, claim lease state, retry exhaustion, and an attention flag. It distinguishes completed, overdue, identity-review, missing-queue, failed, expired-lease, and near-deadline work.
+
+This is monitoring data only. It does not schedule itself, send alerts, assign an operator, retry a job, or complete a request. A production operational owner, alert delivery, escalation, and deadline response process remain launch requirements.
