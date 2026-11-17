@@ -21,8 +21,8 @@ test("preview inventories exact-store records and flags financial and suppressio
 });
 
 test("preview is service-role-only, read-only and cannot complete a request", () => {
-  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.preview_shopify_customer_redaction_impact_preview_v2\(uuid,text\)[\s\S]*FROM PUBLIC, anon, authenticated/);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.preview_shopify_customer_redaction_impact_preview_v2\(uuid,text\)\s+TO service_role/);
+  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.preview_shopify_customer_redaction_v2\(uuid,text\)[\s\S]*FROM PUBLIC, anon, authenticated/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.preview_shopify_customer_redaction_v2\(uuid,text\)\s+TO service_role/);
   assert.match(migration, /'safe_to_execute', false/);
   assert.match(migration, /'mutations_performed', false/);
   assert.doesNotMatch(migration, /\bDELETE\s+FROM\b|\bUPDATE\s+henvalt\./i);
