@@ -218,6 +218,8 @@ BEGIN
     currency=EXCLUDED.currency,refunded_at=EXCLUDED.refunded_at,
     source_delivery_id=EXCLUDED.source_delivery_id,updated_at=pg_catalog.now()
   WHERE henvalt.shopify_order_refund_adjustments_v2.currency=EXCLUDED.currency
+    AND henvalt.shopify_order_refund_adjustments_v2.order_identity_id=EXCLUDED.order_identity_id
+    AND henvalt.shopify_order_refund_adjustments_v2.tenant_id=EXCLUDED.tenant_id
   RETURNING id INTO v_adjustment_id;
 
   IF v_adjustment_id IS NULL THEN
