@@ -136,7 +136,7 @@ BEGIN
       AND processing_status='PROCESSED' AND send_attempt_id=v_attempt_late
   ) OR NOT EXISTS(
     SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
-    WHERE id=v_attempt_late AND status='DELIVERED'
+    WHERE id=v_attempt_late AND status='DELIVERED' AND delivered_at IS NOT NULL
   ) THEN RAISE EXCEPTION 'Late provider event correlation did not update exact send attempt'; END IF;
 
   IF EXISTS(
