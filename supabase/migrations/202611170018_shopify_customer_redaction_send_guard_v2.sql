@@ -106,8 +106,8 @@ DECLARE
   v_receipt henvalt.shopify_privacy_webhook_deliveries%ROWTYPE;
   v_customer henvalt.shopify_customer_identity_v2%ROWTYPE;
   v_claim_hash text;
-  v_expired_permits integer := 0;
-  v_cancelled_interventions integer := 0;
+  v_pending_permits integer := 0;
+  v_pending_interventions integer := 0;
   v_unresolved_attempts integer := 0;
 BEGIN
   IF p_receipt_id IS NULL
@@ -187,34 +187,33 @@ BEGIN
     RETURN jsonb_build_object('guarded', false, 'code', 'GUARD_STATE_CONFLICT');
   END IF;
 
-  -- Revoke only unconsumed permits by expiring them. Keep permit rows and
-  -- hashes as operational evidence; never touch permits tied to a send attempt.
-  UPDATE henvalt.shopify_delivery_permits_v2 p
-     SET expires_at = LEAST(p.expires_at, pg_catalog.now())
-   WHERE p.tenant_id = v_receipt.tenant_id
-     AND p.shopify_connection_id = v_receipt.connection_id
-     AND p.customer_identity_id = v_customer.id
-     AND p.consumed_at IS NULL
-     AND p.expires_at > pg_catalog.now();
-  GET DIAGNOSTICS v_expired_permits = ROW_COUNT;
+  -- Do not mutate permits/interventions in this transaction. A concurrent
+  -- consume may already hold a permit row while waiting for the customer lock;
+  -- changing permit rows here would create a lock-order deadlock. The guard is
+  -- committed first. A second claim-bound RPC performs cleanup without taking
+  -- the customer identity lock; new consumes will see the guard and abort.
 
-  -- Cancel only interventions that have not produced a send attempt. An
-  -- AUTHORIZED/AMBIGUOUS attempt may already be in flight and must be reconciled.
-  UPDATE henvalt.shopify_recovery_intervention_v2 i
-     SET status = 'CANCELLED',
-         updated_at = pg_catalog.now()
-   WHERE i.tenant_id = v_receipt.tenant_id
-     AND i.shopify_connection_id = v_receipt.connection_id
-     AND i.customer_identity_id = v_customer.id
-     AND i.status = 'READY_FOR_AUTHORIZATION'
-     AND NOT EXISTS (
-       SELECT 1
-       FROM henvalt.shopify_recovery_send_attempt_v2 a
-       WHERE a.intervention_id = i.id
-         AND a.tenant_id = i.tenant_id
-         AND a.shopify_connection_id = i.shopify_connection_id
-     );
-  GET DIAGNOSTICS v_cancelled_interventions = ROW_COUNT;
+  SELECT count(*) INTO v_pending_permits
+  FROM henvalt.shopify_delivery_permits_v2 p
+  WHERE p.tenant_id = v_receipt.tenant_id
+    AND p.shopify_connection_id = v_receipt.connection_id
+    AND p.customer_identity_id = v_customer.id
+    AND p.consumed_at IS NULL
+    AND p.expires_at > pg_catalog.now();
+
+  SELECT count(*) INTO v_pending_interventions
+  FROM henvalt.shopify_recovery_intervention_v2 i
+  WHERE i.tenant_id = v_receipt.tenant_id
+    AND i.shopify_connection_id = v_receipt.connection_id
+    AND i.customer_identity_id = v_customer.id
+    AND i.status = 'READY_FOR_AUTHORIZATION'
+    AND NOT EXISTS (
+      SELECT 1
+      FROM henvalt.shopify_recovery_send_attempt_v2 a
+      WHERE a.intervention_id = i.id
+        AND a.tenant_id = i.tenant_id
+        AND a.shopify_connection_id = i.shopify_connection_id
+    );
 
   SELECT count(*) INTO v_unresolved_attempts
   FROM henvalt.shopify_recovery_send_attempt_v2 a
@@ -229,8 +228,8 @@ BEGIN
     'customer_identity_found', true,
     'exact_store_scope_confirmed', true,
     'new_delivery_material_blocked', true,
-    'unconsumed_permits_expired', v_expired_permits,
-    'not_yet_authorized_interventions_cancelled', v_cancelled_interventions,
+    'unconsumed_permits_pending_expiry', v_pending_permits,
+    'untouched_interventions_pending_cancellation', v_pending_interventions,
     'unresolved_send_attempts_require_reconciliation', v_unresolved_attempts,
     'suppression_records_mutated', false,
     'provider_audit_records_mutated', false,
@@ -246,6 +245,137 @@ $function$;
 REVOKE ALL ON FUNCTION henvalt.begin_shopify_customer_redaction_guard_v2(uuid, text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.begin_shopify_customer_redaction_guard_v2(uuid, text)
+  TO service_role;
+
+CREATE OR REPLACE FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v2(
+  p_receipt_id uuid,
+  p_claim_token text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_receipt henvalt.shopify_privacy_webhook_deliveries%ROWTYPE;
+  v_customer_id uuid;
+  v_claim_hash text;
+  v_expired_permits integer := 0;
+  v_cancelled_interventions integer := 0;
+  v_unresolved_attempts integer := 0;
+BEGIN
+  IF p_receipt_id IS NULL
+     OR p_claim_token IS NULL
+     OR p_claim_token !~ '^[0-9a-f]{64}
+  'Exact-store per-customer fail-closed send guard during Shopify customers/redact processing. Does not implement a retention policy or data deletion.';
+COMMENT ON FUNCTION henvalt.begin_shopify_customer_redaction_guard_v2(uuid, text) IS
+  'Activates a claim-bound exact-store customer send guard. It commits the serialization lock before cleanup to avoid lock-order deadlocks. Never deletes customer data.';
+COMMENT ON FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v2(uuid, text) IS
+  'After guard activation, expires unconsumed permits and cancels only interventions with no send attempt. Preserves unresolved attempts and all suppression/provider/cost/financial records.';
+
+COMMIT;
+ THEN
+    RETURN jsonb_build_object('prepared', false, 'code', 'INVALID_CLAIM');
+  END IF;
+
+  v_claim_hash := pg_catalog.encode(
+    extensions.digest(pg_catalog.convert_to(p_claim_token, 'UTF8'), 'sha256'),
+    'hex'
+  );
+
+  SELECT r.* INTO v_receipt
+  FROM henvalt.shopify_privacy_webhook_deliveries r
+  JOIN henvalt.shopify_privacy_processing_jobs_v2 j
+    ON j.receipt_id = r.id
+  JOIN henvalt.shopify_connections sc
+    ON sc.id = r.connection_id
+   AND sc.tenant_id = r.tenant_id
+   AND sc.app_key = r.app_key
+   AND sc.shop_domain = r.shop_domain
+  WHERE r.id = p_receipt_id
+    AND r.topic = 'customers/redact'
+    AND r.connection_id IS NOT NULL
+    AND r.tenant_id IS NOT NULL
+    AND r.customer_id IS NOT NULL
+    AND j.state = 'CLAIMED'
+    AND j.lease_until > pg_catalog.now()
+    AND j.claim_token_sha256 = v_claim_hash;
+
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('prepared', false, 'code', 'CLAIM_OR_STORE_BINDING_INVALID');
+  END IF;
+
+  SELECT c.id INTO v_customer_id
+  FROM henvalt.shopify_customer_identity_v2 c
+  WHERE c.tenant_id = v_receipt.tenant_id
+    AND c.shopify_connection_id = v_receipt.connection_id
+    AND c.external_customer_reference = v_receipt.customer_id;
+
+  IF v_customer_id IS NULL OR NOT EXISTS (
+    SELECT 1
+    FROM henvalt.shopify_customer_redaction_guards_v2 g
+    WHERE g.tenant_id = v_receipt.tenant_id
+      AND g.shopify_connection_id = v_receipt.connection_id
+      AND g.customer_identity_id = v_customer_id
+      AND g.receipt_id = v_receipt.id
+      AND g.state IN ('ACTIVE', 'REVIEW_REQUIRED')
+  ) THEN
+    RETURN jsonb_build_object('prepared', false, 'code', 'ACTIVE_EXACT_STORE_GUARD_REQUIRED');
+  END IF;
+
+  -- The guard is already committed. Do not lock the customer identity here:
+  -- insert triggers can now fail fast on the guard without a lock cycle.
+  UPDATE henvalt.shopify_delivery_permits_v2 p
+     SET expires_at = LEAST(p.expires_at, pg_catalog.now())
+   WHERE p.tenant_id = v_receipt.tenant_id
+     AND p.shopify_connection_id = v_receipt.connection_id
+     AND p.customer_identity_id = v_customer_id
+     AND p.consumed_at IS NULL
+     AND p.expires_at > pg_catalog.now();
+  GET DIAGNOSTICS v_expired_permits = ROW_COUNT;
+
+  UPDATE henvalt.shopify_recovery_intervention_v2 i
+     SET status = 'CANCELLED',
+         updated_at = pg_catalog.now()
+   WHERE i.tenant_id = v_receipt.tenant_id
+     AND i.shopify_connection_id = v_receipt.connection_id
+     AND i.customer_identity_id = v_customer_id
+     AND i.status = 'READY_FOR_AUTHORIZATION'
+     AND NOT EXISTS (
+       SELECT 1
+       FROM henvalt.shopify_recovery_send_attempt_v2 a
+       WHERE a.intervention_id = i.id
+         AND a.tenant_id = i.tenant_id
+         AND a.shopify_connection_id = i.shopify_connection_id
+     );
+  GET DIAGNOSTICS v_cancelled_interventions = ROW_COUNT;
+
+  SELECT count(*) INTO v_unresolved_attempts
+  FROM henvalt.shopify_recovery_send_attempt_v2 a
+  WHERE a.tenant_id = v_receipt.tenant_id
+    AND a.shopify_connection_id = v_receipt.connection_id
+    AND a.customer_identity_id = v_customer_id
+    AND a.status IN ('AUTHORIZED', 'AMBIGUOUS');
+
+  RETURN jsonb_build_object(
+    'prepared', true,
+    'exact_store_scope_confirmed', true,
+    'unconsumed_permits_expired', v_expired_permits,
+    'not_yet_authorized_interventions_cancelled', v_cancelled_interventions,
+    'unresolved_send_attempts_require_reconciliation', v_unresolved_attempts,
+    'suppression_records_mutated', false,
+    'provider_audit_records_mutated', false,
+    'cost_reservations_mutated', false,
+    'order_refund_attribution_fee_records_mutated', false,
+    'customer_data_deleted', false,
+    'safe_to_complete_privacy_request', false
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v2(uuid, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.prepare_shopify_customer_redaction_send_stop_v2(uuid, text)
   TO service_role;
 
 COMMENT ON TABLE henvalt.shopify_customer_redaction_guards_v2 IS
