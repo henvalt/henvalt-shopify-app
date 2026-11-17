@@ -9,6 +9,9 @@ DECLARE
   v_b record;
   v_retry record;
   v_ok boolean;
+  v_customer_a uuid;
+  v_customer_b uuid;
+  v_export jsonb;
 BEGIN
   SELECT id INTO v_a_id
   FROM henvalt.shopify_privacy_webhook_deliveries
@@ -52,6 +55,50 @@ BEGIN
 
   IF v_a.claim_token = v_b.claim_token THEN
     RAISE EXCEPTION 'privacy claim tokens must be unique';
+  END IF;
+
+  -- Same Shopify customer ID may exist in two different stores in one tenant.
+  -- Export must resolve only the customer identity belonging to the receipt's
+  -- immutable connection and must not leak the other store's session aliases.
+  INSERT INTO henvalt.shopify_customer_identity_v2 (
+    tenant_id, shopify_connection_id, external_customer_reference
+  ) VALUES
+    (v_a.tenant_id, v_a.connection_id, '12345'),
+    (v_b.tenant_id, v_b.connection_id, '12345')
+  RETURNING id INTO v_customer_a;
+
+  SELECT id INTO v_customer_b
+  FROM henvalt.shopify_customer_identity_v2
+  WHERE tenant_id = v_b.tenant_id
+    AND shopify_connection_id = v_b.connection_id
+    AND external_customer_reference = '12345';
+
+  INSERT INTO henvalt.shopify_session_identity_v2 (
+    tenant_id, shopify_connection_id, session_reference, customer_identity_id
+  ) VALUES
+    (v_a.tenant_id, v_a.connection_id, 'privacy-session-store-a', v_customer_a),
+    (v_b.tenant_id, v_b.connection_id, 'privacy-session-store-b', v_customer_b);
+
+  INSERT INTO henvalt.shopify_session_alias_identity_v2 (
+    tenant_id, shopify_connection_id, alias_reference, session_reference
+  ) VALUES
+    (v_a.tenant_id, v_a.connection_id, 'privacy-alias-store-a', 'privacy-session-store-a'),
+    (v_b.tenant_id, v_b.connection_id, 'privacy-alias-store-b', 'privacy-session-store-b');
+
+  v_export := henvalt.build_shopify_customer_privacy_export_v2(v_a_id, v_a.claim_token);
+  IF v_export->>'exported' <> 'true'
+     OR v_export->>'customer_identity_found' <> 'true'
+     OR v_export->>'completion_eligible' <> 'false'
+     OR v_export->>'legacy_scope_review_required' <> 'true'
+     OR jsonb_array_length(v_export #> '{records,sessions}') <> 1
+     OR jsonb_array_length(v_export #> '{records,session_aliases}') <> 1
+     OR v_export::text LIKE '%privacy-session-store-b%'
+     OR v_export::text LIKE '%privacy-alias-store-b%' THEN
+    RAISE EXCEPTION 'customer export was not exact-store scoped or did not require legacy review: %', v_export;
+  END IF;
+
+  IF (henvalt.build_shopify_customer_privacy_export_v2(v_a_id, v_b.claim_token)->>'exported') <> 'false' THEN
+    RAISE EXCEPTION 'a different store claim token accessed this customer export';
   END IF;
 
   IF EXISTS (
