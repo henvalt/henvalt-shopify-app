@@ -59,3 +59,10 @@ Do not submit or release the public app until the three compliance topics are co
 The candidate migration `202611170021_shopify_privacy_order_scope_v2.sql` adds a service-role-only child table keyed by the verified privacy receipt. It stores `orders_requested[]` as `REQUESTED` and `orders_to_redact[]` as `TO_REDACT`, preserving array order and numeric Shopify IDs while rejecting malformed, duplicate, zero, negative, oversized, or over-limit arrays. The receipt's body digest remains the idempotency evidence; repeated identical deliveries do not create duplicate order rows, and changed-body reuse remains rejected.
 
 This is scope preservation only. It does not yet prove that HENVALT owns every requested order record, does not fetch or export Shopify order data, does not execute deletion, and does not authorize completion. Exact-store processors must separately verify each requested order against the same immutable connection before acting. Email-only customer requests remain review-only.
+
+
+## Exact-store order scope reporting (candidate migration 022)
+
+Candidate migration `202611170022_shopify_privacy_order_scope_report_v2.sql` now surfaces the preserved order IDs in both the customer export draft and the read-only redaction impact preview. It reports requested IDs, exact-store/customer identity matches, and unmatched IDs separately. A match means only that HENVALT has an order-identity row for the same tenant, immutable Shopify connection, order ID, and customer identity.
+
+**An identity match is not a complete Shopify order export.** HENVALT's current order projection stores summary fields, not full line items or every Shopify order/customer field. The report therefore explicitly returns `export_data_complete=false` and `requires_manual_review=true`. Neither the export draft nor redaction preview can complete a request, deliver data, or delete/anonymize records.
