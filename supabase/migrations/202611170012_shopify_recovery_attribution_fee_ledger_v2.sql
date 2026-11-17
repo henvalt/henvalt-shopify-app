@@ -465,8 +465,16 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $function$
+DECLARE v_attribution_id uuid;
 BEGIN
-  PERFORM henvalt.reconcile_shopify_recovery_attribution_v2(NEW.id);
+  FOR v_attribution_id IN
+    SELECT a.id FROM henvalt.shopify_recovery_attributions_v2 a
+    WHERE a.order_identity_id=NEW.order_identity_id
+      AND a.tenant_id=NEW.tenant_id
+      AND a.shopify_connection_id=NEW.shopify_connection_id
+  LOOP
+    PERFORM henvalt.reconcile_shopify_recovery_attribution_v2(v_attribution_id);
+  END LOOP;
   RETURN NEW;
 END;
 $function$;
