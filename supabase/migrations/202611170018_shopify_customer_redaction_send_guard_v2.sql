@@ -182,6 +182,7 @@ BEGIN
     WHERE g.tenant_id = v_receipt.tenant_id
       AND g.shopify_connection_id = v_receipt.connection_id
       AND g.customer_identity_id = v_customer.id
+      AND g.receipt_id = v_receipt.id
       AND g.state IN ('ACTIVE', 'REVIEW_REQUIRED')
   ) THEN
     RETURN jsonb_build_object('guarded', false, 'code', 'GUARD_STATE_CONFLICT');
