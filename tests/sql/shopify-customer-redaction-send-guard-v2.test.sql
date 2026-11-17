@@ -59,7 +59,7 @@ BEGIN
   FROM generate_series(1,10) AS steps(n)
   WHERE NOT EXISTS (
     SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
-    WHERE i.opportunity_id=v_opportunity_b AND i.step_number=candidate
+    WHERE i.opportunity_id=v_opportunity_b AND i.step_number=steps.n
   )
   ORDER BY steps.n
   LIMIT 1;
