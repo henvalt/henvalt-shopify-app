@@ -1,6 +1,6 @@
 # HENVALT exact-store privacy lifecycle V2
 
-**Status:** customer export, customer redaction and shop redaction remain design-only. Migration 025 adds a service-role-only, leased processing queue for verified privacy receipts, with exact-store claim validation, retry leases, hashed claim tokens and confirmed-completion gating. It does not export or delete data. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion. All work remains branch-only.
+**Status:** customer export, customer redaction and shop redaction remain design-only. Migration 025 adds a service-role-only, leased processing queue for verified privacy receipts, with exact-store claim validation, retry leases, hashed claim tokens and confirmed-completion gating. Identity V2 CI run #375 passed the migration and disposable PostgreSQL queue tests. It does not export or delete data. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion. All work remains branch-only.
 
 ## 1. Non-negotiable scope
 
