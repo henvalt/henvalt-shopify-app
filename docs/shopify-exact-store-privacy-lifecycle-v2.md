@@ -133,3 +133,18 @@ Migration 026 adds `henvalt.build_shopify_customer_privacy_export_v2(receipt_id,
 Identity V2 CI run #393 passed migrations 001–026 and the full disposable PostgreSQL suite, including the two-store export test where both stores use the same Shopify customer ID but have distinct sessions and aliases. The export for Store A did not contain Store B's session or alias, and a Store B claim token could not access Store A's export.
 
 Open before launch: reconcile legacy tenant-scoped customer/session/checkout/event records, review the exported field list with applicable privacy requirements, implement secure export delivery/retention, and only then permit completion.
+
+## 10. Customer redaction impact preview (migration 027)
+
+Migration 027 adds `henvalt.preview_shopify_customer_redaction_v2(receipt_id, claim_token)` as a read-only planning step:
+
+- It requires a current, unexpired claim for a verified `customers/redact` or `customers/data_request` receipt and re-binds receipt → exact connection → customer identity.
+- It returns counts only for the requested customer's V2 graph in that exact connection: sessions/aliases, pixel events, checkouts/candidates/opportunities, consent, interventions, permits, attempts, suppressions, provider events, cost reservations, orders/refunds, attributions and fee measurements.
+- It returns no customer identifier, email, recipient fingerprint, provider secret, or row payload.
+- It explicitly identifies accounting, provider audit and suppression-retention dependencies.
+- It always blocks execution while legacy tenant-scoped data, retention policy, suppression policy, cost-ledger detachment and provider-audit FK detachment remain unresolved.
+- It is service-role-only and contains no DELETE/UPDATE statements. It does not complete or mutate a privacy request.
+
+The disposable PostgreSQL test exercises the preview using two stores with the same Shopify customer ID. Store A's preview must count only Store A's session/alias, and the customer identity must still exist after the preview. CI runs the full migration chain through 027 and static security contracts.
+
+This is not a redaction processor. It is a safe inventory that informs the required FK/retention migration before any destructive operation is designed.
