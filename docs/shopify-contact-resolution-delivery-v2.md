@@ -1,6 +1,6 @@
 # V2 trusted contact resolution and MailerSend delivery
 
-Status: candidate migration 018 and Edge Function are branch-only. Not applied or deployed. No secrets have been seeded.
+Status: candidate migrations 018–019 and Edge Function are branch-only. Disposable PostgreSQL CI run #235 passed migrations 001–019 and the delivery-cost reservation integration checks. Not applied or deployed. No secrets have been seeded.
 
 ## Security boundary
 
@@ -10,6 +10,8 @@ Status: candidate migration 018 and Edge Function are branch-only. Not applied o
 - Shopify email is retrieved by Admin GraphQL using the exact connection's shop domain, access token, and Shopify customer ID. There is no email fallback or tenant-level customer match.
 - Email stays in Edge Function memory. The function computes a keyed HMAC fingerprint and passes only that fingerprint to the permit RPC.
 - Permit issue and consume re-check checkout, same-store order absence, current subscribed consent, supported jurisdiction, suppression, app/store/tenant, verified sender, provider, and non-test billing entitlement.
+- The resolver preflights an explicit positive provider unit cost in the merchant billing currency before returning Vault-held credentials to the trusted Edge Function. This is configuration validation, not the actual spend reservation.
+- Permit consumption inserts the `AUTHORIZED` send attempt. Migration 019's `AFTER INSERT` trigger locks the merchant billing account row, aggregates all stores for that tenant, checks the monetary cap and monthly email limit, and inserts the reservation in the same transaction. If the trigger rejects the attempt, the insert and permit-consumption transaction roll back; the Edge Function does not call MailerSend.
 - Shopify expiring offline tokens use the existing serialized refresh lease. Refresh tokens are never logged.
 - The Edge Function sends one recipient to MailerSend and never returns email, customer ID, access token, API token, fingerprint secret, or permit token to its caller.
 
@@ -18,7 +20,8 @@ Status: candidate migration 018 and Edge Function are branch-only. Not applied o
 - MailerSend's Email API returns HTTP 202 and an x-message-id when accepted asynchronously.
 - Successful submission is recorded against the exact-store send attempt.
 - Explicit provider rejection is recorded as FAILED.
-- Network timeout or a 202 without a message ID is recorded as AMBIGUOUS and is never automatically resent.
+- Network timeout or a 202 without a message ID is recorded as AMBIGUOUS and is never automatically resent. Its cost reservation remains RESERVED.
+- SUBMITTED settles the reservation; FAILED releases it; AMBIGUOUS remains reserved conservatively. A provider/operations reconciliation path for ambiguous outcomes is still required.
 - If MailerSend accepts but recording the message ID fails, the function returns a safe pending status; provider-event reconciliation is required.
 
 ## Configuration and launch blockers
@@ -28,13 +31,13 @@ Status: candidate migration 018 and Edge Function are branch-only. Not applied o
 3. Verify a sender profile for the exact Shopify store.
 4. Obtain Shopify Level 2 protected customer data approval for email access.
 5. Activate a merchant billing entitlement with an agreed performance percentage and monetary cap reservation. The current live billing account remains PENDING/test-mode/0%, so it is blocked.
-6. Implement monetary usage-cap reservation/reconciliation and complete end-to-end tests.
+6. Add a parallel-transaction two-store race test and implement a safe reconciliation path for AMBIGUOUS reservations; then complete end-to-end tests.
 
 ## Non-actions
 
 No production SQL, Edge Function, Cloudflare Worker, n8n workflow, Shopify app or MailerSend account was changed. No secret values were read, created or copied. No customer email was sent.
 
 
-## Additional fail-closed condition
+## Reservation validation
 
-The resolver currently returns MONETARY_USAGE_RESERVATION_REQUIRED before disclosing any Vault-held credentials. The existing positive cap amount is not a reservation. No delivery can proceed until an atomic monetary cap reservation and reconciliation workflow is implemented and tested.
+CI run #235 passed static contract tests and disposable PostgreSQL integration checks for cross-store cap aggregation, missing provider unit cost, currency mismatch, merchant monthly email limit, and reservation transitions for FAILED, AMBIGUOUS and SUBMITTED outcomes. The billing-account `FOR UPDATE` lock is present to serialize concurrent stores, but a true parallel-transaction race test remains open. AMBIGUOUS reservations are deliberately retained until an explicit reconciliation process exists.
