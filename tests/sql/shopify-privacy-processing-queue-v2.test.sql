@@ -13,6 +13,7 @@ DECLARE
   v_customer_b uuid;
   v_export jsonb;
   v_preview jsonb;
+  v_fk_map jsonb;
 BEGIN
   SELECT id INTO v_a_id
   FROM henvalt.shopify_privacy_webhook_deliveries
@@ -116,6 +117,33 @@ BEGIN
     WHERE id = v_customer_a AND shopify_connection_id = v_a.connection_id
   ) THEN
     RAISE EXCEPTION 'redaction impact preview unexpectedly mutated customer identity';
+  END IF;
+
+  v_fk_map := henvalt.shopify_customer_redaction_fk_dependency_map_v2();
+  IF v_fk_map->>'root_table' <> 'henvalt.shopify_customer_identity_v2'
+     OR v_fk_map->>'read_only' <> 'true'
+     OR (v_fk_map->>'dependency_count')::integer < 10
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_catalog.jsonb_array_elements(v_fk_map->'dependencies') edge
+       WHERE edge->>'constraint' = 'shopify_session_identity_v2_customer_same_connection_fkey'
+         AND edge->>'on_delete' = 'SET NULL'
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_catalog.jsonb_array_elements(v_fk_map->'dependencies') edge
+       WHERE edge->>'constraint' = 'shopify_session_alias_identity_v2_session_same_connection_fkey'
+         AND edge->>'on_delete' = 'CASCADE'
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_catalog.jsonb_array_elements(v_fk_map->'dependencies') edge
+       WHERE edge->>'constraint' = 'shopify_delivery_suppressions_v2_customer_fkey'
+         AND edge->>'on_delete' = 'RESTRICT'
+     )
+     OR NOT EXISTS (
+       SELECT 1 FROM pg_catalog.jsonb_array_elements(v_fk_map->'dependencies') edge
+       WHERE edge->>'constraint' = 'shopify_recovery_fee_measurements_v2_attribution_fkey'
+         AND edge->>'on_delete' = 'RESTRICT'
+     ) THEN
+    RAISE EXCEPTION 'FK dependency inventory omitted critical redaction dependencies: %', v_fk_map;
   END IF;
 
   IF EXISTS (
