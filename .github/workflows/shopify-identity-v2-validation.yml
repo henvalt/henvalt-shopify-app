@@ -36,7 +36,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
       - name: Run identity graph contract tests
-        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs tests/shopify-order-conversion-projection-v2.test.mjs tests/shopify-checkout-recovery-eligibility-v2.test.mjs tests/shopify-recovery-opportunity-v2.test.mjs tests/shopify-email-consent-evidence-v2.test.mjs
+        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs tests/shopify-order-conversion-projection-v2.test.mjs tests/shopify-checkout-recovery-eligibility-v2.test.mjs tests/shopify-recovery-opportunity-v2.test.mjs tests/shopify-email-consent-evidence-v2.test.mjs tests/shopify-checkout-jurisdiction-projection-v2.test.mjs
       - name: Create disposable database baseline
         env:
           PGPASSWORD: postgres
@@ -59,7 +59,8 @@ jobs:
             supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql \
             supabase/migrations/202611170001_shopify_checkout_recovery_eligibility_v2.sql \
             supabase/migrations/202611170002_shopify_recovery_opportunity_foundation_v2.sql \
-            supabase/migrations/202611170003_shopify_email_consent_evidence_v2.sql; do
+            supabase/migrations/202611170003_shopify_email_consent_evidence_v2.sql \
+            supabase/migrations/202611170004_shopify_checkout_jurisdiction_projection_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise existing Shopify V2 database contracts
@@ -90,3 +91,8 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-email-consent-evidence-v2.test.sql
+
+      - name: Exercise checkout jurisdiction projection
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-jurisdiction-projection-v2.test.sql
