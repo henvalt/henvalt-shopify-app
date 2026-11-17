@@ -62,16 +62,13 @@ BEGIN
   -- immutable connection and must not leak the other store's session aliases.
   INSERT INTO henvalt.shopify_customer_identity_v2 (
     tenant_id, shopify_connection_id, external_customer_reference
-  ) VALUES
-    (v_a.tenant_id, v_a.connection_id, '12345'),
-    (v_b.tenant_id, v_b.connection_id, '12345')
+  ) VALUES (v_a.tenant_id, v_a.connection_id, '12345')
   RETURNING id INTO v_customer_a;
 
-  SELECT id INTO v_customer_b
-  FROM henvalt.shopify_customer_identity_v2
-  WHERE tenant_id = v_b.tenant_id
-    AND shopify_connection_id = v_b.connection_id
-    AND external_customer_reference = '12345';
+  INSERT INTO henvalt.shopify_customer_identity_v2 (
+    tenant_id, shopify_connection_id, external_customer_reference
+  ) VALUES (v_b.tenant_id, v_b.connection_id, '12345')
+  RETURNING id INTO v_customer_b;
 
   INSERT INTO henvalt.shopify_session_identity_v2 (
     tenant_id, shopify_connection_id, session_reference, customer_identity_id
