@@ -38,9 +38,9 @@ DECLARE
   v_privacy_hmac text;
   v_changed_privacy_body text := '{"shop_domain":"store-a.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765},"orders_requested":[299938,280263,220458],"changed":true}';
   v_changed_privacy_hmac text;
-  v_second_shop_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"2002","customer":{"id":12345},"data_request":{"id":98765}}';
+  v_second_shop_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"2002","customer":{"id":12345},"data_request":{"id":98765},"orders_requested":[299938,280263,220458]}';
   v_second_shop_hmac text;
-  v_wrong_shop_id_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765}}';
+  v_wrong_shop_id_body text := '{"shop_domain":"store-b.myshopify.com","shop_id":"1001","customer":{"id":12345},"data_request":{"id":98765},"orders_requested":[299938,280263,220458]}';
   v_wrong_shop_id_hmac text;
 BEGIN
   v_finalized := henvalt.control_plane_finalize_shopify_oauth_install_app_aware(
