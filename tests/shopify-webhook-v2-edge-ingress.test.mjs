@@ -16,8 +16,8 @@ test("Checkout topics require exact-store verified checkout projection before ac
  assert.match(src,/checkout_projection_unavailable/);
 });
 
-test("Order creation topics require exact-store conversion projection before acknowledgement",()=>{
- assert.match(src,/topic==="orders\/create"/);
+test("Order lifecycle topics require exact-store projection before acknowledgement",()=>{
+ assert.match(src,/orders\/create/);assert.match(src,/orders\/updated/);assert.match(src,/orders\/paid/);assert.match(src,/orders\/cancelled/);
  assert.match(src,/project_verified_shopify_order_v2/);
  assert.match(src,/order_projection_unavailable/);
 });
