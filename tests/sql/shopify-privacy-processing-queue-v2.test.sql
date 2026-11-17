@@ -12,6 +12,7 @@ DECLARE
   v_customer_a uuid;
   v_customer_b uuid;
   v_export jsonb;
+  v_preview jsonb;
 BEGIN
   SELECT id INTO v_a_id
   FROM henvalt.shopify_privacy_webhook_deliveries
@@ -96,6 +97,25 @@ BEGIN
 
   IF (henvalt.build_shopify_customer_privacy_export_v2(v_a_id, v_b.claim_token)->>'exported') <> 'false' THEN
     RAISE EXCEPTION 'a different store claim token accessed this customer export';
+  END IF;
+
+  v_preview := henvalt.preview_shopify_customer_redaction_v2(v_a_id, v_a.claim_token);
+  IF v_preview->>'previewed' <> 'true'
+     OR v_preview->>'exact_store_scope_confirmed' <> 'true'
+     OR v_preview->>'safe_to_execute' <> 'false'
+     OR v_preview->>'mutations_performed' <> 'false'
+     OR (v_preview #>> '{record_counts,sessions}')::integer <> 1
+     OR (v_preview #>> '{record_counts,session_aliases}')::integer <> 1
+     OR v_preview::text LIKE '%privacy-session-store-b%'
+     OR v_preview::text LIKE '%privacy-alias-store-b%' THEN
+    RAISE EXCEPTION 'customer redaction preview was not read-only and exact-store scoped: %', v_preview;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_customer_identity_v2
+    WHERE id = v_customer_a AND shopify_connection_id = v_a.connection_id
+  ) THEN
+    RAISE EXCEPTION 'redaction impact preview unexpectedly mutated customer identity';
   END IF;
 
   IF EXISTS (
