@@ -197,6 +197,7 @@ DECLARE
   v_inserted uuid;
   v_attempt record;
   v_suppression_type text;
+  v_existing_status text;
 BEGIN
   IF p_provider_account_key IS NULL OR length(p_provider_account_key)<24 OR length(p_provider_account_key)>96
      OR p_signature_hex IS NULL OR p_signature_hex !~ '^[0-9a-fA-F]{64}$'
@@ -267,14 +268,19 @@ BEGIN
   RETURNING id INTO v_inserted;
 
   IF v_inserted IS NULL THEN
-    IF EXISTS(
-      SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
-      WHERE provider_account_key=p_provider_account_key
-        AND provider_event_id=v_event_id AND body_sha256<>v_digest
-    ) THEN
+    SELECT id,processing_status INTO v_inserted,v_existing_status
+    FROM henvalt.shopify_mailer_provider_events_v2
+    WHERE provider_account_key=p_provider_account_key
+      AND provider_event_id=v_event_id AND body_sha256=v_digest
+    FOR UPDATE;
+    IF v_inserted IS NULL THEN
       RETURN jsonb_build_object('accepted',false,'code','EVENT_ID_BODY_MISMATCH');
     END IF;
-    RETURN jsonb_build_object('accepted',true,'status','DUPLICATE');
+    -- An unmatched event may have arrived before the provider message ID was
+    -- persisted. A same-body retry is allowed to complete that mapping later.
+    IF v_existing_status<>'UNMATCHED' THEN
+      RETURN jsonb_build_object('accepted',true,'status','DUPLICATE');
+    END IF;
   END IF;
 
   IF v_message_id IS NULL THEN
