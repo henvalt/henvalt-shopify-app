@@ -59,7 +59,7 @@ jobs:
             supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql \
             supabase/migrations/202611170001_shopify_checkout_recovery_eligibility_v2.sql \
             supabase/migrations/202611170002_shopify_recovery_opportunity_foundation_v2.sql \
-            supabase/migrations/202611170003_shopify_consent_evidence_v2.sql \
+            supabase/migrations/202611170003_shopify_email_consent_evidence_v2.sql \
             supabase/migrations/202611170004_shopify_checkout_jurisdiction_projection_v2.sql \
             supabase/migrations/202611170005_shopify_mailer_provider_events_suppression_v2.sql \
             supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql; do
