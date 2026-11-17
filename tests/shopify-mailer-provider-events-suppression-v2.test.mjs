@@ -26,4 +26,7 @@ test("provider event retries are idempotent and unmatched events can later be co
  assert.match(migration,/v_existing_status<>'UNMATCHED'/);
  assert.match(migration,/UNMATCHED/);
  assert.match(docs,/1 December 2026/);
+ const sql=readFileSync("tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql","utf8");
+ assert.match(sql,/Unmatched provider event did not correlate on retry/);
+ assert.match(sql,/Late provider event correlation did not update exact send attempt/);
 });
