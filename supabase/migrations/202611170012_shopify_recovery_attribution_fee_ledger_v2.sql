@@ -366,7 +366,7 @@ BEGIN
     AND i.opportunity_id=v_opportunity.id
     AND a.status IN ('SUBMITTED','DELIVERED')
     AND (
-      (v_policy.require_delivery_confirmation IS TRUE AND a.status='DELIVERED' AND a.delivered_at IS NOT NULL)
+      (v_policy.require_delivery_confirmation IS TRUE AND a.status='DELIVERED' AND a.delivered_at IS NOT NULL AND a.submitted_at IS NOT NULL AND a.delivered_at>=a.submitted_at)
       OR
       (v_policy.require_delivery_confirmation IS FALSE AND a.submitted_at IS NOT NULL)
     )
