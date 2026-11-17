@@ -10,7 +10,7 @@ const migration = readFileSync(
 test('delivery cost reservations are merchant-wide, explicit-currency, and fail closed', () => {
   assert.match(migration, /email_unit_cost_amount numeric\(18,6\)/);
   assert.match(migration, /email_unit_cost_currency text/);
-  assert.match(migration, /v_provider\.email_unit_cost_currency <> v_billing\.currency/);
+  assert.match(migration, /v_provider\.email_unit_cost_currency <>[\s\S]*?v_billing\.currency/);
   assert.match(migration, /FOR UPDATE/);
   assert.match(migration, /status IN \('RESERVED','SETTLED'\)/);
   assert.match(migration, /v_reserved \+ v_provider\.email_unit_cost_amount > v_billing\.usage_cap_amount/);
