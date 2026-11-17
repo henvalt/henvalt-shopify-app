@@ -6,6 +6,10 @@ const migration = readFileSync(
   "supabase/migrations/202611170019_shopify_exact_store_shop_redact_stop_v2.sql",
   "utf8"
 );
+const tombstone = readFileSync(
+  "supabase/migrations/202611170020_shopify_redacted_store_oauth_tombstone_v2.sql",
+  "utf8"
+);
 const integration = readFileSync(
   "tests/sql/shopify-exact-store-shop-redact-stop-v2.test.sql",
   "utf8"
@@ -34,4 +38,16 @@ test("shop/redact remains queued for review and never claims deletion completed"
   assert.match(integration, /shop\/redact stop leaked into another store/i);
   assert.match(integration, /v_processed_at IS NOT NULL/);
   assert.match(integration, /ROLLBACK/);
+});
+
+test("shop/redact tombstones the exact app/store and blocks stale or new OAuth states", () => {
+  assert.match(tombstone, /PRIMARY KEY \(app_key, shop_domain\)/);
+  assert.match(tombstone, /NEW\.shop_domain[\s\S]*NEW\.app_key/);
+  assert.match(tombstone, /shopify_store_redacted_reinstall_requires_new_connection_lineage/);
+  assert.match(tombstone, /BEFORE INSERT OR UPDATE OF consumed_at ON henvalt\.shopify_oauth_states/);
+  assert.match(tombstone, /NEW\.connection_id[\s\S]*NEW\.tenant_id[\s\S]*NEW\.app_key[\s\S]*NEW\.shop_domain/);
+  assert.match(integration, /shop-redact-stale-oauth-state/);
+  assert.match(integration, /shop-redact-new-oauth-state/);
+  assert.match(integration, /v_old_oauth_state_blocked/);
+  assert.match(integration, /v_new_oauth_state_blocked/);
 });
