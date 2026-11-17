@@ -143,7 +143,7 @@ BEGIN
 
   UPDATE henvalt.shopify_privacy_processing_jobs_v2 AS j
      SET state = 'CLAIMED',
-         attempt_count = attempt_count + 1,
+         attempt_count = j.attempt_count + 1,
          claim_token_sha256 = pg_catalog.encode(
            extensions.digest(pg_catalog.convert_to(v_token, 'UTF8'), 'sha256'), 'hex'
          ),
