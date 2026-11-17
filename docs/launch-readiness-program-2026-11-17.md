@@ -78,6 +78,7 @@ Status: candidate migrations 001–013 passed disposable-database validation and
 Required:
 1. Apply only after production-schema parity review and separate approval.
 2. Verify the actual Worker-to-Edge-to-Vault HMAC path with a real Shopify delivery.
+3. Verify public-app Level 2 protected customer data approval for email before production contact resolution.
 3. Project checkout, customer, session, pixel and order identities using immutable connection IDs.
 4. Keep ambiguous historical events quarantined; never infer store identity from an unauthenticated shop header or ambiguous metadata.
 5. Make duplicate deliveries idempotent and reject same delivery ID with a changed body digest.
@@ -86,11 +87,11 @@ Exit evidence: two real test stores can reuse checkout/customer/order identifier
 
 ### C. Recovery eligibility, contact resolution and consent
 
-Status: eligibility candidate in migration 012 and exact-store opportunity promotion candidate in migration 013; contact resolution, consent evaluation and V2 recovery sequence are not implemented.
+Status: eligibility candidate in migration 012 and exact-store opportunity promotion candidate in migration 013; contact resolution and V2 recovery sequence are not implemented. A branch-only exact-store consent evidence projector (migration 014) and checkout-country projector (migration 015) are now prepared; neither is applied or deployed.
 
 Required:
 1. Use the V2 exact-store candidate and opportunity layers, not legacy tenant-wide candidate readers.
-2. Resolve contact only through the same verified Shopify connection and approved customer data scope.
+2. Resolve contact only through the same verified Shopify connection and approved customer data scope. Public-app email access is Level 2 protected customer data and requires separate Shopify approval for the email field.
 3. Require a verified recipient, explicit current marketing consent, jurisdictional eligibility, merchant recovery settings and store-scoped suppression.
 4. Fail closed when customer ID, email, consent state, country or store identity is missing or ambiguous.
 5. Re-check consent, opt-out, order status, store status, app status and tenant status immediately before each send.
@@ -101,7 +102,7 @@ Exit evidence: a test checkout reaches an eligible intervention only when every 
 
 ### D. Delivery, tracking, replies and cost controls
 
-Status: existing three-workflow pipeline is active; V2 candidate queue is not connected to it.
+Status: existing three-workflow pipeline is active; V2 candidate queue is not connected to it. The live MailerSend Edge Function accepts recipient email from its caller and uses legacy tenant-scoped authorization; it is explicitly unsuitable for V2 sends.
 
 Required:
 1. Keep exactly three n8n workflows.
@@ -202,3 +203,13 @@ Do not mark launch-ready until all are demonstrated:
 ## Non-actions confirmed
 
 No production Supabase migration, database write, Edge Function deployment, Cloudflare Worker deployment, n8n workflow edit, Shopify app change, public release, purchase or Lovable project edit was performed in this audit.
+
+
+## New coordinated work added on 17 November
+
+- Migration 014: exact-store email marketing consent evidence, append-only receipt history and replay-safe current-state projection. The projector ignores duplicate receipts, prevents older events from overwriting newer consent, and changes conflicting same-timestamp states to UNKNOWN.
+- Migration 015: exact-store checkout country-code projection from the same verified checkout webhook receipt. Only ISO alpha-2 country code is persisted; no address, postal code or customer email is stored. Missing country remains unknown.
+- Edge ingress candidate now runs checkout-country projection before acknowledging checkout webhook delivery.
+- Added disposable SQL integration coverage for consent replay/order/timestamp conflicts and known/unknown checkout country.
+- Added recipient resolution and single-use delivery authorization contract. The existing deployed MailerSend endpoint is explicitly excluded from V2 because it trusts caller-supplied recipient email and legacy tenant-scoped authorization.
+- Shopify public app must request Level 2 protected customer data approval for email field before public production use. Development-store field selection is not production approval.
