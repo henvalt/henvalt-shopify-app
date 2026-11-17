@@ -3,6 +3,13 @@
 
 BEGIN;
 
+-- Earlier integration cases deliberately uninstall store B. Restore the
+-- synthetic two-store fixture before testing the independent shop/redact path.
+UPDATE henvalt.shopify_connections
+SET active = true
+WHERE tenant_id = '00000000-0000-4000-8000-000000000001'
+  AND shop_domain IN ('store-a.myshopify.com', 'store-b.myshopify.com');
+
 DO $shop_redact_stop_v2$
 DECLARE
   v_tenant uuid := '00000000-0000-4000-8000-000000000001';
