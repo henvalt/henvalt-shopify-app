@@ -19,6 +19,7 @@ DECLARE
   v_late_body text:='{"type":"activity.delivered","created_at":"2026-11-17T04:35:00Z","data":{"id":"provider-event-late-002","domain_id":"domain-123","message_id":"provider-message-late-002","email_id":"provider-email-late-002","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
   v_provider_key text:=repeat('p',32);
   v_secret text:='synthetic-mailersend-webhook-secret';
+  v_test_body text:='{"type":"webhook.test","message":"This is a ping test message","created_at":"2026-03-27T07:24:20.577080Z"}';
   v_body text:='{"type":"activity.unsubscribed","created_at":"2026-11-17T04:30:00Z","data":{"id":"provider-event-001","domain_id":"domain-123","message_id":"provider-message-001","email_id":"provider-email-001","type":"unsubscribed","recipient":"shared@example.invalid","meta":{"unsubscribe_reason":"NO_LONGER_WANT"}}}';
   v_changed_body text:='{"type":"activity.unsubscribed","created_at":"2026-11-17T04:30:00Z","data":{"id":"provider-event-001","domain_id":"domain-123","message_id":"provider-message-001","email_id":"provider-email-001","type":"unsubscribed","recipient":"changed@example.invalid","meta":{"unsubscribe_reason":"NO_LONGER_WANT"}}}';
   v_signature text;
@@ -38,6 +39,17 @@ BEGIN
   INSERT INTO henvalt.shopify_mailer_provider_registry_v2(
     tenant_id,provider_account_key,mailersend_domain_id,webhook_secret_ref,recipient_fingerprint_secret_ref,status
   ) VALUES(v_tenant,v_provider_key,'domain-123','test-mailersend-webhook-secret','test-recipient-fingerprint-key','ACTIVE');
+
+  -- MailerSend URL validation uses its documented fixed test signing secret.
+  v_signature:=encode(extensions.hmac(convert_to(v_test_body,'UTF8'),
+    convert_to('test_Am3L3GuOIc4blLUuHqAPxxwkZaJyEk5','UTF8'),'sha256'),'hex');
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_test_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'WEBHOOK_TEST_VERIFIED'
+     OR v_result->>'event_persisted'<>'false' THEN
+    RAISE EXCEPTION 'MailerSend URL-validation test was not safely accepted: %',v_result;
+  END IF;
 
   INSERT INTO henvalt.shopify_recovery_intervention_v2(
     tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
