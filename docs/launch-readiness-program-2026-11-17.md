@@ -21,7 +21,7 @@ Read-only inspection on 17 November 2026 found:
 - 3 customers, 2 checkouts, 5 opportunities and 5 recovery interventions.
 - 3 delivery requests and 5 delivery attempts.
 - 0 Shopify orders, 0 order attributions, 0 revenue-ledger rows and 0 Shopify privacy requests.\n- One billing account is PENDING in test mode, with a zero recurring amount and zero performance percentage; no billing measurements exist. The live configuration is not a production billing setup.
-- Candidate V2 app registry, verified inbox, exact-store identity, order and recovery-candidate tables are not present in live schema. Candidate migrations 001–012 have not been applied.
+- Candidate V2 app registry, verified inbox, exact-store identity, order, recovery-candidate and recovery-opportunity tables are not present in live schema. Candidate migrations 001–013 have not been applied.
 
 These are point-in-time aggregate counts, not proof of customer recovery.
 
@@ -73,7 +73,7 @@ Exit evidence: a real Partner-owned app installation completes OAuth, persists c
 
 ### B. Verified Shopify ingestion and exact-store identity
 
-Status: candidate migrations 001–012 pass disposable-database validation; not live.
+Status: candidate migrations 001–012 passed disposable-database validation; migration 013 opportunity promotion is undergoing its first integration run; none are live.
 
 Required:
 1. Apply only after production-schema parity review and separate approval.
@@ -86,10 +86,10 @@ Exit evidence: two real test stores can reuse checkout/customer/order identifier
 
 ### C. Recovery eligibility, contact resolution and consent
 
-Status: eligibility-only candidate implemented in migration 012; contact resolution and V2 recovery sequence are not implemented.
+Status: eligibility candidate in migration 012 and exact-store opportunity promotion candidate in migration 013; contact resolution, consent evaluation and V2 recovery sequence are not implemented.
 
 Required:
-1. Use the V2 exact-store candidate queue, not legacy tenant-wide candidate readers.
+1. Use the V2 exact-store candidate and opportunity layers, not legacy tenant-wide candidate readers.
 2. Resolve contact only through the same verified Shopify connection and approved customer data scope.
 3. Require a verified recipient, explicit current marketing consent, jurisdictional eligibility, merchant recovery settings and store-scoped suppression.
 4. Fail closed when customer ID, email, consent state, country or store identity is missing or ambiguous.
@@ -192,7 +192,7 @@ Do not mark launch-ready until all are demonstrated:
 
 ## Next coordinated engineering actions
 
-1. Complete one exact-store contract tying candidate → contact → consent → opportunity → intervention → authorization → provider receipt → order → attribution → fee.
+1. Complete one exact-store implementation tying candidate → opportunity → contact → consent → intervention → authorization → provider receipt → order → attribution → fee.
 2. Implement and test V2 contact-resolution and delivery-authorization boundary without persisting unnecessary personal data.
 3. Build exact-store privacy processor and immutable lineage before connecting V2 to legacy engine.
 4. Prepare dashboard multi-store selection and scope contracts in dashboard source repository; do not publish or spend credits.
