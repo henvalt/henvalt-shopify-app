@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 
 const migration=readFileSync("supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql","utf8");
-const deliveryContract=readFileSync("docs/shopify-v2-contact-consent-delivery-contract.md","utf8");
-const providerContract=readFileSync("docs/v2-mailersend-provider-events-and-suppression.md","utf8");
+const deliveryContract=readFileSync("docs/shopify-single-use-delivery-authorization-v2.md","utf8");
+const contactContract=readFileSync("docs/shopify-v2-contact-consent-delivery-contract.md","utf8");
 
 test("delivery permit is opaque, short-lived, single-use and hash-only at rest",()=>{
  assert.match(migration,/permit_token_sha256 text NOT NULL UNIQUE/);
@@ -48,8 +48,8 @@ test("permit consumption rechecks every critical gate and creates one idempotent
  assert.match(migration,/GRANT EXECUTE ON FUNCTION henvalt\.consume_shopify_delivery_permit_v2\(text\)[\s\S]*?TO service_role/);
 });
 
-test("delivery remains blocked from legacy n8n/browser path and documents remaining provider handoff",()=>{
- assert.match(deliveryContract,/Do not send V2 work through this endpoint/);
- assert.match(deliveryContract,/never returned to the browser, n8n, logs/);
- assert.match(providerContract,/does not create interventions|does not authorize sends/i);
+test("delivery keeps recipient email out of logs and the legacy provider route",()=>{
+ assert.match(deliveryContract,/No recipient email in Postgres, n8n execution data, browser responses or logs/);
+ assert.match(deliveryContract,/No send authorization from the legacy MailerSend endpoint/);
+ assert.match(contactContract,/Do not place raw Shopify payloads, OAuth tokens, Vault secrets or customer email in AI prompts or general diagnostic logs/);
 });
