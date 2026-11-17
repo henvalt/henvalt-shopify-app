@@ -311,7 +311,6 @@ BEGIN
 
   -- Re-enable Store B only as a synthetic isolation control for this final test.
   UPDATE henvalt.shopify_connections SET active=true WHERE id=v_store_b AND tenant_id=v_tenant;
-  UPDATE henvalt.shopify_pixel_keys_v2 SET active=true WHERE false;
   UPDATE henvalt.pixel_keys SET active=true,revoked_at=NULL
    WHERE tenant_id=v_tenant AND shopify_connection_id IN (v_store_a,v_store_b);
 
