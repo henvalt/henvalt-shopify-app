@@ -126,7 +126,7 @@ BEGIN
       OR (r.topic IN ('customers/data_request', 'customers/redact')
           AND r.customer_id IS NOT NULL)
     )
-  ORDER BY j.created_at, j.receipt_id
+  ORDER BY j.created_at, r.shop_domain, j.receipt_id
   FOR UPDATE OF j SKIP LOCKED
   LIMIT 1;
 
