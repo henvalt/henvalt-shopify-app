@@ -160,7 +160,6 @@ BEGIN
   END IF;
   IF p_enabled IS TRUE AND (
     p_attribution_window_hours IS NULL OR p_attribution_window_hours NOT BETWEEN 1 AND 720
-    OR p_attribution_window_hours IS NULL
     OR p_touch_model IS NULL OR p_touch_model NOT IN ('FIRST_ELIGIBLE_TOUCH','LAST_ELIGIBLE_TOUCH')
     OR p_revenue_basis IS NULL OR p_revenue_basis<>'SHOPIFY_TOTAL_PRICE'
     OR p_require_delivery_confirmation IS NULL
