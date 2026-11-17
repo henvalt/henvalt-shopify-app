@@ -70,11 +70,18 @@ Deno.serve(async (req: Request) => {
     if(!projected.ok || !projected.row || projected.row.accepted!==true){
       return json(503,{error:"checkout_projection_unavailable"});
     }
+    const jurisdiction=await rpc("project_verified_shopify_checkout_jurisdiction_v2",{
+      p_route_token:routeToken,p_delivery_id:deliveryId,p_raw_body_base64:encodedBody,
+    });
+    if(!jurisdiction.ok || !jurisdiction.row || jurisdiction.row.accepted!==true){
+      return json(503,{error:"checkout_jurisdiction_projection_unavailable"});
+    }
     return json(200,{
       accepted:true,
       duplicate:receipt.duplicate===true,
       status:receipt.receipt_status,
       checkout_projection:projected.row.status,
+      jurisdiction_known:jurisdiction.row.jurisdiction_known===true,
     });
   }
 
