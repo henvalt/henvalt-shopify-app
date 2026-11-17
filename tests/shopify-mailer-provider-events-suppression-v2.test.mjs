@@ -25,5 +25,5 @@ test("provider event retries are idempotent and unmatched events can later be co
  assert.match(migration,/EVENT_ID_BODY_MISMATCH/);
  assert.match(migration,/v_existing_status<>'UNMATCHED'/);
  assert.match(migration,/UNMATCHED/);
- assert.match(docs,/December 1, 2026/);
+ assert.match(docs,/1 December 2026/);
 });
