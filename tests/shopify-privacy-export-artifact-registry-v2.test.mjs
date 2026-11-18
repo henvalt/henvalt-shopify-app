@@ -17,6 +17,7 @@ test("artifact object names are opaque and integrity/size/expiry are constrained
   assert.match(migration, /CHECK \(expires_at > created_at\)/);
   assert.match(migration, /UNIQUE \(receipt_id, generation_id\)/);
   assert.match(migration, /UNIQUE \(bucket_id, object_key\)/);
+  assert.match(migration, /UNIQUE \(id, receipt_id, tenant_id, connection_id, app_key, shop_domain\)/);
 });
 
 test("incomplete artifacts cannot become available and purge state is explicit", () => {
