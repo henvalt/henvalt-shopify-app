@@ -25,6 +25,35 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_pixel_delivery_permits_v2 (
   REFERENCES henvalt.shopify_sender_profiles_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
  CONSTRAINT shopify_pixel_delivery_permits_opportunity_scope UNIQUE(id,tenant_id,shopify_connection_id,opportunity_id)
 );
+-- Composite keys make tenant/store/customer lineage enforceable by PostgreSQL,
+-- not merely by the SECURITY DEFINER routines.
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_recovery_opportunity_v2_id_tenant_connection_uidx
+ ON henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id);
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_customer_identity_v2_id_tenant_connection_uidx
+ ON henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id);
+
+ALTER TABLE henvalt.shopify_pixel_delivery_permits_v2
+ ADD CONSTRAINT shopify_pixel_permit_opportunity_scope_fk
+  FOREIGN KEY(opportunity_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_permit_candidate_scope_fk
+  FOREIGN KEY(pixel_candidate_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_pixel_recovery_candidate_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_permit_customer_scope_fk
+  FOREIGN KEY(customer_identity_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+ALTER TABLE henvalt.shopify_pixel_send_attempts_v2
+ ADD CONSTRAINT shopify_pixel_attempt_opportunity_scope_fk
+  FOREIGN KEY(opportunity_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_attempt_candidate_scope_fk
+  FOREIGN KEY(pixel_candidate_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_pixel_recovery_candidate_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_attempt_customer_scope_fk
+  FOREIGN KEY(customer_identity_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
+
 CREATE INDEX IF NOT EXISTS shopify_pixel_delivery_permits_pending_idx
  ON henvalt.shopify_pixel_delivery_permits_v2(expires_at) WHERE consumed_at IS NULL;
 
