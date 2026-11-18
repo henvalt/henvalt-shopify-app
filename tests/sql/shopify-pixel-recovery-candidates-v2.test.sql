@@ -23,6 +23,8 @@ DECLARE
   v_customer_b uuid;
   v_lookup_id uuid := gen_random_uuid();
   v_evidence_result jsonb;
+  v_eligibility_result jsonb;
+  v_pixel_opportunity_id uuid;
   v_app_key text := 'henvalt_pixel_test';
 BEGIN
   v_origin_a := 'https://' || v_domain_a;
@@ -214,6 +216,33 @@ BEGIN
   IF v_evidence_result->>'accepted'<>'false'
      OR v_evidence_result->>'code'<>'LOOKUP_ID_REPLAY_MISMATCH' THEN
     RAISE EXCEPTION 'Region change under reused lookup ID was not rejected: %',v_evidence_result;
+  END IF;
+
+  -- Even with fresh contact/location evidence, cart/browse stays blocked until
+  -- an exact country/region policy row has a documented legal review.
+  UPDATE henvalt.shopify_connections
+     SET token_type='offline_expiring',
+         scopes=ARRAY['read_customers'],
+         access_token_expires_at=pg_catalog.now()+interval '1 hour',
+         reauth_required_at=NULL
+   WHERE id=v_conn_a AND tenant_id=v_tenant;
+  IF EXISTS (
+    SELECT 1 FROM henvalt.shopify_pixel_delivery_jurisdiction_policy_v2
+    WHERE country_code='US' AND region_code='CA'
+  ) THEN
+    RAISE EXCEPTION 'Test requires an empty jurisdiction policy registry';
+  END IF;
+  SELECT id INTO v_pixel_opportunity_id
+  FROM henvalt.shopify_recovery_opportunity_v2
+  WHERE tenant_id=v_tenant AND shopify_connection_id=v_conn_a
+    AND opportunity_type IN ('ABANDONED_CART','BROWSE_ABANDONMENT')
+  ORDER BY created_at LIMIT 1;
+  PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+  v_eligibility_result := henvalt.assess_shopify_pixel_delivery_eligibility_v2(v_pixel_opportunity_id);
+  IF v_eligibility_result->>'eligible'<>'false'
+     OR v_eligibility_result->>'code'<>'JURISDICTION_POLICY_NOT_APPROVED'
+     OR v_eligibility_result->>'delivery_authorized'<>'false' THEN
+    RAISE EXCEPTION 'Cart/browse did not fail closed without approved jurisdiction policy: %',v_eligibility_result;
   END IF;
 
   IF EXISTS (
