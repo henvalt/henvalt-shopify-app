@@ -398,6 +398,24 @@ BEGIN
     RAISE EXCEPTION 'Pixel permit consumption did not reserve provider cost';
   END IF;
 
+  -- Second adverse race: consent is revoked after consume but before the
+  -- provider-submission gate. The attempt remains unsent and cannot pass final auth.
+  v_evidence_result:=henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_a,v_customer_a,'UNSUBSCRIBED',pg_catalog.now()-interval '10 seconds',
+    pg_catalog.clock_timestamp(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true' THEN
+    RAISE EXCEPTION 'Late consent revocation evidence could not be recorded: %',v_evidence_result;
+  END IF;
+  v_evidence_result:=henvalt.authorize_shopify_pixel_provider_submission_v2(
+    v_pixel_attempt_id,repeat('a',64)
+  );
+  IF v_evidence_result->>'authorized'<>'false'
+     OR v_evidence_result->>'code'<>'FRESH_ADMIN_API_SUBSCRIBED_CONSENT_REQUIRED'
+     OR v_evidence_result->>'provider_submission_performed'<>'false' THEN
+    RAISE EXCEPTION 'Final provider gate failed to block late consent revocation: %',v_evidence_result;
+  END IF;
+
   v_consume_result:=henvalt.consume_shopify_pixel_delivery_permit_v2(v_permit_token);
   IF v_consume_result->>'consumed'<>'false'
      OR v_consume_result->>'code'<>'PERMIT_ALREADY_USED' THEN
