@@ -38,3 +38,16 @@ test("checkout permit implementation remains unchanged and checkout-only",()=>{
  assert.match(checkout,/JOIN henvalt\.shopify_checkout_identity_v2 ch/);
  assert.doesNotMatch(sql,/shopify_checkout_recovery_candidate_v2|shopify_checkout_identity_v2/);
 });
+
+test("merchant-wide concurrency harness races checkout and pixel reservations across separate stores",()=>{
+ const setup=readFileSync(new URL("../tests/sql/shopify-delivery-cost-reservation-concurrency-setup-v2.test.sql",import.meta.url),"utf8");
+ const runner=readFileSync(new URL("../tests/sql/shopify-delivery-cost-reservation-concurrency-v2.test.sh",import.meta.url),"utf8");
+ assert.match(setup,/store-a\.myshopify\.com/);
+ assert.match(setup,/store-b\.myshopify\.com/);
+ assert.match(setup,/INSERT INTO henvalt\.shopify_pixel_send_attempts_v2/);
+ assert.match(setup,/INSERT INTO henvalt\.shopify_recovery_send_attempt_v2/);
+ assert.match(setup,/FOR UPDATE|pg_sleep/);
+ assert.match(runner,/shopify_pixel_delivery_cost_reservations_v2/);
+ assert.match(runner,/shopify_delivery_cost_reservations_v2/);
+ assert.match(runner,/checkout-or-pixel reservation/);
+});
