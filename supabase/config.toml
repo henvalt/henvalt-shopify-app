@@ -6,4 +6,6 @@ verify_jwt = false
 
 [functions.henvalt-shopify-contact-evidence-v2]
 verify_jwt = false
-\n[functions.henvalt-shopify-pixel-delivery-v2]\nverify_jwt = false\n
+
+[functions.henvalt-shopify-pixel-delivery-v2]
+verify_jwt = false
