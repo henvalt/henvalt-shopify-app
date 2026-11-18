@@ -24,9 +24,18 @@ BEGIN
   END IF;
 
   v_assessment:=henvalt.assess_shopify_pixel_delivery_eligibility_v2(p_opportunity_id);
-  IF coalesce((v_assessment->>'eligible')::boolean,false) IS NOT TRUE THEN
+  IF coalesce((v_assessment->>'eligible')::boolean,false) IS NOT TRUE
+     AND coalesce(v_assessment->>'code','PIXEL_NOT_ELIGIBLE') NOT IN (
+       'FRESH_CONTACT_AND_LOCATION_EVIDENCE_REQUIRED',
+       'CONTACT_LOCATION_EVIDENCE_STALE',
+       'FRESH_ADMIN_API_SUBSCRIBED_CONSENT_REQUIRED',
+       'CONSENT_WEBHOOK_AFTER_ADMIN_LOOKUP'
+     ) THEN
     RETURN jsonb_build_object('ready',false,'code',coalesce(v_assessment->>'code','PIXEL_NOT_ELIGIBLE'));
   END IF;
+  -- Only stale/missing contact or consent evidence may pass this credential
+  -- resolver. The delivery Edge Function must refresh Shopify evidence, then
+  -- permit issue/consume and the final send gate re-run full eligibility.
 
   SELECT
     o.id AS opportunity_id,o.tenant_id,o.shopify_connection_id,o.customer_identity_id,
