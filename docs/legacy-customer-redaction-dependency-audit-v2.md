@@ -164,3 +164,11 @@ This audit is preparation only. It does not execute deletion, update RLS, modify
 - Shopify privacy compliance webhooks and customer/order request payloads: https://shopify.dev/docs/apps/build/compliance/privacy-law-compliance
 - Shopify webhook compliance topics: https://shopify.dev/docs/apps/build/webhooks/subscribe
 - Shopify merchant processing responsibilities and distinctions between erasure and profile deletion: https://help.shopify.com/en/manual/privacy-and-security/privacy/processing-customer-data-requests
+
+## 9. V2 exact-store model cross-check
+
+The branch's migration `202611160007_exact_store_core_lineage_foundation.sql` adds nullable `shopify_connection_id` to the legacy customer, session, session-alias, checkout and canonical-event tables. It adds same-tenant connection foreign keys and composite same-connection relationships for session/customer, checkout/customer and session-alias/session. The migration explicitly does not backfill history and marks legacy NULL lineage as unresolved. The composite relationship constraints are added `NOT VALID`, so existing rows are not silently certified by their presence; new writes are guarded while legacy rows remain subject to review.
+
+The V2 privacy preview in migration 022 scopes its impact inventory through the verified receipt's tenant, connection and customer identity, and counts exact-store rows across the V2 session, alias, pixel, checkout, candidate, consent, intervention, permit, suppression, provider-event, cost-reservation, order/refund, attribution and fee-measurement tables. It continues to return `safe_to_execute=false`, `legacy_rows_included=false`, and explicit blockers for legacy reconciliation, retention policy, suppression retention, cost-ledger detachment and provider-audit FK detachment.
+
+This is the correct boundary: keep legacy and V2 records separate until there is a verified lineage bridge. Do not widen the V2 redaction scope to the tenant to “catch” old records, and do not treat the current preview's V2 row counts as proof that all historical PII has been found.
