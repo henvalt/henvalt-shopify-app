@@ -101,6 +101,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-export-purge-lifecycle-v2.test.sql
+      - name: Exercise Shopify privacy order-scope preservation
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-order-scope-v2.test.sql
