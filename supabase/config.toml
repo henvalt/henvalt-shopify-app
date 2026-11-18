@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.henvalt-shopify-contact-delivery-v2]
 verify_jwt = false
+
+[functions.henvalt-shopify-contact-evidence-v2]
+verify_jwt = false
