@@ -22,7 +22,7 @@ test("resolver decrypts only trusted server credentials and exact-store customer
  assert.match(sql,/pr\.recipient_fingerprint_secret_ref/);
  assert.match(sql,/pr\.api_token_secret_ref/);
  assert.match(sql,/gid:\/\/shopify\/Customer/);
- assert.doesNotMatch(sql,/customer_email|email_address|recipient_email\\s+(text|varchar)/i);
+ assert.doesNotMatch(sql,/customer_email|email_address|recipient_email\s+(text|varchar)/i);
 });
 test("resolver is metadata-only and cannot authorize or submit delivery",()=>{
  assert.match(sql,/recipient_email_returned',false/);
