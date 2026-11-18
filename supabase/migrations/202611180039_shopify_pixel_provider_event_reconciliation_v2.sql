@@ -6,6 +6,13 @@ BEGIN;
 ALTER TABLE henvalt.shopify_mailer_provider_events_v2
  ADD COLUMN IF NOT EXISTS pixel_send_attempt_id uuid;
 
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempt_provider_message_uidx
+ ON henvalt.shopify_pixel_send_attempts_v2(provider_account_key,provider_message_reference)
+ WHERE provider_message_reference IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempts_id_tenant_connection_uidx
+ ON henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id);
+
 ALTER TABLE henvalt.shopify_delivery_suppressions_v2
  ALTER COLUMN source_send_attempt_id DROP NOT NULL,
  ADD COLUMN source_pixel_send_attempt_id uuid,
@@ -15,13 +22,6 @@ ALTER TABLE henvalt.shopify_delivery_suppressions_v2
   ON UPDATE RESTRICT ON DELETE RESTRICT,
  ADD CONSTRAINT shopify_delivery_suppressions_v2_one_attempt_source_check
   CHECK ((source_send_attempt_id IS NULL) <> (source_pixel_send_attempt_id IS NULL));
-
-CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempt_provider_message_uidx
- ON henvalt.shopify_pixel_send_attempts_v2(provider_account_key,provider_message_reference)
- WHERE provider_message_reference IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempts_id_tenant_connection_uidx
- ON henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id);
 
 ALTER TABLE henvalt.shopify_mailer_provider_events_v2
  ADD CONSTRAINT shopify_mailer_provider_events_pixel_attempt_fkey
