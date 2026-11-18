@@ -86,6 +86,7 @@ BEGIN
      OR length(v_order.currency)<>3
      OR v_order.currency ~ '[^A-Z]'
      OR v_order.cancelled_at IS NOT NULL
+     OR v_order.financial_status IS NULL
      OR v_order.financial_status NOT IN ('paid','partially_refunded') THEN
     RETURN jsonb_build_object('accepted',false,'code','ORDER_NOT_PIXEL_ATTRIBUTABLE');
   END IF;
