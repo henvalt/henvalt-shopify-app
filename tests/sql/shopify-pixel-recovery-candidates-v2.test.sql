@@ -26,6 +26,13 @@ DECLARE
   v_eligibility_result jsonb;
   v_pixel_opportunity_id uuid;
   v_app_key text := 'henvalt_pixel_test';
+  v_provider_key text := repeat('p',32);
+  v_sender_profile_id uuid;
+  v_permit_result jsonb;
+  v_consume_result jsonb;
+  v_permit_token text;
+  v_pixel_attempt_id uuid;
+  v_cost_status text;
 BEGIN
   v_origin_a := 'https://' || v_domain_a;
   v_origin_b := 'https://' || v_domain_b;
@@ -276,6 +283,98 @@ BEGIN
     RAISE EXCEPTION 'Consent lookup replay with altered state was not rejected: %',v_evidence_result;
   END IF;
 
+  -- Disposable-only approved policy and provider/billing fixtures enable a real
+  -- pixel permit issue/consume test. This legal-review reference is synthetic and
+  -- the surrounding transaction is rolled back below; it is not a live approval.
+  INSERT INTO henvalt.shopify_pixel_delivery_jurisdiction_policy_v2(
+    country_code,region_code,policy_version,policy_status,legal_review_reference,
+    require_region,max_consent_evidence_age,max_contact_evidence_age,approved_at
+  ) VALUES('US','CA','test-policy-v1','APPROVED','TEST-ONLY-LEGAL-REVIEW-REFERENCE',
+    true,interval '30 days',interval '15 minutes',pg_catalog.now());
+
+  INSERT INTO henvalt.billing_accounts(
+    tenant_id,henvalt_percentage,usage_cap_amount,currency,status,test_mode,monthly_email_limit
+  ) VALUES(v_tenant,5,1.00,'USD','ACTIVE',false,10);
+
+  INSERT INTO henvalt.shopify_mailer_provider_registry_v2(
+    tenant_id,provider_account_key,mailersend_domain_id,webhook_secret_ref,
+    recipient_fingerprint_secret_ref,status,email_unit_cost_amount,email_unit_cost_currency
+  ) VALUES(v_tenant,v_provider_key,'pixel-test-domain','vault://pixel-test-webhook',
+    'vault://pixel-test-fingerprint','ACTIVE',0.01,'USD');
+
+  INSERT INTO henvalt.shopify_sender_profiles_v2(
+    tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,status,verified_at
+  ) VALUES(v_tenant,v_conn_a,v_provider_key,'recovery@example.test','HENVALT Test',
+    'ACTIVE',pg_catalog.now())
+  RETURNING id INTO v_sender_profile_id;
+
+  -- Refresh the Admin API consent observation immediately before authorization.
+  v_evidence_result:=henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_a,v_customer_a,'SUBSCRIBED',pg_catalog.now()-interval '1 minute',
+    pg_catalog.clock_timestamp(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true' THEN
+    RAISE EXCEPTION 'Fresh consent lookup could not be refreshed for permit test: %',v_evidence_result;
+  END IF;
+
+  v_eligibility_result:=henvalt.assess_shopify_pixel_delivery_eligibility_v2(v_pixel_opportunity_id);
+  IF v_eligibility_result->>'eligible'<>'true'
+     OR v_eligibility_result->>'delivery_authorized'<>'false' THEN
+    RAISE EXCEPTION 'Pixel opportunity did not reach the authorization-review state: %',v_eligibility_result;
+  END IF;
+
+  v_permit_result:=henvalt.issue_shopify_pixel_delivery_permit_v2(
+    v_pixel_opportunity_id,v_provider_key,v_sender_profile_id,repeat('a',64)
+  );
+  IF v_permit_result->>'authorized'<>'true'
+     OR v_permit_result->>'delivery_authorized'<>'false'
+     OR v_permit_result->>'provider_cost_reserved'<>'false' THEN
+    RAISE EXCEPTION 'Pixel permit was not safely issued: %',v_permit_result;
+  END IF;
+  v_permit_token:=v_permit_result->>'permit_token';
+  IF v_permit_token IS NULL OR length(v_permit_token)<>64 OR EXISTS(
+    SELECT 1 FROM henvalt.shopify_pixel_delivery_permits_v2
+    WHERE permit_token_sha256=v_permit_token
+  ) THEN
+    RAISE EXCEPTION 'Permit token was not returned as a one-time secret with hash-only storage';
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_pixel_delivery_permits_v2
+    WHERE opportunity_id=v_pixel_opportunity_id
+      AND permit_token_sha256=encode(extensions.digest(convert_to(v_permit_token,'UTF8'),'sha256'),'hex')
+  ) THEN
+    RAISE EXCEPTION 'Permit token hash was not stored for verification';
+  END IF;
+
+  PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+  v_consume_result:=henvalt.consume_shopify_pixel_delivery_permit_v2(v_permit_token);
+  IF v_consume_result->>'consumed'<>'true'
+     OR v_consume_result->>'recipient_email_returned'<>'false'
+     OR v_consume_result->>'provider_submission_performed'<>'false'
+     OR v_consume_result->>'provider_cost_reserved'<>'true' THEN
+    RAISE EXCEPTION 'Pixel permit consumption did not create a metadata-only reserved attempt: %',v_consume_result;
+  END IF;
+  v_pixel_attempt_id:=(v_consume_result->>'pixel_send_attempt_id')::uuid;
+
+  SELECT status INTO v_cost_status FROM henvalt.shopify_pixel_delivery_cost_reservations_v2
+  WHERE pixel_send_attempt_id=v_pixel_attempt_id;
+  IF v_cost_status IS DISTINCT FROM 'RESERVED' THEN
+    RAISE EXCEPTION 'Pixel permit consumption did not reserve provider cost';
+  END IF;
+
+  v_consume_result:=henvalt.consume_shopify_pixel_delivery_permit_v2(v_permit_token);
+  IF v_consume_result->>'consumed'<>'false'
+     OR v_consume_result->>'code'<>'PERMIT_ALREADY_USED' THEN
+    RAISE EXCEPTION 'Pixel permit replay was not rejected: %',v_consume_result;
+  END IF;
+
+  v_evidence_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(
+    v_pixel_attempt_id,'FAILED',NULL
+  );
+  IF v_evidence_result->>'recorded'<>'true'
+     OR v_evidence_result->>'provider_cost_state'<>'RELEASED' THEN
+    RAISE EXCEPTION 'Test pixel attempt did not release its reservation on pre-provider failure: %',v_evidence_result;
+  END IF;
   IF EXISTS (
     SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
     JOIN henvalt.shopify_recovery_opportunity_v2 o ON o.id=i.opportunity_id
