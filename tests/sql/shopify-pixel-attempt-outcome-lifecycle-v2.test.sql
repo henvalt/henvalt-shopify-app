@@ -10,6 +10,9 @@ DECLARE
  v_source_delivery uuid; v_order_id uuid; v_attr_id uuid; v_attributed_order_id uuid; v_store_a uuid;
  v_provider_event_id text; v_provider_message_id text;
  v_policy_result jsonb; v_dashboard jsonb;
+ v_order_body text; v_order_hmac text; v_shopify_order_id text;
+ v_order_delivery_id text; v_order_event_id text;
+ v_webhook_result record; v_order_projection jsonb;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key FROM henvalt.shopify_connections
   WHERE tenant_id=v_tenant AND shop_domain='store-b.myshopify.com';
@@ -290,13 +293,6 @@ BEGIN
 
  -- End-to-end pixel recovery attribution: provider touch first, then a paid
  -- same-store/customer order. Sent alone is insufficient when delivery is required.
- SELECT id INTO v_source_delivery
- FROM henvalt.shopify_webhook_deliveries
- WHERE tenant_id=v_tenant AND connection_id=v_connection
- ORDER BY id LIMIT 1;
- IF v_source_delivery IS NULL THEN
-  RAISE EXCEPTION 'Verified Store B webhook receipt required for order fixture';
- END IF;
 
  INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
   tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
@@ -356,13 +352,40 @@ BEGIN
   RAISE EXCEPTION 'Signed provider sent event did not reconcile: %',v_result;
  END IF;
 
- INSERT INTO henvalt.shopify_order_identity_v2(
-  tenant_id,shopify_connection_id,shopify_order_id,checkout_token,
-  customer_identity_id,total_value,currency,financial_status,ordered_at,
-  source_delivery_id,checkout_match_status,updated_at
- ) VALUES(v_tenant,v_connection,'pixel-attribution-order-'||gen_random_uuid()::text,
-  NULL,v_customer,125.50,'USD','paid',now(),v_source_delivery,'NO_CHECKOUT_TOKEN',now())
- RETURNING id INTO v_order_id;
+ -- Drive the conversion through the real signed Shopify webhook receipt
+ -- and exact-store order projector, not a direct table insert.
+ v_shopify_order_id:=(1000000000000000+floor(random()*999999999)::bigint)::text;
+ v_order_delivery_id:='pixel-attribution-order-delivery-'||gen_random_uuid()::text;
+ v_order_event_id:='pixel-attribution-order-event-'||gen_random_uuid()::text;
+ v_order_body:=jsonb_build_object(
+  'shop_id','2002','id',v_shopify_order_id::bigint,
+  'customer',jsonb_build_object('id',12345),
+  'total_price','125.50','currency','USD','financial_status','paid',
+  'created_at',to_char(now(),'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+ )::text;
+ v_order_hmac:=encode(extensions.hmac(convert_to(v_order_body,'UTF8'),
+  convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+ SELECT * INTO v_webhook_result FROM henvalt.accept_shopify_webhook_v2(
+  repeat('c',64),v_order_hmac,encode(convert_to(v_order_body,'UTF8'),'base64'),
+  'store-b.myshopify.com','orders/create',v_order_delivery_id,v_order_event_id
+ );
+ IF v_webhook_result.accepted IS DISTINCT FROM true THEN
+  RAISE EXCEPTION 'Signed Store B paid order receipt was rejected: %',row_to_json(v_webhook_result);
+ END IF;
+ v_order_projection:=henvalt.project_verified_shopify_order_v2(
+  repeat('c',64),v_order_delivery_id,encode(convert_to(v_order_body,'UTF8'),'base64')
+ );
+ IF v_order_projection->>'accepted'<>'true'
+   OR v_order_projection->>'checkout_match_status'<>'NO_CHECKOUT_TOKEN' THEN
+  RAISE EXCEPTION 'Exact-store order projection did not preserve no-checkout lineage: %',v_order_projection;
+ END IF;
+ SELECT id INTO v_source_delivery FROM henvalt.shopify_webhook_deliveries
+  WHERE connection_id=v_connection AND shopify_delivery_id=v_order_delivery_id;
+ SELECT id INTO v_order_id FROM henvalt.shopify_order_identity_v2
+  WHERE shopify_connection_id=v_connection AND shopify_order_id=v_shopify_order_id;
+ IF v_source_delivery IS NULL OR v_order_id IS NULL THEN
+  RAISE EXCEPTION 'Verified order projection did not create its exact-store order and receipt';
+ END IF;
 
  IF EXISTS(SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
    WHERE order_identity_id=v_order_id) THEN
