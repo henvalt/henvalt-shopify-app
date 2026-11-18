@@ -412,7 +412,7 @@ BEGIN
   );
   IF v_evidence_result->>'authorized'<>'false'
      OR v_evidence_result->>'code'<>'FRESH_ADMIN_API_SUBSCRIBED_CONSENT_REQUIRED'
-     OR v_evidence_result->>'provider_submission_performed'<>'false' THEN
+     OR v_evidence_result ? 'provider_submission_performed' THEN
     RAISE EXCEPTION 'Final provider gate failed to block late consent revocation: %',v_evidence_result;
   END IF;
 
