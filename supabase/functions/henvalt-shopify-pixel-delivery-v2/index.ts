@@ -154,6 +154,10 @@ Deno.serve(async(req:Request)=>{
    if(saved?.recorded!==true)return json(202,{accepted:true,status:"provider_accepted_record_pending",recipient_email_returned:false});
    return json(202,{accepted:true,status:"submitted",recipient_email_returned:false});
   }
+  if(providerResponse.status>=500||providerResponse.status===408){
+   await recordAttempt(attemptId,"AMBIGUOUS");
+   return json(202,{accepted:true,status:"ambiguous_provider_submission",provider_status:providerResponse.status,recipient_email_returned:false});
+  }
   await recordAttempt(attemptId,"FAILED");
   return json(502,{accepted:false,error:"provider_submission_rejected",provider_status:providerResponse.status,recipient_email_returned:false});
  }catch{
