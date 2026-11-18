@@ -5,6 +5,9 @@ const edge=readFileSync(new URL("../supabase/functions/henvalt-shopify-pixel-del
 const sql=readFileSync(new URL("../supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql",import.meta.url),"utf8");
 test("pixel worker is private, exact-opportunity scoped and does not accept caller-supplied recipient data",()=>{
  assert.match(edge,/HENVALT_PIXEL_DELIVERY_AUTH_TOKEN/);
+ assert.match(edge,/content-length/);
+ assert.match(edge,/Array\.isArray\(parsed\)/);
+ assert.match(edge,/request_body_too_large/);
  assert.match(edge,/resolve_shopify_pixel_delivery_context_v2/);
  assert.match(edge,/opportunity_id/);
  assert.doesNotMatch(edge,/input\.(to|email|recipient_email|customer_gid)/i);
