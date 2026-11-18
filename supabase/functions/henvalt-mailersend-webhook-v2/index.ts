@@ -50,6 +50,7 @@ Deno.serve(async(req:Request)=>{
   // Reconcile only from this verified event row; never trust a caller-supplied message ID.
   const payload=JSON.parse(new TextDecoder().decode(raw));
   const eventId=payload&&typeof payload==="object"&&payload.data&&typeof payload.data.id==="string"?payload.data.id:"";
+  let pixelReconciled=false;
   if(eventId){
     const reconciliation=await fetch(SUPABASE_URL+"/rest/v1/rpc/reconcile_mailersend_pixel_provider_event_v2",{
       method:"POST",
@@ -68,10 +69,12 @@ Deno.serve(async(req:Request)=>{
       console.error("MailerSend pixel reconciliation rejected");
       return json(503,{error:"pixel_provider_reconciliation_rejected"});
     }
+    pixelReconciled=reconciliationRow.pixel_attempt_reconciled===true;
   }
   return json(200,{
     accepted:true,
-    status:typeof row.status==="string"?row.status:"ACCEPTED",
+    status:pixelReconciled?"PROCESSED":typeof row.status==="string"?row.status:"ACCEPTED",
+    pixel_attempt_reconciled:pixelReconciled,
     suppression_applied:row.suppression_applied===true,
     recipient_pii_stored:false,
   });
