@@ -200,6 +200,13 @@ BEGIN
        AND pixel_send_attempt_id=v_attempt AND processing_status='PROCESSED') THEN
   RAISE EXCEPTION 'Provider event failed to durably reconcile pixel send and cost';
  END IF;
+ v_result:=henvalt.reconcile_mailersend_pixel_provider_event_v2(
+  v_provider,(SELECT provider_event_id FROM henvalt.shopify_mailer_provider_events_v2
+   WHERE provider_account_key=v_provider AND provider_message_id='synthetic-provider-message-id-2')
+ );
+ IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'DUPLICATE' THEN
+  RAISE EXCEPTION 'Duplicate provider event reconciliation was not idempotent: %',v_result;
+ END IF;
 END;
 $test$;
 ROLLBACK;
