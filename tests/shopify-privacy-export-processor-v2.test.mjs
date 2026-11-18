@@ -30,7 +30,8 @@ test("object keys are opaque UUID filenames and artifact size is bounded", () =>
 test("processor checks completeness before metadata insert and private upload", () => {
   assert.match(source, /authorization !== "Bearer " \+ SERVICE_ROLE_KEY/);
   assert.match(source, /isCompleteExport\(draft, claim\)/);
-  assert.ok(source.indexOf("if (!isCompleteExport(draft, claim))") < source.indexOf("/rest/v1/shopify_privacy_export_artifacts_v2"));
+  assert.ok(source.indexOf("if (!isCompleteExport(draft, claim))") < source.indexOf("const insertResponse = await rest("));
+  assert.ok(source.indexOf("if (!isCompleteExport(draft, claim))") < source.indexOf("/storage/v1/object/"));
   assert.match(source, /state: "STAGED"/);
   assert.match(source, /\/storage\/v1\/object\//);
   assert.match(source, /private_object_integrity_mismatch/);
