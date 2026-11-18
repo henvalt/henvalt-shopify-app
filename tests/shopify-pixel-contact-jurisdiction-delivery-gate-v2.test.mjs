@@ -31,7 +31,8 @@ test("existing resolver and both permit stages remain checkout-only", () => {
 test("consent remains exact-store and timestamp evidence, not pixel marketing consent", () => {
   assert.match(consent, /UNIQUE \(shopify_connection_id, customer_identity_id\)/);
   assert.match(consent, /v_consent_at IS NULL[\s\S]*?'UNKNOWN'/);
-  assert.match(consent, /v_consent_at>v_existing_at/);\n  assert.match(consent, /v_consent_at=v_existing_at[\\s\\S]*?UNKNOWN/);
+  assert.match(consent, /v_consent_at>v_existing_at/);
+  assert.match(consent, /v_consent_at=v_existing_at[\s\S]*?UNKNOWN/);
   assert.match(gate, /pixel marketing signal never authorize email/i);
 });
 
