@@ -27,3 +27,12 @@ It returns only a compact eligibility result and policy version. It never return
 An `eligible=true` result means only that the opportunity may proceed to a separately reviewed authorization stage. The function does not create an intervention, permit, send attempt, n8n job, provider request, attribution record or billable reservation. It explicitly returns all of those flags as false.
 
 The existing checkout-only resolver and permit functions are unchanged. Pixel delivery still requires a future delivery-time Shopify Admin re-resolution of email and marketing consent, recipient-fingerprint suppression check, a separate pixel-bound single-use permit/consume pair, and the existing atomic merchant-wide cost-reservation trigger. No legal country/region policy rows are inserted by this migration; those require documented review and explicit administrative configuration.
+
+
+## Fresh Admin API marketing-consent evidence (migration 033)
+
+The trusted contact resolver now requests `emailMarketingConsent { marketingState consentUpdatedAt }` in the same exact-customer Shopify Admin API query used for contact/location evidence. It writes the normalized consent state and timestamps to a separate append-only, exact-store evidence ledger. The recipient email remains transient and is not stored, logged, or returned.
+
+The eligibility assessment now requires a positive Admin API `SUBSCRIBED` observation no older than five minutes with a non-null Shopify consent timestamp. Any consent webhook received after that Admin API observation invalidates it until a new trusted Admin API lookup occurs, regardless of webhook state. This is intentionally conservative and closes the stale-positive race; it is still not delivery authorization.
+
+The new ledger and RPC are service-role-only, replay-checked, bounded to recent observations, and store no raw GraphQL response, email, address, or access token. No jurisdiction policy is seeded. Existing checkout authorization is unchanged.
