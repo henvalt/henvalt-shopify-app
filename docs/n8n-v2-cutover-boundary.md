@@ -79,6 +79,18 @@ The V2 claim/lease adapter now exists in migration 042 and is covered by disposa
 
 The branch now contains `202611180042_shopify_recovery_work_claims_v2.sql`. It introduces a shared exact-store queue without merging the two delivery models.
 
+### Scheduled discovery and checkout intervention materialization
+
+Before claiming work, the V2 Recovery schedule should run the candidate lifecycle in this order:
+1. `refresh_shopify_checkout_recovery_candidates_v2(limit)` — refreshes exact-store checkout candidate eligibility from verified webhook projections.
+2. `promote_shopify_checkout_recovery_candidates_v2(limit)` — creates idempotent checkout opportunities and marks converted/closed candidates.
+3. `refresh_shopify_pixel_recovery_candidates_v2(inactivity,max_age,limit)` — refreshes pseudonymous cart/browse candidates only from analytics-permitted pixel events.
+4. `promote_shopify_pixel_recovery_candidates_v2(limit)` — creates cart/browse opportunities in `REVIEW_REQUIRED`; it does not authorize marketing delivery.
+5. `materialize_shopify_checkout_interventions_v2(limit)` — migration 043 creates step-1 checkout intervention metadata only for open, exact-store, due checkout opportunities. It creates no intervention for pixel opportunities, issues no permit, and calls no provider.
+6. `claim_shopify_recovery_work_v2(worker,limit,lease_seconds)` — leases due checkout interventions and pixel opportunities for the existing synchronous Recovery → Delivery handoff.
+
+The checkout materializer rechecks active store/app/tenant, exact checkout/customer lineage, open checkout state, candidate token equality and absence of a same-store order. Its unique (opportunity, step) constraint makes repeated schedules idempotent. The delivery Edge Function still performs current Shopify consent, contact, suppression, sender, billing, provider-cost and final order checks; materialization is not consent or delivery authorization.
+
 ### Claim
 
 Call the service-role RPC:
@@ -152,14 +164,14 @@ Do not edit or publish the active workflows until each gate is satisfied:
 
 ## 8. Migration 042 validation
 
-The V2 work-claim contract is implemented and passed current-head CI runs #937 and #938 on 18 November 2026:
+The V2 work-claim contract is implemented and passed current-head CI runs #937 and #938 on 18 November 2026. Migration 043 adds the missing idempotent checkout intervention materializer; its checkout fixture now exercises materialization → claim → handoff completion:
 - migration 042 applies after migrations 001–041 on disposable PostgreSQL;
 - a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
 - a second worker cannot claim an active lease;
 - deferred work is reclaimed under a new lease UUID;
 - the stale worker cannot finish the reclaimed lease;
 - a current worker can complete it, after which it is no longer claimable;
-- a checkout intervention is independently claimable with its own intervention/opportunity lineage;
+- a checkout opportunity is materialized into a step-1 intervention and independently claimable with its own intervention/opportunity lineage;
 - no recipient email, provider credentials, Shopify token or message body enters the claim response.
 
 GitHub's connected Cloudflare Pages integration also produced successful **preview** builds for the preparation branch. The deployment records identify environment `preview`, branch `prep/public-app-hardening-2026-11-15`, and production branch `main`; they did not deploy this branch to the production environment.
