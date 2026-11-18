@@ -53,7 +53,7 @@ async function shopFromToken(token: string): Promise<string> {
     ? new URL(claims.dest).hostname.toLowerCase()
     : "";
   const now = Math.floor(Date.now() / 1000);
-  if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop) ||
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ||
       claims.aud !== APP_KEY ||
       claims.iss !== "https://" + shop + "/admin" ||
       claims.dest !== "https://" + shop ||
@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "GET") return out(405, { error: "method_not_allowed" });
 
   try {
-    const token = (req.headers.get("authorization") || "").replace(/^Bearer\\s+/i, "").trim();
+    const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     if (!token) return out(401, { error: "shopify_session_required" });
     if (!URL || !KEY) return out(503, { error: "dashboard_not_configured" });
 
@@ -127,7 +127,7 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const valid = (value: string | null) =>
-      value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value : null;
+      value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
     const today = new Date().toISOString().slice(0, 10);
     const from = valid(url.searchParams.get("from")) ||
       new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
