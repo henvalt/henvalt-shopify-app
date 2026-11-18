@@ -72,3 +72,6 @@ The production Pages project `henvalt-dashboard` is connected to this repository
 ## Shopify privacy export delivery and redaction safety (V2)
 
 The preparation branch now includes [the export-delivery and retention-safety design](docs/shopify-privacy-export-delivery-v2.md). It records a read-only production audit: the live project has no Storage buckets, its deployed privacy endpoints still use the legacy tenant-scoped path, and its download timestamp is written before the response body is transferred. The proposed V2 path therefore uses exact-store receipt lineage, a private artifact, authenticated server-side download proxy, honest delivery states, and a separately approved retention/redaction plan. This is documentation only; no production resources or active functions were changed. V2 remains unmerged and unapplied.
+## Legacy customer redaction dependency audit (V2)
+
+The preparation branch also contains a [read-only legacy customer-data dependency audit](docs/legacy-customer-redaction-dependency-audit-v2.md). It maps direct customer foreign keys and delete rules, downstream cascade/retention risks, PII-bearing columns and JSON payload paths, current row-count inventory, and the exact-store lineage blockers. It recommends an impact-manifest-first V2 process and explicitly keeps destructive redaction disabled. No production data was modified.
