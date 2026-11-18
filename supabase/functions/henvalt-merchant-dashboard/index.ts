@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { isSingleActiveStoreScope } from "../_shared/dashboard-store-scope.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -55,16 +54,31 @@ Deno.serve(async (req: Request) => {
       return reply(403, { error: "one_active_tenant_membership_required" });
     }
     const tenantId = membership[0].tenant_id;
-    const connections = await rest("shopify_connections?select=id,shop_domain,active,tenants!inner(status)&tenant_id=eq." +
-      encodeURIComponent(tenantId) + "&tenants.status=eq.ACTIVE&limit=2");
-    // The legacy summary RPC aggregates by tenant. Only call it when the tenant
-    // has exactly one connection in total, including inactive historical stores.
-    if (!isSingleActiveStoreScope(connections) ||
-        typeof connections[0].shop_domain !== "string") {
-      return reply(409, { error: "store_specific_metrics_unavailable" });
-    }
-
     const u = new URL(req.url);
+    const connections = await rest("shopify_connections?select=id,shop_domain,active,tenants!inner(status)&tenant_id=eq." +
+      encodeURIComponent(tenantId) + "&active=eq.true&tenants.status=eq.ACTIVE&order=shop_domain.asc&limit=100");
+    if (!Array.isArray(connections) || connections.length === 0) {
+      return reply(409, { error: "shop_not_connected" });
+    }
+    const requestedConnectionId = u.searchParams.get("shopify_connection_id");
+    let selectedConnection: any = null;
+    if (requestedConnectionId !== null) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestedConnectionId)) {
+        return reply(400, { error: "invalid_store_selection" });
+      }
+      selectedConnection = connections.find((item: any) => item.id === requestedConnectionId) ?? null;
+      if (!selectedConnection) return reply(404, { error: "store_not_available" });
+    } else if (connections.length === 1) {
+      selectedConnection = connections[0];
+    } else {
+      return reply(409, {
+        error: "store_selection_required",
+        stores: connections.map((item: any) => ({ id: item.id, shop_domain: item.shop_domain })),
+      });
+    }
+    if (typeof selectedConnection.shop_domain !== "string") {
+      return reply(409, { error: "shop_not_connected" });
+    }
     const validDate = (v: string | null) =>
       v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? v : null;
     const today = new Date().toISOString().slice(0, 10);
@@ -75,7 +89,7 @@ Deno.serve(async (req: Request) => {
       return reply(400, { error: "invalid_date_range" });
     }
 
-    const summaryResponse = await fetch(SUPABASE_URL + "/rest/v1/rpc/control_plane_dashboard_summary", {
+    const summaryResponse = await fetch(SUPABASE_URL + "/rest/v1/rpc/control_plane_dashboard_summary_v2", {
       method: "POST",
       headers: {
         apikey: SERVICE_ROLE_KEY,
@@ -85,7 +99,7 @@ Deno.serve(async (req: Request) => {
         "content-profile": "henvalt",
       },
       body: JSON.stringify({
-        p_shop_domain: connections[0].shop_domain,
+        p_shopify_connection_id: selectedConnection.id,
         p_from: from + "T00:00:00.000Z",
         p_to: to + "T00:00:00.000Z",
       }),
@@ -93,7 +107,13 @@ Deno.serve(async (req: Request) => {
     if (!summaryResponse.ok) throw new Error("SUMMARY_QUERY_FAILED");
     const summary = await summaryResponse.json();
     if (!summary || summary.linked !== true) return reply(409, { error: "shop_not_connected" });
-    return reply(200, { ...summary, range: { from, to }, generatedAt: new Date().toISOString() });
+    return reply(200, {
+      ...summary,
+      selectedStoreId: selectedConnection.id,
+      stores: connections.map((item: any) => ({ id: item.id, shop_domain: item.shop_domain })),
+      range: { from, to },
+      generatedAt: new Date().toISOString(),
+    });
   } catch {
     return reply(500, { error: "dashboard_unavailable" });
   }
