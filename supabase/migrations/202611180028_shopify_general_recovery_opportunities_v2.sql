@@ -114,9 +114,10 @@ BEGIN
       c.value_at_risk,
       c.currency,
       c.idempotency_key,
-      CASE WHEN c.customer_identity_id IS NOT NULL
-        THEN 'CONTACT_RESOLUTION_PENDING'
-        ELSE 'REVIEW_REQUIRED' END AS initial_status
+      -- A pixel customer identity is not proof of a deliverable contact,
+      -- current marketing consent, or trusted jurisdiction. Keep cart/browse
+      -- opportunities in review until those independent gates are projected.
+      'REVIEW_REQUIRED' AS initial_status
     FROM henvalt.shopify_pixel_recovery_candidate_v2 c
     JOIN henvalt.shopify_connections sc
       ON sc.id=c.shopify_connection_id
