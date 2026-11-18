@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const edge=readFileSync(new URL("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts",import.meta.url),"utf8");
 const sql=readFileSync(new URL("../supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql",import.meta.url),"utf8");
+const config=readFileSync(new URL("../supabase/config.toml",import.meta.url),"utf8");
 test("pixel worker is private, exact-opportunity scoped and does not accept caller-supplied recipient data",()=>{
  assert.match(edge,/HENVALT_PIXEL_DELIVERY_AUTH_TOKEN/);
  assert.match(edge,/content-length/);
@@ -63,4 +64,9 @@ test("worker enforces the body limit while streaming even when Content-Length is
  assert.match(edge,/total>maxBytes/);
  assert.match(edge,/reader\.cancel\(\)/);
  assert.match(edge,/parseJsonLimited\(req,160000\)/);
+});
+
+test("pixel delivery Edge Function is configured for its dedicated bearer gate with valid TOML section formatting",()=>{
+ assert.match(config,/(^|\\n)\\[functions\\.henvalt-shopify-pixel-delivery-v2\\]\\nverify_jwt = false\\n?$/);
+ assert.doesNotMatch(config,/\\\\n\\[functions\\.henvalt-shopify-pixel-delivery-v2/);
 });
