@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 const edge=readFileSync(new URL("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts",import.meta.url),"utf8");
 const sql=readFileSync(new URL("../supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql",import.meta.url),"utf8");
+const outcomeSql=readFileSync(new URL("../supabase/migrations/202611180037_shopify_pixel_attempt_outcome_reconciliation_v2.sql",import.meta.url),"utf8");
 const config=readFileSync(new URL("../supabase/config.toml",import.meta.url),"utf8");
 test("pixel worker is private, exact-opportunity scoped and does not accept caller-supplied recipient data",()=>{
  assert.match(edge,/HENVALT_PIXEL_DELIVERY_AUTH_TOKEN/);
@@ -69,4 +70,9 @@ test("worker enforces the body limit while streaming even when Content-Length is
 test("pixel delivery Edge Function is configured for its dedicated bearer gate with valid TOML section formatting",()=>{
  assert.ok(config.endsWith("\n[functions.henvalt-shopify-pixel-delivery-v2]\nverify_jwt = false\n"));
  assert.equal(config.includes("\\n[functions.henvalt-shopify-pixel-delivery-v2]"),false);
+});
+
+test("ambiguous provider outcomes cannot be downgraded to failed or release reserved cost",()=>{
+ assert.match(outcomeSql,/v_attempt\.status='AMBIGUOUS' AND p_status<>'SUBMITTED'/);
+ assert.match(outcomeSql,/AMBIGUOUS is never converted to FAILED/);
 });
