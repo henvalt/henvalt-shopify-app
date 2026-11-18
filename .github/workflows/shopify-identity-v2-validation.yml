@@ -84,7 +84,8 @@ jobs:
             supabase/migrations/202611180025_shopify_privacy_export_artifact_registry_v2.sql \
             supabase/migrations/202611180026_shopify_privacy_export_purge_lifecycle_v2.sql \
             supabase/migrations/202611180027_shopify_pixel_recovery_candidates_v2.sql \
-            supabase/migrations/202611180028_shopify_general_recovery_opportunities_v2.sql \\\n            supabase/migrations/202611180029_shopify_customer_contact_evidence_v2.sql; do
+            supabase/migrations/202611180028_shopify_general_recovery_opportunities_v2.sql \
+            supabase/migrations/202611180029_shopify_customer_contact_evidence_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise two-store pixel cart/browse candidates and opportunity promotion
