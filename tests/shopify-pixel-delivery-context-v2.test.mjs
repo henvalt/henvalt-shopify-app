@@ -8,6 +8,13 @@ test("pixel delivery context is exact-opportunity, service-only and reuses the e
  assert.match(sql,/request\.jwt\.claim\.role[\s\S]*?service_role_required/);
  assert.match(sql,/GRANT EXECUTE ON FUNCTION henvalt\.resolve_shopify_pixel_delivery_context_v2\(uuid\)[\s\S]*?TO service_role/);
 });
+test("resolver permits only stale or missing evidence to be refreshed by the trusted worker",()=>{
+ assert.match(sql,/FRESH_CONTACT_AND_LOCATION_EVIDENCE_REQUIRED/);
+ assert.match(sql,/CONTACT_LOCATION_EVIDENCE_STALE/);
+ assert.match(sql,/FRESH_ADMIN_API_SUBSCRIBED_CONSENT_REQUIRED/);
+ assert.match(sql,/CONSENT_WEBHOOK_AFTER_ADMIN_LOOKUP/);
+ assert.match(sql,/NOT IN \([\s\S]*?FRESH_CONTACT_AND_LOCATION_EVIDENCE_REQUIRED[\s\S]*?CONSENT_WEBHOOK_AFTER_ADMIN_LOOKUP/);
+});
 test("resolver decrypts only trusted server credentials and exact-store customer identity",()=>{
  assert.match(sql,/vault\.decrypted_secrets/);
  assert.match(sql,/shopify_connections sc[\s\S]*?sc\.id=o\.shopify_connection_id/);
