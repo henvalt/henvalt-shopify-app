@@ -227,6 +227,10 @@ BEGIN
      AND source_send_attempt_id IS NULL AND suppression_type='UNSUBSCRIBED' AND active IS TRUE) THEN
   RAISE EXCEPTION 'Pixel unsubscribe suppression did not retain exact-store attempt lineage';
  END IF;
+ -- This isolated lifecycle fixture needs room for its additional synthetic attempt;
+ -- the merchant-wide cap itself is covered by the separate concurrent-cap harness.
+ UPDATE henvalt.billing_accounts SET monthly_email_limit=100 WHERE tenant_id=v_tenant;
+
  -- A crashed worker's stale AUTHORIZED attempt is marked AMBIGUOUS and remains reserved.
  INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
   tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
