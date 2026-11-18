@@ -390,6 +390,11 @@ BEGIN
     RAISE EXCEPTION 'Revoked-consent permit created an attempt or cost reservation';
   END IF;
 
+  -- The rejected permit remains unusable; expire it before issuing a replacement.
+  UPDATE henvalt.shopify_pixel_delivery_permits_v2
+     SET expires_at=pg_catalog.now()-interval '1 second'
+   WHERE opportunity_id=v_pixel_opportunity_id AND consumed_at IS NULL;
+
   -- A fresh positive Admin API lookup is required before a new permit may be issued.
   v_evidence_result:=henvalt.record_shopify_customer_marketing_consent_lookup_v2(
     v_conn_a,v_customer_a,'SUBSCRIBED',pg_catalog.now()-interval '20 seconds',
