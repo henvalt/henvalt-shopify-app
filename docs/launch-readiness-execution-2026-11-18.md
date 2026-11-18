@@ -316,3 +316,68 @@ until the V2 candidate model and two-store integration tests cover it. If the
 first controlled release is intentionally checkout-only, disclose that scope
 and keep the other flows disabled rather than routing them through ambiguous
 legacy records.
+
+
+## 7. Active recovery runtime trace — cart and browse are V1, not V2
+
+A read-only trace of the three active n8n graphs and the live PostgreSQL
+function definitions refines the recovery-coverage finding:
+
+- `HENVALT_RECOVERY` actively calls all three legacy discovery functions:
+  `process_abandoned_checkout_candidates`,
+  `process_abandoned_cart_candidates` and
+  `process_browse_abandonment_candidates`.
+- Its worker context and email-preflight code already understands
+  `ABANDONED_CHECKOUT`, `ABANDONED_CART` and `BROWSE_ABANDONMENT`.
+  That is copy/worker compatibility, not proof of safe store identity.
+- The live cart candidate query joins `shopify_connections` by
+  `tenant_id` and `active=true`, without binding the canonical cart snapshot,
+  pixel event and customer to the same immutable connection.
+- The live browse candidate query has the same tenant-only connection join.
+  Its session activity and checkout suppression subqueries are also scoped
+  by tenant/session rather than an immutable store connection.
+- Both legacy processors write into the tenant-scoped `opportunities`,
+  `recovery_sequences` and `recovery_interventions` model. The active
+  recovery worker then claims and processes those legacy interventions.
+- The candidate V2 pixel inbox is not the source for these legacy discovery
+  functions; it remains `PENDING_ADAPTER`. Thus V1 and V2 are separate
+  event/identity paths today.
+
+This matters because a tenant currently has more than one active Shopify
+connection. A join on tenant plus active status can multiply a candidate or
+associate it with the wrong shop. The cart query also matches a pixel event
+to a cart snapshot using tenant/session/product data without an exact-store
+key. The browse query's suppression checks can likewise observe activity
+from another store when session references collide.
+
+### Required remediation before recovery cutover
+
+1. Do not feed legacy cart/browse opportunities from ambiguous tenant-only
+   records into the V2 delivery path.
+2. Preserve V1 recovery only for a demonstrably single-install tenant where
+   every source event, customer, session, checkout and intervention can be
+   positively bound to the same immutable connection. A count of active
+   stores alone is not enough; historical connections and unresolved lineage
+   must be considered.
+3. Build the V2 event adapter from the verified pixel inbox into exact-store
+   session/customer/event context. It must persist bounded product/cart
+   context only under analytics consent and evaluate marketing consent
+   independently at send time.
+4. Generalize the V2 source-candidate/opportunity model to represent cart and
+   browse without inventing checkout identities. Recheck same-store order,
+   checkout progression, customer suppression, uninstall and current consent
+   before promotion and again before delivery.
+5. Keep the three-workflow architecture. HENVALT_INGEST accepts verified
+   source events; HENVALT_RECOVERY runs the exact-store candidate/claim worker;
+   HENVALT_DELIVERY performs final authorization, provider send and
+   reconciliation. Use a durable idempotent handoff, not a fourth workflow
+   and not a parallel direct-send path.
+6. Cut over one recovery type at a time behind a tenant/store feature gate.
+   Prove two-store collision tests and a no-duplicate-send test before enabling
+   each type. Retain a rollback switch that stops new V2 promotion without
+   reopening ambiguous V1 sends.
+
+**Current decision:** the existing V1 cart/browse functions are real and
+active, but they are not safe evidence for multi-store launch. The V2 pixel
+inbox and checkout-only opportunity model do not yet replace them. No active
+n8n workflow or live database function was changed during this trace.
