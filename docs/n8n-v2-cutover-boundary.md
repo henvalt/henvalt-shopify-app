@@ -164,7 +164,7 @@ Do not edit or publish the active workflows until each gate is satisfied:
 
 ## 8. Migrations 042–043 validation
 
-The V2 work-claim and checkout intervention lifecycle passed disposable CI run #962 on 18 November 2026, including true concurrent workers. Latest branch head 0f243485 also passed full CI runs #966 and #967, including checkout materializer idempotency and pixel/checkout separation:
+The V2 work-claim and checkout intervention lifecycle passed disposable CI run #962 on 18 November 2026, including true concurrent workers. Latest branch head 0932059e also passed full CI runs #968 and #969, including checkout materializer idempotency and pixel/checkout separation:
 - migrations 042 and 043 apply after migrations 001–041 on disposable PostgreSQL;
 - a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
 - a second worker cannot claim an active lease;
