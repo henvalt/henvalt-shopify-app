@@ -1,5 +1,5 @@
 export class RequestBodyError extends Error {
-  readonly code: "BODY_TOO_LARGE" | "EMPTY_BODY" | "INVALID_CONTENT_TYPE" | "INVALID_UTF8" | "INVALID_JSON" | "INVALID_OBJECT";
+  readonly code: "BODY_TOO_LARGE" | "EMPTY_BODY" | "INVALID_CONTENT_TYPE" | "INVALID_CONTENT_LENGTH" | "INVALID_UTF8" | "INVALID_JSON" | "INVALID_OBJECT";
   constructor(code: RequestBodyError["code"]) {
     super(code);
     this.name = "RequestBodyError";
@@ -11,7 +11,7 @@ export async function readBoundedBody(request: Request, maxBytes: number): Promi
   if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new TypeError("maxBytes must be a positive safe integer");
   const declared = request.headers.get("content-length");
   if (declared !== null) {
-    if (!/^\d+$/.test(declared)) throw new RequestBodyError("INVALID_CONTENT_TYPE");
+    if (!/^\d+$/.test(declared)) throw new RequestBodyError("INVALID_CONTENT_LENGTH");
     if (Number(declared) > maxBytes) throw new RequestBodyError("BODY_TOO_LARGE");
   }
   const reader = request.body?.getReader();
