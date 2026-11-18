@@ -1,77 +1,273 @@
-# HENVALT Shopify integration
+# HENVALT — Shopify recovery platform
 
-## Verified components
-- Shopify OAuth Edge Function is deployed and uses authenticated install initiation, one-time hashed state, callback HMAC validation, owner-aware finalization, and Vault-backed Shopify token storage.
-- OAuth callback source registers and verifies nine Shopify webhook topics against the HENVALT Cloudflare ingress Worker. Dynamic merchant OAuth installation and a real customer event still require end-to-end verification.
-- Cloudflare ingress Worker source is included for review. The production Worker is managed separately; do not deploy changes without comparing the live Worker and preserving its secret bindings.
-- `henvalt-merchant-dashboard` is deployed. It validates the Supabase user session, resolves the user's tenant and active Shopify connection server-side, and reads tenant-scoped metrics through the service-role-only dashboard summary RPC.
-- `henvalt-mailersend-setup` validates the MailerSend token and verified sender domain, then stores the tenant credential in Supabase Vault. Setup does not send email.
-- `henvalt-mailersend-delivery` is deployed. It accepts calls only from the Supabase service-role identity, retrieves the already-authorised tenant's MailerSend credential server-side, and never returns that credential to n8n.
-- The delivery-token RPC is executable only by `service_role`. It requires a delivery request already claimed by `authorize_delivery_request`, atomically permits one provider attempt per request, and requires the tenant's MailerSend credential and sender domain to be verified.
-- `HENVALT_DELIVERY` now uses the tenant-scoped delivery Edge Function in its published active version; the previous global n8n MailerSend credential is no longer used by the send node.
-- `HENVALT_INGEST` now correctly maps the top-level Shopify customer ID from `customers_email_marketing_consent/update` into the normalized customer identity. The fix is published.
-- A manual negative-path test confirmed that an unknown delivery request is rejected before the provider send node and is not recorded as a provider attempt. No email was sent during this test.
-- Shopify CLI app configuration now points to the deployed HENVALT dashboard and the Supabase OAuth callback, with the public Client ID supplied for this app.
-- Multi-step recovery is now supported: a provider-accepted checkout/cart message can schedule steps 2 and 3 at 24 and 48 hours from sequence start (payment-failure sequences are capped at 2). Supabase rechecks active store, unrecovered opportunity, email consent, suppression, and verified sender before creating each next intervention.
-- Recovery context now includes the intervention step, prior message subject/body, and normalized line items from Shopify checkout/cart events. The model is instructed to avoid repeating earlier copy and to use only supplied product facts.
-- The merchant dashboard UI is published on Cloudflare Pages at `https://henvalt-dashboard.pages.dev`; the current immutable deployment URL is `https://8ffdc377.henvalt-dashboard.pages.dev`.
+HENVALT is a Shopify recovery platform intended to identify abandoned checkout,
+cart and browse opportunities, evaluate eligibility, send merchant-branded
+recovery messages, reconcile Shopify orders and refunds, and measure only
+evidence-backed recovered revenue.
 
-## Required Supabase Edge Function secrets
-The Shopify OAuth function requires:
-- `SHOPIFY_API_KEY`
-- `SHOPIFY_API_SECRET`
-- `SHOPIFY_REDIRECT_URI` (must exactly match the Shopify Dev Dashboard callback URL)
-- Optional `SHOPIFY_SCOPES` (the source always includes `read_orders,read_customers,write_pixels,read_customer_events`)
+## Release status
 
-Never commit access tokens, API secrets, service-role keys, or MailerSend keys.
+**Preparation branch only — not launch-ready and not approved for production.**
 
-## OAuth routes
-- `GET /auth?shop={shop}.myshopify.com` (requires authenticated merchant bearer token)
-- `GET /callback?shop=...&code=...&state=...&hmac=...`
-- `GET /health`
+This repository contains a candidate V2 architecture and its validation
+suite. A passing CI run proves that the candidate code works against the
+disposable PostgreSQL fixture and static contracts; it does not prove that
+production Supabase, Cloudflare, Shopify or n8n are running that code.
 
-## Launch gates still open
-- Request the required protected customer data and email-field access in Shopify Partner Dashboard. A scope alone does not guarantee customer email fields are returned.
-- Reauthorize the test store once through the new expiring-offline-token OAuth flow, then verify that the access-token expiry, refresh-token expiry, refresh-token Vault reference, and required scopes are actually persisted. Existing installations are not migrated automatically.
-- Complete a real merchant OAuth install and verify all nine webhook registrations in that shop.
-- The repository now contains `shopify.app.toml` and the `extensions/henvalt-pixel` Web Pixel source. The extension has not yet been validated with Shopify CLI, packaged into an app version, released, or activated on the test shop. Do not treat the source commit as proof of browse tracking. Validate the extension settings/UID, run Shopify CLI validation, deploy a version, release it, then activate the pixel and verify a real storefront event. Do not treat `carts/create` or `carts/update` webhooks as a substitute for storefront browse events.
-- Implement customer-reply handling through a MailerSend inbound route, with signed webhook verification, idempotent message storage, safe correlation to the original intervention, and sequence pause/merchant notification. No inbound route or reply processor is currently configured.
-- Add a deterministic, auditable high-intent score gate before recovery sequence creation. Current eligibility checks consent, suppression, paid orders, connection state, and duplicate sequences, but does not enforce an intent-score threshold. Calibrate it only after real merchant events are flowing; the current event set is synthetic and too small for model calibration.
-- Deliver an identifiable, consent-eligible checkout/cart event through Cloudflare → n8n → Supabase. Synthetic payloads without customer identity, checkout value, and consent do not qualify.
-- Verify a legitimate recovery opportunity can be claimed and processed by `HENVALT_RECOVERY`.
-- Re-run tenant MailerSend setup for the test store and verify that the sender domain is stored as verified. The currently stored test configuration has no verified-domain metadata, so the new delivery gateway will fail closed.
-- Only after explicit approval, perform a controlled end-to-end email test to an address the user controls. No production email is sent during provider setup.
-- Verify a real recovered order and attribution before claiming recovered revenue or enabling performance billing.
+The current PR is [#6](https://github.com/henvalt/henvalt-shopify-app/pull/6),
+on branch `prep/public-app-hardening-2026-11-15`. It is draft, open and
+unmerged.
 
-The integration is not launch-ready until the launch gates above are verified. Synthetic webhook tests prove ingress and event persistence only; they do not prove recovery or revenue.
+### Verified candidate branch
 
-## Shopify OAuth token lifecycle
+- App-aware Shopify OAuth state/finalization and exact app/store identity.
+- Raw-body Shopify webhook verification and exact-store event projection.
+- Exact-store customer, session, checkout, order and refund identity graph.
+- Checkout and pixel cart/browse recovery candidates and generalized
+  opportunity records.
+- Checkout intervention materialization and atomic, leased recovery work
+  claims for the existing three-workflow architecture.
+- Separate checkout and pixel delivery authorization boundaries, current
+  Shopify consent/contact checks, single-use permits and merchant-wide
+  provider-cost reservations.
+- Signed MailerSend event intake, suppression and ambiguous-attempt
+  reconciliation.
+- Confirmed order/refund attribution and non-charging performance-fee
+  measurements.
+- Exact-store privacy receipt processing, export artifact lifecycle and
+  fail-closed redaction/retention boundaries.
+- An exact-store V2 dashboard read model and a candidate merchant dashboard.
+- Bounded streaming request parsing, strict dashboard date validation,
+  request cancellation, sign-out data clearing and bounded backend timeouts.
 
-The OAuth callback requests **expiring offline Admin API tokens** (`expiring=1`); it does not request per-user online tokens. Shopify returns an access token plus a rotating refresh token and both lifetimes. The callback persists both credentials in Supabase Vault and records their expiry metadata in `henvalt.shopify_connections`. The refresh secret is never returned to the browser or n8n.
+### Verified live baseline (read-only audit)
 
-**Important launch gate:** token refresh/rotation must be wired into the server-side Shopify API execution path before any background Admin API calls rely on these credentials. Refreshes must persist each returned access/refresh pair atomically; a failed or expired refresh requires merchant reauthorization. Do not revert to non-expiring or online per-user tokens.
+The latest integrated runtime audit recorded:
 
-## Shopify refresh-token rotation service
+- Production Supabase had 178 applied migrations, latest
+  `20261114174204`; none of candidate migrations 001–043 were in its
+  migration history.
+- Candidate V2 relations were absent from the live `henvalt` schema.
+- Four active Shopify connections existed across three tenants, including
+  one tenant with multiple active stores.
+- Live operational tables did not carry immutable Shopify connection lineage
+  across the full V1 recovery/order/revenue graph.
+- The active three n8n workflows still used legacy tenant-scoped RPCs.
+- The live dashboard did not yet use the candidate exact-store V2 read model.
+- No real recovered order, confirmed attribution, revenue-ledger row or
+  billing measurement was evidenced in the audited live data.
 
-`henvalt-shopify-token-refresh` is deployed as an internal service-role-only Edge Function. It serializes refresh attempts per shop with a database lease, reads the refresh credential only inside the privileged database claim, calls Shopify with `grant_type=refresh_token`, and persists the returned access/refresh pair together in Vault before clearing the lease. It records reauthorization-required state for invalid/expired refresh credentials and leaves transient network/provider failures retryable. Token values are never returned in the HTTP response or logged.
+The audit and its dependency-ordered plan are documented in
+[the integrated launch execution record](docs/launch-readiness-execution-2026-11-18.md)
+and [the n8n V2 cutover boundary](docs/n8n-v2-cutover-boundary.md).
 
-The refresh service is an infrastructure primitive, not a scheduled job: the current app/dashboard and n8n workflows do not make Admin API calls using stored shop tokens. Any future server-side Admin API caller must check expiry and invoke this service before using an expiring offline token. Do not add per-user online tokens or bypass rotation.
+## Architecture
 
+HENVALT is a serverless, multi-system product. It is not one long-running
+application process, so a single Docker image would not represent its actual
+deployment topology.
 
-## Current Web Pixel release gate (2026-11-08)
+| Component | Responsibility | Candidate/live boundary |
+|---|---|---|
+| Shopify app and OAuth | Merchant install, app identity, scopes and token lifecycle | Candidate V2 OAuth is branch-only; current app config still points to legacy settings |
+| Cloudflare Worker | Shopify raw webhook ingress and forwarding | Existing live Worker is legacy; candidate Worker source must be compared before any deployment |
+| Supabase Edge Functions | Trusted API boundaries, Shopify lookups, delivery, dashboard and privacy | Several legacy functions are live; V2 functions are branch-only |
+| Supabase PostgreSQL | Exact-store identity, recovery state, permits, provider events, attribution and fee measurements | Candidate migrations 001–043 are not applied to production |
+| n8n | Scheduled recovery orchestration and delivery handoff | Exactly three production workflows remain active; they are not V2-wired |
+| MailerSend | Provider submission and signed delivery/suppression events | V2 provider integration is candidate code; production sender/billing readiness is unverified |
+| Cloudflare Pages | Merchant dashboard static UI | The production Pages project is connected to `main`; this branch is preview-only until merged |
 
-- The static GitHub Actions check confirms the TOML parses and the app/pixel source contains the expected configuration and event subscriptions. It is not a Shopify CLI build or release.
-- Shopify requires a Shopify-generated `uid` in the Web Pixel extension configuration. The current extension file does not yet contain that UID; do not invent one. Shopify CLI generates/maps it during an authenticated `shopify app deploy` (the first deploy can be run with `--no-release` to avoid releasing an unverified version).
-- The previous Shopify CLI validation job failed because GitHub Actions has no Shopify login. It did not reach the build step. An authenticated Shopify CLI session is therefore still required before validation, UID mapping, deploy, and activation can proceed.
-- Do not reauthorize the test shop until a deployable app version containing this extension is released.
+### The three-workflow rule
 
+Do not create a fourth HENVALT workflow.
 
-## Cloudflare Pages production configuration
+1. `HENVALT_INGEST` — verified ingress routing; must not duplicate V2 webhook
+   projection into the legacy canonical-event path.
+2. `HENVALT_RECOVERY` — scheduled discovery, promotion, intervention
+   materialization, exact-store claim and synchronous handoff.
+3. `HENVALT_DELIVERY` — final V2 checkout/pixel delivery routing and result
+   handling. Recipient email, Shopify access tokens, MailerSend API tokens and
+   fingerprint secrets must never enter n8n item data or execution logs.
 
-The production Pages project `henvalt-dashboard` is connected to this repository's `main` branch. Its build root is `dashboard/` and its output directory is `.`. The Shopify app's configured dashboard URL remains `https://henvalt-dashboard.pages.dev`; do not switch it to the separate `henvalt-dashboard-preview.pages.dev` project.
-## Shopify privacy export delivery and redaction safety (V2)
+The active workflows have not been edited, published, executed or cut over by
+this preparation work. See
+[docs/n8n-v2-cutover-boundary.md](docs/n8n-v2-cutover-boundary.md).
 
-The preparation branch now includes [the export-delivery and retention-safety design](docs/shopify-privacy-export-delivery-v2.md). It records a read-only production audit: the live project has no Storage buckets, its deployed privacy endpoints still use the legacy tenant-scoped path, and its download timestamp is written before the response body is transferred. The proposed V2 path therefore uses exact-store receipt lineage, a private artifact, authenticated server-side download proxy, honest delivery states, and a separately approved retention/redaction plan. This is documentation only; no production resources or active functions were changed. V2 remains unmerged and unapplied.
-## Legacy customer redaction dependency audit (V2)
+## Repository layout
 
-The preparation branch also contains a [read-only legacy customer-data dependency audit](docs/legacy-customer-redaction-dependency-audit-v2.md). It maps direct customer foreign keys and delete rules, downstream cascade/retention risks, PII-bearing columns and JSON payload paths, current row-count inventory, and the exact-store lineage blockers. It recommends an impact-manifest-first V2 process and explicitly keeps destructive redaction disabled. No production data was modified.
+- `dashboard/` — static merchant dashboard candidate.
+- `cloudflare/` — Worker and ingress source.
+- `supabase/functions/` — Edge Functions and shared runtime helpers.
+- `supabase/migrations/` — candidate database migrations.
+- `supabase/config.toml` — function JWT verification configuration.
+- `extensions/henvalt-pixel/` — Shopify Web Pixel extension source.
+- `tests/` — Node contract/regression tests and SQL integration fixtures.
+- `tests/sql/` — disposable PostgreSQL integration and concurrency tests.
+- `.github/workflows/` — validation and manually gated Shopify preparation /
+  release workflows.
+- `docs/` — architecture, lineage, privacy, cutover and launch records.
+
+## Local validation
+
+Requirements:
+
+- Node.js 22 or later.
+- Deno 2.x.
+- PostgreSQL 17 and `psql` for running the SQL integration suite locally.
+
+No Node runtime dependencies are required by the repository test/check scripts.
+
+```bash
+npm test
+npm run check
+```
+
+- `npm test` runs every `tests/*.test.mjs` file.
+- `npm run check` type-checks the OAuth, checkout delivery, pixel delivery,
+  MailerSend webhook and dashboard Edge Functions.
+
+The GitHub Actions validation additionally:
+
+- runs Gitleaks secret scanning;
+- runs the complete Node regression suite and focused V2 contracts;
+- checks the configured Edge Functions with Deno;
+- creates a disposable PostgreSQL 17 database;
+- applies candidate migrations 001–043 in order;
+- executes two-store isolation, privacy, consent, attribution, cost-reservation
+  and true concurrent work-claim tests;
+- validates Shopify TOML and extension source.
+
+These jobs do not connect to or mutate production. The current successful
+validation included 319/319 repository Node tests and 209/209 focused V2
+contract tests.
+
+## Runtime configuration and secrets
+
+Never commit service-role keys, Shopify API secrets, offline access/refresh
+tokens, MailerSend API tokens, fingerprint secrets or delivery bearer tokens.
+Use the relevant provider's secret manager:
+
+- Supabase Edge Function secrets and Supabase Vault for server-held
+  credentials.
+- Cloudflare Worker secrets for Worker-only secrets.
+- GitHub Actions repository secrets for CI deployment credentials.
+- n8n credential storage for service credentials used by the three workflows.
+
+Known function environment names in this repository include:
+
+| Function / boundary | Required environment names |
+|---|---|
+| Legacy Shopify OAuth | `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_REDIRECT_URI`; optional `SHOPIFY_SCOPES` |
+| Checkout delivery V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HENVALT_DELIVERY_AUTH_TOKEN` |
+| Pixel delivery V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HENVALT_PIXEL_DELIVERY_AUTH_TOKEN` |
+| MailerSend webhook V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
+| Merchant dashboard | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` |
+| Shopify-session dashboard | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` |
+
+The V2 delivery bearer tokens must be high-entropy, independently generated
+secrets. Do not reuse one token across the checkout and pixel endpoints.
+Do not place secret values in this README, app TOML, Worker vars, browser code,
+n8n item payloads or GitHub source.
+
+The public Shopify client ID and Supabase publishable/anon key are identifiers
+intended for client configuration; they are not substitutes for server
+credentials.
+
+## Deployment topology and safety
+
+### Supabase
+
+Candidate migrations 001–043 and V2 Edge Functions are not deployed to the
+audited production project. The live project has a separate migration history
+and legacy operational schema. **Do not run `supabase db push` or deploy
+candidate functions until the production schema has been reconciled and an
+approved staged migration/rollback plan exists.**
+
+### Cloudflare Worker
+
+`wrangler.toml` identifies the existing legacy ingress Worker
+`henvalt-clean-ingress-v1`. Its configuration is not a ready-to-deploy
+definition for the candidate V2 Worker. Compare the live Worker source and
+secret bindings before any Worker operation. Do not run `wrangler deploy`
+from this branch.
+
+### Cloudflare Pages
+
+The production Pages project `henvalt-dashboard` is connected to the
+repository's `main` branch, with build root `dashboard/` and output
+directory `.`. Pull-request branch builds are previews; merging to `main`
+can publish production. This PR has not been merged and no Pages production
+deployment was made by this work.
+
+### Shopify app
+
+The checked-in `shopify.app.toml` is not release-ready: it still points to
+legacy application/privacy URLs and enables the legacy install flow. The
+Partner-owned app identity, redirect URLs, requested protected customer data
+access and Shopify-generated Web Pixel UID must be confirmed by the current
+app owner before an app version is prepared.
+
+Shopify preparation and production release workflows now require an explicit
+manual `workflow_dispatch` confirmation from `main`. A normal push or PR
+cannot release the app. The preparation workflow creates an unreleased version
+only; the separate release workflow is the production release boundary.
+
+### Why there is no Dockerfile
+
+The deployed product consists of Supabase Edge Functions/PostgreSQL,
+Cloudflare Worker/Pages, Shopify configuration and three n8n workflows.
+A Dockerfile would not deploy or validate those provider-managed services and
+would imply a single-container runtime that does not exist. The repository's
+provider-specific CI/CD workflows and runbooks are the appropriate deployment
+configuration.
+
+## Launch blockers — do not represent as completed
+
+1. **App ownership and configuration:** obtain owner-controlled Partner app
+   identity and credentials; replace the legacy application URL, callback,
+   privacy endpoint and install-flow settings; generate and validate the
+   Shopify Pixel UID.
+2. **Production database parity:** reconcile the 178-migration live baseline
+   with candidate migrations 001–043, map every V1/V2 foreign-key lineage and
+   resolve historical ambiguous rows before any migration.
+3. **Runtime cutover:** design, test and explicitly approve the V2 adapters
+   for the three existing n8n workflows. Prevent duplicate V1/V2 ingestion or
+   sends.
+4. **Message rendering:** implement a trusted server-side renderer and
+   approved template/context contract. Current delivery functions accept
+   caller-supplied subject/body content; do not wire these into n8n or send
+   customer messages until that contract is complete and tested.
+5. **Provider and billing readiness:** configure an owner-controlled
+   MailerSend account, verified sender, Vault references, provider cost and
+   merchant-funded caps. Confirm the performance percentage and billing
+   principal; fee measurements are non-charging records.
+6. **Protected customer data:** obtain Shopify approval for the required
+   customer email access and confirm scopes/fields on an owner-controlled
+   test store.
+7. **End-to-end proof:** run a controlled, consent-eligible checkout/cart/browse
+   event through the verified ingress, recovery claim, trusted delivery,
+   signed provider event, Shopify order/refund projection and confirmed
+   attribution. A provider-accepted email is not recovered revenue.
+8. **Privacy lifecycle:** finish exact-store export delivery, customer/shop
+   redaction and retention approval; legacy tenant-scoped lineage remains an
+   explicit blocker.
+9. **Merchant dashboard:** deploy the exact-store API/read model only after
+   the matching migrations and authorization contract are live; verify
+   two-store switching and reconciliation against source records.
+10. **Operational readiness:** monitoring, retry/reconciliation queues,
+    incident response, rollback, privacy deadlines, app review and support
+    processes must be approved before launch.
+
+## Release documentation
+
+- [Integrated launch execution and verified live baseline](docs/launch-readiness-execution-2026-11-18.md)
+- [Three-workflow V2 cutover boundary](docs/n8n-v2-cutover-boundary.md)
+- [Checkout recovery eligibility](docs/shopify-checkout-recovery-eligibility-v2.md)
+- [Contact resolution and delivery boundary](docs/shopify-contact-resolution-delivery-v2.md)
+- [Exact-store revenue attribution](docs/shopify-exact-store-revenue-attribution-v2.md)
+- [Exact-store privacy lifecycle](docs/shopify-exact-store-privacy-lifecycle-v2.md)
+- [Preparation-branch release notes](docs/release-notes-2026-11-18.md)
+
+**No production migration, Edge Function, Worker, n8n workflow, Shopify app
+release, Pages deployment, customer email or billing transaction was performed
+by this preparation work.**
