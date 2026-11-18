@@ -79,7 +79,7 @@ jobs:
             supabase/migrations/202611170020_shopify_redacted_store_oauth_tombstone_v2.sql \
             supabase/migrations/202611170021_shopify_privacy_order_scope_v2.sql \
             supabase/migrations/202611170022_shopify_privacy_order_scope_report_v2.sql \
-            supabase/migrations/202611170023_shopify_privacy_deadline_monitor_v2.sql \\
+            supabase/migrations/202611170023_shopify_privacy_deadline_monitor_v2.sql \
             supabase/migrations/202611180024_shopify_privacy_completion_evidence_gate_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
