@@ -14,6 +14,8 @@ DECLARE
  v_order_delivery_id text; v_order_event_id text;
  v_webhook_result record; v_order_projection jsonb;
  v_claim jsonb; v_lease_id uuid; v_retry_lease_id uuid; v_finish jsonb;
+ v_checkout_identity uuid; v_checkout_candidate uuid; v_checkout_opp uuid;
+ v_intervention uuid; v_checkout_lease uuid; v_checkout_token text;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key FROM henvalt.shopify_connections
   WHERE tenant_id=v_tenant AND shop_domain='store-b.myshopify.com';
@@ -451,6 +453,65 @@ BEGIN
   WHERE shopify_connection_id=v_connection AND shopify_order_id=v_shopify_order_id;
  IF v_source_delivery IS NULL OR v_order_id IS NULL THEN
   RAISE EXCEPTION 'Verified order projection did not create its exact-store order and receipt';
+ END IF;
+
+ -- Checkout interventions use the same lease queue but retain their own
+ -- checkout identity and intervention delivery chain.
+ v_checkout_token:='lease-checkout-'||gen_random_uuid()::text;
+ INSERT INTO henvalt.shopify_checkout_identity_v2(
+  tenant_id,shopify_connection_id,shopify_checkout_id,checkout_token,
+  session_reference,customer_identity_id,source_delivery_id,checkout_status,
+  shopify_checkout_token,total_value,currency,jurisdiction_country_code
+ ) VALUES(v_tenant,v_connection,'lease-checkout-id-'||gen_random_uuid()::text,
+  v_checkout_token,NULL,v_customer,v_source_delivery,'OPEN',
+  v_checkout_token,88.00,'USD','US')
+ RETURNING id INTO v_checkout_identity;
+ INSERT INTO henvalt.shopify_checkout_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,checkout_identity_id,checkout_token,
+  source_delivery_id,last_activity_at,eligible_after,state
+ ) VALUES(v_tenant,v_connection,v_checkout_identity,v_checkout_token,
+  v_source_delivery,now()-interval '2 hours',now()-interval '1 hour',
+  'READY_FOR_CONTACT_RESOLUTION')
+ RETURNING id INTO v_checkout_candidate;
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,
+  customer_identity_id,source_delivery_id,opportunity_type,status,
+  value_at_risk,currency,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,v_checkout_candidate,
+  v_checkout_identity,v_customer,v_source_delivery,'ABANDONED_CHECKOUT',
+  'CONTACT_RESOLUTION_PENDING',88.00,'USD',
+  'lease-checkout-opportunity-'||gen_random_uuid()::text)
+ RETURNING id INTO v_checkout_opp;
+ INSERT INTO henvalt.shopify_recovery_intervention_v2(
+  tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,
+  step_number,status,scheduled_at
+ ) VALUES(v_tenant,v_connection,v_checkout_opp,v_customer,1,
+  'READY_FOR_AUTHORIZATION',now()-interval '1 minute')
+ RETURNING id INTO v_intervention;
+
+ v_claim:=henvalt.claim_shopify_recovery_work_v2('checkout-worker-a',10,120);
+ SELECT (x.item->>'lease_id')::uuid INTO v_checkout_lease
+ FROM jsonb_array_elements(v_claim->'items') AS x(item)
+ WHERE x.item->>'work_type'='CHECKOUT_INTERVENTION'
+  AND x.item->>'work_id'=v_intervention::text
+  AND x.item->>'opportunity_id'=v_checkout_opp::text
+  AND x.item->>'shopify_connection_id'=v_connection::text
+  AND x.item->>'intervention_id'=v_intervention::text;
+ IF v_checkout_lease IS NULL THEN
+  RAISE EXCEPTION 'Checkout intervention was not claimed with its exact-store lineage: %',v_claim;
+ END IF;
+ v_claim:=henvalt.claim_shopify_recovery_work_v2('checkout-worker-b',10,120);
+ IF EXISTS(
+  SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
+  WHERE x.item->>'work_id'=v_intervention::text
+ ) THEN
+  RAISE EXCEPTION 'Second checkout worker received an active intervention lease';
+ END IF;
+ v_finish:=henvalt.finish_shopify_recovery_work_claim_v2(
+  v_checkout_lease,'checkout-worker-a','HANDOFF_ACCEPTED',interval '1 hour'
+ );
+ IF v_finish->>'finished'<>'true' THEN
+  RAISE EXCEPTION 'Checkout intervention lease did not finish: %',v_finish;
  END IF;
 
  IF EXISTS(SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
