@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { isDateOnly, isValidDateRange } from "../_shared/date-range-v2.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -117,10 +118,10 @@ Deno.serve(async (req: Request) => {
     const valid = (value: string | null) =>
       value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
     const today = new Date().toISOString().slice(0, 10);
-    const from = valid(url.searchParams.get("from")) ||
+    const from = (isDateOnly(url.searchParams.get("from")) ? url.searchParams.get("from") : null) ||
       new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
-    const to = valid(url.searchParams.get("to")) || today;
-    if (to < from || Date.parse(to) - Date.parse(from) > 366 * 86400000) {
+    const to = (isDateOnly(url.searchParams.get("to")) ? url.searchParams.get("to") : null) || today;
+    if (!isValidDateRange(from, to, 366)) {
       return out(400, { error: "invalid_date_range" });
     }
 
