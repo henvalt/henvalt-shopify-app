@@ -76,6 +76,7 @@ async function rpc(name: string, body: Record<string, unknown>): Promise<any> {
       "content-profile": "henvalt",
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) throw new Error("DATABASE_LOOKUP_FAILED");
   const payload = await response.json().catch(() => null);
@@ -90,6 +91,7 @@ async function rest(path: string): Promise<any> {
       "accept-profile": "henvalt",
       "content-profile": "henvalt",
     },
+    signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) throw new Error("DATABASE_LOOKUP_FAILED");
   return await response.json();
