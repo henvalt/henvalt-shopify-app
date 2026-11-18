@@ -180,6 +180,11 @@ jobs:
           PGPASSWORD: postgres
         run: bash tests/sql/shopify-delivery-cost-reservation-concurrency-v2.test.sh
 
+      - name: Exercise pixel attempt outcome and cost reservation lifecycle
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql
+
       - name: Exercise exact-store shop/redact stop boundary
         env:
           PGPASSWORD: postgres
