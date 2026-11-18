@@ -6,6 +6,12 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      confirm_shopify_prepare:
+        description: "Confirm creation of an unreleased Shopify app version after reviewing the app owner, scopes, URLs and Pixel extension"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -114,6 +120,7 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
 
   deploy-shopify-version:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_shopify_prepare == true && github.ref == 'refs/heads/main'
     permissions:
       contents: write
     if: github.event_name != 'pull_request'
@@ -122,6 +129,16 @@ jobs:
       SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require reviewed main-branch preparation confirmation
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Shopify app preparation is permitted only from main."
+            exit 1
+          fi
+          if [ "${{ inputs.confirm_shopify_prepare }}" != "true" ]; then
+            echo "::error::Explicit Shopify preparation confirmation is required."
+            exit 1
+          fi
       - name: Skip deployment until Shopify token is configured
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN == ''
         run: echo "Deployment skipped. Add SHOPIFY_SERVICE_ACCOUNT_TOKEN in GitHub repository Actions secrets."
