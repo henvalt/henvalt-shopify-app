@@ -67,6 +67,6 @@ test("worker enforces the body limit while streaming even when Content-Length is
 });
 
 test("pixel delivery Edge Function is configured for its dedicated bearer gate with valid TOML section formatting",()=>{
- assert.match(config,/(^|\\n)\\[functions\\.henvalt-shopify-pixel-delivery-v2\\]\\nverify_jwt = false\\n?$/);
- assert.doesNotMatch(config,/\\\\n\\[functions\\.henvalt-shopify-pixel-delivery-v2/);
+ assert.ok(config.endsWith("\n[functions.henvalt-shopify-pixel-delivery-v2]\nverify_jwt = false\n"));
+ assert.equal(config.includes("\\n[functions.henvalt-shopify-pixel-delivery-v2]"),false);
 });
