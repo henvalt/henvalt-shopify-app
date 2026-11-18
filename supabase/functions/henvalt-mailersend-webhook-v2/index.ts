@@ -70,6 +70,10 @@ Deno.serve(async(req:Request)=>{
       console.error("MailerSend pixel reconciliation rejected");
       return json(503,{error:"pixel_provider_reconciliation_rejected"});
     }
+    if(reconciliationRow.status==="UNMATCHED"){
+      // Preserve provider retry semantics while a send response/message reference is still being persisted.
+      return json(503,{error:"pixel_provider_event_waiting_for_attempt_correlation"});
+    }
     pixelReconciled=reconciliationRow.pixel_attempt_reconciled===true;
     pixelSuppressionApplied=reconciliationRow.suppression_applied===true;
   }
