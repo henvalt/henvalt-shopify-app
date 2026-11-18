@@ -49,7 +49,9 @@ Deno.serve(async(req:Request)=>{
   // The signed inbox may initially be UNMATCHED when the send was a pixel attempt.
   // Reconcile only from this verified event row; never trust a caller-supplied message ID.
   const payload=JSON.parse(new TextDecoder().decode(raw));
-  const eventId=payload&&typeof payload==="object"&&payload.data&&typeof payload.data.id==="string"?payload.data.id:"";
+  const rawEventId=payload&&typeof payload==="object"?payload.data?.id:undefined;
+  const eventId=typeof rawEventId==="string"?rawEventId:
+    typeof rawEventId==="number"&&Number.isSafeInteger(rawEventId)?String(rawEventId):"";
   let pixelReconciled=false;
   let pixelSuppressionApplied=false;
   if(eventId){
