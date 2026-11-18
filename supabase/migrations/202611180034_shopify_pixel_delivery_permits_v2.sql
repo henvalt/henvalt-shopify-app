@@ -32,10 +32,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS shopify_recovery_opportunity_v2_id_tenant_conn
 CREATE UNIQUE INDEX IF NOT EXISTS shopify_customer_identity_v2_id_tenant_connection_uidx
  ON henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_recovery_opportunity_v2_pixel_delivery_lineage_uidx
+ ON henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id,pixel_candidate_id,customer_identity_id);
 ALTER TABLE henvalt.shopify_pixel_delivery_permits_v2
  ADD CONSTRAINT shopify_pixel_permit_opportunity_scope_fk
   FOREIGN KEY(opportunity_id,tenant_id,shopify_connection_id)
   REFERENCES henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_permit_opportunity_lineage_fk
+  FOREIGN KEY(opportunity_id,tenant_id,shopify_connection_id,pixel_candidate_id,customer_identity_id)
+  REFERENCES henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id,pixel_candidate_id,customer_identity_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
  ADD CONSTRAINT shopify_pixel_permit_candidate_scope_fk
   FOREIGN KEY(pixel_candidate_id,tenant_id,shopify_connection_id)
   REFERENCES henvalt.shopify_pixel_recovery_candidate_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
@@ -98,6 +103,12 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_pixel_delivery_cost_reservations_v2 (
 
 ALTER TABLE henvalt.shopify_pixel_delivery_permits_v2 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE henvalt.shopify_pixel_send_attempts_v2 ENABLE ROW LEVEL SECURITY;
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempts_v2_id_scope_uidx
+ ON henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id);
+ALTER TABLE henvalt.shopify_pixel_delivery_cost_reservations_v2
+ ADD CONSTRAINT shopify_pixel_cost_attempt_scope_fk
+ FOREIGN KEY(pixel_send_attempt_id,tenant_id,shopify_connection_id)
+ REFERENCES henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE henvalt.shopify_pixel_delivery_cost_reservations_v2 ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON henvalt.shopify_pixel_delivery_permits_v2,henvalt.shopify_pixel_send_attempts_v2,henvalt.shopify_pixel_delivery_cost_reservations_v2 FROM PUBLIC,anon,authenticated,service_role;
 
