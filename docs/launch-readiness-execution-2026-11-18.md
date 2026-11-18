@@ -552,3 +552,22 @@ This closes an ingress resource-boundary gap; it does not close the broader
 launch blockers in app ownership, production migration parity, n8n V2
 orchestration, verified sender/billing configuration, real recovery testing,
 or Shopify privacy approval.
+
+## 14. Dashboard date and asynchronous-state hardening — branch implementation
+
+Both authenticated dashboard Edge Function routes now use the shared
+`date-range-v2.mjs` validator. It rejects impossible Gregorian dates
+(for example, February 31), malformed date-only values, reversed ranges and
+ranges longer than 366 days. This avoids JavaScript date-parser rollover
+silently converting invalid merchant query parameters into a different day.
+
+The dashboard browser client now aborts superseded requests when the merchant
+changes store or date range, ignores responses from older request generations,
+and invalidates outstanding work on sign-out. Merchant metrics and activity
+are cleared from the rendered view when the owner session ends. The loading/
+status regions announce updates to assistive technology.
+
+Regression tests cover leap-year validation, inclusive range bounds, both
+dashboard API routes, stale-response suppression, abort handling and
+sign-out clearing. These changes affect only candidate code and the static
+dashboard artifact; no Pages deployment or live Edge Function update occurred.
