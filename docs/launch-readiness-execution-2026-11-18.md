@@ -503,3 +503,22 @@ A new branch-only contract and CI test were added:
 The test locks the current checkout-only permit boundary, exact-store timestamped consent, checkout-derived jurisdiction, merchant-wide atomic reservation and PII/ambiguous-send restrictions. It is wired into the existing V2 validation workflow.
 
 **Decision:** do not generalize the permit SQL by simply making checkout joins optional. The next implementation needs a separate trusted customer-contact/country evidence path for pixel opportunities, then one shared authorization transaction that binds the source shape and reuses the existing consent, suppression, conversion, sender and merchant-wide cost reservation controls. Until that exists, cart/browse remain review-only and no customer send is authorized.
+
+
+## 12. Exact-store customer contact evidence receiver — implemented, resolver still open
+
+Candidate migration 029 adds append-only and current-state contact evidence tables plus a service-role-only RPC. The database accepts only exact-store customer identity references and stores a boolean contact-availability result, optional normalized country code, timestamp and opaque lookup ID. It never stores the email, address, phone, Shopify token or raw Admin API response.
+
+The current-state row has a composite evidence foreign key binding tenant, connection and customer identity. The RPC checks active app/store/tenant, exact-store customer identity, narrow evidence freshness, and lookup replay consistency. A newer observation wins; stale observations cannot win a concurrent first-write race.
+
+The existing two-store pixel integration test now verifies:
+- Store A and Store B have separate customer identity rows despite reusing the same external customer reference.
+- Store A contact evidence is accepted only for Store A.
+- Store A identity submitted under Store B is rejected.
+- An unavailable contact is recorded without storing the contact value.
+- Reusing a lookup ID with changed country facts is rejected.
+- Evidence creation returns `send_authorized=false`.
+
+The new migration is included in disposable CI migration application (001–029), and the static contact-evidence contract test is included in the V2 Node suite.
+
+**Not yet implemented:** the trusted Edge Function that calls Shopify Admin GraphQL for the exact connection, verifies email availability and trusted country, and keeps the email transient through final delivery. Migration 029 is only the evidence receiver; it is not a contact resolver, permit issuer or send authorization. Cart/browse remain review-only. Latest changes require their own green CI run before this slice is considered validated.
