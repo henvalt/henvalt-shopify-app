@@ -12,7 +12,7 @@ This contract turns the export-delivery design into an implementable, testable b
 - The bucket is private. No public URL, signed URL, service key, raw Storage key, or export body may appear in webhook responses, logs, analytics, or browser-visible database rows.
 - The existing V2 completion RPC remains fail-closed until artifact, delivery and redaction postcondition evidence are durable and tested.
 
-## 2. Proposed service-only schema (not yet a migration)
+## 2. Service-only schema (migration 025, branch-only)
 
 ### `henvalt.shopify_privacy_export_artifacts_v2`
 
@@ -148,4 +148,18 @@ Use an Edge Function proxy, not a signed URL.
 
 Do not create the bucket or apply schema until the exact table names/constraints have been reconciled with the current V2 queue and receipt definitions, the Storage API behavior is verified against current Supabase docs, and the migration can be generated using the Supabase CLI workflow. Do not deploy the Edge Function or worker until adversarial tests pass. Do not replace the fail-closed completion RPC until the export and redaction evidence processors both exist.
 
-**Current status:** specification only. Production Supabase remains untouched; no bucket, schema, function, worker, or n8n workflow has been changed.
+**Current status:** migration 025 now creates the two service-only metadata tables and their exact-store composite foreign keys on the preparation branch. It deliberately does not create a Storage bucket, upload/download processor, purge worker, merchant UI, or completion path. The migration is included in disposable-database CI. Production Supabase remains untouched; no bucket, production schema, function, worker, or n8n workflow has been changed.
+
+
+## 10. Migration 025 implementation checkpoint (18 November 2026)
+
+Added `supabase/migrations/202611180025_shopify_privacy_export_artifact_registry_v2.sql` on the preparation branch.
+
+- Adds `henvalt.shopify_privacy_export_artifacts_v2` with receipt + tenant + connection + app + shop composite binding, opaque UUID object filename, SHA-256, bounded size, fixed bucket identifier, generation idempotency, explicit completeness, staged/available/purge states and expiry.
+- An artifact can become `AVAILABLE` only when its completeness status is `COMPLETE_FOR_MERCHANT_REVIEW`; `PURGED` requires a purge timestamp.
+- Adds `henvalt.shopify_privacy_delivery_evidence_v2` with append-only grants and separate stream-start, stream-failure and merchant-attestation event types.
+- Both tables have RLS and FORCE RLS; browser roles have no privileges. Service role can insert/read/update artifact metadata; evidence is insert/read only.
+- Added static and disposable PostgreSQL tests for same-store binding, cross-store rejection, incomplete artifact rejection, RLS, grants and append-only evidence.
+- CI now applies candidate migration 025 after the fail-closed completion gate.
+
+Important limitation: the registry records an expected private bucket name, but does not create that bucket or prove that an object exists. The live project previously had no Storage buckets. A separate, reviewed Storage bucket provisioning step and service-side upload/download/purge processors remain unimplemented. Migration 024 continues to prevent request completion. No production changes or data access occurred.
