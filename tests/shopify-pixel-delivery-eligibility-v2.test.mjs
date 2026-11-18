@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const migration=readFileSync(new URL("../supabase/migrations/202611180032_shopify_pixel_delivery_eligibility_v2.sql",import.meta.url),"utf8");
-const policyDoc=readFileSync(new URL("../docs/shopify-pixel-delivery-boundary-2026-11-18.md",import.meta.url),"utf8");
+const policyDoc=readFileSync(new URL("../docs/shopify-pixel-delivery-eligibility-v2.md",import.meta.url),"utf8");
 test("pixel jurisdiction policy is explicit, versioned, unseeded, and legal-review referenced",()=>{
  assert.match(migration,/CREATE TABLE IF NOT EXISTS henvalt\.shopify_pixel_delivery_jurisdiction_policy_v2/);
  assert.match(migration,/legal_review_reference text NOT NULL/);
@@ -36,6 +36,6 @@ test("eligibility assessment cannot create or authorize delivery",()=>{
  assert.match(body,/recipient_email_returned',false/);
 });
 test("engineering boundary records future delivery-time requirements",()=>{
- assert.match(policyDoc,/delivery-time Shopify Admin re-resolution of email and marketing consent/);
+ assert.match(policyDoc,/Delivery-time email must be re-resolved from the exact Shopify customer GID/);
  assert.match(policyDoc,/atomic merchant-wide cost-reservation trigger/);
 });
