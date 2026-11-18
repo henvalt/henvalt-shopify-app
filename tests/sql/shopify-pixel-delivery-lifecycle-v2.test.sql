@@ -25,7 +25,8 @@ BEGIN
     'henvalt.resolve_shopify_pixel_delivery_context_v2(uuid)',
     'henvalt.authorize_shopify_pixel_provider_submission_v2(uuid,text)',
     'henvalt.record_shopify_pixel_send_attempt_result_v2(uuid,text,text)',
-    'henvalt.mark_stale_shopify_pixel_send_attempts_ambiguous_v2(timestamp with time zone,integer)'
+    'henvalt.mark_stale_shopify_pixel_send_attempts_ambiguous_v2(timestamp with time zone,integer)',
+    'henvalt.reconcile_mailersend_pixel_provider_event_v2(text,text)'
   ] LOOP
     IF has_function_privilege('anon',v_function,'EXECUTE')
       OR has_function_privilege('authenticated',v_function,'EXECUTE')
