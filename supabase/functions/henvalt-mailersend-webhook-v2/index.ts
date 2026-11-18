@@ -51,6 +51,7 @@ Deno.serve(async(req:Request)=>{
   const payload=JSON.parse(new TextDecoder().decode(raw));
   const eventId=payload&&typeof payload==="object"&&payload.data&&typeof payload.data.id==="string"?payload.data.id:"";
   let pixelReconciled=false;
+  let pixelSuppressionApplied=false;
   if(eventId){
     const reconciliation=await fetch(SUPABASE_URL+"/rest/v1/rpc/reconcile_mailersend_pixel_provider_event_v2",{
       method:"POST",
@@ -70,12 +71,13 @@ Deno.serve(async(req:Request)=>{
       return json(503,{error:"pixel_provider_reconciliation_rejected"});
     }
     pixelReconciled=reconciliationRow.pixel_attempt_reconciled===true;
+    pixelSuppressionApplied=reconciliationRow.suppression_applied===true;
   }
   return json(200,{
     accepted:true,
     status:pixelReconciled?"PROCESSED":typeof row.status==="string"?row.status:"ACCEPTED",
     pixel_attempt_reconciled:pixelReconciled,
-    suppression_applied:row.suppression_applied===true,
+    suppression_applied:row.suppression_applied===true||pixelSuppressionApplied,
     recipient_pii_stored:false,
   });
 });
