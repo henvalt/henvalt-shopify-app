@@ -41,7 +41,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check pixel delivery Edge Function
-        run: deno check supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts
+        run: deno check --no-config supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts
       - name: Create disposable database baseline
         env:
           PGPASSWORD: postgres
