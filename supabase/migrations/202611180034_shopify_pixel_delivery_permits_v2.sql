@@ -158,7 +158,7 @@ AS $function$
 BEGIN
  IF NEW.status IS DISTINCT FROM OLD.status THEN
   UPDATE henvalt.shopify_pixel_delivery_cost_reservations_v2
-   SET status=CASE WHEN NEW.status='SUBMITTED' THEN 'SETTLED' WHEN NEW.status='FAILED' THEN 'RELEASED' ELSE 'RESERVED' END,
+   SET status=CASE WHEN NEW.status='SUBMITTED' THEN 'SETTLED' WHEN NEW.status='FAILED' THEN 'RELEASED' WHEN NEW.status='AMBIGUOUS' THEN 'RESERVED' ELSE status END,
        updated_at=pg_catalog.now()
    WHERE pixel_send_attempt_id=NEW.id AND tenant_id=NEW.tenant_id AND shopify_connection_id=NEW.shopify_connection_id
      AND status IN ('RESERVED','SETTLED');
