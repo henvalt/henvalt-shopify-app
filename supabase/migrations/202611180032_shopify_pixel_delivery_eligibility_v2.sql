@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_pixel_delivery_jurisdiction_policy_v2
       AND max_contact_evidence_age <= interval '15 minutes'
     ),
   CONSTRAINT shopify_pixel_delivery_jurisdiction_policy_v2_approval_pair
-    CHECK ((policy_status = 'APPROVED') = (approved_at IS NOT NULL)),
+    CHECK (policy_status <> 'APPROVED' OR approved_at IS NOT NULL),
   CONSTRAINT shopify_pixel_delivery_jurisdiction_policy_v2_expiry
     CHECK (expires_at IS NULL OR approved_at IS NULL OR expires_at > approved_at),
   CONSTRAINT shopify_pixel_delivery_jurisdiction_policy_v2_region_format
@@ -142,11 +142,12 @@ BEGIN
   SELECT * INTO v_policy
   FROM henvalt.shopify_pixel_delivery_jurisdiction_policy_v2 p
   WHERE p.country_code=v_contact.country_code
-    AND p.region_code IS NOT DISTINCT FROM v_contact.region_code
+    AND (p.region_code IS NOT DISTINCT FROM v_contact.region_code
+      OR (p.region_code IS NULL AND p.require_region IS FALSE))
     AND p.policy_status='APPROVED'
     AND p.approved_at IS NOT NULL
     AND (p.expires_at IS NULL OR p.expires_at>pg_catalog.now())
-  ORDER BY p.approved_at DESC
+  ORDER BY (p.region_code IS NOT NULL) DESC,p.approved_at DESC
   LIMIT 1;
   IF NOT FOUND THEN
     RETURN jsonb_build_object('eligible',false,'code','JURISDICTION_POLICY_NOT_APPROVED',
