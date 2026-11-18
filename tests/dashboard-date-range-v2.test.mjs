@@ -22,7 +22,7 @@ test("date ranges are inclusive, ordered and bounded to 366 days", () => {
 });
 test("both dashboard endpoints use the shared strict date-only contract", () => {
   assert.match(merchant, /isDateOnly/);
-  assert.match(merchant, /isValidDateRange\(from,to,366\)/);
+  assert.match(merchant, /isValidDateRange\(from,\\s*to,\\s*366\)/);
   assert.match(legacy, /isDateOnly/);
   assert.match(legacy, /isValidDateRange\(from,to,366\)/);
   assert.doesNotMatch(merchant, /!Number\.isNaN\(Date\.parse\(v\)\)/);
