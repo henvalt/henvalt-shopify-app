@@ -381,3 +381,55 @@ from another store when session references collide.
 active, but they are not safe evidence for multi-store launch. The V2 pixel
 inbox and checkout-only opportunity model do not yet replace them. No active
 n8n workflow or live database function was changed during this trace.
+
+
+## 8. Implemented candidate-stage cart/browse foundation — branch only
+
+The following additive preparation changes are now in the branch:
+
+- The pixel inbox ingestion function retains a bounded allowlist of product and
+  cart-line context only when analytics processing is allowed. It does not
+  retain arbitrary nested browser payloads, query strings, or fragments.
+- The Cloudflare pixel collector forwards bounded product ID/title/variant,
+  quantity, unit/line amount and currency fields to the server-side validator.
+- Migration
+  `202611180027_shopify_pixel_recovery_candidates_v2.sql` adds a server-only
+  candidate table with composite exact-connection foreign keys to the tenant,
+  session identity, optional customer identity and source inbox event.
+- The candidate refresh RPC recognizes two distinct signals:
+  - abandoned cart from a product-added-to-cart event;
+  - browse abandonment from at least two product views of the same product.
+- Both paths use same-store session activity and suppress on later checkout
+  progression. Cart candidates also suppress on same-product removal; browse
+  candidates suppress when that product is subsequently added/removed.
+- Candidate processing is gated by analytics consent and active tenant/store/
+  app identity. Marketing consent is not inferred from analytics consent and
+  is not treated as send authorization.
+- Candidate rows contain no email address and cannot create a recovery
+  opportunity, sequence, intervention, send attempt, provider request,
+  attribution or billable measurement. Final contact consent and suppression
+  must be rechecked by the future delivery boundary.
+
+### Verification evidence
+
+The disposable PostgreSQL CI suite applied migrations 001–027 and executed a
+new two-store integration test. It reused the same browser, customer and
+product identifiers in two stores, created cart and browse candidates in both,
+then removed a cart item in Store A. The test confirmed that only Store A's
+cart candidate was suppressed and Store B remained eligible. It also ran with
+analytics consent true and marketing consent false, demonstrating that
+candidate analytics processing does not itself authorize marketing sends.
+
+The latest completed validation at the time of this update passed:
+- candidate SQL migration application;
+- the two-store cart/browse candidate integration test;
+- the pixel cart/browse contract tests;
+- the existing identity, checkout, conversion, privacy and delivery contract
+  suite up to the currently executing final steps.
+
+This is a candidate-stage milestone, **not an end-to-end recovery launch**.
+The next gate is to generalize the V2 opportunity source model and bind these
+candidates to the existing single-use delivery authorization and the three
+existing n8n workflow boundaries. Do not enable candidate promotion or sends
+until that integration has its own two-store, consent-withdrawal, conversion,
+uninstall and duplicate-send tests.
