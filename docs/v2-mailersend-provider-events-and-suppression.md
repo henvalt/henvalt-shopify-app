@@ -34,7 +34,7 @@ Migration 039 adds a separate pixel-attempt correlation path to the same signed 
 - An ambiguous pixel attempt becomes SUBMITTED only when a signed MailerSend activity event matches its provider account and message reference.
 - The transition settles the reserved provider cost; it does not mark the recovery as revenue recovered.
 - Event-to-pixel-attempt lineage is stored separately from legacy checkout send-attempt lineage.
-- Replays are idempotent. Events without a matching message reference remain unmatched and cannot authorize a resend.
+- Replays are idempotent. Events without a matching message reference remain unmatched and cannot authorize a resend; the webhook returns a retryable 503 while correlation is pending, allowing MailerSend's signed-event retry schedule to deliver the same event again.
 - If the provider accepted a message but neither the response nor a later webhook exposes a correlatable message ID, the attempt remains AMBIGUOUS and its cost remains RESERVED for manual reconciliation. There is no automatic resend.
 
 ## Critical implementation boundary
