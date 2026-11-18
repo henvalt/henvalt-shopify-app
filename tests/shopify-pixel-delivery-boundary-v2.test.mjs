@@ -60,7 +60,7 @@ test("contact evidence resolver never returns recipient email or grants send aut
 
 test("contact evidence stores bounded country and region facts, not address or contact values", () => {
   assert.match(evidence, /ADD COLUMN IF NOT EXISTS region_code text/);
-  assert.ok(evidence.includes("region_code !~ '^[A-Z0-9-]{1,12}$'"));
+  assert.ok(evidence.includes("v_region !~ '^[A-Z0-9-]{1,12}$'"));
   assert.match(evidence, /contact_value_stored',false/);
   assert.match(evidence, /address_fields_stored',false/);
   assert.match(evidence, /GRANT EXECUTE ON FUNCTION henvalt\.record_shopify_customer_contact_evidence_v3[\s\S]*?TO service_role/);
