@@ -4,9 +4,9 @@ export PGPASSWORD="${PGPASSWORD:-postgres}"
 psql_cmd=(psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1)
 
 set +e
-"${psql_cmd[@]}" -Atc "SELECT henvalt.claim_shopify_recovery_work_v2('claim-race-worker-a',100,120)" >/tmp/henvalt-claim-race-a.log 2>&1 &
+"${psql_cmd[@]}" -Atc "SELECT set_config('request.jwt.claim.role','service_role',false); SELECT henvalt.claim_shopify_recovery_work_v2('claim-race-worker-a',100,120)" >/tmp/henvalt-claim-race-a.log 2>&1 &
 pid_a=$!
-"${psql_cmd[@]}" -Atc "SELECT henvalt.claim_shopify_recovery_work_v2('claim-race-worker-b',100,120)" >/tmp/henvalt-claim-race-b.log 2>&1 &
+"${psql_cmd[@]}" -Atc "SELECT set_config('request.jwt.claim.role','service_role',false); SELECT henvalt.claim_shopify_recovery_work_v2('claim-race-worker-b',100,120)" >/tmp/henvalt-claim-race-b.log 2>&1 &
 pid_b=$!
 wait "$pid_a"; status_a=$?
 wait "$pid_b"; status_b=$?
