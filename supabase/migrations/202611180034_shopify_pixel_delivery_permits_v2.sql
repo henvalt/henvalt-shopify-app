@@ -48,17 +48,6 @@ ALTER TABLE henvalt.shopify_pixel_delivery_permits_v2
   FOREIGN KEY(customer_identity_id,tenant_id,shopify_connection_id)
   REFERENCES henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
-ALTER TABLE henvalt.shopify_pixel_send_attempts_v2
- ADD CONSTRAINT shopify_pixel_attempt_opportunity_scope_fk
-  FOREIGN KEY(opportunity_id,tenant_id,shopify_connection_id)
-  REFERENCES henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
- ADD CONSTRAINT shopify_pixel_attempt_candidate_scope_fk
-  FOREIGN KEY(pixel_candidate_id,tenant_id,shopify_connection_id)
-  REFERENCES henvalt.shopify_pixel_recovery_candidate_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
- ADD CONSTRAINT shopify_pixel_attempt_customer_scope_fk
-  FOREIGN KEY(customer_identity_id,tenant_id,shopify_connection_id)
-  REFERENCES henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
-
 CREATE INDEX IF NOT EXISTS shopify_pixel_delivery_permits_pending_idx
  ON henvalt.shopify_pixel_delivery_permits_v2(expires_at) WHERE consumed_at IS NULL;
 
@@ -84,6 +73,17 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_pixel_send_attempts_v2 (
 );
 CREATE INDEX IF NOT EXISTS shopify_pixel_send_attempts_tenant_month_idx
  ON henvalt.shopify_pixel_send_attempts_v2(tenant_id,created_at);
+
+ALTER TABLE henvalt.shopify_pixel_send_attempts_v2
+ ADD CONSTRAINT shopify_pixel_attempt_opportunity_scope_fk
+  FOREIGN KEY(opportunity_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_recovery_opportunity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_attempt_candidate_scope_fk
+  FOREIGN KEY(pixel_candidate_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_pixel_recovery_candidate_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_pixel_attempt_customer_scope_fk
+  FOREIGN KEY(customer_identity_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 
 CREATE TABLE IF NOT EXISTS henvalt.shopify_pixel_delivery_cost_reservations_v2 (
  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
