@@ -74,6 +74,7 @@ async function processOne(): Promise<Response> {
     const released = await retryClaim(claim, "UNSUPPORTED_OR_INVALID_PRIVACY_CLAIM");
     return released ? json(202, { status: "claim_released" }) : json(503, { error: "claim_release_failed" });
   }
+  let stagedArtifactId: string | null = null;
   try {
     const draftResponse = await rpc("build_shopify_customer_privacy_export_v2", {
       p_receipt_id: claim.receipt_id, p_claim_token: claim.claim_token,
@@ -121,6 +122,7 @@ async function processOne(): Promise<Response> {
     const inserted = await insertResponse.json().catch(() => []);
     const artifact = Array.isArray(inserted) ? inserted[0] : null;
     if (!artifact?.id) return json(503, { error: "artifact_metadata_unconfirmed" });
+    stagedArtifactId = artifact.id;
 
     const uploadResponse = await rest("/storage/v1/object/" + BUCKET + "/" + encodeURIComponent(objectKey), {
       method: "POST", headers: { "content-type": "application/json", "cache-control": "no-store", "x-upsert": "false" },
@@ -154,6 +156,7 @@ async function processOne(): Promise<Response> {
     // Availability for merchant review is not proof of delivery to the data subject.
     return json(201, { status: "artifact_available_for_merchant_review", artifact_id: artifact.id });
   } catch {
+    if (stagedArtifactId) await patchArtifact(stagedArtifactId, "PURGE_PENDING");
     const released = await retryClaim(claim, "PRIVACY_ARTIFACT_PROCESSOR_FAILED");
     return released ? json(202, { status: "retry_scheduled" }) : json(503, { error: "privacy_processor_failed" });
   }
