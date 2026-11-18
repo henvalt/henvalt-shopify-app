@@ -232,3 +232,47 @@ it does not close any of these live-runtime gates.
   verification evidence.
 - Do not mark launch-ready until the complete chain from install to confirmed
   recovered revenue and privacy-safe uninstall has been demonstrated.
+
+
+## 5. Candidate-to-runtime integration gaps found during code-path tracing
+
+The candidate Edge Functions and SQL migrations provide several strong
+components, but they do not yet form one connected execution path:
+
+- **OAuth configuration mismatch:** the checked-in `shopify.app.toml` still
+  points to the legacy dashboard URL and legacy OAuth callback and retains
+  `use_legacy_install_flow = true`. The candidate OAuth V2 handler resolves
+  app identity through the app registry, but the app configuration has not
+  been regenerated from an owner-controlled public app. Do not release this
+  configuration as-is.
+- **Ingress-to-recovery gap:** the candidate
+  `henvalt-shopify-webhook-ingress` verifies and projects checkout, consent,
+  order and refund events. It does not itself hand a durable V2 recovery job
+  to the active `HENVALT_RECOVERY` workflow. The active recovery workflow
+  continues to call legacy tenant-scoped RPCs. A durable, idempotent V2
+  orchestration adapter is still required.
+- **Delivery integration gap:** `henvalt-shopify-contact-delivery-v2` is a
+  candidate direct Shopify-to-MailerSend boundary. It uses the V2 resolver,
+  single-use permit and cost-reservation chain, but the active
+  `HENVALT_DELIVERY` workflow still invokes the legacy
+  `authorize_delivery_request` and `henvalt-mailersend-delivery` path. The
+  cutover needs one clearly defined owner for scheduling, final authorization,
+  provider submission and outcome reconciliation; do not run both paths for
+  the same intervention.
+- **Privacy processor boundary:** `henvalt-shopify-privacy-v2` durably records
+  verified receipts and explicitly responds that review is required. The
+  export processor is a separate candidate function, currently blocked by
+  legacy-scope completeness. A webhook HTTP 200 therefore means receipt
+  acceptance, not completed export or deletion.
+- **Dashboard contract gap:** candidate V2 migrations add exact-store identity,
+  recovery and billing tables, but there is no completed store-selection API
+  and no V2 dashboard summary contract replacing the live tenant-wide summary.
+  The current single-store endpoint remains fail-closed for multi-store
+  tenants; the control-plane summary remains unsafe for shop-specific
+  multi-store reporting until replaced.
+
+These findings mean the next implementation batch must connect the V2
+identity graph to the three existing workflows, the merchant dashboard and
+the compliance lifecycle as a single controlled cutover. Merely deploying the
+candidate Edge Functions one by one would leave an incomplete or duplicated
+recovery system.
