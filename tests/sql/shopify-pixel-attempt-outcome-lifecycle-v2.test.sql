@@ -207,6 +207,26 @@ BEGIN
  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'DUPLICATE' THEN
   RAISE EXCEPTION 'Duplicate provider event reconciliation was not idempotent: %',v_result;
  END IF;
+ INSERT INTO henvalt.shopify_mailer_provider_events_v2(
+  provider_account_key,provider_event_id,provider_message_id,event_type,
+  body_sha256,processing_status
+ ) VALUES(v_provider,'pixel-provider-unsubscribe-'||gen_random_uuid()::text,
+  'synthetic-provider-message-id-2','activity.unsubscribed',repeat('b',64),'UNMATCHED');
+ v_result:=henvalt.reconcile_mailersend_pixel_provider_event_v2(
+  v_provider,(SELECT provider_event_id FROM henvalt.shopify_mailer_provider_events_v2
+   WHERE provider_account_key=v_provider AND provider_message_id='synthetic-provider-message-id-2'
+     AND event_type='activity.unsubscribed')
+ );
+ IF v_result->>'accepted'<>'true' OR v_result->>'pixel_attempt_reconciled'<>'true'
+   OR v_result->>'suppression_applied'<>'true' THEN
+  RAISE EXCEPTION 'Verified pixel unsubscribe event did not create exact-store suppression: %',v_result;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_delivery_suppressions_v2
+   WHERE tenant_id=v_tenant AND shopify_connection_id=v_connection
+     AND customer_identity_id=v_customer AND source_pixel_send_attempt_id=v_attempt
+     AND source_send_attempt_id IS NULL AND suppression_type='UNSUBSCRIBED' AND active IS TRUE) THEN
+  RAISE EXCEPTION 'Pixel unsubscribe suppression did not retain exact-store attempt lineage';
+ END IF;
 END;
 $test$;
 ROLLBACK;
