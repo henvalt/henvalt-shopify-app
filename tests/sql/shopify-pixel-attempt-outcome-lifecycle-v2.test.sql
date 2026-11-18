@@ -136,6 +136,70 @@ BEGIN
  IF v_reservation_status IS DISTINCT FROM 'RELEASED' THEN
   RAISE EXCEPTION 'Failed pixel attempt reservation is not released';
  END IF;
+
+ -- A signed MailerSend activity event can resolve an ambiguous pixel attempt
+ -- only after its provider message reference is retained on that attempt.
+ INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
+  tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
+  occurred_at,analytics_processing_allowed,marketing_allowed,client_reference,
+  customer_reference,payload,status,processed_at
+ ) VALUES(v_tenant,v_connection,'pixel-outcome-event-'||gen_random_uuid()::text,
+  'product_added_to_cart',encode(extensions.digest(convert_to(gen_random_uuid()::text,'UTF8'),'sha256'),'hex'),
+  now()-interval '1 hour',true,false,'outcome-browser','12345',
+  '{"product":{"id":"outcome-event-product"}}'::jsonb,'PROCESSED',now())
+ RETURNING id INTO v_inbox;
+ INSERT INTO henvalt.shopify_session_identity_v2(
+  tenant_id,shopify_connection_id,session_reference,customer_identity_id
+ ) VALUES(v_tenant,v_connection,'outcome-event-session-'||gen_random_uuid()::text,v_customer)
+ RETURNING id INTO v_session;
+ INSERT INTO henvalt.shopify_pixel_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,candidate_type,session_identity_id,customer_identity_id,
+  source_inbox_event_id,product_key,product_context,last_activity_at,eligible_after,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,'ABANDONED_CART',v_session,v_customer,v_inbox,
+  'outcome-event-product','{"product_id":"outcome-event-product"}'::jsonb,now()-interval '1 hour',
+  now()-interval '30 minutes','PROMOTED','outcome-event-candidate-'||gen_random_uuid()::text)
+ RETURNING id INTO v_candidate;
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,customer_identity_id,
+  source_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,NULL,NULL,v_customer,NULL,v_candidate,
+  'ABANDONED_CART','REVIEW_REQUIRED','outcome-event-opportunity-'||gen_random_uuid()::text)
+ RETURNING id INTO v_opportunity;
+ INSERT INTO henvalt.shopify_pixel_send_attempts_v2(
+  tenant_id,shopify_connection_id,opportunity_id,pixel_candidate_id,customer_identity_id,
+  provider_account_key,idempotency_key,status
+ ) VALUES(v_tenant,v_connection,v_opportunity,v_candidate,v_customer,v_provider,
+  'outcome-event-attempt-'||gen_random_uuid()::text,'AUTHORIZED')
+ RETURNING id INTO v_attempt;
+ v_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(
+  v_attempt,'AMBIGUOUS','synthetic-provider-message-id-2'
+ );
+ IF v_result->>'recorded'<>'true' OR v_result->>'provider_cost_state'<>'RESERVED' THEN
+  RAISE EXCEPTION 'Ambiguous attempt did not retain provider reference and reservation: %',v_result;
+ END IF;
+ INSERT INTO henvalt.shopify_mailer_provider_events_v2(
+  provider_account_key,provider_event_id,provider_message_id,event_type,
+  body_sha256,processing_status
+ ) VALUES(v_provider,'pixel-provider-event-'||gen_random_uuid()::text,
+  'synthetic-provider-message-id-2','activity.delivered',repeat('a',64),'UNMATCHED');
+ v_result:=henvalt.reconcile_mailersend_pixel_provider_event_v2(
+  v_provider,(SELECT provider_event_id FROM henvalt.shopify_mailer_provider_events_v2
+   WHERE provider_account_key=v_provider AND provider_message_id='synthetic-provider-message-id-2')
+ );
+ IF v_result->>'accepted'<>'true' OR v_result->>'pixel_attempt_reconciled'<>'true'
+   OR v_result->>'provider_cost_state'<>'SETTLED' THEN
+  RAISE EXCEPTION 'Verified provider event did not reconcile ambiguous pixel attempt: %',v_result;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2
+   WHERE id=v_attempt AND status='SUBMITTED'
+     AND provider_message_reference='synthetic-provider-message-id-2')
+   OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2
+     WHERE pixel_send_attempt_id=v_attempt AND status='SETTLED')
+   OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
+     WHERE provider_account_key=v_provider AND provider_message_id='synthetic-provider-message-id-2'
+       AND pixel_send_attempt_id=v_attempt AND processing_status='PROCESSED') THEN
+  RAISE EXCEPTION 'Provider event failed to durably reconcile pixel send and cost';
+ END IF;
 END;
 $test$;
 ROLLBACK;
