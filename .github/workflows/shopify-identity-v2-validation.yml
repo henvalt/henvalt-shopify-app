@@ -85,6 +85,10 @@ jobs:
             supabase/migrations/202611180026_shopify_privacy_export_purge_lifecycle_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
+      - name: Execute read-only privacy export schema catalog against disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f docs/sql/privacy-export-schema-catalog-read-only.sql
       - name: Exercise existing Shopify V2 database contracts
         env:
           PGPASSWORD: postgres
