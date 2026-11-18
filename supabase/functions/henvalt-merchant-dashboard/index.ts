@@ -82,7 +82,6 @@ Deno.serve(async (req: Request) => {
     if (typeof selectedConnection.shop_domain !== "string") {
       return reply(409, { error: "shop_not_connected" });
     }
-      v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? v : null;
     const today = new Date().toISOString().slice(0, 10);
     const from = (isDateOnly(u.searchParams.get("from")) ? u.searchParams.get("from") : null) ??
       new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
