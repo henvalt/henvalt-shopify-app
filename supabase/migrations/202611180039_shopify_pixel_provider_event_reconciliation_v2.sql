@@ -51,7 +51,9 @@ BEGIN
  FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','VERIFIED_EVENT_NOT_FOUND'); END IF;
  IF v_event.pixel_send_attempt_id IS NOT NULL THEN
-  RETURN jsonb_build_object('accepted',true,'status','DUPLICATE','pixel_attempt_reconciled',true);
+  RETURN jsonb_build_object('accepted',true,'status','DUPLICATE','pixel_attempt_reconciled',true,
+   'suppression_applied',EXISTS(SELECT 1 FROM henvalt.shopify_delivery_suppressions_v2
+    WHERE source_provider_event_id=v_event.id));
  END IF;
  IF v_event.processing_status<>'UNMATCHED' OR v_event.provider_message_id IS NULL
    OR v_event.event_type NOT IN ('activity.sent','activity.delivered','activity.soft_bounced',
