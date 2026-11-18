@@ -23,9 +23,10 @@ Deno.serve(async(req:Request)=>{
   const email=typeof customer.email==="string"?customer.email.trim():"";
   const available=email.length>0&&email.length<=320&&/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(email);
   const raw=customer.defaultAddress?.countryCodeV2,country=typeof raw==="string"&&/^[A-Z]{2}$/.test(raw)?raw:null;
+  const rawRegion=customer.defaultAddress?.provinceCode,region=typeof rawRegion==="string"&&/^[A-Za-z0-9-]{1,12}$/.test(rawRegion.trim())?rawRegion.trim().toUpperCase():null;
   const observed=new Date().toISOString();
-  const saved=await rpc("record_shopify_customer_contact_evidence_v3",{p_connection_id:b.shopify_connection_id,p_customer_identity_id:b.customer_identity_id,p_contact_available:available,p_country_code:country,p_observed_at:observed,p_lookup_id:crypto.randomUUID()});
+  const saved=await rpc("record_shopify_customer_contact_evidence_v3",{p_connection_id:b.shopify_connection_id,p_customer_identity_id:b.customer_identity_id,p_contact_available:available,p_country_code:country,p_region_code:region,p_observed_at:observed,p_lookup_id:crypto.randomUUID()});
   if(!saved||saved.accepted!==true)return reply(409,{error:String(saved?.code??"evidence_rejected").toLowerCase()});
-  return reply(200,{accepted:true,contact_available:available,country_code_available:country!==null,evidence_id:saved.evidence_id,observed_at:observed,send_authorized:false,recipient_email_returned:false});
+  return reply(200,{accepted:true,contact_available:available,country_code_available:country!==null,region_code_available:region!==null,evidence_id:saved.evidence_id,observed_at:observed,send_authorized:false,recipient_email_returned:false});
  }catch{return reply(503,{error:"contact_lookup_unavailable"});}
 });
