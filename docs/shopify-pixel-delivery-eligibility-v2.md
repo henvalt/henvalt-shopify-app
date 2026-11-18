@@ -36,3 +36,12 @@ The trusted contact resolver now requests `emailMarketingConsent { marketingStat
 The eligibility assessment now requires a positive Admin API `SUBSCRIBED` observation no older than five minutes with a non-null Shopify consent timestamp. Any consent webhook received after that Admin API observation invalidates it until a new trusted Admin API lookup occurs, regardless of webhook state. This is intentionally conservative and closes the stale-positive race; it is still not delivery authorization.
 
 The new ledger and RPC are service-role-only, replay-checked, bounded to recent observations, and store no raw GraphQL response, email, address, or access token. No jurisdiction policy is seeded. Existing checkout authorization is unchanged.
+
+
+## Independent pixel permit and send-attempt boundary (migration 034)
+
+Cart/browse now has its own permit table, two-minute token, single-use consume function, pixel send-attempt ledger, and terminal-result recorder. It is structurally separate from checkout interventions, checkout identities, and checkout permits. Issuance and consumption both rerun the fail-closed pixel eligibility assessment; consumption also rechecks recipient fingerprint suppression and creates exactly one attempt per opportunity.
+
+The attempt insert reserves provider cost under the merchant billing-account row lock. Pixel reservations are tracked separately but summed with checkout reservations against the same merchant monetary cap. Monthly usage counts checkout and pixel attempts together. SUBMITTED settles cost, FAILED releases it, and AMBIGUOUS retains the reservation.
+
+This is an authorization/accounting boundary only: it does not resolve or return recipient email, call MailerSend, enqueue n8n work, or authorize a customer send. A dedicated trusted delivery Edge Function and end-to-end provider tests remain required before cart/browse can actually send. Checkout migration 006 and its functions are unchanged.
