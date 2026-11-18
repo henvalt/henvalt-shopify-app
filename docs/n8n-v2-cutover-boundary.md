@@ -183,3 +183,14 @@ The repository candidate now contains migrations 039–043, pixel attribution, t
 The active n8n workflows remain unchanged and continue to reference legacy functions. That means the new V2 database lifecycle and dashboard are validated as candidate code, but **the live n8n runtime is not yet connected to the V2 lifecycle**. This is a launch blocker, not a reason to mutate the active workflows prematurely.
 
 No n8n workflow execution was triggered during this inspection. No active workflow was changed, disabled, published or unpublished. No customer email, provider call, billing action or production data mutation occurred.
+
+## 8. Provider and delivery ingress request limits
+
+The checkout delivery and signed MailerSend webhook Edge Functions now use the
+shared bounded streaming request reader at
+`supabase/functions/_shared/request-body-v2.ts`. Checkout input is limited
+to 160 KB and a strict object-key allowlist; signed provider events are limited
+to 1 MB before raw-body signature verification. Content type, UTF-8, JSON
+shape and streamed byte count are validated without relying on Content-Length.
+This is a branch-only hardening change. It does not change the active n8n
+graphs or the live MailerSend webhook route.
