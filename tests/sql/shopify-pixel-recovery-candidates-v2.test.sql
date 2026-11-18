@@ -347,6 +347,42 @@ BEGIN
   END IF;
 
   PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+
+  -- Adverse race: consent is revoked after permit issuance but before consume.
+  -- The old permit must become unusable without creating an attempt or reserving cost.
+  v_evidence_result:=henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_a,v_customer_a,'UNSUBSCRIBED',pg_catalog.now()-interval '30 seconds',
+    pg_catalog.clock_timestamp(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true' THEN
+    RAISE EXCEPTION 'Consent revocation evidence could not be recorded: %',v_evidence_result;
+  END IF;
+  v_consume_result:=henvalt.consume_shopify_pixel_delivery_permit_v2(v_permit_token);
+  IF v_consume_result->>'consumed'<>'false'
+     OR v_consume_result->>'code'<>'FRESH_ADMIN_API_SUBSCRIBED_CONSENT_REQUIRED' THEN
+    RAISE EXCEPTION 'Permit survived consent revocation before consume: %',v_consume_result;
+  END IF;
+  IF EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2 WHERE opportunity_id=v_pixel_opportunity_id)
+     OR EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2 WHERE opportunity_id=v_pixel_opportunity_id) THEN
+    RAISE EXCEPTION 'Revoked-consent permit created an attempt or cost reservation';
+  END IF;
+
+  -- A fresh positive Admin API lookup is required before a new permit may be issued.
+  v_evidence_result:=henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_a,v_customer_a,'SUBSCRIBED',pg_catalog.now()-interval '20 seconds',
+    pg_catalog.clock_timestamp(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true' THEN
+    RAISE EXCEPTION 'Fresh subscribed consent could not be restored for isolated positive-path test: %',v_evidence_result;
+  END IF;
+  v_permit_result:=henvalt.issue_shopify_pixel_delivery_permit_v2(
+    v_pixel_opportunity_id,v_provider_key,v_sender_profile_id,repeat('a',64)
+  );
+  IF v_permit_result->>'authorized'<>'true' THEN
+    RAISE EXCEPTION 'New permit was not issued after fresh subscribed evidence: %',v_permit_result;
+  END IF;
+  v_permit_token:=v_permit_result->>'permit_token';
+
   v_consume_result:=henvalt.consume_shopify_pixel_delivery_permit_v2(v_permit_token);
   IF v_consume_result->>'consumed'<>'true'
      OR v_consume_result->>'recipient_email_returned'<>'false'
