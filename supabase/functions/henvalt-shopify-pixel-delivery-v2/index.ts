@@ -77,7 +77,8 @@ Deno.serve(async(req:Request)=>{
  const html=typeof input.html==="string"?input.html:"",textBody=typeof input.text==="string"?input.text:"";
  if(!uuid(opportunityId)||!subject.trim()||subject.length>180||html.length>100000||textBody.length>50000||(!html.trim()&&!textBody.trim()))
   return json(400,{error:"invalid_pixel_delivery_request"});
- let attemptId="";\n let providerSubmissionStarted=false;
+ let attemptId="";
+ let providerSubmissionStarted=false;
  try{
   const ctx=await rpc("resolve_shopify_pixel_delivery_context_v2",{p_opportunity_id:opportunityId});
   if(!ctx||ctx.ready!==true)return json(409,{error:typeof ctx?.code==="string"?ctx.code.toLowerCase():"pixel_delivery_context_not_ready"});
