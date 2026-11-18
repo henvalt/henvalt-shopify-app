@@ -119,17 +119,21 @@ Allowed outcomes:
 
 A reclaimed item gets a new lease UUID. A stale worker cannot finish the newer lease. Network timeouts must not be reported as accepted; defer and let the V2 attempt/idempotency state decide whether another handoff is safe. Never call the legacy `authorize_delivery_request` or legacy `record_delivery_result` functions.
 
-### HENVALT_RECOVERY routing
+### HENVALT_RECOVERY → HENVALT_DELIVERY routing
 
-For each claim item:
-1. `CHECKOUT_INTERVENTION` → call `henvalt-shopify-contact-delivery-v2` with `intervention_id`, `subject`, `html` and/or `text`. The Edge Function itself performs contact resolution, fresh consent checks, checkout permit issue/consume, cost reservation and provider submission.
+The existing active `HENVALT_RECOVERY` already invokes the existing `HENVALT_DELIVERY` as a synchronous Execute Workflow subworkflow. Preserve that exact three-workflow topology; do not have Recovery call the MailerSend endpoints directly.
+
+For each claim item, Recovery passes the opaque `work_type`, `work_id`, `opportunity_id`, `intervention_id`, `lease_id`, `tenant_id`, `shopify_connection_id` and `opportunity_type` to `HENVALT_DELIVERY`. The delivery subworkflow branches on `work_type`:
+1. `CHECKOUT_INTERVENTION` → call `henvalt-shopify-contact-delivery-v2` with `intervention_id`, `subject`, `html` and/or `text`. The Edge Function performs contact resolution, fresh consent checks, checkout permit issue/consume, cost reservation and provider submission.
 2. `PIXEL_OPPORTUNITY` → call `henvalt-shopify-pixel-delivery-v2` with `opportunity_id`, `subject`, `html` and/or `text`. It uses the separate pixel context, eligibility assessment, pixel permit, final Shopify consent lookup and provider submission gate.
-3. A 202 response with `submitted`, `ambiguous_provider_submission` or `provider_accepted_record_pending` means the server-side attempt lifecycle owns the outcome; do not resend or create another attempt. Finish the lease as `HANDOFF_ACCEPTED`.
+3. Return a structured outcome to Recovery. A 202 response with `submitted`, `ambiguous_provider_submission` or `provider_accepted_record_pending` means the server-side attempt lifecycle owns the outcome; do not resend or create another attempt. Recovery finishes the lease as `HANDOFF_ACCEPTED`.
 4. A 409 eligibility/consent/suppression/order response is a review outcome. Use `DEFERRED` for conditions that can change (for example, fresh evidence or a jurisdiction policy review); use `TERMINAL` for permanently closed, converted or revoked records.
 5. A 5xx before provider submission can be deferred. If provider submission may have started, the Edge Function marks the attempt AMBIGUOUS and retains its cost reservation; do not manually release it or create a second send. Let the signed MailerSend webhook reconciler resolve it.
-6. Never pass raw email or Shopify/provider credentials between n8n nodes. Keep message content limited to the requested subject/body and avoid logging complete HTTP request/response bodies.
+6. Recovery calls `finish_shopify_recovery_work_claim_v2` after the subworkflow returns. Network timeouts are deferred, never treated as accepted. Never pass raw email or Shopify/provider credentials between n8n nodes. Keep message content limited to the requested subject/body and avoid logging complete HTTP request/response bodies.
 
-The `HENVALT_INGEST` workflow remains outside this claim queue: verified Shopify webhooks are ingested by the Worker/Edge Function boundary, not duplicated through legacy n8n ingestion. `HENVALT_DELIVERY` is not yet cut over; first validate the worker's V2 handoff in a disabled/dry-run workflow copy and then explicitly approve a production update. The current active workflows remain unchanged.
+**Still required before this routing can be safely wired:** the V2 message-template/context contract. Both Edge Functions currently require subject and HTML/text from the caller. The active workflow's legacy content renderer must not be reused until its inputs are proven to be exact-store and PII-safe. The V2 branch needs a tested renderer that can produce checkout/cart/browse copy from safe server-side context without exposing recipient email or tokens to n8n. Also decide whether MailerSend's signed event URL points directly to the V2 webhook Edge Function or is safely forwarded with raw body/signature; do not process the same provider event through both legacy and V2 event handlers.
+
+The `HENVALT_INGEST` workflow remains outside this claim queue: verified Shopify webhooks are ingested by the Worker/Edge Function boundary, not duplicated through legacy n8n ingestion. The active `HENVALT_RECOVERY` and `HENVALT_DELIVERY` versions remain unchanged.
 
 ## 6. Cutover gates
 
