@@ -21,13 +21,13 @@ test("privacy export catalog discovers customer and operational schema metadata"
     "convalidated",
     "historical_rows_proven",
   ]) {
-    assert.ok(sql.includes(token), \`Missing schema inventory field: \${token}\`);
+    assert.ok(sql.includes(token), "Missing schema inventory field: " + token);
   }
 });
 
 test("privacy export catalog is metadata-only and cannot mutate or read customer rows", () => {
   assert.match(sql, /READ-ONLY ONLY/i);
-  assert.match(sql, /'read_only', true/);
+  assert.match(sql, /\x27read_only\x27, true/);
   assert.doesNotMatch(executable, /\b(?:INSERT|UPDATE|DELETE|ALTER|CREATE|DROP|TRUNCATE|CALL|DO|GRANT|REVOKE)\b/i);
   assert.doesNotMatch(executable, /FROM\s+henvalt\./i);
   assert.doesNotMatch(executable, /decrypted_secrets|vault\.decrypted/i);
