@@ -463,3 +463,24 @@ candidate and opportunity-promotion integration test, and the existing
 checkout, privacy, delivery and cost-reservation tests. The subsequent
 workflow-title/document commits do not alter application code. A new CI run
 is being triggered for the updated branch head.
+
+
+## 10. Pixel opportunity contactability gate — fail closed
+
+A follow-up review found that the first generalized promotion draft used the
+presence of a pixel customer identity to set a cart/browse opportunity to
+`CONTACT_RESOLUTION_PENDING`. That state was too optimistic: a customer
+identity reference does not prove a usable email, current marketing consent,
+or a trusted country/jurisdiction. Pixel analytics consent is separate and
+cannot be reused for marketing authorization.
+
+Migration 028 now keeps every pixel-backed cart/browse opportunity in
+`REVIEW_REQUIRED`, even when a customer identity exists. The source candidate
+may be promoted as metadata, but a later, separately verified resolver must
+establish contactability and policy evidence before any transition toward
+delivery. A static regression test prevents reintroducing the identity-only
+shortcut.
+
+This change does not alter the checkout path, delivery permits, provider
+submission, or production services. It is branch-only and must pass the
+updated CI run before being treated as validated.
