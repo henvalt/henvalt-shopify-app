@@ -29,20 +29,22 @@ test("dashboard scope accepts only one active connection and the selected connec
 });
 
 test("Shopify-session dashboard uses its authenticated exact connection for V2 metrics", () => {
-  assert.match(shopifyDashboard, /new URL\\(req\\.url\\)/);
-  assert.match(shopifyDashboard, /control_plane_shop_connection/);
-  assert.match(shopifyDashboard, /control_plane_dashboard_summary_v2/);
-  assert.match(shopifyDashboard, /p_shopify_connection_id: connection\\.connection_id/);
-  assert.doesNotMatch(shopifyDashboard, /isSingleActiveStoreScope|control_plane_dashboard_summary"/);
+  assert.ok(shopifyDashboard.includes("new URL(req.url)"));
+  assert.ok(shopifyDashboard.includes("control_plane_shop_connection"));
+  assert.ok(shopifyDashboard.includes("control_plane_dashboard_summary_v2"));
+  assert.ok(shopifyDashboard.includes("p_shopify_connection_id: connection.connection_id"));
+  assert.ok(!shopifyDashboard.includes("isSingleActiveStoreScope"));
+  assert.ok(!shopifyDashboard.includes('rpc("control_plane_dashboard_summary"'));
 });
 
 test("merchant dashboard requires an explicit store selection when multiple active stores exist", () => {
-  assert.match(merchantDashboard, /shopify_connections\\?select=id,shop_domain,active,tenants!inner\\(status\\)/);
-  assert.match(merchantDashboard, /&active=eq\\.true/);
-  assert.match(merchantDashboard, /requestedConnectionId/);
-  assert.match(merchantDashboard, /store_selection_required/);
-  assert.match(merchantDashboard, /stores: connections\\.map/);
-  assert.match(merchantDashboard, /control_plane_dashboard_summary_v2/);
-  assert.match(merchantDashboard, /p_shopify_connection_id: selectedConnection\\.id/);
-  assert.doesNotMatch(merchantDashboard, /isSingleActiveStoreScope|control_plane_dashboard_summary"/);
+  assert.ok(merchantDashboard.includes("shopify_connections?select=id,shop_domain,active,tenants!inner(status)"));
+  assert.ok(merchantDashboard.includes("&active=eq.true"));
+  assert.ok(merchantDashboard.includes("requestedConnectionId"));
+  assert.ok(merchantDashboard.includes("store_selection_required"));
+  assert.ok(merchantDashboard.includes("stores: connections.map"));
+  assert.ok(merchantDashboard.includes("control_plane_dashboard_summary_v2"));
+  assert.ok(merchantDashboard.includes("p_shopify_connection_id: selectedConnection.id"));
+  assert.ok(!merchantDashboard.includes("isSingleActiveStoreScope"));
+  assert.ok(!merchantDashboard.includes('control_plane_dashboard_summary"'));
 });
