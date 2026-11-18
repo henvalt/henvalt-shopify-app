@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { readBoundedBody, RequestBodyError } from "../_shared/request-body-v2.ts";
 
 const SUPABASE_URL=Deno.env.get("SUPABASE_URL")??"";
 const SERVICE_ROLE_KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
@@ -19,8 +20,12 @@ Deno.serve(async(req:Request)=>{
   if(!/^[A-Za-z0-9_-]{24,96}$/.test(providerAccountKey)||!/^[0-9a-fA-F]{64}$/.test(signature)){
     return json(400,{error:"invalid_provider_webhook_metadata"});
   }
-  const raw=new Uint8Array(await req.arrayBuffer());
-  if(raw.length===0||raw.length>1_000_000)return json(413,{error:"invalid_body_size"});
+  if(!/^application\\/json(?:\\s*;|\\s*$)/i.test(req.headers.get("content-type")??""))return json(415,{error:"application_json_required"});
+  let raw:Uint8Array;
+  try{raw=await readBoundedBody(req,1_000_000);}catch(error){
+    const code=error instanceof RequestBodyError?error.code:"INVALID_BODY";
+    return json(code==="BODY_TOO_LARGE"?413:400,{error:code==="BODY_TOO_LARGE"?"request_body_too_large":"invalid_body"});
+  }
   const response=await fetch(SUPABASE_URL+"/rest/v1/rpc/ingest_mailersend_webhook_v2",{
     method:"POST",
     headers:{
@@ -48,8 +53,11 @@ Deno.serve(async(req:Request)=>{
   }
   // The signed inbox may initially be UNMATCHED when the send was a pixel attempt.
   // Reconcile only from this verified event row; never trust a caller-supplied message ID.
-  const payload=JSON.parse(new TextDecoder().decode(raw));
-  const rawEventId=payload&&typeof payload==="object"?payload.data?.id:undefined;
+  let payload:unknown;
+  try{payload=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(raw));}catch{return json(400,{error:"invalid_provider_event_body"});}
+  const event=payload&&typeof payload==="object"&&!Array.isArray(payload)?payload as Record<string,unknown>:null;
+  const eventData=event?.data&&typeof event.data==="object"&&!Array.isArray(event.data)?event.data as Record<string,unknown>:null;
+  const rawEventId=eventData?.id;
   const eventId=typeof rawEventId==="string"?rawEventId:
     typeof rawEventId==="number"&&Number.isSafeInteger(rawEventId)?String(rawEventId):"";
   let pixelReconciled=false;
