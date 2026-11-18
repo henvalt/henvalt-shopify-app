@@ -69,3 +69,6 @@ The refresh service is an infrastructure primitive, not a scheduled job: the cur
 ## Cloudflare Pages production configuration
 
 The production Pages project `henvalt-dashboard` is connected to this repository's `main` branch. Its build root is `dashboard/` and its output directory is `.`. The Shopify app's configured dashboard URL remains `https://henvalt-dashboard.pages.dev`; do not switch it to the separate `henvalt-dashboard-preview.pages.dev` project.
+## Shopify privacy export delivery and redaction safety (V2)
+
+The preparation branch now includes [the export-delivery and retention-safety design](docs/shopify-privacy-export-delivery-v2.md). It records a read-only production audit: the live project has no Storage buckets, its deployed privacy endpoints still use the legacy tenant-scoped path, and its download timestamp is written before the response body is transferred. The proposed V2 path therefore uses exact-store receipt lineage, a private artifact, authenticated server-side download proxy, honest delivery states, and a separately approved retention/redaction plan. This is documentation only; no production resources or active functions were changed. V2 remains unmerged and unapplied.
