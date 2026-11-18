@@ -10,7 +10,7 @@ test("pixel SUBMITTED requires a provider message reference and other states can
 test("outcome recording is service-only and preserves monotonic ambiguous reconciliation",()=>{
  assert.match(sql,/request\.jwt\.claim\.role[\s\S]*?service_role_required/);
  assert.match(sql,/v_attempt\.status NOT IN \('AUTHORIZED','AMBIGUOUS'\)/);
- assert.match(sql,/v_attempt\.status='AMBIGUOUS' AND p_status='AMBIGUOUS'/);
+ assert.match(sql,/v_attempt\.status='AMBIGUOUS' AND p_status<>'SUBMITTED'/);
  assert.match(sql,/ELSE 'RESERVED'/);
  assert.match(sql,/GRANT EXECUTE ON FUNCTION henvalt\.record_shopify_pixel_send_attempt_result_v2\(uuid,text,text\)[\s\S]*?TO service_role/);
 });
