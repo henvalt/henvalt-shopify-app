@@ -51,3 +51,11 @@ test("merchant-wide concurrency harness races checkout and pixel reservations ac
  assert.match(runner,/shopify_delivery_cost_reservations_v2/);
  assert.match(runner,/checkout-or-pixel reservation/);
 });
+
+test("permit issuance stores the eligibility assessment as JSONB before reading its fields",()=>{
+ const issue=sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION henvalt.issue_shopify_pixel_delivery_permit_v2"));
+ assert.match(issue,/DECLARE o record; s jsonb; token text; pid uuid;/);
+ assert.match(issue,/s:=henvalt\.assess_shopify_pixel_delivery_eligibility_v2\(o\.id\)/);
+ assert.match(issue,/s->>'eligible'/);
+ assert.doesNotMatch(issue,/DECLARE o record; s record;/);
+});
