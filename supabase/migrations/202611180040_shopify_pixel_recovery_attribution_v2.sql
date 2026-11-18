@@ -220,7 +220,7 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION henvalt.evaluate_shopify_pixel_recovery_attribution_provider_event_trigger_v2()
+CREATE OR REPLACE FUNCTION henvalt.evaluate_shopify_pixel_attr_provider_event_trigger_v2()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -279,13 +279,13 @@ CREATE TRIGGER shopify_pixel_recovery_attribution_provider_event_v2
 AFTER UPDATE OF processing_status,pixel_send_attempt_id,event_type,occurred_at
 ON henvalt.shopify_mailer_provider_events_v2
 FOR EACH ROW
-EXECUTE FUNCTION henvalt.evaluate_shopify_pixel_recovery_attribution_provider_event_trigger_v2();
+EXECUTE FUNCTION henvalt.evaluate_shopify_pixel_attr_provider_event_trigger_v2();
 
 REVOKE ALL ON FUNCTION henvalt.evaluate_shopify_pixel_recovery_attribution_v2(uuid)
   FROM PUBLIC,anon,authenticated,service_role;
 REVOKE ALL ON FUNCTION henvalt.evaluate_shopify_pixel_recovery_attribution_order_trigger_v2()
   FROM PUBLIC,anon,authenticated,service_role;
-REVOKE ALL ON FUNCTION henvalt.evaluate_shopify_pixel_recovery_attribution_provider_event_trigger_v2()
+REVOKE ALL ON FUNCTION henvalt.evaluate_shopify_pixel_attr_provider_event_trigger_v2()
   FROM PUBLIC,anon,authenticated,service_role;
 
 COMMENT ON FUNCTION henvalt.evaluate_shopify_pixel_recovery_attribution_v2(uuid) IS
