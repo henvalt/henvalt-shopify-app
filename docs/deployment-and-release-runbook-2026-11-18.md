@@ -89,7 +89,7 @@ After written owner approval for each stage:
    webhooks on the owner-controlled test shop, then use the separate
    manually gated release workflow only after Shopify review.
 8. **Pages:** verify the candidate dashboard against exact-store read-model
-   data on preview. Merge to `main) only after approval because the production
+   data on preview. Merge to `main` only after approval because the production
    Pages project follows `main`.
 9. **Revenue:** confirm a paid Shopify order, exact-store attribution, refunds
    and one idempotent non-charging fee measurement. Enable collection only
