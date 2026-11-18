@@ -36,12 +36,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
       - name: Run identity, cost reservation, and privacy contract tests
-        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs tests/shopify-order-conversion-projection-v2.test.mjs tests/shopify-checkout-recovery-eligibility-v2.test.mjs tests/shopify-recovery-opportunity-v2.test.mjs tests/shopify-email-consent-evidence-v2.test.mjs tests/shopify-checkout-jurisdiction-projection-v2.test.mjs tests/v2-recipient-resolution-and-delivery-authorization-contract.test.mjs tests/shopify-mailer-provider-events-suppression-v2.test.mjs tests/shopify-single-use-delivery-authorization-v2.test.mjs tests/shopify-contact-resolution-delivery-v2.test.mjs tests/shopify-delivery-cost-reservations-v2.test.mjs tests/shopify-privacy-order-scope-v2.test.mjs tests/shopify-privacy-order-scope-report-v2.test.mjs tests/shopify-privacy-deadline-monitor-v2.test.mjs tests/shopify-privacy-processing-queue-v2.test.mjs tests/shopify-privacy-completion-evidence-gate-v2.test.mjs tests/shopify-privacy-export-artifact-registry-v2.test.mjs tests/shopify-privacy-export-download-v2.test.mjs tests/shopify-privacy-export-purge-lifecycle-v2.test.mjs tests/shopify-privacy-export-processor-v2.test.mjs tests/shopify-customer-privacy-export-v2.test.mjs tests/shopify-customer-redaction-impact-preview-v2.test.mjs tests/shopify-customer-redaction-fk-inventory-v2.test.mjs tests/shopify-customer-redaction-send-guard-v2.test.mjs tests/shopify-exact-store-shop-redact-stop-v2.test.mjs tests/privacy-export-schema-catalog-safety.test.mjs tests/dashboard-single-store-scope.test.mjs
+        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs tests/shopify-order-conversion-projection-v2.test.mjs tests/shopify-checkout-recovery-eligibility-v2.test.mjs tests/shopify-recovery-opportunity-v2.test.mjs tests/shopify-email-consent-evidence-v2.test.mjs tests/shopify-checkout-jurisdiction-projection-v2.test.mjs tests/v2-recipient-resolution-and-delivery-authorization-contract.test.mjs tests/shopify-mailer-provider-events-suppression-v2.test.mjs tests/shopify-single-use-delivery-authorization-v2.test.mjs tests/shopify-contact-resolution-delivery-v2.test.mjs tests/shopify-delivery-cost-reservations-v2.test.mjs tests/shopify-privacy-order-scope-v2.test.mjs tests/shopify-privacy-order-scope-report-v2.test.mjs tests/shopify-privacy-deadline-monitor-v2.test.mjs tests/shopify-privacy-processing-queue-v2.test.mjs tests/shopify-privacy-completion-evidence-gate-v2.test.mjs tests/shopify-privacy-export-artifact-registry-v2.test.mjs tests/shopify-privacy-export-download-v2.test.mjs tests/shopify-privacy-export-purge-lifecycle-v2.test.mjs tests/shopify-privacy-export-processor-v2.test.mjs tests/shopify-customer-privacy-export-v2.test.mjs tests/shopify-customer-redaction-impact-preview-v2.test.mjs tests/shopify-customer-redaction-fk-inventory-v2.test.mjs tests/shopify-customer-redaction-send-guard-v2.test.mjs tests/shopify-exact-store-shop-redact-stop-v2.test.mjs tests/privacy-export-schema-catalog-safety.test.mjs tests/dashboard-single-store-scope.test.mjs tests/shopify-pixel-recovery-candidates-v2.test.mjs
       - name: Create disposable database baseline
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
-      - name: Apply candidate migrations 001 through 026
+      - name: Apply candidate migrations 001 through 027
         env:
           PGPASSWORD: postgres
         run: |
@@ -82,7 +82,8 @@ jobs:
             supabase/migrations/202611170023_shopify_privacy_deadline_monitor_v2.sql \
             supabase/migrations/202611180024_shopify_privacy_completion_evidence_gate_v2.sql \
             supabase/migrations/202611180025_shopify_privacy_export_artifact_registry_v2.sql \
-            supabase/migrations/202611180026_shopify_privacy_export_purge_lifecycle_v2.sql; do
+            supabase/migrations/202611180026_shopify_privacy_export_purge_lifecycle_v2.sql; do \\
+            supabase/migrations/202611180027_shopify_pixel_recovery_candidates_v2.sql;
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Execute read-only privacy export schema catalog against disposable PostgreSQL
