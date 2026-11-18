@@ -75,7 +75,11 @@ Deno.serve(async(req:Request)=>{
  if(!SUPABASE_URL||!SERVICE_ROLE_KEY||!DELIVERY_AUTH_TOKEN)return json(503,{error:"pixel_delivery_not_configured"});
  const bearer=(req.headers.get("authorization")??"").match(/^Bearer\s+(.+)$/i)?.[1]??"";
  if(!bearer||!equal(bearer,DELIVERY_AUTH_TOKEN))return json(401,{error:"unauthorized"});
- let input:Record<string,unknown>;try{input=await req.json();}catch{return json(400,{error:"invalid_json"});}
+ const declaredLength=Number(req.headers.get("content-length")??"0");
+ if(Number.isFinite(declaredLength)&&declaredLength>160000)return json(413,{error:"request_body_too_large"});
+ let parsed:unknown;try{parsed=await req.json();}catch{return json(400,{error:"invalid_json"});}
+ if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return json(400,{error:"invalid_pixel_delivery_request"});
+ const input=parsed as Record<string,unknown>;
  const opportunityId=input.opportunity_id,subject=typeof input.subject==="string"?input.subject:"";
  const html=typeof input.html==="string"?input.html:"",textBody=typeof input.text==="string"?input.text:"";
  if(!uuid(opportunityId)||!subject.trim()||subject.length>180||html.length>100000||textBody.length>50000||(!html.trim()&&!textBody.trim()))
