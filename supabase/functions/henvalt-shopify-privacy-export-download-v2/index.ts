@@ -3,13 +3,14 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/$/, "");
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const BUCKET = "henvalt-privacy-exports-v2";
+const DASHBOARD_ORIGIN = Deno.env.get("HENVALT_DASHBOARD_ORIGIN") ?? "";
 const MAX_BYTES = 25 * 1024 * 1024;
 
 const headers = {
   "cache-control": "no-store, max-age=0",
   "pragma": "no-cache",
   "x-content-type-options": "nosniff",
-  "access-control-allow-origin": "null",
+  "access-control-allow-origin": DASHBOARD_ORIGIN,
   "access-control-allow-headers": "authorization,content-type,apikey",
   "access-control-allow-methods": "POST,OPTIONS",
 };
@@ -50,6 +51,10 @@ async function recordEvidence(row: Record<string, unknown>): Promise<boolean> {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
+  const origin = req.headers.get("origin");
+  if (origin && (!DASHBOARD_ORIGIN || origin !== DASHBOARD_ORIGIN)) {
+    return json(403, { error: "origin_not_allowed" });
+  }
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
     return json(503, { error: "privacy_download_not_configured" });
   }
@@ -126,7 +131,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const receiptResponse = await rest(
-      "/rest/v1/shopify_privacy_webhook_deliveries?select=id,tenant_id,connection_id,app_key,shop_domain&id=eq." +
+      "/rest/v1/shopify_privacy_webhook_deliveries?select=id,tenant_id,connection_id,app_key,shop_domain,topic&id=eq." +
       encodeURIComponent(artifact.receipt_id) + "&limit=1",
       { headers: { "accept-profile": "henvalt" } },
     );
@@ -137,7 +142,7 @@ Deno.serve(async (req: Request) => {
         receipt.tenant_id !== artifact.tenant_id ||
         receipt.connection_id !== artifact.connection_id ||
         receipt.app_key !== artifact.app_key ||
-        receipt.shop_domain !== artifact.shop_domain) {
+        receipt.shop_domain !== artifact.shop_domain || receipt.topic !== "customers/data_request") {
       return json(403, { error: "receipt_binding_invalid" });
     }
 
@@ -148,8 +153,8 @@ Deno.serve(async (req: Request) => {
         artifact.bucket_id !== BUCKET ||
         typeof artifact.object_key !== "string" ||
         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.json$/i.test(artifact.object_key) ||
-        !Number.isInteger(artifact.byte_count) || artifact.byte_count < 1 ||
-        artifact.byte_count > MAX_BYTES ||
+        !Number.isSafeInteger(Number(artifact.byte_count)) || Number(artifact.byte_count) < 1 ||
+        Number(artifact.byte_count) > MAX_BYTES ||
         !/^[0-9a-f]{64}$/.test(artifact.sha256_hex)) {
       return json(409, { error: "artifact_not_available" });
     }
@@ -187,7 +192,7 @@ Deno.serve(async (req: Request) => {
 
     const bytes = new Uint8Array(await objectResponse.arrayBuffer());
     const digest = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)));
-    if (bytes.byteLength !== artifact.byte_count || digest !== artifact.sha256_hex) {
+    if (bytes.byteLength !== Number(artifact.byte_count) || digest !== artifact.sha256_hex) {
       await recordEvidence({
         ...evidenceBase,
         event_type: "DOWNLOAD_STREAM_FAILED",
