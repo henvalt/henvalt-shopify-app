@@ -106,6 +106,7 @@ Deno.serve(async(req:Request)=>{
   return json(400,{error:"invalid_pixel_delivery_request"});
  let attemptId="";
  let providerSubmissionStarted=false;
+ let providerMessageReference="";
  try{
   const ctx=await rpc("resolve_shopify_pixel_delivery_context_v2",{p_opportunity_id:opportunityId});
   if(!ctx||ctx.ready!==true)return json(409,{error:typeof ctx?.code==="string"?ctx.code.toLowerCase():"pixel_delivery_context_not_ready"});
@@ -181,12 +182,17 @@ Deno.serve(async(req:Request)=>{
   if(providerResponse.status===202){
    const messageRef=providerResponse.headers.get("x-message-id")??"";
    if(!messageRef){await recordAttempt(attemptId,"AMBIGUOUS");return json(202,{accepted:true,status:"ambiguous_provider_submission",recipient_email_returned:false});}
+   providerMessageReference=messageRef;
    const saved=await recordAttempt(attemptId,"SUBMITTED",messageRef);
-   if(saved?.recorded!==true)return json(202,{accepted:true,status:"provider_accepted_record_pending",recipient_email_returned:false});
+   if(saved?.recorded!==true){
+    await recordAttempt(attemptId,"AMBIGUOUS",messageRef);
+    return json(202,{accepted:true,status:"provider_accepted_record_pending",recipient_email_returned:false});
+   }
    return json(202,{accepted:true,status:"submitted",recipient_email_returned:false});
   }
   if(providerResponse.status>=500||providerResponse.status===408){
-   await recordAttempt(attemptId,"AMBIGUOUS");
+   providerMessageReference=providerResponse.headers.get("x-message-id")??"";
+   await recordAttempt(attemptId,"AMBIGUOUS",providerMessageReference||undefined);
    return json(202,{accepted:true,status:"ambiguous_provider_submission",provider_status:providerResponse.status,recipient_email_returned:false});
   }
   await recordAttempt(attemptId,"FAILED");
@@ -194,7 +200,8 @@ Deno.serve(async(req:Request)=>{
  }catch{
   // After the provider request begins, a later failure is ambiguous. Never
   // release its reservation or make the attempt eligible for automatic retry.
-  if(attemptId){try{await recordAttempt(attemptId,providerSubmissionStarted?"AMBIGUOUS":"FAILED");}catch{}}
+  if(attemptId){try{await recordAttempt(attemptId,providerSubmissionStarted?"AMBIGUOUS":"FAILED",
+    providerSubmissionStarted&&providerMessageReference?providerMessageReference:undefined);}catch{}}
   return json(providerSubmissionStarted?202:503,{
    error:providerSubmissionStarted?"provider_outcome_requires_reconciliation":"pixel_delivery_boundary_unavailable",
    status:providerSubmissionStarted?"ambiguous_provider_submission":"not_submitted",
