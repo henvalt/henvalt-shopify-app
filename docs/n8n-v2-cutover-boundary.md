@@ -73,7 +73,7 @@ The branch already has two distinct server-side delivery boundaries:
 
 Both require the server-held delivery bearer secret. Neither accepts a recipient email from n8n, and both keep the raw recipient email inside the trusted Edge Function/provider request. Both record SUBMITTED/FAILED/AMBIGUOUS outcomes internally; n8n must not call the legacy result RPC afterward. The V2 signed MailerSend webhook Edge Function owns provider-event correlation, suppression and ambiguous-attempt reconciliation.
 
-The V2 claim/lease adapter now exists in migration 042 and is covered by disposable PostgreSQL tests for both checkout intervention and pixel opportunity work, concurrent claim exclusion, deferred retry with a fresh lease identity, stale-worker rejection and terminal completion. The active Recovery workflow is still not wired to it; production cutover remains pending.
+The V2 claim/lease adapter now exists in migration 042, and migration 043 now materializes step-1 checkout interventions from eligible exact-store checkout opportunities. Disposable PostgreSQL tests cover both checkout intervention and pixel opportunity work, intervention materialization idempotency, true concurrent claim exclusion, deferred retry with a fresh lease identity, stale-worker rejection and terminal completion. The active Recovery workflow is still not wired to it; production cutover remains pending.
 
 ## 5. V2 claim/lease RPC contract — migration 042
 
@@ -162,23 +162,23 @@ Do not edit or publish the active workflows until each gate is satisfied:
 - [ ] The owner explicitly approves any production workflow update, activation or real provider send.
 
 
-## 8. Migration 042 validation
+## 8. Migrations 042–043 validation
 
-The V2 work-claim contract is implemented and passed current-head CI runs #937 and #938 on 18 November 2026. Migration 043 adds the missing idempotent checkout intervention materializer; its checkout fixture now exercises materialization → claim → handoff completion:
-- migration 042 applies after migrations 001–041 on disposable PostgreSQL;
+The V2 work-claim and checkout intervention lifecycle passed disposable CI run #962 on 18 November 2026, including true concurrent workers. The latest head additionally tests checkout materializer idempotency and pixel/checkout separation:
+- migrations 042 and 043 apply after migrations 001–041 on disposable PostgreSQL;
 - a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
 - a second worker cannot claim an active lease;
 - deferred work is reclaimed under a new lease UUID;
 - the stale worker cannot finish the reclaimed lease;
 - a current worker can complete it, after which it is no longer claimable;
-- a checkout opportunity is materialized into a step-1 intervention and independently claimable with its own intervention/opportunity lineage;
+- a checkout opportunity is materialized into one step-1 intervention, a repeated materialization creates zero duplicates, and the intervention is independently claimable with its own intervention/opportunity lineage;
 - no recipient email, provider credentials, Shopify token or message body enters the claim response.
 
 GitHub's connected Cloudflare Pages integration also produced successful **preview** builds for the preparation branch. The deployment records identify environment `preview`, branch `prep/public-app-hardening-2026-11-15`, and production branch `main`; they did not deploy this branch to the production environment.
 
 ## 9. Current release boundary
 
-The repository candidate now contains migrations 039–041, pixel attribution, exact-store V2 dashboard read model and merchant store selection. Current-head GitHub validation passed on 18 November 2026. These are not deployed to the active Supabase project.
+The repository candidate now contains migrations 039–043, pixel attribution, the exact-store V2 dashboard read model, merchant store selection, checkout intervention materialization and concurrent work claims. These remain candidate changes and have not been applied to the active Supabase project.
 
 The active n8n workflows remain unchanged and continue to reference legacy functions. That means the new V2 database lifecycle and dashboard are validated as candidate code, but **the live n8n runtime is not yet connected to the V2 lifecycle**. This is a launch blocker, not a reason to mutate the active workflows prematurely.
 
