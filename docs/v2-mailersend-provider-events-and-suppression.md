@@ -26,6 +26,17 @@ MailerSend documents that webhook version 1 stops working on **1 December 2026**
 - Events with no matching provider message ID are retained as UNMATCHED and cannot mutate any store's suppression state.
 - Suppression in Store B must not affect Store A, even when both stores share a tenant and Shopify customer reference.
 
+## Pixel attempt outcome reconciliation
+
+Migration 039 adds a separate pixel-attempt correlation path to the same signed provider inbox. The webhook Edge Function first verifies and ingests the exact raw-body signature through the existing Vault-backed RPC, then asks a service-only reconciliation RPC to correlate the already-verified event ID. The caller never supplies a provider message ID to the reconciliation RPC.
+
+- Provider activity events can correlate through the stored provider message reference on a pixel attempt.
+- An ambiguous pixel attempt becomes SUBMITTED only when a signed MailerSend activity event matches its provider account and message reference.
+- The transition settles the reserved provider cost; it does not mark the recovery as revenue recovered.
+- Event-to-pixel-attempt lineage is stored separately from legacy checkout send-attempt lineage.
+- Replays are idempotent. Events without a matching message reference remain unmatched and cannot authorize a resend.
+- If the provider accepted a message but neither the response nor a later webhook exposes a correlatable message ID, the attempt remains AMBIGUOUS and its cost remains RESERVED for manual reconciliation. There is no automatic resend.
+
 ## Critical implementation boundary
 
 The provider registry requires two separately provisioned Vault secrets: MailerSend webhook signing secret and recipient-fingerprint key. The candidate does not seed either secret or configure MailerSend. It does not create interventions from opportunities or authorize sends. During setup, the provider registry may remain PENDING while MailerSend performs its URL-validation ping; the documented fixed test secret is accepted only for `webhook.test`, and that ping is not persisted. Real provider events require ACTIVE status and the account-specific Vault signing secret. The existing deployed MailerSend sender function remains legacy and is not safe for V2 because it accepts caller-supplied recipient email and uses tenant-scoped authorization.
