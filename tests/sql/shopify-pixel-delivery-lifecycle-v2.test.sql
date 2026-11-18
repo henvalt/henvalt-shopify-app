@@ -36,7 +36,7 @@ BEGIN
 
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='shopify_pixel_delivery_cost_reserve_v2' AND NOT tgisinternal)
     OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='shopify_pixel_delivery_cost_sync_v2' AND NOT tgisinternal)
-    OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='shopify_delivery_cost_reserve_v2' AND NOT tgisinternal) THEN
+    OR NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='shopify_delivery_cost_reserve_after_attempt_v2' AND NOT tgisinternal) THEN
     RAISE EXCEPTION 'Pixel and checkout reservation lifecycle triggers are incomplete';
   END IF;
 
