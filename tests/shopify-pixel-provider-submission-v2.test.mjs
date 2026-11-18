@@ -47,3 +47,12 @@ test("final gate is service-only, locks the attempt/reservation and rechecks con
  assert.match(sql,/recipient_fingerprint/);
  assert.match(sql,/GRANT EXECUTE ON FUNCTION henvalt\.authorize_shopify_pixel_provider_submission_v2\(uuid,text\)[\s\S]*?TO service_role/);
 });
+
+test("worker preserves AMBIGUOUS cost state when a post-request ledger or response failure occurs",()=>{
+ const requestStart=edge.indexOf('providerSubmissionStarted=true;');
+ const providerFetch=edge.indexOf('fetch("https://api.mailersend.com/v1/email"');
+ const outerCatch=edge.lastIndexOf('providerSubmissionStarted?"AMBIGUOUS":"FAILED"');
+ assert.ok(requestStart>=0&&requestStart<providerFetch,"mark provider boundary before issuing HTTP request");
+ assert.ok(outerCatch>providerFetch,"post-submission failures must reconcile as ambiguous, not release cost");
+ assert.match(edge,/provider_outcome_requires_reconciliation/);
+});
