@@ -28,24 +28,21 @@ test("dashboard scope accepts only one active connection and the selected connec
   assert.equal(isSingleActiveStoreScope(null), false);
 });
 
-test("Shopify-session dashboard validates all tenant connections before calling tenant-wide summary", () => {
-  assert.doesNotMatch(shopifyDashboard, /const URL =/);
-  assert.match(shopifyDashboard, /new URL\(req\.url\)/);
+test("Shopify-session dashboard uses its authenticated exact connection for V2 metrics", () => {
+  assert.match(shopifyDashboard, /new URL\\(req\\.url\\)/);
   assert.match(shopifyDashboard, /control_plane_shop_connection/);
-  assert.match(shopifyDashboard, /shopify_connections\?select=id,active&tenant_id=eq\./);
-  assert.match(shopifyDashboard, /isSingleActiveStoreScope\(tenantConnections, connection\.connection_id\)/);
-  const guard = shopifyDashboard.indexOf("isSingleActiveStoreScope(tenantConnections");
-  const summary = shopifyDashboard.indexOf('rpc("control_plane_dashboard_summary"');
-  assert.ok(guard >= 0 && summary > guard, "The store-scope guard must run before the summary RPC");
-  assert.match(shopifyDashboard, /store_specific_metrics_unavailable/);
+  assert.match(shopifyDashboard, /control_plane_dashboard_summary_v2/);
+  assert.match(shopifyDashboard, /p_shopify_connection_id: connection\\.connection_id/);
+  assert.doesNotMatch(shopifyDashboard, /isSingleActiveStoreScope|control_plane_dashboard_summary"/);
 });
 
-test("merchant dashboard includes inactive historical connections in its single-store guard", () => {
-  assert.match(merchantDashboard, /shopify_connections\?select=id,shop_domain,active,tenants!inner\(status\)/);
-  assert.doesNotMatch(merchantDashboard, /&active=eq\.true/);
-  assert.match(merchantDashboard, /isSingleActiveStoreScope\(connections\)/);
-  const guard = merchantDashboard.indexOf("isSingleActiveStoreScope(connections)");
-  const summary = merchantDashboard.indexOf("control_plane_dashboard_summary");
-  assert.ok(guard >= 0 && summary > guard, "The store-scope guard must run before the summary RPC");
-  assert.match(merchantDashboard, /store_specific_metrics_unavailable/);
+test("merchant dashboard requires an explicit store selection when multiple active stores exist", () => {
+  assert.match(merchantDashboard, /shopify_connections\\?select=id,shop_domain,active,tenants!inner\\(status\\)/);
+  assert.match(merchantDashboard, /&active=eq\\.true/);
+  assert.match(merchantDashboard, /requestedConnectionId/);
+  assert.match(merchantDashboard, /store_selection_required/);
+  assert.match(merchantDashboard, /stores: connections\\.map/);
+  assert.match(merchantDashboard, /control_plane_dashboard_summary_v2/);
+  assert.match(merchantDashboard, /p_shopify_connection_id: selectedConnection\\.id/);
+  assert.doesNotMatch(merchantDashboard, /isSingleActiveStoreScope|control_plane_dashboard_summary"/);
 });
