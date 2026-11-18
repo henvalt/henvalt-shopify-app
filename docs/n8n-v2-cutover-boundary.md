@@ -64,7 +64,18 @@ The V2 path instead has exact-store checkout permits and a separate pixel permit
 
 The V2 SQL/provider-event and order-projection lifecycle owns recovered-order attribution. n8n must never mark an order recovered merely because an email was accepted, sent, opened or clicked.
 
-## 4. Cutover gates
+## 4. Existing V2 delivery Edge Function contracts
+
+The branch already has two distinct server-side delivery boundaries:
+
+- Checkout recovery: `henvalt-shopify-contact-delivery-v2` accepts an opaque `intervention_id` plus `subject`, `html` and/or `text`. It resolves the exact-store checkout intervention, refreshes Shopify customer consent, issues and consumes the checkout permit, rechecks recipient identity, reserves provider cost, and submits to MailerSend.
+- Cart/browse pixel recovery: `henvalt-shopify-pixel-delivery-v2` accepts an opaque `opportunity_id` plus `subject`, `html` and/or `text`. It resolves the exact-store pixel context, refreshes Shopify consent/contact evidence, issues and consumes a pixel-specific permit, rechecks recipient identity, reserves provider cost, and submits to MailerSend.
+
+Both require the server-held delivery bearer secret. Neither accepts a recipient email from n8n, and both keep the raw recipient email inside the trusted Edge Function/provider request. Both record SUBMITTED/FAILED/AMBIGUOUS outcomes internally; n8n must not call the legacy result RPC afterward. The V2 signed MailerSend webhook Edge Function owns provider-event correlation, suppression and ambiguous-attempt reconciliation.
+
+The remaining orchestration gap is upstream of these endpoints: the active Recovery workflow still has no V2 claim/lease adapter that safely selects due V2 checkout interventions and pixel opportunities. That claim/lease contract, including exact-store locks, duplicate-worker handling, stale-lease recovery and idempotent work identity, must be implemented and tested before wiring n8n to these two endpoints.
+
+## 5. Cutover gates
 
 Do not edit or publish the active workflows until each gate is satisfied:
 
@@ -78,7 +89,7 @@ Do not edit or publish the active workflows until each gate is satisfied:
 - [ ] Existing legacy workflows are compared against the V2 branch contract and a rollback plan is documented.
 - [ ] The owner explicitly approves any production workflow update, activation or real provider send.
 
-## 5. Current release boundary
+## 6. Current release boundary
 
 The repository candidate now contains migrations 039–041, pixel attribution, exact-store V2 dashboard read model and merchant store selection. Current-head GitHub validation passed on 18 November 2026. These are not deployed to the active Supabase project.
 
