@@ -1,4 +1,7 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+declare const Deno: {
+ env: { get(name: string): string | undefined };
+ serve(handler: (request: Request) => Response | Promise<Response>): void;
+};
 
 const SUPABASE_URL=Deno.env.get("SUPABASE_URL")??"";
 const SERVICE_ROLE_KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
