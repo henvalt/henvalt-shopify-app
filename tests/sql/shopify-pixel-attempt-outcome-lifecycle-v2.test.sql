@@ -482,12 +482,20 @@ BEGIN
   'CONTACT_RESOLUTION_PENDING',88.00,'USD',
   'lease-checkout-opportunity-'||gen_random_uuid()::text)
  RETURNING id INTO v_checkout_opp;
- INSERT INTO henvalt.shopify_recovery_intervention_v2(
-  tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,
-  step_number,status,scheduled_at
- ) VALUES(v_tenant,v_connection,v_checkout_opp,v_customer,1,
-  'READY_FOR_AUTHORIZATION',now()-interval '1 minute')
- RETURNING id INTO v_intervention;
+ v_finish:=henvalt.materialize_shopify_checkout_interventions_v2(10);
+ IF v_finish->>'accepted'<>'true'
+   OR (v_finish->>'interventions_created')::integer<>1
+   OR v_finish->>'delivery_authorized'<>'false'
+   OR v_finish->>'provider_called'<>'false' THEN
+  RAISE EXCEPTION 'Checkout opportunity did not materialize a non-authorizing intervention: %',v_finish;
+ END IF;
+ SELECT id INTO v_intervention FROM henvalt.shopify_recovery_intervention_v2
+ WHERE opportunity_id=v_checkout_opp AND tenant_id=v_tenant
+  AND shopify_connection_id=v_connection AND step_number=1
+  AND status='READY_FOR_AUTHORIZATION';
+ IF v_intervention IS NULL THEN
+  RAISE EXCEPTION 'Checkout intervention materializer did not create the exact-store row';
+ END IF;
 
  v_claim:=henvalt.claim_shopify_recovery_work_v2('checkout-worker-a',10,120);
  SELECT (x.item->>'lease_id')::uuid INTO v_checkout_lease
