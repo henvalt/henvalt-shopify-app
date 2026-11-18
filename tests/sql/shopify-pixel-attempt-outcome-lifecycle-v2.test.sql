@@ -496,6 +496,18 @@ BEGIN
  IF v_intervention IS NULL THEN
   RAISE EXCEPTION 'Checkout intervention materializer did not create the exact-store row';
  END IF;
+ v_finish:=henvalt.materialize_shopify_checkout_interventions_v2(10);
+ IF v_finish->>'accepted'<>'true'
+   OR (v_finish->>'interventions_created')::integer<>0 THEN
+  RAISE EXCEPTION 'Checkout intervention materializer was not idempotent: %',v_finish;
+ END IF;
+ IF EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_intervention_v2
+  WHERE opportunity_id=v_opportunity AND tenant_id=v_tenant
+   AND shopify_connection_id=v_connection
+ ) THEN
+  RAISE EXCEPTION 'Pixel opportunity was incorrectly assigned a checkout intervention';
+ END IF;
 
  v_claim:=henvalt.claim_shopify_recovery_work_v2('checkout-worker-a',10,120);
  SELECT (x.item->>'lease_id')::uuid INTO v_checkout_lease
