@@ -34,3 +34,16 @@ test("provider event retries are idempotent and unmatched events can later be co
  assert.match(sql,/Late provider event did not reconcile the ambiguous send and settle its cost/);
  assert.match(sql,/MailerSend URL-validation test was not safely accepted/);
 });
+
+test("verified MailerSend events can reconcile ambiguous pixel attempts without caller-supplied message IDs",()=>{
+ const reconciliation=readFileSync("supabase/migrations/202611180039_shopify_pixel_provider_event_reconciliation_v2.sql","utf8");
+ assert.match(reconciliation,/processing_status<>'UNMATCHED'/);
+ assert.match(reconciliation,/v_event\.event_type NOT IN \('activity\.sent'/);
+ assert.match(reconciliation,/v_attempt\.status='AMBIGUOUS'/);
+ assert.match(reconciliation,/record_shopify_pixel_send_attempt_result_v2/);
+ assert.match(reconciliation,/provider_cost_state','SETTLED'/);
+ assert.match(reconciliation,/GRANT EXECUTE ON FUNCTION henvalt\.reconcile_mailersend_pixel_provider_event_v2\(text,text\)[\s\S]*?TO service_role/);
+ assert.match(edge,/reconcile_mailersend_pixel_provider_event_v2/);
+ assert.match(edge,/p_provider_event_id:eventId/);
+ assert.doesNotMatch(edge,/p_provider_message_reference/);
+});
