@@ -88,7 +88,6 @@ DECLARE
   v_evidence_id uuid;
   v_existing_at timestamptz;
   v_current_updated boolean := false;
-  v_current_updated boolean := false;
 BEGIN
   IF p_connection_id IS NULL OR p_customer_identity_id IS NULL
      OR p_contact_available IS NULL OR p_observed_at IS NULL
