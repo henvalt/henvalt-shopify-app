@@ -88,6 +88,7 @@ DECLARE
   v_evidence_id uuid;
   v_existing_at timestamptz;
   v_current_updated boolean := false;
+  v_rows integer := 0;
 BEGIN
   IF p_connection_id IS NULL OR p_customer_identity_id IS NULL
      OR p_contact_available IS NULL OR p_observed_at IS NULL
@@ -151,7 +152,6 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND OR p_observed_at>v_existing_at THEN
-    v_current_updated := true;
     INSERT INTO henvalt.shopify_customer_contact_evidence_current_v2(
       tenant_id,shopify_connection_id,customer_identity_id,evidence_id,
       contact_available,country_code,observed_at,updated_at
@@ -165,7 +165,10 @@ BEGIN
           contact_available=EXCLUDED.contact_available,
           country_code=EXCLUDED.country_code,
           observed_at=EXCLUDED.observed_at,
-          updated_at=pg_catalog.now();
+          updated_at=pg_catalog.now()
+      WHERE EXCLUDED.observed_at > henvalt.shopify_customer_contact_evidence_current_v2.observed_at;
+    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    v_current_updated := v_rows > 0;
   END IF;
 
   RETURN jsonb_build_object(
