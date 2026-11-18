@@ -227,6 +227,59 @@ BEGIN
      AND source_send_attempt_id IS NULL AND suppression_type='UNSUBSCRIBED' AND active IS TRUE) THEN
   RAISE EXCEPTION 'Pixel unsubscribe suppression did not retain exact-store attempt lineage';
  END IF;
+ -- A crashed worker's stale AUTHORIZED attempt is marked AMBIGUOUS and remains reserved.
+ INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
+  tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
+  occurred_at,analytics_processing_allowed,marketing_allowed,client_reference,
+  customer_reference,payload,status,processed_at
+ ) VALUES(v_tenant,v_connection,'pixel-stale-event-'||gen_random_uuid()::text,
+  'product_added_to_cart',encode(extensions.digest(convert_to(gen_random_uuid()::text,'UTF8'),'sha256'),'hex'),
+  now()-interval '1 hour',true,false,'outcome-browser','12345',
+  '{"product":{"id":"outcome-stale-product"}}'::jsonb,'PROCESSED',now())
+ RETURNING id INTO v_inbox;
+ INSERT INTO henvalt.shopify_session_identity_v2(
+  tenant_id,shopify_connection_id,session_reference,customer_identity_id
+ ) VALUES(v_tenant,v_connection,'outcome-stale-session-'||gen_random_uuid()::text,v_customer)
+ RETURNING id INTO v_session;
+ INSERT INTO henvalt.shopify_pixel_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,candidate_type,session_identity_id,customer_identity_id,
+  source_inbox_event_id,product_key,product_context,last_activity_at,eligible_after,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,'ABANDONED_CART',v_session,v_customer,v_inbox,
+  'outcome-stale-product','{"product_id":"outcome-stale-product"}'::jsonb,now()-interval '1 hour',
+  now()-interval '30 minutes','PROMOTED','outcome-stale-candidate-'||gen_random_uuid()::text)
+ RETURNING id INTO v_candidate;
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,customer_identity_id,
+  source_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,NULL,NULL,v_customer,NULL,v_candidate,
+  'ABANDONED_CART','REVIEW_REQUIRED','outcome-stale-opportunity-'||gen_random_uuid()::text)
+ RETURNING id INTO v_opportunity;
+ INSERT INTO henvalt.shopify_pixel_send_attempts_v2(
+  tenant_id,shopify_connection_id,opportunity_id,pixel_candidate_id,customer_identity_id,
+  provider_account_key,idempotency_key,status
+ ) VALUES(v_tenant,v_connection,v_opportunity,v_candidate,v_customer,v_provider,
+  'outcome-stale-attempt-'||gen_random_uuid()::text,'AUTHORIZED')
+ RETURNING id INTO v_attempt;
+ UPDATE henvalt.shopify_pixel_send_attempts_v2
+ SET created_at=pg_catalog.now()-interval '5 minutes' WHERE id=v_attempt;
+ v_result:=henvalt.mark_stale_shopify_pixel_send_attempts_ambiguous_v2(
+  pg_catalog.now()-interval '3 minutes',10
+ );
+ IF v_result->>'accepted'<>'true' OR (v_result->>'marked_ambiguous')::integer<>1
+   OR v_result->>'automatic_retry_performed'<>'false'
+   OR v_result->>'provider_cost_reservation_released'<>'false' THEN
+  RAISE EXCEPTION 'Stale worker attempt was not safely marked ambiguous: %',v_result;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2
+   WHERE id=v_attempt AND status='AMBIGUOUS')
+   OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2
+     WHERE pixel_send_attempt_id=v_attempt AND status='RESERVED') THEN
+  RAISE EXCEPTION 'Stale worker reconciliation released or lost its cost reservation';
+ END IF;
+ v_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(v_attempt,'FAILED',NULL);
+ IF v_result->>'recorded'<>'false' OR v_result->>'code'<>'ATTEMPT_ALREADY_FINALIZED' THEN
+  RAISE EXCEPTION 'Stale ambiguous attempt could be downgraded to failed: %',v_result;
+ END IF;
 END;
 $test$;
 ROLLBACK;
