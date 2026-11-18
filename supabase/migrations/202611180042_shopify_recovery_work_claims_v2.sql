@@ -187,7 +187,8 @@ BEGIN
     'opportunity_id',v_work.opportunity_id,
     'intervention_id',v_work.intervention_id,
     'opportunity_type',v_work.opportunity_type,
-    'lease_expires_at',now()+make_interval(secs=>p_lease_seconds)
+    'lease_expires_at',now()+make_interval(secs=>p_lease_seconds),
+    'attempt_count',(SELECT attempt_count FROM henvalt.shopify_recovery_work_claims_v2 WHERE id=v_claim_id)
    ));
   END IF;
   v_claim_id:=NULL;
@@ -218,7 +219,7 @@ BEGIN
  END IF;
  IF p_lease_id IS NULL OR p_worker_id IS NULL
    OR p_worker_id !~ '^[A-Za-z0-9._:-]{3,80}$'
-   OR p_outcome NOT IN ('HANDOFF_ACCEPTED','TERMINAL','DEFERRED')
+   OR p_outcome IS NULL OR p_outcome NOT IN ('HANDOFF_ACCEPTED','TERMINAL','DEFERRED')
    OR p_retry_after IS NULL OR p_retry_after<interval '0 seconds'
    OR p_retry_after>interval '24 hours' THEN
   RETURN jsonb_build_object('finished',false,'code','INVALID_COMPLETION');
