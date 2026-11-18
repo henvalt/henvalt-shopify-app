@@ -64,20 +64,27 @@ BEGIN
    OR v_claim->>'provider_called'<>'false'
    OR v_claim->>'recipient_pii_returned'<>'false'
    OR NOT EXISTS(
-     SELECT 1 FROM jsonb_array_elements(v_claim->'items') item
-     WHERE item->>'work_type'='PIXEL_OPPORTUNITY'
-       AND item->>'work_id'=v_opportunity::text
-       AND item->>'tenant_id'=v_tenant::text
-       AND item->>'shopify_connection_id'=v_connection::text
-       AND item->>'intervention_id' IS NULL
+     SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
+     WHERE x.item->>'work_type'='PIXEL_OPPORTUNITY'
+       AND x.item->>'work_id'=v_opportunity::text
+       AND x.item->>'tenant_id'=v_tenant::text
+       AND x.item->>'shopify_connection_id'=v_connection::text
+       AND x.item->>'intervention_id' IS NULL
    ) THEN
   RAISE EXCEPTION 'Pixel opportunity was not safely exposed by the exact-store work lease: %',v_claim;
  END IF;
- SELECT (item->>'lease_id')::uuid INTO v_lease_id
- FROM jsonb_array_elements(v_claim->'items') item
- WHERE item->>'work_id'=v_opportunity::text;
+ SELECT (x.item->>'lease_id')::uuid INTO v_lease_id
+ FROM jsonb_array_elements(v_claim->'items') AS x(item)
+ WHERE x.item->>'work_id'=v_opportunity::text;
  IF v_lease_id IS NULL THEN
   RAISE EXCEPTION 'Pixel work lease did not return its opaque lease ID';
+ END IF;
+ v_claim:=henvalt.claim_shopify_recovery_work_v2('test-worker-b',10,120);
+ IF EXISTS(
+   SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
+   WHERE x.item->>'work_id'=v_opportunity::text
+ ) THEN
+  RAISE EXCEPTION 'Concurrent worker received an already leased opportunity: %',v_claim;
  END IF;
  v_finish:=henvalt.finish_shopify_recovery_work_claim_v2(
   v_lease_id,'test-worker-a','DEFERRED',interval '0 seconds'
@@ -86,9 +93,9 @@ BEGIN
   RAISE EXCEPTION 'Pixel work lease could not be safely deferred: %',v_finish;
  END IF;
  v_claim:=henvalt.claim_shopify_recovery_work_v2('test-worker-b',10,120);
- SELECT (item->>'lease_id')::uuid INTO v_retry_lease_id
- FROM jsonb_array_elements(v_claim->'items') item
- WHERE item->>'work_id'=v_opportunity::text;
+ SELECT (x.item->>'lease_id')::uuid INTO v_retry_lease_id
+ FROM jsonb_array_elements(v_claim->'items') AS x(item)
+ WHERE x.item->>'work_id'=v_opportunity::text;
  IF v_retry_lease_id IS NULL OR v_retry_lease_id=v_lease_id THEN
   RAISE EXCEPTION 'Deferred work was not reclaimed with a fresh lease identity: %',v_claim;
  END IF;
@@ -106,8 +113,8 @@ BEGIN
  END IF;
  v_claim:=henvalt.claim_shopify_recovery_work_v2('test-worker-c',10,120);
  IF EXISTS(
-   SELECT 1 FROM jsonb_array_elements(v_claim->'items') item
-   WHERE item->>'work_id'=v_opportunity::text
+   SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
+   WHERE x.item->>'work_id'=v_opportunity::text
  ) THEN
   RAISE EXCEPTION 'Completed pixel work was claimed again: %',v_claim;
  END IF;
