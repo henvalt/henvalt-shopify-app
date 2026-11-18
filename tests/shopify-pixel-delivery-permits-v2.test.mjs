@@ -28,7 +28,7 @@ test("pixel send attempt has atomic merchant-wide cost reservation and terminal 
  assert.match(sql,/shopify_pixel_delivery_cost_reservations_v2/);
  assert.match(sql,/usage_cap_amount/);
  assert.match(sql,/monthly_email_limit/);
- assert.equal((sql.match(/IF monthly>=b\\.monthly_email_limit THEN/g)||[]).length,2,"both checkout and pixel reservation triggers must reject when the existing count has reached the cap");
+ assert.equal((sql.match(/IF monthly>=b\.monthly_email_limit THEN/g)||[]).length,2,"both checkout and pixel reservation triggers must reject when the existing count has reached the cap");
  assert.match(sql,/WHEN NEW\.status='SUBMITTED' THEN 'SETTLED'/);
  assert.match(sql,/WHEN NEW\.status='FAILED' THEN 'RELEASED'/);
  assert.match(sql,/WHEN NEW\.status='AMBIGUOUS' THEN 'RESERVED'/);
