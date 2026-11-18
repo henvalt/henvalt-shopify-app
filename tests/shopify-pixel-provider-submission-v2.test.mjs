@@ -39,7 +39,7 @@ test("final gate is service-only, locks the attempt/reservation and rechecks con
  assert.match(sql,/request\.jwt\.claim\.role[\s\S]*?service_role_required/);
  assert.match(sql,/FOR UPDATE OF attempt_row,permit_row,reservation_row/);
  assert.match(sql,/reservation_status<>'RESERVED'/);
- assert.match(sql,/assess_shopify_pixel_delivery_eligibility_v2\(a\.opportunity_id\)/);
+ assert.match(sql,/assess_shopify_pixel_delivery_eligibility_v2\(v_attempt\.opportunity_id\)/);
  assert.match(sql,/shopify_delivery_suppressions_v2/);
  assert.match(sql,/recipient_fingerprint/);
  assert.match(sql,/GRANT EXECUTE ON FUNCTION henvalt\.authorize_shopify_pixel_provider_submission_v2\(uuid,text\)[\s\S]*?TO service_role/);
