@@ -87,3 +87,53 @@ gate unchanged. The processor must hold requests for review rather than emit
 an incomplete export or report a false completion. The next implementation
 should begin with a read-only catalog and relationship inventory, then add
 per-family export coverage with two-store isolation tests.
+
+
+## Disposable-CI catalog result (2026-11-18)
+
+The new metadata-only catalog was executed successfully after applying the
+candidate migrations 001–026 to the disposable PostgreSQL baseline in GitHub
+Actions run
+[44240491811](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44240491811).
+The catalog emitted these candidate-schema relations:
+
+- **Legacy/core and platform fixture:** `billing_accounts`, `canonical_events`,
+  `checkouts`, `customers`, `pixel_keys`, `pixel_rate_limits`,
+  `session_aliases`, `sessions`, `shopify_app_registry`,
+  `shopify_connections`, `shopify_oauth_states`, `tenants`,
+  `shopify_webhook_deliveries`, `shopify_webhook_route_tokens`.
+- **V2 identity and ingestion:** `shopify_customer_identity_v2`,
+  `shopify_session_identity_v2`, `shopify_session_alias_identity_v2`,
+  `shopify_pixel_event_inbox_v2`, `shopify_checkout_identity_v2`,
+  `shopify_order_identity_v2`, `shopify_checkout_recovery_candidate_v2`.
+- **V2 consent and recovery/delivery:** `shopify_customer_email_consent_v2`,
+  `shopify_customer_email_consent_events_v2`,
+  `shopify_recovery_opportunity_v2`, `shopify_recovery_intervention_v2`,
+  `shopify_recovery_send_attempt_v2`, `shopify_delivery_permits_v2`,
+  `shopify_delivery_suppressions_v2`, `shopify_mailer_provider_events_v2`,
+  `shopify_mailer_provider_registry_v2`, `shopify_sender_profiles_v2`,
+  `shopify_delivery_cost_reservations_v2`.
+- **V2 orders, attribution, privacy and control:** `shopify_order_refund_adjustments_v2`,
+  `shopify_recovery_attribution_policies_v2`,
+  `shopify_recovery_attributions_v2`,
+  `shopify_recovery_fee_measurements_v2`,
+  `shopify_privacy_webhook_deliveries`,
+  `shopify_privacy_webhook_order_scope_v2`,
+  `shopify_privacy_processing_jobs_v2`,
+  `shopify_privacy_delivery_evidence_v2`,
+  `shopify_privacy_export_artifacts_v2`,
+  `shopify_redacted_store_tombstones_v2`,
+  `shopify_customer_redaction_guards_v2`.
+
+**Important limitation:** this is a catalog of the disposable candidate
+baseline, not a production-schema snapshot. The fixture does not define the
+legacy `opportunities`, `recoveries`, `interventions`, or V1 delivery-log
+tables used by the older workflow. Their absence from this CI output is not
+evidence that they are absent from the live Supabase schema. The catalog run
+therefore validates SQL syntax and inventories only the relations actually
+present in the fixture; it does not close the legacy coverage review.
+
+The next safe step is to obtain a read-only catalog from the actual Supabase
+schema (without row data), then classify each discovered V1 table and its
+foreign-key lineage. Until that evidence exists, the export remains
+`legacy_scope_review_required=true` and `completion_eligible=false`.
