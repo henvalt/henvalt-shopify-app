@@ -430,8 +430,13 @@ BEGIN
    OR (v_dashboard->'metrics'->>'messagesSent')::integer<1 THEN
   RAISE EXCEPTION 'V2 dashboard did not report exact-store confirmed pixel recovery: %',v_dashboard;
  END IF;
- SELECT id INTO v_store_a FROM henvalt.shopify_connections
-  WHERE tenant_id=v_tenant AND shop_domain='store-a.myshopify.com';
+ v_store_a:=gen_random_uuid();
+ INSERT INTO henvalt.shopify_connections(
+  id,tenant_id,shop_domain,shopify_shop_id,active,app_key
+ ) VALUES(v_store_a,v_tenant,
+  'dashboard-isolation-'||left(replace(gen_random_uuid()::text,'-',''),12)||'.myshopify.com',
+  'dashboard-isolation-shop-'||left(replace(gen_random_uuid()::text,'-',''),12),
+  true,v_app_key);
  v_dashboard:=henvalt.control_plane_dashboard_summary_v2(
   v_store_a,now()-interval '1 day',now()
  );
