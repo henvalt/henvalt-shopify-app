@@ -293,7 +293,7 @@ BEGIN
  SELECT id INTO v_source_delivery
  FROM henvalt.shopify_webhook_deliveries
  WHERE tenant_id=v_tenant AND connection_id=v_connection
- ORDER BY created_at DESC LIMIT 1;
+ ORDER BY id LIMIT 1;
  IF v_source_delivery IS NULL THEN
   RAISE EXCEPTION 'Verified Store B webhook receipt required for order fixture';
  END IF;
