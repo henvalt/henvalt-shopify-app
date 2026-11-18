@@ -32,6 +32,6 @@ test("MailerSend signed webhook body is bounded while streaming and parsed only 
 });
 test("webhook body-size and content-type failures return bounded client errors", () => {
   assert.match(webhook, /BODY_TOO_LARGE/);
-  assert.match(webhook, /INVALID_CONTENT_TYPE/);
+  assert.match(helper, /INVALID_CONTENT_TYPE/);
   assert.match(webhook, /status===413/);
 });
