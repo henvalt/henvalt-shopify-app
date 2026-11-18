@@ -115,7 +115,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const url = new URL(req.url);
-    const valid = (value: string | null) =>
       value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
     const today = new Date().toISOString().slice(0, 10);
     const from = (isDateOnly(url.searchParams.get("from")) ? url.searchParams.get("from") : null) ||
