@@ -16,7 +16,6 @@ AS $function$
 DECLARE
   v_shop text;
   v_tenant_id uuid;
-  v_default_currency text;
   v_currency text;
   v_currency_count integer:=0;
   v_currency_mixed boolean:=false;
@@ -28,8 +27,8 @@ DECLARE
   v_activity jsonb:='[]'::jsonb;
   v_by_event jsonb:='[]'::jsonb;
 BEGIN
-  SELECT sc.shop_domain,sc.tenant_id,t.default_currency
-    INTO v_shop,v_tenant_id,v_default_currency
+  SELECT sc.shop_domain,sc.tenant_id
+    INTO v_shop,v_tenant_id
   FROM henvalt.shopify_connections sc
   JOIN henvalt.tenants t ON t.id=sc.tenant_id AND t.status='ACTIVE'
   JOIN henvalt.shopify_app_registry ar ON ar.app_key=sc.app_key AND ar.lifecycle_status='active'
@@ -55,7 +54,15 @@ BEGIN
     AND a.attributed_at<p_to+interval '1 day';
   v_currency_mixed:=v_currency_count>1;
   IF v_currency_mixed THEN
-    v_currency:=COALESCE(NULLIF(upper(btrim(v_default_currency::text)),''),'USD');
+    v_currency:=COALESCE(
+      (SELECT upper(o.currency) FROM henvalt.shopify_order_identity_v2 o
+       WHERE o.tenant_id=v_tenant_id AND o.shopify_connection_id=p_shopify_connection_id
+         AND o.currency IS NOT NULL ORDER BY o.ordered_at DESC NULLS LAST LIMIT 1),
+      (SELECT upper(o.currency) FROM henvalt.shopify_recovery_opportunity_v2 o
+       WHERE o.tenant_id=v_tenant_id AND o.shopify_connection_id=p_shopify_connection_id
+         AND o.currency IS NOT NULL ORDER BY o.updated_at DESC LIMIT 1),
+      'USD'
+    );
     v_revenue:=NULL;
   ELSIF v_currency_count=0 THEN
     SELECT COALESCE(
@@ -65,7 +72,6 @@ BEGIN
       (SELECT upper(o.currency) FROM henvalt.shopify_recovery_opportunity_v2 o
        WHERE o.tenant_id=v_tenant_id AND o.shopify_connection_id=p_shopify_connection_id
          AND o.currency IS NOT NULL ORDER BY o.updated_at DESC LIMIT 1),
-      NULLIF(upper(btrim(v_default_currency::text)),''),
       'USD'
     ) INTO v_currency;
     v_revenue:=0;
