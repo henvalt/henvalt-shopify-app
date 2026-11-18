@@ -14,6 +14,17 @@ CREATE TABLE henvalt.shopify_connections (
   tenant_id uuid NOT NULL,
   shop_domain text NOT NULL UNIQUE,
   shopify_shop_id text,
+  access_token_secret_ref text,
+  refresh_token_secret_ref text,
+  access_token_expires_at timestamptz,
+  refresh_token_expires_at timestamptz,
+  token_type text,
+  token_updated_at timestamptz,
+  token_refresh_lease_until timestamptz,
+  token_refresh_started_at timestamptz,
+  token_refresh_last_error text,
+  reauth_required_at timestamptz,
+  scopes text[] NOT NULL DEFAULT '{}'::text[],
   active boolean NOT NULL DEFAULT true,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
