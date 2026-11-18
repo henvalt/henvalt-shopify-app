@@ -433,3 +433,33 @@ candidates to the existing single-use delivery authorization and the three
 existing n8n workflow boundaries. Do not enable candidate promotion or sends
 until that integration has its own two-store, consent-withdrawal, conversion,
 uninstall and duplicate-send tests.
+
+
+## 9. Generalized opportunity promotion — metadata only
+
+Migration
+`202611180028_shopify_general_recovery_opportunities_v2.sql` extends the
+V2 opportunity record so it can reference either:
+- a checkout recovery candidate plus its checkout identity and verified webhook
+  receipt; or
+- a cart/browse pixel candidate plus its exact-store source identity.
+
+A database check constraint enforces those two mutually exclusive source
+shapes. The cart/browse promotion RPC rechecks active app/store/tenant state
+and same-store orders, then creates idempotent opportunity metadata and marks
+the source candidate promoted. The two-store integration test now verifies
+that Store A's removed-cart candidate is suppressed, Store B remains eligible,
+and only the three remaining candidates become opportunities.
+
+**Delivery remains deliberately closed for cart/browse.** The existing V2
+single-use permit and contact-resolution functions still join the checkout
+candidate and checkout identity tables. They cannot authorize a pixel-backed
+opportunity. No intervention, send permit, MailerSend request, attribution or
+fee measurement is created by this new promotion function.
+
+The full disposable PostgreSQL identity workflow passed on commit
+`4e123b5`, including migrations through 028, the two-store cart/browse
+candidate and opportunity-promotion integration test, and the existing
+checkout, privacy, delivery and cost-reservation tests. The subsequent
+workflow-title/document commits do not alter application code. A new CI run
+is being triggered for the updated branch head.
