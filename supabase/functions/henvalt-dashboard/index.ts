@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { isSingleActiveStoreScope } from "../_shared/dashboard-store-scope.mjs";
 
-const URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const APP_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
@@ -66,7 +66,7 @@ async function shopFromToken(token: string): Promise<string> {
 }
 
 async function rpc(name: string, body: Record<string, unknown>): Promise<any> {
-  const response = await fetch(URL + "/rest/v1/rpc/" + name, {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
     method: "POST",
     headers: {
       apikey: KEY,
@@ -83,7 +83,7 @@ async function rpc(name: string, body: Record<string, unknown>): Promise<any> {
 }
 
 async function rest(path: string): Promise<any> {
-  const response = await fetch(URL + "/rest/v1/" + path, {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
     headers: {
       apikey: KEY,
       authorization: "Bearer " + KEY,
@@ -102,7 +102,7 @@ Deno.serve(async (req: Request) => {
   try {
     const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
     if (!token) return out(401, { error: "shopify_session_required" });
-    if (!URL || !KEY) return out(503, { error: "dashboard_not_configured" });
+    if (!SUPABASE_URL || !KEY) return out(503, { error: "dashboard_not_configured" });
 
     const shop = await shopFromToken(token);
     const connection = await rpc("control_plane_shop_connection", { p_shop_domain: shop });
