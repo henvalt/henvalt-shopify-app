@@ -36,6 +36,6 @@ test("eligibility assessment cannot create or authorize delivery",()=>{
  assert.match(body,/recipient_email_returned',false/);
 });
 test("engineering boundary records future delivery-time requirements",()=>{
- assert.match(policyDoc,/Delivery-time email must be re-resolved from the exact Shopify customer GID/);
+ assert.match(policyDoc,/future delivery-time Shopify Admin re-resolution of email and marketing consent/);
  assert.match(policyDoc,/atomic merchant-wide cost-reservation trigger/);
 });
