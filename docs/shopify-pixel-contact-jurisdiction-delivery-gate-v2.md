@@ -73,7 +73,7 @@ It stores no email, street address, postcode, phone, Shopify token or raw API re
 
 The two-store disposable SQL integration test now records Store A and Store B evidence independently, rejects using Store A's customer identity under Store B, and rejects a replayed lookup ID with altered country facts.
 
-**Important limitation:** this is the database evidence receiver, not the Shopify Admin API contact resolver. No email is fetched or stored by this migration, and no contact evidence can authorize a send. The trusted Edge Function that performs the exact-store Shopify customer lookup, validates a usable email and country, and immediately resolves email transiently at send time remains to be implemented. Until then, the evidence RPC must not be called from browser or n8n, and cart/browse remain review-only.
+**Important limitation:** migration 029 is the database evidence receiver; migration 030 and `henvalt-shopify-contact-evidence-v2` now perform the trusted exact-store Shopify Admin lookup for contact availability and default-address country. The Edge Function does not return or persist email and cannot authorize a send. A separate delivery-time email re-resolution and complete cart/browse authorization path remain unimplemented; the evidence RPC must never be called from browser or n8n, and cart/browse remain review-only.
 
 
 ## Trusted Admin customer evidence resolver (migration 030)
