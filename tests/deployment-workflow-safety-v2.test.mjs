@@ -19,3 +19,10 @@ test("Shopify preparation can create only an unreleased version after manual con
   assert.match(config, /github\.ref == 'refs\/heads\/main'/);
   assert.match(config, /shopify app deploy --no-release/);
 });
+
+test("Shopify preparation job has one unambiguous job-level condition", () => {
+  const start = config.indexOf("  deploy-shopify-version:");
+  const end = config.indexOf("    steps:", start);
+  const header = config.slice(start, end);
+  assert.equal((header.match(/^    if:/gm) || []).length, 1);
+});
