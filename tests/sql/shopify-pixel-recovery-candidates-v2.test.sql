@@ -19,6 +19,10 @@ DECLARE
   v_count integer;
   v_status_a text;
   v_status_b text;
+  v_customer_a uuid;
+  v_customer_b uuid;
+  v_lookup_id uuid := gen_random_uuid();
+  v_evidence_result jsonb;
   v_app_key text := 'henvalt_pixel_test';
 BEGIN
   v_origin_a := 'https://' || v_domain_a;
@@ -123,6 +127,59 @@ BEGIN
     AND opportunity_type IN ('ABANDONED_CART','BROWSE_ABANDONMENT');
   IF v_count <> 3 THEN
     RAISE EXCEPTION 'Expected three generalized cart/browse opportunities, found %',v_count;
+  END IF;
+
+  -- Trusted Admin API evidence is recorded separately per exact installation.
+  SELECT customer_identity_id INTO v_customer_a
+  FROM henvalt.shopify_pixel_recovery_candidate_v2
+  WHERE tenant_id=v_tenant AND shopify_connection_id=v_conn_a
+    AND customer_identity_id IS NOT NULL
+  LIMIT 1;
+  SELECT customer_identity_id INTO v_customer_b
+  FROM henvalt.shopify_pixel_recovery_candidate_v2
+  WHERE tenant_id=v_tenant AND shopify_connection_id=v_conn_b
+    AND customer_identity_id IS NOT NULL
+  LIMIT 1;
+
+  IF v_customer_a IS NULL OR v_customer_b IS NULL OR v_customer_a=v_customer_b THEN
+    RAISE EXCEPTION 'Expected separate exact-store customer identities';
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v2(
+    v_conn_a,v_customer_a,true,'GB',pg_catalog.now(),v_lookup_id
+  );
+  IF v_evidence_result->>'accepted'<>'true'
+     OR v_evidence_result->>'send_authorized'<>'false' THEN
+    RAISE EXCEPTION 'Store A contact evidence was not safely recorded: %',v_evidence_result;
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v2(
+    v_conn_b,v_customer_a,true,'US',pg_catalog.now(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'false'
+     OR v_evidence_result->>'code'<>'CUSTOMER_IDENTITY_SCOPE_MISMATCH' THEN
+    RAISE EXCEPTION 'Store A customer identity was accepted under Store B: %',v_evidence_result;
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v2(
+    v_conn_b,v_customer_b,false,NULL,pg_catalog.now(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true'
+     OR v_evidence_result->>'contact_value_stored'<>'false' THEN
+    RAISE EXCEPTION 'Store B unavailable-contact evidence was not safely recorded: %',v_evidence_result;
+  END IF;
+
+  IF (SELECT count(*) FROM henvalt.shopify_customer_contact_evidence_current_v2
+      WHERE tenant_id=v_tenant)<>2 THEN
+    RAISE EXCEPTION 'Contact evidence was not isolated by exact store';
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v2(
+    v_conn_a,v_customer_a,true,'US',pg_catalog.now(),v_lookup_id
+  );
+  IF v_evidence_result->>'accepted'<>'false'
+     OR v_evidence_result->>'code'<>'LOOKUP_ID_REPLAY_MISMATCH' THEN
+    RAISE EXCEPTION 'Lookup ID replay with altered facts was not rejected: %',v_evidence_result;
   END IF;
 
   IF EXISTS (
