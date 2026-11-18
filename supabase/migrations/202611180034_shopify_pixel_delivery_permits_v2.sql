@@ -224,8 +224,8 @@ BEGIN
  THEN RETURN jsonb_build_object('recorded',false,'code','INVALID_RESULT'); END IF;
  SELECT * INTO a FROM henvalt.shopify_pixel_send_attempts_v2 WHERE id=p_send_attempt_id FOR UPDATE;
  IF NOT FOUND THEN RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_NOT_FOUND'); END IF;
- IF a.status<>'AUTHORIZED' THEN RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_ALREADY_FINALIZED'); END IF;
- UPDATE henvalt.shopify_pixel_send_attempts_v2 SET status=p_status,provider_message_reference=p_provider_message_reference,updated_at=pg_catalog.now() WHERE id=a.id;
+ IF a.status NOT IN ('AUTHORIZED','AMBIGUOUS') OR (a.status='AMBIGUOUS' AND p_status='AMBIGUOUS') THEN RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_ALREADY_FINALIZED'); END IF;
+ UPDATE henvalt.shopify_pixel_send_attempts_v2 SET status=p_status,provider_message_reference=coalesce(p_provider_message_reference,provider_message_reference),updated_at=pg_catalog.now() WHERE id=a.id;
  RETURN jsonb_build_object('recorded',true,'status',p_status,'provider_cost_state',CASE WHEN p_status='SUBMITTED' THEN 'SETTLED' WHEN p_status='FAILED' THEN 'RELEASED' ELSE 'RESERVED' END);
 END;$function$;
 
