@@ -138,7 +138,7 @@ The GitHub Actions validation additionally:
 - validates Shopify TOML and extension source.
 
 These jobs do not connect to or mutate production. The current successful
-validation included 321/321 repository Node tests and 209/209 focused V2
+validation included 322/322 repository Node tests and 209/209 focused V2
 contract tests.
 
 ## Runtime configuration and secrets
