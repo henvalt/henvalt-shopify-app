@@ -107,15 +107,31 @@ BEGIN
   WHERE tenant_id=v_tenant AND shopify_connection_id=v_conn_b
     AND candidate_type='ABANDONED_CART';
 
-  IF v_status_a <> 'SUPPRESSED' OR v_status_b <> 'READY_FOR_REVIEW' THEN
+  IF v_status_a IS DISTINCT FROM 'SUPPRESSED'
+     OR v_status_b IS DISTINCT FROM 'READY_FOR_REVIEW' THEN
     RAISE EXCEPTION 'Cross-store suppression failure: Store A %, Store B %',v_status_a,v_status_b;
   END IF;
 
+  v_result := henvalt.promote_shopify_pixel_recovery_candidates_v2(100);
+  IF v_result->>'accepted' <> 'true' OR (v_result->>'opportunities_created')::integer <> 3 THEN
+    RAISE EXCEPTION 'Expected three cart/browse opportunities after Store A cart suppression: %',v_result;
+  END IF;
+
+  SELECT count(*) INTO v_count
+  FROM henvalt.shopify_recovery_opportunity_v2
+  WHERE tenant_id=v_tenant
+    AND opportunity_type IN ('ABANDONED_CART','BROWSE_ABANDONMENT');
+  IF v_count <> 3 THEN
+    RAISE EXCEPTION 'Expected three generalized cart/browse opportunities, found %',v_count;
+  END IF;
+
   IF EXISTS (
-    SELECT 1 FROM henvalt.shopify_pixel_recovery_candidate_v2
-    WHERE tenant_id=v_tenant AND status='PROMOTED'
+    SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
+    JOIN henvalt.shopify_recovery_opportunity_v2 o ON o.id=i.opportunity_id
+    WHERE o.tenant_id=v_tenant
+      AND o.opportunity_type IN ('ABANDONED_CART','BROWSE_ABANDONMENT')
   ) THEN
-    RAISE EXCEPTION 'Candidate-only stage unexpectedly promoted a delivery opportunity';
+    RAISE EXCEPTION 'Generalized candidate promotion unexpectedly created delivery interventions';
   END IF;
 END
 $$;
