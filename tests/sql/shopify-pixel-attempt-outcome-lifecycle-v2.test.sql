@@ -70,6 +70,15 @@ BEGIN
  IF v_reservation_status IS DISTINCT FROM 'RESERVED' THEN
   RAISE EXCEPTION 'Ambiguous pixel attempt released cost reservation';
  END IF;
+ v_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(v_attempt,'FAILED',NULL);
+ IF v_result->>'recorded'<>'false' OR v_result->>'code'<>'ATTEMPT_ALREADY_FINALIZED' THEN
+  RAISE EXCEPTION 'Ambiguous attempt was incorrectly downgraded to failed: %',v_result;
+ END IF;
+ SELECT status INTO v_reservation_status FROM henvalt.shopify_pixel_delivery_cost_reservations_v2
+  WHERE pixel_send_attempt_id=v_attempt;
+ IF v_reservation_status IS DISTINCT FROM 'RESERVED' THEN
+  RAISE EXCEPTION 'Rejected ambiguous-to-failed transition released cost reservation';
+ END IF;
 
  v_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(v_attempt,'SUBMITTED','synthetic-provider-message-id');
  IF v_result->>'recorded'<>'true' OR v_result->>'provider_cost_state'<>'SETTLED' THEN
