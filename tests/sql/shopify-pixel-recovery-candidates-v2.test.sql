@@ -194,6 +194,28 @@ BEGIN
     RAISE EXCEPTION 'Lookup ID replay with altered facts was not rejected: %',v_evidence_result;
   END IF;
 
+  -- New V3 resolver stores only Shopify's region code alongside country.
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v3(
+    v_conn_a,v_customer_a,true,'US','CA',pg_catalog.now(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true'
+     OR v_evidence_result->>'send_authorized'<>'false' THEN
+    RAISE EXCEPTION 'Subnational contact evidence was not safely recorded: %',v_evidence_result;
+  END IF;
+  IF (SELECT country_code FROM henvalt.shopify_customer_contact_evidence_current_v2
+      WHERE shopify_connection_id=v_conn_a AND customer_identity_id=v_customer_a)<>'US'
+     OR (SELECT region_code FROM henvalt.shopify_customer_contact_evidence_current_v2
+      WHERE shopify_connection_id=v_conn_a AND customer_identity_id=v_customer_a)<>'CA' THEN
+    RAISE EXCEPTION 'Current country/region evidence was not retained together';
+  END IF;
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v3(
+    v_conn_a,v_customer_a,true,'US','NY',pg_catalog.now(),v_lookup_id
+  );
+  IF v_evidence_result->>'accepted'<>'false'
+     OR v_evidence_result->>'code'<>'LOOKUP_ID_REPLAY_MISMATCH' THEN
+    RAISE EXCEPTION 'Region change under reused lookup ID was not rejected: %',v_evidence_result;
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
     JOIN henvalt.shopify_recovery_opportunity_v2 o ON o.id=i.opportunity_id
