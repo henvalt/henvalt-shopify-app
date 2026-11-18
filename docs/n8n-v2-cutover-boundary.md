@@ -75,7 +75,63 @@ Both require the server-held delivery bearer secret. Neither accepts a recipient
 
 The remaining orchestration gap is upstream of these endpoints: the active Recovery workflow still has no V2 claim/lease adapter that safely selects due V2 checkout interventions and pixel opportunities. That claim/lease contract, including exact-store locks, duplicate-worker handling, stale-lease recovery and idempotent work identity, must be implemented and tested before wiring n8n to these two endpoints.
 
-## 5. Cutover gates
+## 5. V2 claim/lease RPC contract — migration 042
+
+The branch now contains `202611180042_shopify_recovery_work_claims_v2.sql`. It introduces a shared exact-store queue without merging the two delivery models.
+
+### Claim
+
+Call the service-role RPC:
+
+```json
+{
+  "p_worker_id": "HENVALT_RECOVERY",
+  "p_limit": 25,
+  "p_lease_seconds": 180
+}
+```
+
+Endpoint: `POST /rest/v1/rpc/claim_shopify_recovery_work_v2`, with `apikey` and bearer authorization held only in the n8n credential store, and `accept-profile: henvalt` / `content-profile: henvalt`.
+
+The response contains opaque IDs only:
+- `CHECKOUT_INTERVENTION`: `work_id` and `intervention_id` are the same intervention UUID; `opportunity_id` is its exact-store opportunity.
+- `PIXEL_OPPORTUNITY`: `work_id` and `opportunity_id` are the same pixel opportunity UUID; `intervention_id` is null.
+
+Each item also contains `lease_id`, tenant ID, immutable Shopify connection ID, opportunity type, expiry and attempt count. It contains no recipient email, Shopify token, provider secret, message body or send authority. The queue filters inactive stores/apps/tenants, same-store conversions, existing attempts, non-due work and ineligible source states. The claim write is atomic under the unique (work type, work ID) key, so concurrent workers cannot own the same active lease.
+
+### Finish or defer
+
+Call `POST /rest/v1/rpc/finish_shopify_recovery_work_claim_v2`:
+
+```json
+{
+  "p_lease_id": "UUID_FROM_CLAIM",
+  "p_worker_id": "HENVALT_RECOVERY",
+  "p_outcome": "HANDOFF_ACCEPTED",
+  "p_retry_after": "01:00:00"
+}
+```
+
+Allowed outcomes:
+- `HANDOFF_ACCEPTED`: the V2 delivery boundary returned an accepted/ambiguous provider outcome or a successfully recorded attempt. The lease is terminal; provider reconciliation and Shopify order attribution proceed independently.
+- `TERMINAL`: the item is permanently ineligible/closed/already processed and must not be retried by the worker.
+- `DEFERRED`: retry the review later. The current lease is invalidated and the work becomes claimable after the supplied delay (0–24 hours).
+
+A reclaimed item gets a new lease UUID. A stale worker cannot finish the newer lease. Network timeouts must not be reported as accepted; defer and let the V2 attempt/idempotency state decide whether another handoff is safe. Never call the legacy `authorize_delivery_request` or legacy `record_delivery_result` functions.
+
+### HENVALT_RECOVERY routing
+
+For each claim item:
+1. `CHECKOUT_INTERVENTION` → call `henvalt-shopify-contact-delivery-v2` with `intervention_id`, `subject`, `html` and/or `text`. The Edge Function itself performs contact resolution, fresh consent checks, checkout permit issue/consume, cost reservation and provider submission.
+2. `PIXEL_OPPORTUNITY` → call `henvalt-shopify-pixel-delivery-v2` with `opportunity_id`, `subject`, `html` and/or `text`. It uses the separate pixel context, eligibility assessment, pixel permit, final Shopify consent lookup and provider submission gate.
+3. A 202 response with `submitted`, `ambiguous_provider_submission` or `provider_accepted_record_pending` means the server-side attempt lifecycle owns the outcome; do not resend or create another attempt. Finish the lease as `HANDOFF_ACCEPTED`.
+4. A 409 eligibility/consent/suppression/order response is a review outcome. Use `DEFERRED` for conditions that can change (for example, fresh evidence or a jurisdiction policy review); use `TERMINAL` for permanently closed, converted or revoked records.
+5. A 5xx before provider submission can be deferred. If provider submission may have started, the Edge Function marks the attempt AMBIGUOUS and retains its cost reservation; do not manually release it or create a second send. Let the signed MailerSend webhook reconciler resolve it.
+6. Never pass raw email or Shopify/provider credentials between n8n nodes. Keep message content limited to the requested subject/body and avoid logging complete HTTP request/response bodies.
+
+The `HENVALT_INGEST` workflow remains outside this claim queue: verified Shopify webhooks are ingested by the Worker/Edge Function boundary, not duplicated through legacy n8n ingestion. `HENVALT_DELIVERY` is not yet cut over; first validate the worker's V2 handoff in a disabled/dry-run workflow copy and then explicitly approve a production update. The current active workflows remain unchanged.
+
+## 6. Cutover gates
 
 Do not edit or publish the active workflows until each gate is satisfied:
 
@@ -89,7 +145,7 @@ Do not edit or publish the active workflows until each gate is satisfied:
 - [ ] Existing legacy workflows are compared against the V2 branch contract and a rollback plan is documented.
 - [ ] The owner explicitly approves any production workflow update, activation or real provider send.
 
-## 6. Current release boundary
+## 7. Current release boundary
 
 The repository candidate now contains migrations 039–041, pixel attribution, exact-store V2 dashboard read model and merchant store selection. Current-head GitHub validation passed on 18 November 2026. These are not deployed to the active Supabase project.
 
