@@ -267,6 +267,7 @@ configuration.
 - [Exact-store revenue attribution](docs/shopify-exact-store-revenue-attribution-v2.md)
 - [Exact-store privacy lifecycle](docs/shopify-exact-store-privacy-lifecycle-v2.md)
 - [Preparation-branch release notes](docs/release-notes-2026-11-18.md)
+- [Staged deployment and rollback runbook](docs/deployment-and-release-runbook-2026-11-18.md)
 
 **No production migration, Edge Function, Worker, n8n workflow, Shopify app
 release, Pages deployment, customer email or billing transaction was performed
