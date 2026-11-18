@@ -6,6 +6,16 @@ BEGIN;
 ALTER TABLE henvalt.shopify_mailer_provider_events_v2
  ADD COLUMN IF NOT EXISTS pixel_send_attempt_id uuid;
 
+ALTER TABLE henvalt.shopify_delivery_suppressions_v2
+ ALTER COLUMN source_send_attempt_id DROP NOT NULL,
+ ADD COLUMN source_pixel_send_attempt_id uuid,
+ ADD CONSTRAINT shopify_delivery_suppressions_v2_pixel_attempt_fkey
+  FOREIGN KEY(source_pixel_send_attempt_id,tenant_id,shopify_connection_id)
+  REFERENCES henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id)
+  ON UPDATE RESTRICT ON DELETE RESTRICT,
+ ADD CONSTRAINT shopify_delivery_suppressions_v2_one_attempt_source_check
+  CHECK ((source_send_attempt_id IS NULL) <> (source_pixel_send_attempt_id IS NULL));
+
 CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempt_provider_message_uidx
  ON henvalt.shopify_pixel_send_attempts_v2(provider_account_key,provider_message_reference)
  WHERE provider_message_reference IS NOT NULL;
@@ -24,6 +34,7 @@ CREATE OR REPLACE FUNCTION henvalt.reconcile_mailersend_pixel_provider_event_v2(
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $function$
 DECLARE v_event record; v_attempt record; v_result jsonb;
+ v_suppression_type text; v_fingerprint bytea;
 BEGIN
  IF current_setting('request.jwt.claim.role',true) IS DISTINCT FROM 'service_role' THEN
   RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501';
@@ -48,7 +59,7 @@ BEGIN
       'activity.opened','activity.clicked') THEN
   RETURN jsonb_build_object('accepted',true,'status','NOT_PIXEL_RECONCILABLE','pixel_attempt_reconciled',false);
  END IF;
- SELECT id,tenant_id,shopify_connection_id,status,provider_message_reference
+ SELECT id,tenant_id,shopify_connection_id,customer_identity_id,status,provider_message_reference
  INTO v_attempt
  FROM henvalt.shopify_pixel_send_attempts_v2
  WHERE provider_account_key=p_provider_account_key
@@ -74,8 +85,30 @@ BEGIN
  IF NOT FOUND THEN
   RETURN jsonb_build_object('accepted',false,'code','PIXEL_EVENT_CLAIM_RACE');
  END IF;
+
+ v_suppression_type:=CASE v_event.event_type
+  WHEN 'activity.unsubscribed' THEN 'UNSUBSCRIBED'
+  WHEN 'activity.spam_complaint' THEN 'SPAM_COMPLAINT'
+  WHEN 'activity.hard_bounced' THEN 'HARD_BOUNCE'
+  ELSE NULL END;
+ IF v_suppression_type IS NOT NULL THEN
+  SELECT p.recipient_fingerprint INTO v_fingerprint
+  FROM henvalt.shopify_pixel_delivery_permits_v2 p
+  WHERE p.pixel_send_attempt_id=v_attempt.id
+    AND p.tenant_id=v_attempt.tenant_id
+    AND p.shopify_connection_id=v_attempt.shopify_connection_id;
+  INSERT INTO henvalt.shopify_delivery_suppressions_v2(
+   tenant_id,shopify_connection_id,customer_identity_id,recipient_fingerprint,
+   suppression_type,source_send_attempt_id,source_pixel_send_attempt_id,source_provider_event_id
+  ) VALUES(
+   v_attempt.tenant_id,v_attempt.shopify_connection_id,v_attempt.customer_identity_id,
+   v_fingerprint,v_suppression_type,NULL,v_attempt.id,v_event.id
+  ) ON CONFLICT(shopify_connection_id,customer_identity_id,suppression_type,source_provider_event_id)
+   DO NOTHING;
+ END IF;
  RETURN jsonb_build_object('accepted',true,'status','PROCESSED',
-  'pixel_attempt_reconciled',true,'provider_cost_state','SETTLED','recipient_pii_stored',false);
+  'pixel_attempt_reconciled',true,'provider_cost_state','SETTLED',
+  'suppression_applied',v_suppression_type IS NOT NULL,'recipient_pii_stored',false);
 END;
 $function$;
 
