@@ -105,6 +105,10 @@ ALTER TABLE henvalt.shopify_pixel_delivery_permits_v2 ENABLE ROW LEVEL SECURITY;
 ALTER TABLE henvalt.shopify_pixel_send_attempts_v2 ENABLE ROW LEVEL SECURITY;
 CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempts_v2_id_scope_uidx
  ON henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id);
+ALTER TABLE henvalt.shopify_pixel_delivery_permits_v2
+ ADD CONSTRAINT shopify_pixel_permit_attempt_scope_fk
+ FOREIGN KEY(pixel_send_attempt_id,tenant_id,shopify_connection_id)
+ REFERENCES henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id) ON UPDATE RESTRICT ON DELETE RESTRICT;
 ALTER TABLE henvalt.shopify_pixel_delivery_cost_reservations_v2
  ADD CONSTRAINT shopify_pixel_cost_attempt_scope_fk
  FOREIGN KEY(pixel_send_attempt_id,tenant_id,shopify_connection_id)
