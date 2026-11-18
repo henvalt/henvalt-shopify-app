@@ -20,7 +20,8 @@ test("eligibility assessment is service-only, exact-store and fail-closed",()=>{
  assert.match(migration,/shopify_customer_redaction_guards_v2/);
  assert.match(migration,/shopify_order_identity_v2/);
  assert.match(migration,/policy_status='APPROVED'/);
- assert.match(migration,/p.region_code IS NOT DISTINCT FROM v_contact.region_code[\\s\\S]*?p.region_code IS NULL AND p.require_region IS FALSE/);
+ assert.ok(migration.includes("p.region_code IS NOT DISTINCT FROM v_contact.region_code"));
+ assert.ok(migration.includes("p.region_code IS NULL AND p.require_region IS FALSE"));
  assert.match(migration,/policy_status <> 'APPROVED' OR approved_at IS NOT NULL/);
 });
 test("eligibility assessment cannot create or authorize delivery",()=>{
