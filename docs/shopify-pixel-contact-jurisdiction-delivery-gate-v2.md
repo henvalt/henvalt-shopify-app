@@ -59,3 +59,18 @@ The current jurisdiction projector stores a two-letter country from a verified c
 ## Release boundary
 
 Cart/browse remain metadata-only and review-gated. Checkout delivery remains the only candidate delivery shape, and even that requires owner-controlled app setup, protected customer-data approval, verified sender/provider/billing configuration, and a staged runtime cutover. This document does not authorize any of those actions.
+
+
+## New branch-only evidence storage slice (migration 029)
+
+Migration `202611180029_shopify_customer_contact_evidence_v2.sql` adds append-only and current-state evidence tables keyed by exact connection and customer identity. It stores only:
+
+- whether a trusted lookup found a usable contact (`contact_available`);
+- an optional normalized country code;
+- lookup ID, evidence timestamp and fixed source label.
+
+It stores no email, street address, postcode, phone, Shopify token or raw API response. The current evidence pointer has a composite foreign key back to the same tenant, connection and customer identity. The service-only RPC rejects inactive app/store/tenant, mismatched customer identity, stale/future evidence, and altered replay of a lookup ID. Older evidence cannot replace newer evidence, including on a concurrent first-write conflict. Evidence freshness is 15 minutes.
+
+The two-store disposable SQL integration test now records Store A and Store B evidence independently, rejects using Store A's customer identity under Store B, and rejects a replayed lookup ID with altered country facts.
+
+**Important limitation:** this is the database evidence receiver, not the Shopify Admin API contact resolver. No email is fetched or stored by this migration, and no contact evidence can authorize a send. The trusted Edge Function that performs the exact-store Shopify customer lookup, validates a usable email and country, and immediately resolves email transiently at send time remains to be implemented. Until then, the evidence RPC must not be called from browser or n8n, and cart/browse remain review-only.
