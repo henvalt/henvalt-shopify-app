@@ -12,6 +12,23 @@ const json=(status:number,body:Record<string,unknown>)=>new Response(JSON.string
 });
 function equal(a:string,b:string){const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);if(x.length!==y.length)return false;let d=0;for(let i=0;i<x.length;i++)d|=x[i]^y[i];return d===0;}
 function row(v:unknown):Record<string,any>|null{return Array.isArray(v)?(v[0]&&typeof v[0]==="object"?v[0] as Record<string,any>:null):(v&&typeof v==="object"?v as Record<string,any>:null);}
+async function parseJsonLimited(request:Request,maxBytes:number):Promise<unknown>{
+ const reader=request.body?.getReader();
+ if(!reader)throw new Error("EMPTY_BODY");
+ const chunks:Uint8Array[]=[];let total=0;
+ try{
+  while(true){
+   const part=await reader.read();
+   if(part.done)break;
+   total+=part.value.byteLength;
+   if(total>maxBytes){try{await reader.cancel();}catch{}throw new Error("BODY_TOO_LARGE");}
+   chunks.push(part.value);
+  }
+ }finally{try{reader.releaseLock();}catch{}}
+ const bytes=new Uint8Array(total);let offset=0;
+ for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+ return JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
+}
 const uuid=(v:unknown)=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 async function rpc(name:string,body:Record<string,unknown>){
  const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/"+name,{method:"POST",
@@ -77,7 +94,10 @@ Deno.serve(async(req:Request)=>{
  if(!bearer||!equal(bearer,DELIVERY_AUTH_TOKEN))return json(401,{error:"unauthorized"});
  const declaredLength=Number(req.headers.get("content-length")??"0");
  if(Number.isFinite(declaredLength)&&declaredLength>160000)return json(413,{error:"request_body_too_large"});
- let parsed:unknown;try{parsed=await req.json();}catch{return json(400,{error:"invalid_json"});}
+ let parsed:unknown;try{parsed=await parseJsonLimited(req,160000);}catch(error){
+  if(error instanceof Error&&error.message==="BODY_TOO_LARGE")return json(413,{error:"request_body_too_large"});
+  return json(400,{error:"invalid_json"});
+ }
  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return json(400,{error:"invalid_pixel_delivery_request"});
  const input=parsed as Record<string,unknown>;
  const opportunityId=input.opportunity_id,subject=typeof input.subject==="string"?input.subject:"";
