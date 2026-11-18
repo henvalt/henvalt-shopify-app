@@ -89,3 +89,12 @@ A new internal-only Edge Function, `henvalt-shopify-contact-evidence-v2`, now re
 This is an evidence resolver, not a delivery resolver. It does not authorize marketing, does not make default-address country legally conclusive, does not return an email, and does not widen checkout-only permit functions to cart/browse. A delivery runtime must independently re-resolve the email transiently at send time and re-check current consent, suppression, jurisdiction policy, conversion, sender/provider and atomic merchant-wide cost reservations.
 
 Configuration required before deployment: set a high-entropy `HENVALT_CONTACT_LOOKUP_AUTH_TOKEN` as a server-side Supabase Edge Function secret, and invoke only from a trusted internal worker. Do not expose it to browser code or n8n payloads. No secret was created or read in this work.
+
+
+## Subnational region evidence (migration 031)
+
+Migration `202611180031_shopify_contact_jurisdiction_region_v2.sql` adds an optional normalized `region_code` to append-only and current contact evidence. The trusted Admin GraphQL lookup now requests Shopify's `defaultAddress.countryCodeV2` and `defaultAddress.provinceCode`, then stores only the two-letter country and bounded region code. It still discards the email after deriving the contact-available boolean and does not retain street address, postcode, phone or raw API response.
+
+The new service-role-only `record_shopify_customer_contact_evidence_v3` preserves exact connection/customer scope, timestamp ordering and lookup replay protection. The disposable two-store integration test exercises region recording and rejects changed region facts under a reused lookup ID.
+
+A Shopify default address is still evidence, not a definitive legal determination of the recipient's location or marketing-law applicability. Missing region remains missing; no location is inferred from browser, IP, locale or currency. No delivery authorization is granted.
