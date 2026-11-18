@@ -181,7 +181,7 @@ CREATE OR REPLACE FUNCTION henvalt.issue_shopify_pixel_delivery_permit_v2(
  p_opportunity_id uuid,p_provider_account_key text,p_sender_profile_id uuid,p_recipient_fingerprint_hex text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $function$
-DECLARE o record; s record; token text; pid uuid;
+DECLARE o record; s jsonb; token text; pid uuid;
 BEGIN
  IF current_setting('request.jwt.claim.role',true) IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
  IF p_opportunity_id IS NULL OR p_provider_account_key IS NULL OR p_sender_profile_id IS NULL
