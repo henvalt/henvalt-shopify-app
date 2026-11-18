@@ -276,3 +276,43 @@ identity graph to the three existing workflows, the merchant dashboard and
 the compliance lifecycle as a single controlled cutover. Merely deploying the
 candidate Edge Functions one by one would leave an incomplete or duplicated
 recovery system.
+
+
+## 6. Recovery coverage: V2 currently implements checkout only
+
+The migration code confirms that the V2 recovery pipeline is narrower than
+HENVALT's intended product scope:
+
+- `shopify_checkout_recovery_candidate_v2` is explicitly checkout-token based.
+- `shopify_recovery_opportunity_v2.opportunity_type` is constrained to
+  `ABANDONED_CHECKOUT`.
+- The candidate refresh/promotion RPCs are
+  `refresh_shopify_checkout_recovery_candidates_v2` and
+  `promote_shopify_checkout_recovery_candidates_v2`.
+- The Web Pixel V2 inbox accepts `page_viewed`, `product_viewed`,
+  `product_added_to_cart`, `product_removed_from_cart` and
+  `checkout_started`, but migration 008 deliberately stores them as
+  `PENDING_ADAPTER` and states they are not connected to canonical events,
+  recovery, delivery, attribution or billing.
+- The identity graph projection creates pseudonymous customer/session/alias
+  identities; it does not create browse/cart recovery opportunities.
+
+Therefore **V2 abandoned-cart and browse-abandonment recovery are not yet
+implemented end-to-end**. The active V1 n8n pipeline contains those flows,
+but those flows still use legacy tenant-scoped records. We must not silently
+drop them during cutover or claim that the V2 checkout pipeline covers them.
+
+The required V2 extension is a generalized, exact-store source-candidate and
+opportunity model that can represent checkout, cart and browse without
+pretending that a checkout token exists for every event. It must preserve
+consent separation: analytics permission may allow pseudonymous event
+processing, but it does not imply email-marketing consent. Browse product
+context must be explicitly validated and bounded before it is retained. The
+same exact-store contact, suppression, jurisdiction, conversion, attribution
+and billing gates must then apply to all three recovery types.
+
+**Cutover rule:** keep the existing V1 cart/browse path out of any V2 release
+until the V2 candidate model and two-store integration tests cover it. If the
+first controlled release is intentionally checkout-only, disclose that scope
+and keep the other flows disabled rather than routing them through ambiguous
+legacy records.
