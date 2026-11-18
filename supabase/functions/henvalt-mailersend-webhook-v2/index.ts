@@ -46,6 +46,23 @@ Deno.serve(async(req:Request)=>{
     const status=code==="SIGNATURE_INVALID"?401:code==="PROVIDER_ACCOUNT_INACTIVE"?403:code==="INVALID_REQUEST"||code==="INVALID_BODY"?400:503;
     return json(status,{error:code.toLowerCase()});
   }
+  // The signed inbox may initially be UNMATCHED when the send was a pixel attempt.
+  // Reconcile only from this verified event row; never trust a caller-supplied message ID.
+  const payload=JSON.parse(new TextDecoder().decode(raw));
+  const eventId=payload&&typeof payload==="object"&&payload.data&&typeof payload.data.id==="string"?payload.data.id:"";
+  if(eventId){
+    const reconciliation=await fetch(SUPABASE_URL+"/rest/v1/rpc/reconcile_mailersend_pixel_provider_event_v2",{
+      method:"POST",
+      headers:{apikey:SERVICE_ROLE_KEY,authorization:"Bearer "+SERVICE_ROLE_KEY,
+        "content-type":"application/json",accept:"application/json",
+        "accept-profile":"henvalt","content-profile":"henvalt"},
+      body:JSON.stringify({p_provider_account_key:providerAccountKey,p_provider_event_id:eventId}),
+    });
+    if(!reconciliation.ok){
+      console.error("MailerSend pixel reconciliation unavailable",reconciliation.status);
+      return json(503,{error:"pixel_provider_reconciliation_unavailable"});
+    }
+  }
   return json(200,{
     accepted:true,
     status:typeof row.status==="string"?row.status:"ACCEPTED",
