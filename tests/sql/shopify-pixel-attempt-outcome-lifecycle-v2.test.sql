@@ -7,7 +7,7 @@ DECLARE
  v_connection uuid; v_customer uuid; v_provider text; v_app_key text;
  v_session uuid; v_inbox uuid; v_candidate uuid; v_opportunity uuid; v_attempt uuid;
  v_result jsonb; v_reservation_status text;
- v_source_delivery uuid; v_order_id uuid; v_attr_id uuid; v_store_a uuid;
+ v_source_delivery uuid; v_order_id uuid; v_attr_id uuid; v_attributed_order_id uuid; v_store_a uuid;
  v_provider_event_id text; v_provider_message_id text;
  v_policy_result jsonb; v_dashboard jsonb;
 BEGIN
@@ -387,6 +387,7 @@ BEGIN
  IF v_attr_id IS NULL THEN
   RAISE EXCEPTION 'Paid pixel recovery order was not attributed after delivered evidence';
  END IF;
+ v_attributed_order_id:=v_order_id;
  IF NOT EXISTS(
   SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
   WHERE id=v_attr_id AND status='CONFIRMED'
@@ -438,6 +439,47 @@ BEGIN
    OR (v_dashboard->'metrics'->>'recoveredOrders')::integer<>0
    OR (v_dashboard->'metrics'->>'revenueRecovered')::numeric<>0 THEN
   RAISE EXCEPTION 'Store B pixel attribution leaked into Store A dashboard: %',v_dashboard;
+ END IF;
+
+
+ -- Refunds reconcile through the same exact-store attribution row. A full
+ -- refund reverses the recovered revenue and removes it from dashboard totals.
+ INSERT INTO henvalt.shopify_order_refund_adjustments_v2(
+  tenant_id,shopify_connection_id,order_identity_id,shopify_refund_id,
+  refund_amount,currency,refunded_at,source_delivery_id
+ ) VALUES(v_tenant,v_connection,v_attributed_order_id,
+  'pixel-refund-partial-'||gen_random_uuid()::text,25.50,'USD',now(),v_source_delivery);
+ IF NOT EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
+  WHERE id=v_attr_id AND status='CONFIRMED'
+    AND refunded_amount=25.50 AND net_recovered_amount=100.00
+ ) THEN
+  RAISE EXCEPTION 'Pixel attribution did not reduce net revenue after partial refund';
+ END IF;
+ UPDATE henvalt.shopify_order_identity_v2
+ SET financial_status='partially_refunded',updated_at=now()
+ WHERE id=v_attributed_order_id;
+ INSERT INTO henvalt.shopify_order_refund_adjustments_v2(
+  tenant_id,shopify_connection_id,order_identity_id,shopify_refund_id,
+  refund_amount,currency,refunded_at,source_delivery_id
+ ) VALUES(v_tenant,v_connection,v_attributed_order_id,
+  'pixel-refund-full-'||gen_random_uuid()::text,100.00,'USD',now(),v_source_delivery);
+ UPDATE henvalt.shopify_order_identity_v2
+ SET financial_status='refunded',updated_at=now()
+ WHERE id=v_attributed_order_id;
+ IF NOT EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
+  WHERE id=v_attr_id AND status='REVERSED'
+    AND refunded_amount=125.50 AND net_recovered_amount=0
+ ) THEN
+  RAISE EXCEPTION 'Pixel attribution did not reverse after full refund';
+ END IF;
+ v_dashboard:=henvalt.control_plane_dashboard_summary_v2(
+  v_connection,now()-interval '1 day',now()
+ );
+ IF (v_dashboard->'metrics'->>'recoveredOrders')::integer<>0
+   OR (v_dashboard->'metrics'->>'revenueRecovered')::numeric<>0 THEN
+  RAISE EXCEPTION 'Dashboard continued to count fully refunded pixel revenue: %',v_dashboard;
  END IF;
 
 END;
