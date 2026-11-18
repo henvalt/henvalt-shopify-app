@@ -1,5 +1,4 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { isSingleActiveStoreScope } from "../_shared/dashboard-store-scope.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -114,17 +113,6 @@ Deno.serve(async (req: Request) => {
       return out(409, { error: "shop_not_connected" });
     }
 
-    // The current summary RPC aggregates legacy rows by tenant. Do not expose
-    // those totals as shop-specific when any second connection exists, even
-    // if that second connection is currently inactive.
-    const tenantConnections = await rest(
-      "shopify_connections?select=id,active&tenant_id=eq." +
-      encodeURIComponent(connection.tenant_id) + "&limit=2",
-    );
-    if (!isSingleActiveStoreScope(tenantConnections, connection.connection_id)) {
-      return out(409, { error: "store_specific_metrics_unavailable" });
-    }
-
     const url = new URL(req.url);
     const valid = (value: string | null) =>
       value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
@@ -136,8 +124,8 @@ Deno.serve(async (req: Request) => {
       return out(400, { error: "invalid_date_range" });
     }
 
-    const summary = await rpc("control_plane_dashboard_summary", {
-      p_shop_domain: shop,
+    const summary = await rpc("control_plane_dashboard_summary_v2", {
+      p_shopify_connection_id: connection.connection_id,
       p_from: from + "T00:00:00.000Z",
       p_to: to + "T00:00:00.000Z",
     });
