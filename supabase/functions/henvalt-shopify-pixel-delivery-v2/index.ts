@@ -145,6 +145,9 @@ Deno.serve(async(req:Request)=>{
   // Recipient email exists only in this request's memory and provider request body.
   let providerResponse:Response;
   try{
+   // From this point the provider may accept the message even if a later
+   // response or ledger operation fails. Preserve the cost reservation.
+   providerSubmissionStarted=true;
    providerResponse=await fetch("https://api.mailersend.com/v1/email",{
     method:"POST",headers:{authorization:"Bearer "+providerToken,"content-type":"application/json","x-requested-with":"XMLHttpRequest"},
     body:JSON.stringify({from:{email:senderEmail,name:senderName},to:[{email:finalCustomer.email}],
@@ -169,7 +172,13 @@ Deno.serve(async(req:Request)=>{
   await recordAttempt(attemptId,"FAILED");
   return json(502,{accepted:false,error:"provider_submission_rejected",provider_status:providerResponse.status,recipient_email_returned:false});
  }catch{
-  if(attemptId){try{await recordAttempt(attemptId,"FAILED");}catch{}}
-  return json(503,{error:"pixel_delivery_boundary_unavailable",recipient_email_returned:false});
+  // After the provider request begins, a later failure is ambiguous. Never
+  // release its reservation or make the attempt eligible for automatic retry.
+  if(attemptId){try{await recordAttempt(attemptId,providerSubmissionStarted?"AMBIGUOUS":"FAILED");}catch{}}
+  return json(providerSubmissionStarted?202:503,{
+   error:providerSubmissionStarted?"provider_outcome_requires_reconciliation":"pixel_delivery_boundary_unavailable",
+   status:providerSubmissionStarted?"ambiguous_provider_submission":"not_submitted",
+   recipient_email_returned:false
+  });
  }
 });
