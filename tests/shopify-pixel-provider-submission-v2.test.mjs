@@ -32,7 +32,7 @@ test("provider submission follows a final database gate and is reconciled withou
  assert.match(edge,/recordAttempt\(attemptId,"AMBIGUOUS"\)/);
  assert.match(edge,/recordAttempt\(attemptId,"SUBMITTED",messageRef\)/);
  assert.match(edge,/recordAttempt\(attemptId,"FAILED"\)/);
- assert.match(edge,/status:"ambiguous_provider_submission"/);
+ assert.match(edge,/status:"ambiguous_provider_submission"/);\n assert.match(edge,/providerResponse\.status>=500\|\|providerResponse\.status===408/);
 });
 test("final gate is service-only, locks the attempt/reservation and rechecks consent eligibility and suppression",()=>{
  assert.match(sql,/request\.jwt\.claim\.role[\s\S]*?service_role_required/);
