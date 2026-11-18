@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { isSingleActiveStoreScope } from "../_shared/dashboard-store-scope.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -54,11 +55,13 @@ Deno.serve(async (req: Request) => {
       return reply(403, { error: "one_active_tenant_membership_required" });
     }
     const tenantId = membership[0].tenant_id;
-    const connections = await rest("shopify_connections?select=shop_domain,active,tenants!inner(status)&tenant_id=eq." +
-      encodeURIComponent(tenantId) + "&active=eq.true&tenants.status=eq.ACTIVE&limit=2");
-    if (!Array.isArray(connections) || connections.length !== 1 ||
+    const connections = await rest("shopify_connections?select=id,shop_domain,active,tenants!inner(status)&tenant_id=eq." +
+      encodeURIComponent(tenantId) + "&tenants.status=eq.ACTIVE&limit=2");
+    // The legacy summary RPC aggregates by tenant. Only call it when the tenant
+    // has exactly one connection in total, including inactive historical stores.
+    if (!isSingleActiveStoreScope(connections) ||
         typeof connections[0].shop_domain !== "string") {
-      return reply(409, { error: "active_shop_connection_required" });
+      return reply(409, { error: "store_specific_metrics_unavailable" });
     }
 
     const u = new URL(req.url);
