@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 
 const sql=readFileSync(new URL("../supabase/migrations/202611180042_shopify_recovery_work_claims_v2.sql",import.meta.url),"utf8");
+const materializer=readFileSync(new URL("../supabase/migrations/202611180043_shopify_checkout_intervention_materializer_v2.sql",import.meta.url),"utf8");
 const integration=readFileSync(new URL("./sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql",import.meta.url),"utf8");
 const concurrency=readFileSync(new URL("./sql/shopify-recovery-work-claims-concurrency-v2.test.sh",import.meta.url),"utf8");
 
@@ -52,4 +53,17 @@ test("parallel workers race against one durable work item and exactly one lease 
  assert.match(concurrency,/count\(DISTINCT c\.worker_id\)/);
  assert.match(concurrency,/"1:1:1"/);
  assert.match(concurrency,/shopify_recovery_work_claims_v2/);
+});
+
+test("checkout interventions are materialized from exact-store eligible opportunities without authorizing delivery",()=>{
+ assert.match(materializer,/o\.status='CONTACT_RESOLUTION_PENDING'/);
+ assert.match(materializer,/c\.state='READY_FOR_CONTACT_RESOLUTION'/);
+ assert.match(materializer,/ch\.checkout_status='OPEN'/);
+ assert.match(materializer,/ch\.shopify_checkout_token=c\.checkout_token/);
+ assert.match(materializer,/FOR UPDATE OF o,c,ch SKIP LOCKED/);
+ assert.match(materializer,/ON CONFLICT\(opportunity_id,step_number\) DO NOTHING/);
+ assert.match(materializer,/'delivery_authorized',false/);
+ assert.match(materializer,/'provider_called',false/);
+ assert.match(materializer,/GRANT EXECUTE ON FUNCTION henvalt\.materialize_shopify_checkout_interventions_v2\(integer\)[\s\S]*?TO service_role/);
+ assert.match(integration,/Checkout intervention materializer did not create the exact-store row/);
 });
