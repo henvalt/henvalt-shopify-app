@@ -56,3 +56,11 @@ test("worker preserves AMBIGUOUS cost state when a post-request ledger or respon
  assert.ok(outerCatch>providerFetch,"post-submission failures must reconcile as ambiguous, not release cost");
  assert.match(edge,/provider_outcome_requires_reconciliation/);
 });
+
+test("worker enforces the body limit while streaming even when Content-Length is absent",()=>{
+ assert.match(edge,/async function parseJsonLimited\(request:Request,maxBytes:number\)/);
+ assert.match(edge,/request\.body\?\.getReader\(\)/);
+ assert.match(edge,/total>maxBytes/);
+ assert.match(edge,/reader\.cancel\(\)/);
+ assert.match(edge,/parseJsonLimited\(req,160000\)/);
+});
