@@ -175,6 +175,18 @@ BEGIN
   END IF;
 
   v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v2(
+    v_conn_a,v_customer_a,true,'US',pg_catalog.now()-interval '1 minute',gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'true'
+     OR v_evidence_result->>'current_updated'<>'false' THEN
+    RAISE EXCEPTION 'Older contact evidence unexpectedly replaced current evidence: %',v_evidence_result;
+  END IF;
+  IF (SELECT country_code FROM henvalt.shopify_customer_contact_evidence_current_v2
+      WHERE shopify_connection_id=v_conn_a AND customer_identity_id=v_customer_a)<>'GB' THEN
+    RAISE EXCEPTION 'Older contact evidence replaced the current country';
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v2(
     v_conn_a,v_customer_a,true,'US',pg_catalog.now(),v_lookup_id
   );
   IF v_evidence_result->>'accepted'<>'false'
