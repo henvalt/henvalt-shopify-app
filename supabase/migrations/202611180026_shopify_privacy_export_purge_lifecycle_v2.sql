@@ -160,7 +160,7 @@ BEGIN
   ) VALUES (
     v_artifact.receipt_id, v_artifact.tenant_id, v_artifact.connection_id,
     v_artifact.app_key, v_artifact.shop_domain, v_artifact.id,
-    'ARTIFACT_PURGED', 'PRIVATE_OBJECT_ABSENCE_CONFIRMED', extensions.gen_random_uuid()
+    'ARTIFACT_PURGED', 'PRIVATE_OBJECT_ABSENCE_CONFIRMED', pg_catalog.gen_random_uuid()
   );
 
   RETURN true;
@@ -214,7 +214,7 @@ BEGIN
   ) VALUES (
     v_artifact.receipt_id, v_artifact.tenant_id, v_artifact.connection_id,
     v_artifact.app_key, v_artifact.shop_domain, v_artifact.id,
-    'ARTIFACT_PURGE_FAILED', p_failure_code, extensions.gen_random_uuid()
+    'ARTIFACT_PURGE_FAILED', p_failure_code, pg_catalog.gen_random_uuid()
   );
 
   RETURN true;
