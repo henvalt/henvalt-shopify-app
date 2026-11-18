@@ -1,6 +1,6 @@
 # HENVALT exact-store recovered-revenue attribution V2
 
-**Status:** candidate implementation in migrations 021–024; disposable PostgreSQL integration passed in CI run #335 for migrations 001–023. Migration 024 adds provider-event reconciliation for ambiguous delivery costs and is under current-head validation. All work is branch-only; no production billing or data changed.
+**Status:** candidate implementation across migrations 021–041. The checkout attribution/refund foundation has earlier disposable PostgreSQL validation; migrations 040–041 add pixel cart/browse attribution and the exact-store V2 dashboard read model, with full current-head validation pending. All work is branch-only; no production billing or data changed.
 
 ## 1. Implemented evidence chain
 
@@ -61,6 +61,36 @@ Still required before launch:
 - obtain the merchant's explicit approved performance percentage and fee basis;
 - implement and reconcile actual billing collection only after legal/merchant approval.
 
-## 6. Explicit non-actions
+
+## 6. Pixel cart/browse attribution (migration 040)
+
+Cart and browse opportunities now use a separate attribution lineage; they do not fabricate or borrow a checkout identity.
+
+A pixel opportunity can be attributed only when all of the following hold:
+- the Shopify order is projected under the same immutable store connection;
+- the order has an exact Shopify customer identity matching the pixel candidate and pixel send attempt;
+- the order has no checkout-token match, so the pixel path cannot compete with checkout attribution;
+- the order is paid or partially refunded, has a valid positive Shopify total price and currency, and is not cancelled;
+- the pixel send attempt is SUBMITTED and has a signed MailerSend provider event already reconciled to that exact attempt;
+- the provider touch is before the order and inside the explicitly configured attribution window;
+- delivery-confirmation policy is honored: when required, only `activity.delivered` qualifies; otherwise a reconciled `activity.sent` or delivered event qualifies.
+
+A sent/delivered event is evidence of a recovery touch, not recovered revenue. It never creates an attribution or fee by itself. The paid Shopify order is the revenue evidence. The attribution row stores `pixel_send_attempt_id`; `checkout_identity_id` and the legacy checkout `send_attempt_id` remain NULL. The same refund reconciler then reduces net pixel-attributed revenue and reverses a fully refunded order.
+
+The candidate SQL integration test covers a sent-only non-attribution, delivered-event qualification, same-customer/same-store order attribution without checkout identity, one-opportunity/one-order protection, and dashboard isolation. The test fixtures are rolled back.
+
+## 7. Exact-store V2 dashboard read model (migration 041)
+
+The old dashboard summary reads legacy tenant-wide tables and is not a source of truth for the new V2 recovery engine. The candidate dashboard now calls `control_plane_dashboard_summary_v2` with an immutable `shopify_connection_id`. It reads V2 opportunities, send attempts, confirmed attributions and refund-adjusted net revenue only. It does not mix the legacy tenant-wide ledger into store-specific totals.
+
+- Revenue and recovered-order counts come only from CONFIRMED V2 attribution rows.
+- Pixel messages count only when a signed provider event has been reconciled to the attempt; checkout messages use provider-accepted attempt states.
+- Refund reconciliation removes fully reversed amounts from confirmed dashboard totals.
+- When more than one currency exists in a store's selected period, the API returns a mixed-currency signal rather than summing unlike currencies. The UI labels the total accordingly and formats activity amounts using their own currency.
+- The merchant dashboard returns active stores for the authenticated tenant and requires an explicit store selection when more than one exists. The Shopify-session dashboard is already bound to the exact store from its validated session token.
+
+These are candidate branch changes only. They do not replace or deploy the live summary RPC.
+
+## 8. Explicit non-actions
 
 No production attribution policy was enabled. No production Supabase migration/function or billing row was changed. No performance percentage was selected. No Paddle transaction, Shopify charge, customer email or provider send was initiated by this work.
