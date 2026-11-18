@@ -81,3 +81,10 @@ test("cart and browse promotion creates metadata only, not interventions or deli
   assert.match(deliveryMigration, /JOIN henvalt\.shopify_checkout_recovery_candidate_v2 c/);
   assert.match(deliveryMigration, /JOIN henvalt\.shopify_checkout_identity_v2 ch/);
 });
+
+
+test("pixel opportunities remain review-gated even when a customer identity is present", () => {
+  assert.match(opportunityMigration, /'REVIEW_REQUIRED' AS initial_status/);
+  assert.doesNotMatch(opportunityMigration, /CASE WHEN c\.customer_identity_id IS NOT NULL[\s\S]*?CONTACT_RESOLUTION_PENDING/);
+  assert.match(opportunityMigration, /pixel customer identity is not proof of a deliverable contact/);
+});
