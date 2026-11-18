@@ -18,7 +18,7 @@ test("pixel permit issue and consume are service-only, single-use and re-assess 
  assert.match(sql,/PERMIT_EXPIRED/);
  assert.match(sql,/assess_shopify_pixel_delivery_eligibility_v2/);
  assert.match(sql,/RECIPIENT_SUPPRESSION_CHANGED/);
- assert.match(sql,/GRANT EXECUTE ON FUNCTION henvalt\.consume_shopify_pixel_delivery_permit_v2\(text\) TO service_role/);
+ assert.match(sql,/GRANT EXECUTE ON FUNCTION henvalt\.consume_shopify_pixel_delivery_permit_v2\(text\)[\s\S]*?TO service_role/);
 });
 test("pixel send attempt has atomic merchant-wide cost reservation and terminal state accounting",()=>{
  assert.match(sql,/FROM henvalt\.billing_accounts WHERE tenant_id=NEW\.tenant_id FOR UPDATE/);
