@@ -74,3 +74,18 @@ It stores no email, street address, postcode, phone, Shopify token or raw API re
 The two-store disposable SQL integration test now records Store A and Store B evidence independently, rejects using Store A's customer identity under Store B, and rejects a replayed lookup ID with altered country facts.
 
 **Important limitation:** this is the database evidence receiver, not the Shopify Admin API contact resolver. No email is fetched or stored by this migration, and no contact evidence can authorize a send. The trusted Edge Function that performs the exact-store Shopify customer lookup, validates a usable email and country, and immediately resolves email transiently at send time remains to be implemented. Until then, the evidence RPC must not be called from browser or n8n, and cart/browse remain review-only.
+
+
+## Trusted Admin customer evidence resolver (migration 030)
+
+A new internal-only Edge Function, `henvalt-shopify-contact-evidence-v2`, now resolves contact availability and default-address country for a supplied exact-store customer identity.
+
+- The caller supplies only `shopify_connection_id` and `customer_identity_id`; the endpoint requires the dedicated `HENVALT_CONTACT_LOOKUP_AUTH_TOKEN`.
+- A service-role-only SQL context resolver binds the customer identity to the exact connection, verifies active tenant/store/app state, `read_customers` scope, expiring offline token state, and reads the matching Vault access token.
+- The Edge Function queries Shopify Admin GraphQL for the exact expected Customer GID and rejects a returned ID mismatch.
+- Email is used only to derive `contact_available`; it is not logged, persisted, or returned. Country is reduced to a two-letter code and recorded through migration 029's append-only evidence RPC.
+- The response explicitly says `send_authorized: false` and `recipient_email_returned: false`.
+
+This is an evidence resolver, not a delivery resolver. It does not authorize marketing, does not make default-address country legally conclusive, does not return an email, and does not widen checkout-only permit functions to cart/browse. A delivery runtime must independently re-resolve the email transiently at send time and re-check current consent, suppression, jurisdiction policy, conversion, sender/provider and atomic merchant-wide cost reservations.
+
+Configuration required before deployment: set a high-entropy `HENVALT_CONTACT_LOOKUP_AUTH_TOKEN` as a server-side Supabase Edge Function secret, and invoke only from a trusted internal worker. Do not expose it to browser code or n8n payloads. No secret was created or read in this work.
