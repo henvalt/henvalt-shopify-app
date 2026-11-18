@@ -36,7 +36,7 @@ test("provider submission follows a final database gate and is reconciled withou
 });
 test("final gate is service-only, locks the attempt/reservation and rechecks consent eligibility and suppression",()=>{
  assert.match(sql,/request\.jwt\.claim\.role[\s\S]*?service_role_required/);
- assert.match(sql,/FOR UPDATE OF a,p,r/);
+ assert.match(sql,/FOR UPDATE OF attempt_row,permit_row,reservation_row/);
  assert.match(sql,/reservation_status<>'RESERVED'/);
  assert.match(sql,/assess_shopify_pixel_delivery_eligibility_v2\(a\.opportunity_id\)/);
  assert.match(sql,/shopify_delivery_suppressions_v2/);
