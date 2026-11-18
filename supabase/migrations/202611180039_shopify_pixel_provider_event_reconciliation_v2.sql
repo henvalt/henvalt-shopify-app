@@ -10,14 +10,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempt_provider_message_ui
  ON henvalt.shopify_pixel_send_attempts_v2(provider_account_key,provider_message_reference)
  WHERE provider_message_reference IS NOT NULL;
 
+CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempts_id_tenant_connection_uidx
+ ON henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id);
+
 ALTER TABLE henvalt.shopify_mailer_provider_events_v2
  ADD CONSTRAINT shopify_mailer_provider_events_pixel_attempt_fkey
  FOREIGN KEY(pixel_send_attempt_id,tenant_id,shopify_connection_id)
  REFERENCES henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id)
  ON UPDATE RESTRICT ON DELETE RESTRICT;
-
-CREATE UNIQUE INDEX IF NOT EXISTS shopify_pixel_send_attempts_id_tenant_connection_uidx
- ON henvalt.shopify_pixel_send_attempts_v2(id,tenant_id,shopify_connection_id);
 
 CREATE OR REPLACE FUNCTION henvalt.reconcile_mailersend_pixel_provider_event_v2(
  p_provider_account_key text,p_provider_event_id text
@@ -83,4 +83,48 @@ REVOKE ALL ON FUNCTION henvalt.reconcile_mailersend_pixel_provider_event_v2(text
  FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.reconcile_mailersend_pixel_provider_event_v2(text,text)
  TO service_role;
+
+-- Retain a provider message reference on AMBIGUOUS outcomes when MailerSend returned
+-- one but the durable SUBMITTED write could not be confirmed. This enables signed-event reconciliation.
+CREATE OR REPLACE FUNCTION henvalt.record_shopify_pixel_send_attempt_result_v2(
+ p_send_attempt_id uuid,p_status text,p_provider_message_reference text DEFAULT NULL
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $function$
+DECLARE v_attempt record;
+BEGIN
+ IF current_setting('request.jwt.claim.role',true) IS DISTINCT FROM 'service_role' THEN
+  RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501';
+ END IF;
+ IF p_send_attempt_id IS NULL OR p_status IS NULL
+   OR p_status NOT IN ('SUBMITTED','FAILED','AMBIGUOUS')
+   OR (p_provider_message_reference IS NOT NULL AND length(p_provider_message_reference)>240)
+   OR (p_status='SUBMITTED' AND (p_provider_message_reference IS NULL OR pg_catalog.btrim(p_provider_message_reference)=''))
+   OR (p_status='FAILED' AND p_provider_message_reference IS NOT NULL) THEN
+  RETURN jsonb_build_object('recorded',false,'code','INVALID_RESULT');
+ END IF;
+ SELECT * INTO v_attempt FROM henvalt.shopify_pixel_send_attempts_v2
+ WHERE id=p_send_attempt_id FOR UPDATE;
+ IF NOT FOUND THEN RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_NOT_FOUND'); END IF;
+ IF v_attempt.status NOT IN ('AUTHORIZED','AMBIGUOUS')
+   OR (v_attempt.status='AMBIGUOUS' AND p_status NOT IN ('SUBMITTED','AMBIGUOUS'))
+   OR (v_attempt.status='AMBIGUOUS' AND p_status='AMBIGUOUS'
+       AND (v_attempt.provider_message_reference IS NOT NULL OR p_provider_message_reference IS NULL)) THEN
+  RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_ALREADY_FINALIZED');
+ END IF;
+ UPDATE henvalt.shopify_pixel_send_attempts_v2
+ SET status=p_status,
+     provider_message_reference=CASE WHEN p_status IN ('SUBMITTED','AMBIGUOUS')
+       THEN coalesce(v_attempt.provider_message_reference,p_provider_message_reference) ELSE NULL END,
+     updated_at=pg_catalog.now()
+ WHERE id=v_attempt.id;
+ RETURN jsonb_build_object('recorded',true,'status',p_status,
+  'provider_cost_state',CASE WHEN p_status='SUBMITTED' THEN 'SETTLED'
+    WHEN p_status='FAILED' THEN 'RELEASED' ELSE 'RESERVED' END);
+END;
+$function$;
+REVOKE ALL ON FUNCTION henvalt.record_shopify_pixel_send_attempt_result_v2(uuid,text,text)
+ FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.record_shopify_pixel_send_attempt_result_v2(uuid,text,text)
+ TO service_role;
+
 COMMIT;
