@@ -348,6 +348,29 @@ BEGIN
 
   PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
 
+  -- Duplicate issuance is serialized on the opportunity row and must not mint
+  -- a second active permit for the same recovery opportunity.
+  v_permit_result:=henvalt.issue_shopify_pixel_delivery_permit_v2(
+    v_pixel_opportunity_id,v_provider_key,v_sender_profile_id,repeat('a',64)
+  );
+  IF v_permit_result->>'authorized'<>'false'
+     OR v_permit_result->>'code'<>'PIXEL_DELIVERY_ALREADY_CLAIMED' THEN
+    RAISE EXCEPTION 'Duplicate active permit issuance was not rejected: %',v_permit_result;
+  END IF;
+
+  -- Expiry is enforced at consume time, independently of issuance-time checks.
+  UPDATE henvalt.shopify_pixel_delivery_permits_v2
+     SET expires_at=pg_catalog.now()-interval '1 second'
+   WHERE opportunity_id=v_pixel_opportunity_id AND consumed_at IS NULL;
+  v_consume_result:=henvalt.consume_shopify_pixel_delivery_permit_v2(v_permit_token);
+  IF v_consume_result->>'consumed'<>'false'
+     OR v_consume_result->>'code'<>'PERMIT_EXPIRED' THEN
+    RAISE EXCEPTION 'Expired pixel permit was not rejected: %',v_consume_result;
+  END IF;
+  UPDATE henvalt.shopify_pixel_delivery_permits_v2
+     SET expires_at=pg_catalog.now()+interval '2 minutes'
+   WHERE opportunity_id=v_pixel_opportunity_id AND consumed_at IS NULL;
+
   -- Adverse race: consent is revoked after permit issuance but before consume.
   -- The old permit must become unusable without creating an attempt or reserving cost.
   v_evidence_result:=henvalt.record_shopify_customer_marketing_consent_lookup_v2(
