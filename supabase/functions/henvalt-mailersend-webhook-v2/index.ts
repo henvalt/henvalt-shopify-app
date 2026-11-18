@@ -62,6 +62,12 @@ Deno.serve(async(req:Request)=>{
       console.error("MailerSend pixel reconciliation unavailable",reconciliation.status);
       return json(503,{error:"pixel_provider_reconciliation_unavailable"});
     }
+    const reconciliationResult=await reconciliation.json().catch(()=>null);
+    const reconciliationRow=Array.isArray(reconciliationResult)?reconciliationResult[0]:reconciliationResult;
+    if(!reconciliationRow||typeof reconciliationRow.accepted!=="boolean"||reconciliationRow.accepted!==true){
+      console.error("MailerSend pixel reconciliation rejected");
+      return json(503,{error:"pixel_provider_reconciliation_rejected"});
+    }
   }
   return json(200,{
     accepted:true,
