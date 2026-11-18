@@ -102,7 +102,7 @@ jobs:
             supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql \
             supabase/migrations/202611180037_shopify_pixel_attempt_outcome_reconciliation_v2.sql \
             supabase/migrations/202611180038_shopify_pixel_stale_attempt_reconciler_v2.sql \
-            supabase/migrations/202611180039_shopify_pixel_provider_event_reconciliation_v2.sql \\
+            supabase/migrations/202611180039_shopify_pixel_provider_event_reconciliation_v2.sql \
             supabase/migrations/202611180040_shopify_pixel_recovery_attribution_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
@@ -184,12 +184,7 @@ jobs:
           PGPASSWORD: postgres
         run: bash tests/sql/shopify-delivery-cost-reservation-concurrency-v2.test.sh
 
-      - name: Exercise pixel attempt outcome and cost reservation lifecycle
-        env:
-          PGPASSWORD: postgres
-        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql
-
-      - name: Exercise pixel recovery to paid-order attribution lifecycle
+      - name: Exercise pixel delivery outcome, attribution and cost lifecycle
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql
