@@ -7,9 +7,9 @@ DECLARE
  v_connection uuid; v_customer uuid; v_provider text; v_app_key text;
  v_session uuid; v_inbox uuid; v_candidate uuid; v_opportunity uuid; v_attempt uuid;
  v_result jsonb; v_reservation_status text;
- v_source_delivery uuid; v_order_id uuid; v_attr_id uuid;
+ v_source_delivery uuid; v_order_id uuid; v_attr_id uuid; v_store_a uuid;
  v_provider_event_id text; v_provider_message_id text;
- v_policy_result jsonb;
+ v_policy_result jsonb; v_dashboard jsonb;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key FROM henvalt.shopify_connections
   WHERE tenant_id=v_tenant AND shop_domain='store-b.myshopify.com';
@@ -415,6 +415,29 @@ BEGIN
  IF EXISTS(SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
    WHERE order_identity_id=v_order_id) THEN
   RAISE EXCEPTION 'One pixel opportunity was attributed to more than one order';
+ END IF;
+
+
+ -- The V2 dashboard reads only this immutable store scope and the confirmed
+ -- attribution ledger; it does not blend legacy tenant-wide revenue.
+ v_dashboard:=henvalt.control_plane_dashboard_summary_v2(
+  v_connection,now()-interval '1 day',now()
+ );
+ IF v_dashboard->>'linked'<>'true'
+   OR (v_dashboard->'metrics'->>'recoveredOrders')::integer<>1
+   OR (v_dashboard->'metrics'->>'revenueRecovered')::numeric<>125.50
+   OR (v_dashboard->'metrics'->>'messagesSent')::integer<1 THEN
+  RAISE EXCEPTION 'V2 dashboard did not report exact-store confirmed pixel recovery: %',v_dashboard;
+ END IF;
+ SELECT id INTO v_store_a FROM henvalt.shopify_connections
+  WHERE tenant_id=v_tenant AND shop_domain='store-a.myshopify.com';
+ v_dashboard:=henvalt.control_plane_dashboard_summary_v2(
+  v_store_a,now()-interval '1 day',now()
+ );
+ IF v_dashboard->>'linked'<>'true'
+   OR (v_dashboard->'metrics'->>'recoveredOrders')::integer<>0
+   OR (v_dashboard->'metrics'->>'revenueRecovered')::numeric<>0 THEN
+  RAISE EXCEPTION 'Store B pixel attribution leaked into Store A dashboard: %',v_dashboard;
  END IF;
 
 END;
