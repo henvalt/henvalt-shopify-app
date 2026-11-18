@@ -26,6 +26,7 @@ async function rest(path: string, method = "GET", body?: unknown) {
       ...(body === undefined ? {} : { Prefer: "return=representation" }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(10000),
   });
   if (!response.ok) throw new Error("DATABASE_LOOKUP_FAILED");
   return await response.json();
@@ -44,6 +45,7 @@ Deno.serve(async (req: Request) => {
     // Validate the Supabase access token against Auth; do not trust decoded JWT claims.
     const authResponse = await fetch(SUPABASE_URL + "/auth/v1/user", {
       headers: { apikey: ANON_KEY, authorization: "Bearer " + token },
+      signal: AbortSignal.timeout(10000),
     });
     if (!authResponse.ok) return reply(401, { error: "invalid_session" });
     const user = await authResponse.json();
@@ -103,6 +105,7 @@ Deno.serve(async (req: Request) => {
         p_from: from + "T00:00:00.000Z",
         p_to: to + "T00:00:00.000Z",
       }),
+      signal: AbortSignal.timeout(12000),
     });
     if (!summaryResponse.ok) throw new Error("SUMMARY_QUERY_FAILED");
     const summary = await summaryResponse.json();
