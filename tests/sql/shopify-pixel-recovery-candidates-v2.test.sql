@@ -245,6 +245,37 @@ BEGIN
     RAISE EXCEPTION 'Cart/browse did not fail closed without approved jurisdiction policy: %',v_eligibility_result;
   END IF;
 
+  -- Fresh Admin API marketing-consent evidence is append-only and exact-store scoped.
+  v_lookup_id := gen_random_uuid();
+  v_evidence_result := henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_a,v_customer_a,'SUBSCRIBED',pg_catalog.now()-interval '10 minutes',
+    pg_catalog.clock_timestamp(),v_lookup_id
+  );
+  IF v_evidence_result->>'accepted'<>'true'
+     OR v_evidence_result->>'delivery_authorized'<>'false' THEN
+    RAISE EXCEPTION 'Fresh Admin API consent evidence was not safely recorded: %',v_evidence_result;
+  END IF;
+  IF (SELECT marketing_state FROM henvalt.shopify_customer_marketing_consent_lookup_current_v2
+      WHERE shopify_connection_id=v_conn_a AND customer_identity_id=v_customer_a)<>'SUBSCRIBED' THEN
+    RAISE EXCEPTION 'Admin API consent state was not projected to the current pointer';
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_b,v_customer_a,'SUBSCRIBED',pg_catalog.now(),pg_catalog.clock_timestamp(),gen_random_uuid()
+  );
+  IF v_evidence_result->>'accepted'<>'false'
+     OR v_evidence_result->>'code'<>'CUSTOMER_IDENTITY_SCOPE_MISMATCH' THEN
+    RAISE EXCEPTION 'Cross-store consent evidence was accepted: %',v_evidence_result;
+  END IF;
+
+  v_evidence_result := henvalt.record_shopify_customer_marketing_consent_lookup_v2(
+    v_conn_a,v_customer_a,'UNSUBSCRIBED',pg_catalog.now(),pg_catalog.clock_timestamp(),v_lookup_id
+  );
+  IF v_evidence_result->>'accepted'<>'false'
+     OR v_evidence_result->>'code'<>'LOOKUP_ID_REPLAY_MISMATCH' THEN
+    RAISE EXCEPTION 'Consent lookup replay with altered state was not rejected: %',v_evidence_result;
+  END IF;
+
   IF EXISTS (
     SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
     JOIN henvalt.shopify_recovery_opportunity_v2 o ON o.id=i.opportunity_id
