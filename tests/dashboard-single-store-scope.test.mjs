@@ -11,6 +11,10 @@ const merchantDashboard = readFileSync(
   new URL("../supabase/functions/henvalt-merchant-dashboard/index.ts", import.meta.url),
   "utf8",
 );
+const dashboardHtml = readFileSync(
+  new URL("../dashboard/index.html", import.meta.url),
+  "utf8",
+);
 
 test("dashboard scope accepts only one active connection and the selected connection", () => {
   assert.equal(isSingleActiveStoreScope([{ id: "store-a", active: true }]), true);
@@ -47,4 +51,12 @@ test("merchant dashboard requires an explicit store selection when multiple acti
   assert.ok(merchantDashboard.includes("p_shopify_connection_id: selectedConnection.id"));
   assert.ok(!merchantDashboard.includes("isSingleActiveStoreScope"));
   assert.ok(!merchantDashboard.includes('control_plane_dashboard_summary"'));
+});
+
+test("dashboard UI selects one store and never combines unlike currencies", () => {
+  assert.ok(dashboardHtml.includes('id="storeSelect"'));
+  assert.ok(dashboardHtml.includes("shopify_connection_id="));
+  assert.ok(dashboardHtml.includes("store_selection_required"));
+  assert.ok(dashboardHtml.includes("Multiple currencies"));
+  assert.ok(dashboardHtml.includes("x.currency||currency"));
 });
