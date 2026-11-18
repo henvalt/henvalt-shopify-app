@@ -575,3 +575,44 @@ The dashboard's Auth, database lookup and summary calls also now have explicit
 10–12 second network deadlines. A stalled upstream service therefore returns
 the dashboard's bounded error response instead of leaving a request open
 indefinitely.
+
+## 15. Full repository verification and secret scanning
+
+The repository now exposes `npm test` for every `tests/*.test.mjs` file
+and `npm run check` for the configured Edge Function type checks. The
+identity validation workflow runs both scripts in addition to the focused V2
+suite and disposable PostgreSQL integration.
+
+The latest successful pull-request validation on commit
+`02f3a99665731bb86bcb05ffeb7987a8b2d895e3` reported:
+
+- 321/321 complete repository Node tests passed.
+- 209/209 focused V2 Node contract tests passed.
+- Gitleaks scan passed with full Git history available.
+- Configured Deno checks passed.
+- Candidate migrations 001–043 and the complete disposable PostgreSQL SQL
+  integration/concurrency suite passed.
+
+The new dashboard HTML safety tests cover escaping of merchant/event-derived
+values and verify that sensitive recipient/provider fields are not rendered.
+The deployment-workflow safety tests assert that Shopify production release
+and unreleased-version preparation are manual-only operations.
+
+These are candidate-branch checks, not production runtime verification.
+
+## 16. Shopify deployment and release gates
+
+The Shopify configuration workflow's app-preparation job now runs only for an
+explicit `workflow_dispatch` with `confirm_shopify_prepare=true` from
+`main`. It can create an unreleased app version and is not part of ordinary
+push/PR validation.
+
+The separate production release workflow no longer has a push trigger. It
+requires `workflow_dispatch`, `confirm_release=true`, the `main` branch
+and the configured Shopify service-account secret. The release job remains a
+distinct production action.
+
+A repository regression test checks both conditions. These gates reduce
+accidental releases; they do not make the checked-in Shopify app configuration
+release-ready. The app TOML still contains legacy URLs and install-flow
+settings, and the owner-controlled app identity and Pixel UID remain open.
