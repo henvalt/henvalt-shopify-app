@@ -58,6 +58,8 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_privacy_export_artifacts_v2 (
     UNIQUE (receipt_id, generation_id),
   CONSTRAINT shopify_privacy_export_artifacts_bucket_object_uidx
     UNIQUE (bucket_id, object_key),
+  CONSTRAINT shopify_privacy_export_artifacts_evidence_binding_uidx
+    UNIQUE (id, receipt_id, tenant_id, connection_id, app_key, shop_domain),
   CONSTRAINT shopify_privacy_export_artifacts_receipt_binding_fkey
     FOREIGN KEY (receipt_id, tenant_id, connection_id, app_key, shop_domain)
     REFERENCES henvalt.shopify_privacy_webhook_deliveries
