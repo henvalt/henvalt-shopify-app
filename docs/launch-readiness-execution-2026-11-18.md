@@ -522,3 +522,33 @@ The existing two-store pixel integration test now verifies:
 The new migration is included in disposable CI migration application (001–029), and the static contact-evidence contract test is included in the V2 Node suite.
 
 **Not yet implemented:** the trusted Edge Function that calls Shopify Admin GraphQL for the exact connection, verifies email availability and trusted country, and keeps the email transient through final delivery. Migration 029 is only the evidence receiver; it is not a contact resolver, permit issuer or send authorization. Cart/browse remain review-only. Latest changes require their own green CI run before this slice is considered validated.
+
+## 13. Bounded request ingress hardening — branch implementation
+
+The checkout delivery and MailerSend provider-event ingress now share
+`supabase/functions/_shared/request-body-v2.ts`.
+
+- Both paths enforce byte ceilings while reading the request stream. The
+  declared Content-Length is an early rejection hint only; the streamed byte
+  count remains authoritative when the header is absent or inaccurate.
+- Checkout delivery accepts only a JSON object with the documented
+  `intervention_id`, `subject`, `html` and `text` keys. It rejects
+  unexpected keys, malformed JSON, invalid UTF-8, non-object bodies and
+  oversized requests before resolving any delivery context.
+- MailerSend provider ingress requires JSON content type and caps the raw
+  signed body at 1 MB before forwarding its exact bytes to the signature-
+  verifying database RPC. It parses the verified body defensively before
+  extracting the provider event ID used for pixel-attempt reconciliation.
+- Stream cancellation occurs as soon as the byte ceiling is exceeded. The
+  helper does not log request bodies, recipient values, signatures or tokens.
+
+Regression contracts are in
+`tests/shopify-request-body-hardening-v2.test.mjs`; CI now includes the new
+test and type-checks the checkout delivery Edge Function. These are candidate
+branch changes only. They do not alter the live webhook route, provider
+settings, n8n workflows, database or deployment.
+
+This closes an ingress resource-boundary gap; it does not close the broader
+launch blockers in app ownership, production migration parity, n8n V2
+orchestration, verified sender/billing configuration, real recovery testing,
+or Shopify privacy approval.
