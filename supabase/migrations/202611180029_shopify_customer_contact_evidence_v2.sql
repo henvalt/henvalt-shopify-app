@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_customer_contact_evidence_v2 (
     REFERENCES henvalt.shopify_connections(id,tenant_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_customer_contact_evidence_v2_lookup_uidx
-    UNIQUE (shopify_connection_id,lookup_id)
+    UNIQUE (shopify_connection_id,lookup_id),
+  CONSTRAINT shopify_customer_contact_evidence_v2_scoped_evidence_uidx
+    UNIQUE (id,tenant_id,shopify_connection_id,customer_identity_id)
 );
 
 CREATE TABLE IF NOT EXISTS henvalt.shopify_customer_contact_evidence_current_v2 (
@@ -47,8 +49,8 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_customer_contact_evidence_current_v2 
     REFERENCES henvalt.shopify_customer_identity_v2(id,tenant_id,shopify_connection_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT,
   CONSTRAINT shopify_customer_contact_evidence_current_v2_evidence_fkey
-    FOREIGN KEY (evidence_id)
-    REFERENCES henvalt.shopify_customer_contact_evidence_v2(id)
+    FOREIGN KEY (evidence_id,tenant_id,shopify_connection_id,customer_identity_id)
+    REFERENCES henvalt.shopify_customer_contact_evidence_v2(id,tenant_id,shopify_connection_id,customer_identity_id)
     ON UPDATE RESTRICT ON DELETE RESTRICT
 );
 
@@ -84,7 +86,9 @@ AS $function$
 DECLARE
   v_connection record;
   v_evidence_id uuid;
-  v_existing_at timestamptz;\n  v_current_updated boolean := false;
+  v_existing_at timestamptz;
+  v_current_updated boolean := false;
+  v_current_updated boolean := false;
 BEGIN
   IF p_connection_id IS NULL OR p_customer_identity_id IS NULL
      OR p_contact_available IS NULL OR p_observed_at IS NULL
@@ -104,8 +108,6 @@ BEGIN
   FOR SHARE OF sc;
 
   IF NOT FOUND OR v_connection.active IS DISTINCT FROM true
-     OR v_connection.lifecycle_status IS NOT NULL
-     OR v_connection.lifecycle_status IS NULL
      OR v_connection.tenant_status<>'ACTIVE'
      OR v_connection.lifecycle_status<>'active' THEN
     RETURN jsonb_build_object('accepted',false,'code','STORE_OR_APP_INACTIVE');
@@ -150,6 +152,7 @@ BEGIN
   FOR UPDATE;
 
   IF NOT FOUND OR p_observed_at>v_existing_at THEN
+    v_current_updated := true;
     INSERT INTO henvalt.shopify_customer_contact_evidence_current_v2(
       tenant_id,shopify_connection_id,customer_identity_id,evidence_id,
       contact_available,country_code,observed_at,updated_at
