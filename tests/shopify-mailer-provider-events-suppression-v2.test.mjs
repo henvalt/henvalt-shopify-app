@@ -47,3 +47,13 @@ test("verified MailerSend events can reconcile ambiguous pixel attempts without 
  assert.match(edge,/p_provider_event_id:eventId/);
  assert.doesNotMatch(edge,/p_provider_message_reference/);
 });
+
+test("pixel provider events apply exact-store suppression without a legacy send-attempt reference",()=>{
+ const reconciliation=readFileSync("supabase/migrations/202611180039_shopify_pixel_provider_event_reconciliation_v2.sql","utf8");
+ assert.match(reconciliation,/source_pixel_send_attempt_id/);
+ assert.match(reconciliation,/source_send_attempt_id IS NULL/);
+ assert.match(reconciliation,/activity\.unsubscribed/);
+ assert.match(reconciliation,/activity\.spam_complaint/);
+ assert.match(reconciliation,/activity\.hard_bounced/);
+ assert.match(reconciliation,/recipient_fingerprint/);
+});
