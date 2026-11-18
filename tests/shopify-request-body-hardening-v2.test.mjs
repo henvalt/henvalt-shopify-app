@@ -24,7 +24,7 @@ test("checkout delivery no longer buffers an unbounded request with request.json
   assert.doesNotMatch(checkout, /await req\.json\(\)/);
 });
 test("MailerSend signed webhook body is bounded while streaming and parsed only after signature acceptance", () => {
-  assert.match(webhook, /readBoundedBody\(req,1000000\)/);
+  assert.match(webhook, /readBoundedBody\(req,1_000_000\)/);
   assert.doesNotMatch(webhook, /await req\.arrayBuffer\(\)/);
   assert.match(webhook, /JSON\.parse\(new TextDecoder\("utf-8", \{ fatal: true \}\)\.decode\(raw\)\)/);
   assert.match(webhook, /invalid_provider_event_body/);
@@ -33,5 +33,5 @@ test("MailerSend signed webhook body is bounded while streaming and parsed only 
 test("webhook body-size and content-type failures return bounded client errors", () => {
   assert.match(webhook, /BODY_TOO_LARGE/);
   assert.match(helper, /INVALID_CONTENT_TYPE/);
-  assert.match(webhook, /status===413/);
+  assert.match(webhook, /BODY_TOO_LARGE"?\?413/);
 });
