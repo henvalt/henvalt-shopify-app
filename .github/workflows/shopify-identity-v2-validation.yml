@@ -97,7 +97,8 @@ jobs:
             supabase/migrations/202611180033_shopify_admin_marketing_consent_lookup_v2.sql \
             supabase/migrations/202611180034_shopify_pixel_delivery_permits_v2.sql \
             supabase/migrations/202611180035_shopify_pixel_delivery_context_v2.sql \
-            supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql \\\n            supabase/migrations/202611180037_shopify_pixel_attempt_outcome_reconciliation_v2.sql; do
+            supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql \
+            supabase/migrations/202611180037_shopify_pixel_attempt_outcome_reconciliation_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise two-store pixel cart/browse candidates and opportunity promotion
