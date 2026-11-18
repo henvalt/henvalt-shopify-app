@@ -6,7 +6,7 @@ const sql = readFileSync(new URL("../supabase/migrations/202611180029_shopify_cu
 
 test("contact evidence is exact-store and tied to an existing customer identity", () => {
   assert.match(sql, /FOREIGN KEY \(customer_identity_id,tenant_id,shopify_connection_id\)[\s\S]*?REFERENCES henvalt\.shopify_customer_identity_v2\(id,tenant_id,shopify_connection_id\)/);
-  assert.match(sql, /PRIMARY KEY \\(shopify_connection_id,customer_identity_id\\)/);
+  assert.match(sql, /PRIMARY KEY \(shopify_connection_id,customer_identity_id\)/);
   assert.match(sql, /FOREIGN KEY \(evidence_id,tenant_id,shopify_connection_id,customer_identity_id\)/);
 });
 
