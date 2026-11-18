@@ -29,6 +29,8 @@ test("dashboard scope accepts only one active connection and the selected connec
 });
 
 test("Shopify-session dashboard validates all tenant connections before calling tenant-wide summary", () => {
+  assert.doesNotMatch(shopifyDashboard, /const URL =/);
+  assert.match(shopifyDashboard, /new URL\(req\.url\)/);
   assert.match(shopifyDashboard, /control_plane_shop_connection/);
   assert.match(shopifyDashboard, /shopify_connections\?select=id,active&tenant_id=eq\./);
   assert.match(shopifyDashboard, /isSingleActiveStoreScope\(tenantConnections, connection\.connection_id\)/);
