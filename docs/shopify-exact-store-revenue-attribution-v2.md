@@ -1,6 +1,6 @@
 # HENVALT exact-store recovered-revenue attribution V2
 
-**Status:** candidate implementation across migrations 021–041. The checkout attribution/refund foundation has earlier disposable PostgreSQL validation; migrations 040–041 add pixel cart/browse attribution and the exact-store V2 dashboard read model, with full current-head validation pending. All work is branch-only; no production billing or data changed.
+**Status:** candidate implementation across migrations 021–041. CI run #913 passed the full disposable PostgreSQL migration and integration suite through migration 041, including pixel attribution, refunds, dashboard metrics and two-store isolation. All work is branch-only; no production billing or data changed.
 
 ## 1. Implemented evidence chain
 
@@ -91,6 +91,20 @@ The old dashboard summary reads legacy tenant-wide tables and is not a source of
 
 These are candidate branch changes only. They do not replace or deploy the live summary RPC.
 
-## 8. Explicit non-actions
+## 8. Validation update — CI run #913 (18 November 2026)
+
+The full identity V2 workflow passed on commit `c3ae83951130a27444a06b9bc91db4dea405c25f`. The run applied candidate migrations 001–041 to disposable PostgreSQL, type-checked both Shopify pixel delivery and MailerSend webhook Edge Functions, ran the existing exact-store/privacy/delivery/cost suites, and exercised the new pixel recovery attribution and dashboard integration path.
+
+The new regression assertions prove:
+1. a reconciled `activity.sent` event alone does not satisfy a delivery-confirmation policy;
+2. a reconciled `activity.delivered` event can qualify as a touch, but only a paid same-store order with the exact same customer identity creates recovered revenue;
+3. pixel attribution stores no checkout identity or legacy checkout send-attempt reference;
+4. one pixel opportunity cannot be reused to attribute a second order;
+5. a partial refund reduces net recovered revenue, a full refund reverses the attribution, and dashboard recovered revenue returns to zero;
+6. the V2 dashboard reports the attributed store's confirmed revenue while a second active store in the same tenant sees zero recovered orders and revenue;
+7. the dashboard refuses to combine unlike currencies and supports explicit store selection for multi-store merchant workspaces.
+
+This is branch validation only. The new migrations, Edge Function changes and dashboard UI have not been deployed.
+## 9. Explicit non-actions
 
 No production attribution policy was enabled. No production Supabase migration/function or billing row was changed. No performance percentage was selected. No Paddle transaction, Shopify charge, customer email or provider send was initiated by this work.
