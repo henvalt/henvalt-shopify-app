@@ -98,7 +98,6 @@ BEGIN
   UPDATE henvalt.shopify_pixel_recovery_candidate_v2 c
      SET status = 'SUPPRESSED', updated_at = pg_catalog.now()
    WHERE c.status = 'READY_FOR_REVIEW'
-     AND c.candidate_type = 'ABANDONED_CART'
      AND EXISTS (
        SELECT 1
        FROM henvalt.shopify_pixel_event_inbox_v2 later
@@ -114,11 +113,20 @@ BEGIN
          AND later.analytics_processing_allowed IS TRUE
          AND later.status = 'PROCESSED'
          AND later.occurred_at > c.last_activity_at
-         AND later.event_type IN ('product_removed_from_cart', 'checkout_started')
          AND (
            later.event_type = 'checkout_started'
-           OR coalesce(later.payload #>> '{cart_line,product_id}',
-                       later.payload #>> '{product,id}') = c.product_key
+           OR (
+             c.candidate_type = 'ABANDONED_CART'
+             AND later.event_type = 'product_removed_from_cart'
+             AND coalesce(later.payload #>> '{cart_line,product_id}',
+                          later.payload #>> '{product,id}') = c.product_key
+           )
+           OR (
+             c.candidate_type = 'BROWSE_ABANDONMENT'
+             AND later.event_type IN ('product_added_to_cart', 'product_removed_from_cart')
+             AND coalesce(later.payload #>> '{cart_line,product_id}',
+                          later.payload #>> '{product,id}') = c.product_key
+           )
          )
      );
   GET DIAGNOSTICS v_suppressed = ROW_COUNT;
