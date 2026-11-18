@@ -1,5 +1,6 @@
 -- HENVALT strict pixel provider outcome reconciliation V2.
 -- A send can be marked SUBMITTED only with a provider message reference.
+-- AMBIGUOUS is never converted to FAILED: provider acceptance may already have happened.
 BEGIN;
 CREATE OR REPLACE FUNCTION henvalt.record_shopify_pixel_send_attempt_result_v2(
  p_send_attempt_id uuid,p_status text,p_provider_message_reference text DEFAULT NULL
@@ -24,7 +25,7 @@ BEGIN
   RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_NOT_FOUND');
  END IF;
  IF v_attempt.status NOT IN ('AUTHORIZED','AMBIGUOUS')
-   OR (v_attempt.status='AMBIGUOUS' AND p_status='AMBIGUOUS') THEN
+   OR (v_attempt.status='AMBIGUOUS' AND p_status<>'SUBMITTED') THEN
   RETURN jsonb_build_object('recorded',false,'code','ATTEMPT_ALREADY_FINALIZED');
  END IF;
  UPDATE henvalt.shopify_pixel_send_attempts_v2
