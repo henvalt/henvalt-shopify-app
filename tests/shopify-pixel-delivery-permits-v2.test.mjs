@@ -59,3 +59,22 @@ test("permit issuance stores the eligibility assessment as JSONB before reading 
  assert.match(issue,/s->>'eligible'/);
  assert.doesNotMatch(issue,/DECLARE o record; s record;/);
 });
+
+
+test("permit consumption rechecks conversion and exact-store suppression after issuance",()=>{
+ const eligibility=readFileSync(new URL("../supabase/migrations/202611180032_shopify_pixel_delivery_eligibility_v2.sql",import.meta.url),"utf8");
+ const consume=sql.slice(sql.indexOf("CREATE OR REPLACE FUNCTION henvalt.consume_shopify_pixel_delivery_permit_v2"),sql.indexOf("CREATE OR REPLACE FUNCTION henvalt.record_shopify_pixel_send_attempt_result_v2"));
+ assert.match(eligibility,/shopify_order_identity_v2[\\s\\S]*?SAME_STORE_CUSTOMER_CONVERTED/);
+ assert.match(eligibility,/shopify_delivery_suppressions_v2[\\s\\S]*?RECIPIENT_SUPPRESSED/);
+ assert.match(consume,/assess_shopify_pixel_delivery_eligibility_v2\\(o\\.id\\)/);
+ assert.match(consume,/shopify_delivery_suppressions_v2[\\s\\S]*?RECIPIENT_SUPPRESSION_CHANGED/);
+ assert.match(consume,/FOR UPDATE/);
+});
+
+test("final provider gate rechecks same-store conversion, suppression and customer eligibility",()=>{
+ const gate=readFileSync(new URL("../supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql",import.meta.url),"utf8");
+ assert.match(gate,/shopify_delivery_suppressions_v2[\\s\\S]*?RECIPIENT_SUPPRESSION_CHANGED/);
+ assert.match(gate,/assess_shopify_pixel_delivery_eligibility_v2\\(v_attempt\\.opportunity_id\\)/);
+ assert.match(gate,/SAME_STORE_CUSTOMER_CONVERTED/);
+ assert.match(gate,/FOR UPDATE OF attempt_row,permit_row,reservation_row/);
+});
