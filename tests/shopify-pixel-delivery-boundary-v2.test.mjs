@@ -50,7 +50,7 @@ test("delivery Edge Function accepts an intervention, not a pixel candidate or b
 });
 
 test("contact evidence resolver never returns recipient email or grants send authority", () => {
-  assert.match(contact, /customer \{ id email defaultAddress \{ countryCodeV2 provinceCode \} \}/);
+  assert.match(contact, /customer\\(id: \\$id\\) \\{ id email defaultAddress \\{ countryCodeV2 provinceCode \\} \\}/);
   assert.match(contact, /record_shopify_customer_contact_evidence_v3/);
   assert.match(contact, /send_authorized:false/);
   assert.match(contact, /recipient_email_returned:false/);
