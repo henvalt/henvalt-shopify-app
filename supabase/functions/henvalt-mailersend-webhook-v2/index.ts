@@ -20,7 +20,7 @@ Deno.serve(async(req:Request)=>{
   if(!/^[A-Za-z0-9_-]{24,96}$/.test(providerAccountKey)||!/^[0-9a-fA-F]{64}$/.test(signature)){
     return json(400,{error:"invalid_provider_webhook_metadata"});
   }
-  if(!/^application\\/json(?:\\s*;|\\s*$)/i.test(req.headers.get("content-type")??""))return json(415,{error:"application_json_required"});
+  if(!/^application\/json(?:\s*;|\s*$)/i.test(req.headers.get("content-type")??""))return json(415,{error:"application_json_required"});
   let raw:Uint8Array;
   try{raw=await readBoundedBody(req,1_000_000);}catch(error){
     const code=error instanceof RequestBodyError?error.code:"INVALID_BODY";
