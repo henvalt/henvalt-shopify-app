@@ -151,7 +151,7 @@ BEGIN
   (SELECT count(*) FROM henvalt.shopify_recovery_send_attempt_v2 a WHERE a.tenant_id=NEW.tenant_id AND a.created_at>=period AND a.created_at<period+interval '1 month')
  + (SELECT count(*) FROM henvalt.shopify_pixel_send_attempts_v2 a WHERE a.tenant_id=NEW.tenant_id AND a.created_at>=period AND a.created_at<period+interval '1 month')
  INTO monthly;
- IF monthly>=b.monthly_email_limit THEN RAISE EXCEPTION 'merchant monthly email limit would be exceeded'; END IF;
+ IF monthly>b.monthly_email_limit THEN RAISE EXCEPTION 'merchant monthly email limit would be exceeded'; END IF;
  INSERT INTO henvalt.shopify_pixel_delivery_cost_reservations_v2(tenant_id,shopify_connection_id,pixel_send_attempt_id,provider_account_key,period_start,amount,currency,status)
  VALUES(NEW.tenant_id,NEW.shopify_connection_id,NEW.id,NEW.provider_account_key,period,p.email_unit_cost_amount,pg_catalog.upper(pg_catalog.btrim(b.currency::text)),'RESERVED');
  RETURN NEW;
@@ -342,7 +342,7 @@ BEGIN
    WHERE a.tenant_id=NEW.tenant_id AND a.created_at>=period
     AND a.created_at<period+interval '1 month')
  INTO monthly;
- IF monthly>=b.monthly_email_limit THEN
+ IF monthly>b.monthly_email_limit THEN
   RAISE EXCEPTION 'merchant monthly email limit would be exceeded';
  END IF;
  INSERT INTO henvalt.shopify_delivery_cost_reservations_v2(
