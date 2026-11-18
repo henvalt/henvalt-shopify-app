@@ -22,14 +22,14 @@ BEGIN
   INSERT INTO henvalt.shopify_privacy_export_artifacts_v2 (
     receipt_id, tenant_id, connection_id, app_key, shop_domain,
     generation_id, object_key, sha256_hex, byte_count,
-    completeness_status, manifest_summary, state, expires_at
+    completeness_status, manifest_summary, state, created_at, expires_at
   ) VALUES (
     v_receipt.id, v_receipt.tenant_id, v_receipt.connection_id,
     v_receipt.app_key, v_receipt.shop_domain,
     gen_random_uuid(), gen_random_uuid()::text || '.json',
     repeat('d', 64), 128, 'COMPLETE_FOR_MERCHANT_REVIEW',
     jsonb_build_object('schema_version', 1, 'categories', jsonb_build_array()),
-    'AVAILABLE', now() - interval '1 minute'
+    'AVAILABLE', now() - interval '2 minutes', now() - interval '1 minute'
   ) RETURNING id INTO v_artifact_id;
 
   SELECT * INTO v_claim
