@@ -4,6 +4,7 @@ import {readFileSync} from "node:fs";
 
 const sql=readFileSync(new URL("../supabase/migrations/202611180042_shopify_recovery_work_claims_v2.sql",import.meta.url),"utf8");
 const integration=readFileSync(new URL("./sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql",import.meta.url),"utf8");
+const concurrency=readFileSync(new URL("./sql/shopify-recovery-work-claims-concurrency-v2.test.sh",import.meta.url),"utf8");
 
 test("V2 recovery claims cover both independent checkout and pixel work shapes",()=>{
  assert.match(sql,/'CHECKOUT_INTERVENTION'/);
@@ -43,4 +44,12 @@ test("work claims never carry recipient data or perform provider sends",()=>{
  assert.match(sql,/'provider_called',false/);
  assert.match(sql,/'delivery_authorized',false/);
  assert.doesNotMatch(sql,/recipient_email|mailer_send_api_token|access_token|html_body|text_body/);
+});
+
+test("parallel workers race against one durable work item and exactly one lease wins",()=>{
+ assert.match(concurrency,/claim-race-worker-a/);
+ assert.match(concurrency,/claim-race-worker-b/);
+ assert.match(concurrency,/count\(DISTINCT c\.worker_id\)/);
+ assert.match(concurrency,/"1:1:1"/);
+ assert.match(concurrency,/shopify_recovery_work_claims_v2/);
 });
