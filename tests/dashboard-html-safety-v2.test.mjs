@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 const dashboard = readFileSync("dashboard/index.html", "utf8");
 
 test("dashboard escapes merchant-controlled and event-derived values before HTML insertion", () => {
-  assert.match(dashboard, /function esc\(s\)=>String\(s\?\?""\)\.replace/);
+  assert.match(dashboard, /const esc=s=>String\(s\?\?""\)\.replace/);
   assert.match(dashboard, /esc\(s\.id\)/);
   assert.match(dashboard, /esc\(s\.shop_domain\)/);
   assert.match(dashboard, /esc\(x\.eventType\)/);
