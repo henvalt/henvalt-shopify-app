@@ -28,3 +28,10 @@ test("dashboard loading and store-selection feedback are announced accessibly", 
   assert.match(dashboard, /id="notice" role="status" aria-live="polite"/);
   assert.match(dashboard, /id="status" aria-live="polite"/);
 });
+
+test("dashboard backend dependencies have bounded network waits", () => {
+  const merchant = readFileSync("supabase/functions/henvalt-merchant-dashboard/index.ts", "utf8");
+  const legacy = readFileSync("supabase/functions/henvalt-dashboard/index.ts", "utf8");
+  assert.ok((merchant.match(/AbortSignal\\.timeout/g) || []).length >= 3);
+  assert.ok((legacy.match(/AbortSignal\\.timeout/g) || []).length >= 2);
+});
