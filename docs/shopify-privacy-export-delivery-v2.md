@@ -106,3 +106,11 @@ All tables must have RLS enabled, no browser-facing write path, and service-role
 - Supabase private bucket access model: https://supabase.com/docs/guides/storage/buckets/fundamentals
 - Supabase signed URL creation: https://supabase.com/docs/reference/javascript/file-buckets-createsignedurl
 - Supabase signed URL revocation and Storage CDN behavior: https://supabase.com/docs/guides/storage/security/signing-keys and https://supabase.com/docs/guides/storage/cdn/smart-cdn
+
+## 8. Completion-state fail-closed gate (18 November 2026)
+
+Candidate migration `202611180024_shopify_privacy_completion_evidence_gate_v2.sql` now overrides the generic queue completion RPC. It revalidates the verified receipt against the immutable connection, tenant, app key and shop domain at the transition boundary. If a service caller supplies the former boolean confirmation, the function does **not** mark the request complete: it clears the lease/claim and leaves both receipt and job in `REVIEW_REQUIRED` with `COMPLETION_EVIDENCE_PIPELINE_NOT_IMPLEMENTED`.
+
+This is intentionally a temporary fail-closed gate. The export builder is still an incomplete JSON preparation function; there is no private artifact manifest, verified download/merchant-attestation flow, or redaction postcondition executor. A later candidate migration must replace this gate only after those durable evidence paths exist and are tested. The SQL integration test now proves that even `p_processor_confirmed=true` cannot complete a request without that evidence pipeline.
+
+Identity V2 run **#552 passed** on code head `536b3ce02297f376eb8f44d14b7772125cd1da22`: static tests, disposable PostgreSQL baseline, migrations 001–024, and the full exact-store SQL suite passed. Shopify configuration run **#621 passed**; deployment was skipped. This validation was against candidate code only; nothing was applied to production.
