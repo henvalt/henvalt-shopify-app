@@ -571,3 +571,7 @@ Regression tests cover leap-year validation, inclusive range bounds, both
 dashboard API routes, stale-response suppression, abort handling and
 sign-out clearing. These changes affect only candidate code and the static
 dashboard artifact; no Pages deployment or live Edge Function update occurred.
+The dashboard's Auth, database lookup and summary calls also now have explicit
+10–12 second network deadlines. A stalled upstream service therefore returns
+the dashboard's bounded error response instead of leaving a request open
+indefinitely.
