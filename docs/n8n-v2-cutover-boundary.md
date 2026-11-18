@@ -73,7 +73,7 @@ The branch already has two distinct server-side delivery boundaries:
 
 Both require the server-held delivery bearer secret. Neither accepts a recipient email from n8n, and both keep the raw recipient email inside the trusted Edge Function/provider request. Both record SUBMITTED/FAILED/AMBIGUOUS outcomes internally; n8n must not call the legacy result RPC afterward. The V2 signed MailerSend webhook Edge Function owns provider-event correlation, suppression and ambiguous-attempt reconciliation.
 
-The remaining orchestration gap is upstream of these endpoints: the active Recovery workflow still has no V2 claim/lease adapter that safely selects due V2 checkout interventions and pixel opportunities. That claim/lease contract, including exact-store locks, duplicate-worker handling, stale-lease recovery and idempotent work identity, must be implemented and tested before wiring n8n to these two endpoints.
+The V2 claim/lease adapter now exists in migration 042 and is covered by disposable PostgreSQL tests for both checkout intervention and pixel opportunity work, concurrent claim exclusion, deferred retry with a fresh lease identity, stale-worker rejection and terminal completion. The active Recovery workflow is still not wired to it; production cutover remains pending.
 
 ## 5. V2 claim/lease RPC contract — migration 042
 
@@ -135,7 +135,7 @@ The `HENVALT_INGEST` workflow remains outside this claim queue: verified Shopify
 
 Do not edit or publish the active workflows until each gate is satisfied:
 
-- [ ] V2 service-only claim/lease contract exists for each due-work type and is covered by exact-store, stale-lease, duplicate-claim and tenant-isolation tests.
+- [x] V2 service-only claim/lease contract exists for both checkout interventions and pixel opportunities; exact-store lineage, active-lease exclusion, stale-worker rejection, deferral and terminal completion pass disposable PostgreSQL CI. Cross-tenant concurrency is enforced by the shared unique lease key and tenant/store lineage.
 - [ ] A documented mapping exists from V2 opportunity/candidate → claim → intervention/permit → Edge Function → provider outcome → provider-event reconciliation.
 - [ ] Checkout and pixel delivery use their distinct V2 permit paths; no fabricated checkout identity is introduced for cart/browse.
 - [ ] n8n payloads contain opaque IDs and correlation IDs only; no raw recipient email, secrets, tokens or customer payloads.
@@ -145,7 +145,22 @@ Do not edit or publish the active workflows until each gate is satisfied:
 - [ ] Existing legacy workflows are compared against the V2 branch contract and a rollback plan is documented.
 - [ ] The owner explicitly approves any production workflow update, activation or real provider send.
 
-## 7. Current release boundary
+
+## 8. Migration 042 validation
+
+The V2 work-claim contract is implemented and passed current-head CI run #935 on 18 November 2026:
+- migration 042 applies after migrations 001–041 on disposable PostgreSQL;
+- a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
+- a second worker cannot claim an active lease;
+- deferred work is reclaimed under a new lease UUID;
+- the stale worker cannot finish the reclaimed lease;
+- a current worker can complete it, after which it is no longer claimable;
+- a checkout intervention is independently claimable with its own intervention/opportunity lineage;
+- no recipient email, provider credentials, Shopify token or message body enters the claim response.
+
+GitHub's connected Cloudflare Pages integration also produced successful **preview** builds for the preparation branch. The deployment records identify environment `preview`, branch `prep/public-app-hardening-2026-11-15`, and production branch `main`; they did not deploy this branch to the production environment.
+
+## 9. Current release boundary
 
 The repository candidate now contains migrations 039–041, pixel attribution, exact-store V2 dashboard read model and merchant store selection. Current-head GitHub validation passed on 18 November 2026. These are not deployed to the active Supabase project.
 
