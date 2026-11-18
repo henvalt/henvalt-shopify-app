@@ -484,3 +484,22 @@ shortcut.
 This change does not alter the checkout path, delivery permits, provider
 submission, or production services. It is branch-only and must pass the
 updated CI run before being treated as validated.
+
+
+
+## 11. Cart/browse contact and jurisdiction delivery gate — traced
+
+A code-path trace of migrations 003–008 and 028 confirms that the current delivery boundary remains checkout-specific:
+
+- The contact resolver, permit issuer and permit consumer join the checkout recovery candidate and checkout identity. Pixel opportunities intentionally have NULL checkout references and cannot pass those joins.
+- Permit issue and consumption recheck current exact-store marketing consent, supported checkout jurisdiction, same-store order state, suppression and app/store/tenant/provider/sender/billing state. The permit is short-lived and single-use.
+- The existing cost-reservation trigger is merchant-wide: it locks the tenant billing-account row, checks provider unit cost in merchant billing currency, aggregates RESERVED and SETTLED reservations across stores, checks monthly email count and inserts the reservation in the send-attempt transaction. AMBIGUOUS provider outcomes retain the reservation.
+- Jurisdiction evidence currently comes from a verified checkout shipping/billing country code. Cart/browse sessions without checkout country evidence cannot use storefront locale, currency, browser locale or IP inference as a substitute.
+
+A new branch-only contract and CI test were added:
+- `docs/shopify-pixel-contact-jurisdiction-delivery-gate-v2.md`
+- `tests/shopify-pixel-contact-jurisdiction-delivery-gate-v2.test.mjs`
+
+The test locks the current checkout-only permit boundary, exact-store timestamped consent, checkout-derived jurisdiction, merchant-wide atomic reservation and PII/ambiguous-send restrictions. It is wired into the existing V2 validation workflow.
+
+**Decision:** do not generalize the permit SQL by simply making checkout joins optional. The next implementation needs a separate trusted customer-contact/country evidence path for pixel opportunities, then one shared authorization transaction that binds the source shape and reuses the existing consent, suppression, conversion, sender and merchant-wide cost reservation controls. Until that exists, cart/browse remain review-only and no customer send is authorized.
