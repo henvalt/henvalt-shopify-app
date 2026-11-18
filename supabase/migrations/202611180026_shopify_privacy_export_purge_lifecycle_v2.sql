@@ -20,7 +20,7 @@ ALTER TABLE henvalt.shopify_privacy_export_artifacts_v2
 
 CREATE INDEX IF NOT EXISTS shopify_privacy_export_artifacts_purge_claim_idx
   ON henvalt.shopify_privacy_export_artifacts_v2 (expires_at, id)
-  WHERE state IN ('AVAILABLE', 'PURGE_PENDING');
+  WHERE state IN ('STAGED', 'AVAILABLE', 'PURGE_PENDING');
 
 CREATE OR REPLACE FUNCTION henvalt.claim_shopify_privacy_export_purge_v2(
   p_lease_seconds integer DEFAULT 300
@@ -62,7 +62,7 @@ BEGIN
    AND r.shop_domain = a.shop_domain
   WHERE (
       a.state = 'PURGE_PENDING'
-      OR (a.state = 'AVAILABLE' AND a.expires_at <= pg_catalog.now())
+      OR (a.state IN ('STAGED', 'AVAILABLE') AND a.expires_at <= pg_catalog.now())
       OR (a.state = 'PURGE_PENDING' AND a.purge_lease_until <= pg_catalog.now())
     )
     AND (a.purge_lease_until IS NULL OR a.purge_lease_until <= pg_catalog.now())
