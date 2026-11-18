@@ -86,6 +86,10 @@ jobs:
             supabase/migrations/202611180027_shopify_pixel_recovery_candidates_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
+      - name: Exercise two-store pixel cart and browse recovery candidates
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-recovery-candidates-v2.test.sql
       - name: Execute read-only privacy export schema catalog against disposable PostgreSQL
         env:
           PGPASSWORD: postgres
