@@ -5,6 +5,7 @@ DECLARE
   v_a_id uuid;
   v_b_id uuid;
   v_unlinked_id uuid;
+  v_completed_id uuid;
   v_a record;
   v_b record;
   v_retry record;
@@ -165,15 +166,15 @@ BEGIN
     RAISE EXCEPTION 'privacy request completed without processor confirmation';
   END IF;
 
+  -- Even a positive boolean is not evidence of a generated export, merchant
+  -- delivery, or completed redaction. The completion gate must fail closed.
   v_ok := henvalt.complete_shopify_privacy_request_v2(v_a_id, v_a.claim_token, true);
-  IF v_ok IS DISTINCT FROM true THEN
-    RAISE EXCEPTION 'confirmed Store A privacy request did not complete';
-  END IF;
-
-  IF (SELECT customer_id FROM henvalt.shopify_privacy_webhook_deliveries WHERE id = v_a_id) IS NOT NULL
-     OR (SELECT processing_status FROM henvalt.shopify_privacy_webhook_deliveries WHERE id = v_a_id) <> 'COMPLETED'
-     OR (SELECT raw_body_sha256 FROM henvalt.shopify_privacy_webhook_deliveries WHERE id = v_a_id) IS NULL THEN
-    RAISE EXCEPTION 'completed privacy receipt did not clear customer ID while retaining minimal digest';
+  IF v_ok IS DISTINCT FROM false
+     OR (SELECT state FROM henvalt.shopify_privacy_processing_jobs_v2 WHERE receipt_id = v_a_id) <> 'REVIEW_REQUIRED'
+     OR (SELECT last_failure_code FROM henvalt.shopify_privacy_processing_jobs_v2 WHERE receipt_id = v_a_id) <> 'COMPLETION_EVIDENCE_PIPELINE_NOT_IMPLEMENTED'
+     OR (SELECT processing_status FROM henvalt.shopify_privacy_webhook_deliveries WHERE id = v_a_id) <> 'REVIEW_REQUIRED'
+     OR (SELECT customer_id FROM henvalt.shopify_privacy_webhook_deliveries WHERE id = v_a_id) IS NULL THEN
+    RAISE EXCEPTION 'privacy completion gate did not hold an unevidenced request for review';
   END IF;
 
   v_ok := henvalt.fail_shopify_privacy_request_v2(v_b_id, v_b.claim_token, 'EXPORT_DELIVERY_PENDING', true);
@@ -238,9 +239,29 @@ BEGIN
     RAISE EXCEPTION 'privacy deadline monitor did not flag overdue request';
   END IF;
 
+  -- Seed a completed synthetic receipt directly to test the monitor's
+  -- presentation of a completed state. The completion RPC itself is gated.
+  INSERT INTO henvalt.shopify_privacy_webhook_deliveries (
+    app_key, tenant_id, connection_id, shop_domain, topic, webhook_id,
+    customer_id, raw_body_sha256, hmac_verified_at, processing_status
+  ) VALUES (
+    'test_app', v_a.tenant_id, v_a.connection_id, 'store-a.myshopify.com',
+    'customers/data_request', 'privacy-completed-monitor-fixture',
+    '12345', repeat('b', 64), now(), 'REVIEW_REQUIRED'
+  ) RETURNING id INTO v_completed_id;
+
+  UPDATE henvalt.shopify_privacy_processing_jobs_v2
+     SET state = 'COMPLETED', claim_token_sha256 = NULL, lease_until = NULL,
+         completed_at = now(), updated_at = now()
+   WHERE receipt_id = v_completed_id;
+
+  UPDATE henvalt.shopify_privacy_webhook_deliveries
+     SET processing_status = 'COMPLETED', processed_at = now(), customer_id = NULL
+   WHERE id = v_completed_id;
+
   IF NOT EXISTS (
     SELECT 1 FROM henvalt.shopify_privacy_deadline_monitor_v2
-    WHERE receipt_id = v_a_id
+    WHERE receipt_id = v_completed_id
       AND deadline_status = 'COMPLETED'
       AND requires_attention = false
   ) THEN
