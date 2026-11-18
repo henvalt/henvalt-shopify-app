@@ -57,3 +57,9 @@ test("pixel provider events apply exact-store suppression without a legacy send-
  assert.match(reconciliation,/activity\.hard_bounced/);
  assert.match(reconciliation,/recipient_fingerprint/);
 });
+
+test("unmatched signed pixel provider events request a retry until message-reference correlation is possible",()=>{
+ const edge=readFileSync("supabase/functions/henvalt-mailersend-webhook-v2/index.ts","utf8");
+ assert.match(edge,/reconciliationRow\.status==="UNMATCHED"/);
+ assert.match(edge,/return json\(503,\{error:"pixel_provider_event_waiting_for_attempt_correlation"\}\)/);
+});
