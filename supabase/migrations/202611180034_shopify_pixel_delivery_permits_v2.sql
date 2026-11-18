@@ -136,7 +136,7 @@ BEGIN
  WHERE tenant_id=NEW.tenant_id AND provider_account_key=NEW.provider_account_key AND status='ACTIVE' FOR SHARE;
  IF NOT FOUND OR p.email_unit_cost_amount IS NULL OR p.email_unit_cost_amount<=0
   OR p.email_unit_cost_currency IS NULL OR p.email_unit_cost_currency !~ '^[A-Z]{3}$'
-  OR p.email_unit_cost_currency<>pg_catalog.upper(pg_catalog.btrim(b.currency::text)) THEN
+   OR p.email_unit_cost_currency<>pg_catalog.upper(pg_catalog.btrim(b.currency::text))
  THEN RAISE EXCEPTION 'pixel provider cost must match merchant billing currency'; END IF;
  period:=pg_catalog.date_trunc('month',NEW.created_at);
  SELECT coalesce(sum(x.amount),0) INTO reserved FROM (
