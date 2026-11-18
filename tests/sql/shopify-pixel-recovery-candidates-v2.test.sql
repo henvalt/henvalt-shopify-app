@@ -196,7 +196,7 @@ BEGIN
 
   -- New V3 resolver stores only Shopify's region code alongside country.
   v_evidence_result := henvalt.record_shopify_customer_contact_evidence_v3(
-    v_conn_a,v_customer_a,true,'US','CA',pg_catalog.now(),gen_random_uuid()
+    v_conn_a,v_customer_a,true,'US','CA',pg_catalog.clock_timestamp(),gen_random_uuid()
   );
   IF v_evidence_result->>'accepted'<>'true'
      OR v_evidence_result->>'send_authorized'<>'false' THEN
