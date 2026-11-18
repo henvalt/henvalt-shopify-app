@@ -186,6 +186,15 @@ jobs:
           PGPASSWORD: postgres
         run: bash tests/sql/shopify-delivery-cost-reservation-concurrency-v2.test.sh
 
+      - name: Prepare concurrent exact-store recovery work-claim fixture
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-work-claims-concurrency-setup-v2.test.sql
+      - name: Exercise concurrent n8n recovery work claims
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/sql/shopify-recovery-work-claims-concurrency-v2.test.sh
+
       - name: Exercise pixel delivery outcome, attribution and cost lifecycle
         env:
           PGPASSWORD: postgres
