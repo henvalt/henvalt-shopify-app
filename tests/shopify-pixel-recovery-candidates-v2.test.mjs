@@ -10,6 +10,14 @@ const inboxMigration = readFileSync(
   new URL("../supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql", import.meta.url),
   "utf8",
 );
+const opportunityMigration = readFileSync(
+  new URL("../supabase/migrations/202611180028_shopify_general_recovery_opportunities_v2.sql", import.meta.url),
+  "utf8",
+);
+const deliveryMigration = readFileSync(
+  new URL("../supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql", import.meta.url),
+  "utf8",
+);
 const collector = readFileSync(
   new URL("../cloudflare/pixel-collector.js", import.meta.url),
   "utf8",
@@ -53,4 +61,23 @@ test("candidate stage cannot send, authorize delivery, or bill", () => {
   assert.match(migration, /'marketing_consent_checked_for_send', false/);
   assert.doesNotMatch(migration, /INSERT\s+INTO\s+henvalt\.shopify_recovery_opportunity_v2/i);
   assert.doesNotMatch(migration, /mailer|send_attempt|billing_measurement|revenue_ledger/i);
+});
+
+test("generalized opportunity model preserves one exact-store source shape", () => {
+  assert.match(opportunityMigration, /candidate_id DROP NOT NULL/);
+  assert.match(opportunityMigration, /checkout_identity_id DROP NOT NULL/);
+  assert.match(opportunityMigration, /source_delivery_id DROP NOT NULL/);
+  assert.match(opportunityMigration, /pixel_candidate_id uuid/);
+  assert.match(opportunityMigration, /ABANDONED_CHECKOUT', 'ABANDONED_CART', 'BROWSE_ABANDONMENT/);
+  assert.match(opportunityMigration, /FOREIGN KEY \(pixel_candidate_id,tenant_id,shopify_connection_id\)/);
+  assert.match(opportunityMigration, /'pixel:'\|\|s\.idempotency_key/);
+});
+
+test("cart and browse promotion creates metadata only, not interventions or delivery permits", () => {
+  assert.match(opportunityMigration, /promote_shopify_pixel_recovery_candidates_v2/);
+  assert.match(opportunityMigration, /'interventions_created',false/);
+  assert.match(opportunityMigration, /'delivery_authorized',false/);
+  assert.doesNotMatch(opportunityMigration, /INSERT\s+INTO\s+henvalt\.shopify_recovery_intervention_v2/i);
+  assert.match(deliveryMigration, /JOIN henvalt\.shopify_checkout_recovery_candidate_v2 c/);
+  assert.match(deliveryMigration, /JOIN henvalt\.shopify_checkout_identity_v2 ch/);
 });
