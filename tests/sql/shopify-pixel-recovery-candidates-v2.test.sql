@@ -386,7 +386,7 @@ BEGIN
     RAISE EXCEPTION 'Permit survived consent revocation before consume: %',v_consume_result;
   END IF;
   IF EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2 WHERE opportunity_id=v_pixel_opportunity_id)
-     OR EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2 WHERE opportunity_id=v_pixel_opportunity_id) THEN
+     OR EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2 r JOIN henvalt.shopify_pixel_send_attempts_v2 a ON a.id=r.pixel_send_attempt_id WHERE a.opportunity_id=v_pixel_opportunity_id) THEN
     RAISE EXCEPTION 'Revoked-consent permit created an attempt or cost reservation';
   END IF;
 
