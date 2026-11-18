@@ -148,7 +148,7 @@ Do not edit or publish the active workflows until each gate is satisfied:
 
 ## 8. Migration 042 validation
 
-The V2 work-claim contract is implemented and passed current-head CI run #935 on 18 November 2026:
+The V2 work-claim contract is implemented and passed current-head CI runs #937 and #938 on 18 November 2026:
 - migration 042 applies after migrations 001–041 on disposable PostgreSQL;
 - a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
 - a second worker cannot claim an active lease;
