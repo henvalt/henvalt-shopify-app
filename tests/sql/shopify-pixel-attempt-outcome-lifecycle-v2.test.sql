@@ -7,6 +7,9 @@ DECLARE
  v_connection uuid; v_customer uuid; v_provider text; v_app_key text;
  v_session uuid; v_inbox uuid; v_candidate uuid; v_opportunity uuid; v_attempt uuid;
  v_result jsonb; v_reservation_status text;
+ v_source_delivery uuid; v_order_id uuid; v_attr_id uuid;
+ v_provider_event_id text; v_provider_message_id text;
+ v_policy_result jsonb;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key FROM henvalt.shopify_connections
   WHERE tenant_id=v_tenant AND shop_domain='store-b.myshopify.com';
@@ -284,6 +287,136 @@ BEGIN
  IF v_result->>'recorded'<>'false' OR v_result->>'code'<>'ATTEMPT_ALREADY_FINALIZED' THEN
   RAISE EXCEPTION 'Stale ambiguous attempt could be downgraded to failed: %',v_result;
  END IF;
+
+ -- End-to-end pixel recovery attribution: provider touch first, then a paid
+ -- same-store/customer order. Sent alone is insufficient when delivery is required.
+ SELECT id INTO v_source_delivery
+ FROM henvalt.shopify_webhook_deliveries
+ WHERE tenant_id=v_tenant AND connection_id=v_connection
+ ORDER BY created_at DESC LIMIT 1;
+ IF v_source_delivery IS NULL THEN
+  RAISE EXCEPTION 'Verified Store B webhook receipt required for order fixture';
+ END IF;
+
+ INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
+  tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
+  occurred_at,analytics_processing_allowed,marketing_allowed,client_reference,
+  customer_reference,payload,status,processed_at
+ ) VALUES(v_tenant,v_connection,'pixel-attribution-'||gen_random_uuid()::text,
+  'product_added_to_cart',encode(extensions.digest(convert_to(gen_random_uuid()::text,'UTF8'),'sha256'),'hex'),
+  now()-interval '2 hours',true,false,'attribution-browser','12345',
+  '{"product":{"id":"attribution-product"}}'::jsonb,'PROCESSED',now())
+ RETURNING id INTO v_inbox;
+ INSERT INTO henvalt.shopify_session_identity_v2(
+  tenant_id,shopify_connection_id,session_reference,customer_identity_id
+ ) VALUES(v_tenant,v_connection,'attribution-session-'||gen_random_uuid()::text,v_customer)
+ RETURNING id INTO v_session;
+ INSERT INTO henvalt.shopify_pixel_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,candidate_type,session_identity_id,customer_identity_id,
+  source_inbox_event_id,product_key,product_context,last_activity_at,eligible_after,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,'ABANDONED_CART',v_session,v_customer,v_inbox,
+  'attribution-product','{"product_id":"attribution-product"}'::jsonb,now()-interval '2 hours',
+  now()-interval '1 hour','PROMOTED','attribution-candidate-'||gen_random_uuid()::text)
+ RETURNING id INTO v_candidate;
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,customer_identity_id,
+  source_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,NULL,NULL,v_customer,NULL,v_candidate,
+  'ABANDONED_CART','REVIEW_REQUIRED','attribution-opportunity-'||gen_random_uuid()::text)
+ RETURNING id INTO v_opportunity;
+ INSERT INTO henvalt.shopify_pixel_send_attempts_v2(
+  tenant_id,shopify_connection_id,opportunity_id,pixel_candidate_id,customer_identity_id,
+  provider_account_key,idempotency_key,status
+ ) VALUES(v_tenant,v_connection,v_opportunity,v_candidate,v_customer,v_provider,
+  'attribution-attempt-'||gen_random_uuid()::text,'AUTHORIZED')
+ RETURNING id INTO v_attempt;
+
+ v_policy_result:=henvalt.set_shopify_recovery_attribution_policy_v2(
+  v_connection,true,72,'LAST_ELIGIBLE_TOUCH','SHOPIFY_TOTAL_PRICE',true
+ );
+ IF v_policy_result->>'accepted'<>'true' THEN
+  RAISE EXCEPTION 'Pixel attribution policy fixture rejected: %',v_policy_result;
+ END IF;
+ v_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(
+  v_attempt,'SUBMITTED','synthetic-pixel-attribution-message'
+ );
+ IF v_result->>'recorded'<>'true' THEN
+  RAISE EXCEPTION 'Pixel attribution attempt could not be marked submitted: %',v_result;
+ END IF;
+
+ v_provider_event_id:='pixel-attribution-sent-'||gen_random_uuid()::text;
+ v_provider_message_id:='synthetic-pixel-attribution-message';
+ INSERT INTO henvalt.shopify_mailer_provider_events_v2(
+  provider_account_key,provider_event_id,provider_message_id,event_type,
+  occurred_at,body_sha256,processing_status
+ ) VALUES(v_provider,v_provider_event_id,v_provider_message_id,'activity.sent',
+  now()-interval '1 minute',repeat('c',64),'UNMATCHED');
+ v_result:=henvalt.reconcile_mailersend_pixel_provider_event_v2(v_provider,v_provider_event_id);
+ IF v_result->>'accepted'<>'true' OR v_result->>'pixel_attempt_reconciled'<>'true' THEN
+  RAISE EXCEPTION 'Signed provider sent event did not reconcile: %',v_result;
+ END IF;
+
+ INSERT INTO henvalt.shopify_order_identity_v2(
+  tenant_id,shopify_connection_id,shopify_order_id,checkout_token,
+  customer_identity_id,total_value,currency,financial_status,ordered_at,
+  source_delivery_id,checkout_match_status,updated_at
+ ) VALUES(v_tenant,v_connection,'pixel-attribution-order-'||gen_random_uuid()::text,
+  NULL,v_customer,125.50,'USD','paid',now(),v_source_delivery,'NO_CHECKOUT_TOKEN',now())
+ RETURNING id INTO v_order_id;
+
+ IF EXISTS(SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
+   WHERE order_identity_id=v_order_id) THEN
+  RAISE EXCEPTION 'Provider sent event alone incorrectly satisfied delivery-confirmed attribution';
+ END IF;
+
+ v_provider_event_id:='pixel-attribution-delivered-'||gen_random_uuid()::text;
+ INSERT INTO henvalt.shopify_mailer_provider_events_v2(
+  provider_account_key,provider_event_id,provider_message_id,event_type,
+  occurred_at,body_sha256,processing_status
+ ) VALUES(v_provider,v_provider_event_id,v_provider_message_id,'activity.delivered',
+  now()-interval '30 seconds',repeat('d',64),'UNMATCHED');
+ v_result:=henvalt.reconcile_mailersend_pixel_provider_event_v2(v_provider,v_provider_event_id);
+ IF v_result->>'accepted'<>'true' OR v_result->>'pixel_attempt_reconciled'<>'true' THEN
+  RAISE EXCEPTION 'Signed provider delivered event did not reconcile: %',v_result;
+ END IF;
+
+ SELECT id INTO v_attr_id
+ FROM henvalt.shopify_recovery_attributions_v2
+ WHERE tenant_id=v_tenant AND shopify_connection_id=v_connection
+   AND order_identity_id=v_order_id;
+ IF v_attr_id IS NULL THEN
+  RAISE EXCEPTION 'Paid pixel recovery order was not attributed after delivered evidence';
+ END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
+  WHERE id=v_attr_id AND status='CONFIRMED'
+    AND checkout_identity_id IS NULL AND send_attempt_id IS NULL
+    AND pixel_send_attempt_id=v_attempt
+    AND gross_recovered_amount=125.50 AND net_recovered_amount=125.50
+    AND currency='USD'
+ ) THEN
+  RAISE EXCEPTION 'Pixel attribution source shape or confirmed revenue fields are incorrect';
+ END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_opportunity_v2
+  WHERE id=v_opportunity AND status='CONVERTED'
+ ) THEN
+  RAISE EXCEPTION 'Attributed pixel opportunity was not marked converted';
+ END IF;
+
+ -- A second paid order cannot reuse the same recovery opportunity/touch.
+ INSERT INTO henvalt.shopify_order_identity_v2(
+  tenant_id,shopify_connection_id,shopify_order_id,checkout_token,
+  customer_identity_id,total_value,currency,financial_status,ordered_at,
+  source_delivery_id,checkout_match_status,updated_at
+ ) VALUES(v_tenant,v_connection,'pixel-attribution-second-order-'||gen_random_uuid()::text,
+  NULL,v_customer,20.00,'USD','paid',now(),v_source_delivery,'NO_CHECKOUT_TOKEN',now())
+ RETURNING id INTO v_order_id;
+ IF EXISTS(SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
+   WHERE order_identity_id=v_order_id) THEN
+  RAISE EXCEPTION 'One pixel opportunity was attributed to more than one order';
+ END IF;
+
 END;
 $test$;
 ROLLBACK;
