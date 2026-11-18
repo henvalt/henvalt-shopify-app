@@ -184,7 +184,7 @@ DECLARE o record; s record; token text; pid uuid;
 BEGIN
  IF current_setting('request.jwt.claim.role',true) IS DISTINCT FROM 'service_role' THEN RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501'; END IF;
  IF p_opportunity_id IS NULL OR p_provider_account_key IS NULL OR p_sender_profile_id IS NULL
-  OR p_recipient_fingerprint_hex IS NULL OR p_recipient_fingerprint_hex !~ '^[0-9a-fA-F]{64} jsonb_build_object('authorized',false,'code','INVALID_REQUEST');
+  OR p_recipient_fingerprint_hex IS NULL OR p_recipient_fingerprint_hex !~ '^[0-9a-fA-F]{64}$' THEN
  END IF;
  SELECT * INTO o FROM henvalt.shopify_recovery_opportunity_v2
  WHERE id=p_opportunity_id AND opportunity_type IN ('ABANDONED_CART','BROWSE_ABANDONMENT')
