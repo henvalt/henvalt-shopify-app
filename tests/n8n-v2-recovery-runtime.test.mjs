@@ -1,12 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createV2DeliveryRuntime } from "../n8n/v2-delivery-runtime.mjs";
 import { createV2RecoveryRuntime } from "../n8n/v2-recovery-runtime.mjs";
 
-test("composed runtime completes a no-provider-network checkout handoff and lease finish", async () => {
+function compose(fakeFetch) {
+  const delivery = createV2DeliveryRuntime({
+    supabaseUrl: "https://project.supabase.co",
+    deliveryAuthToken: "d".repeat(32),
+    fetchImpl: fakeFetch,
+  });
+  const recovery = createV2RecoveryRuntime({
+    supabaseUrl: "https://project.supabase.co",
+    serviceRoleKey: "s".repeat(40),
+    handoff: delivery.handleClaim,
+    fetchImpl: fakeFetch,
+  });
+  return recovery;
+}
+
+test("three-workflow runtime composes Recovery → Delivery and finishes checkout lease", async () => {
   const calls = [];
   const fakeFetch = async (url, init) => {
-    const parsedBody = init.body ? JSON.parse(init.body) : null;
-    calls.push({ url, init, body: parsedBody });
+    const body = init.body ? JSON.parse(init.body) : null;
+    calls.push({ url, init, body });
     if (url.includes("/rest/v1/rpc/claim_shopify_recovery_work_v2")) {
       return new Response(JSON.stringify({
         accepted: true,
@@ -21,24 +37,19 @@ test("composed runtime completes a no-provider-network checkout handoff and leas
       }), { status: 200 });
     }
     if (url.includes("/functions/v1/henvalt-shopify-contact-delivery-v2")) {
-      assert.deepEqual(parsedBody, { intervention_id: "11111111-1111-4111-8111-111111111111" });
+      assert.deepEqual(body, { intervention_id: "11111111-1111-4111-8111-111111111111" });
       assert.equal(init.headers.authorization, "Bearer " + "d".repeat(32));
       return new Response(JSON.stringify({ accepted: true, status: "submitted" }), { status: 202 });
     }
     if (url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")) {
-      assert.equal(parsedBody.p_outcome, "HANDOFF_ACCEPTED");
-      assert.equal(parsedBody.p_retry_after, "0 seconds");
+      assert.equal(body.p_outcome, "HANDOFF_ACCEPTED");
+      assert.equal(body.p_retry_after, "0 seconds");
       return new Response(JSON.stringify({ finished: true, outcome: "HANDOFF_ACCEPTED" }), { status: 200 });
     }
     if (url.includes("/rest/v1/rpc/")) return new Response(JSON.stringify({ accepted: true }), { status: 200 });
     throw new Error("unexpected_network_target");
   };
-  const runtime = createV2RecoveryRuntime({
-    supabaseUrl: "https://project.supabase.co",
-    serviceRoleKey: "s".repeat(40),
-    deliveryAuthToken: "d".repeat(32),
-    fetchImpl: fakeFetch,
-  });
+  const runtime = compose(fakeFetch);
   const result = await runtime.runTick({ workerId: "worker-v2-01" });
   assert.equal(result.accepted, true);
   assert.equal(result.summary.handoff_accepted, 1);
@@ -51,8 +62,7 @@ test("composed runtime completes a no-provider-network checkout handoff and leas
   assert.equal(JSON.stringify(handoff.body).includes("must-not-forward"), false);
 });
 
-
-test("ambiguous 202 provider submission completes the lease and is never handed off twice", async () => {
+test("ambiguous 202 is returned by Delivery, then Recovery completes the lease exactly once", async () => {
   const calls = [];
   const fakeFetch = async (url, init) => {
     const body = init.body ? JSON.parse(init.body) : null;
@@ -81,12 +91,7 @@ test("ambiguous 202 provider submission completes the lease and is never handed 
     if (url.includes("/rest/v1/rpc/")) return new Response(JSON.stringify({ accepted: true }), { status: 200 });
     throw new Error("unexpected_network_target");
   };
-  const runtime = createV2RecoveryRuntime({
-    supabaseUrl: "https://project.supabase.co",
-    serviceRoleKey: "s".repeat(40),
-    deliveryAuthToken: "d".repeat(32),
-    fetchImpl: fakeFetch,
-  });
+  const runtime = compose(fakeFetch);
   const result = await runtime.runTick({ workerId: "worker-v2-02" });
   assert.equal(result.summary.handoff_accepted, 1);
   assert.equal(result.summary.deferred, 0);
