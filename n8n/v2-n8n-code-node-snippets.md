@@ -14,7 +14,7 @@ For Supabase RPC and V2 Edge Function HTTP Request nodes:
 - Route network/timeout errors to a sanitized `DEFERRED` result. Never retry the provider call from n8n.
 - Use the Recovery service-role credential only on Recovery's Supabase RPC nodes. Delivery receives only the per-function delivery bearer.
 
-The Recovery setup/claim snippets run once for all items. Delivery's per-claim validation/classification and Recovery's per-claim finish/acknowledgement snippets must be configured as **Run Once for Each Item** and return one `{ json: ... }` item (not an array).
+The Recovery setup/claim snippets run once for all items. Delivery's per-claim validation/classification and Recovery's per-claim finish/acknowledgement snippets must be configured as **Run Once for Each Item** and return one item (not an array). Every Code node that creates a replacement item includes `pairedItem: { item: 0 }` so n8n can preserve the original work-item lineage through HTTP Request and Execute Sub-workflow nodes.
 
 ## HENVALT_RECOVERY
 
@@ -106,6 +106,7 @@ return items.map(item => ({
     worker_id: workerId,
     correlation_id: `v2:${item.work_id}`,
   },
+  pairedItem: { item: 0 },
 }));
 ```
 
@@ -145,6 +146,7 @@ return {
     p_retry_after: `${retryAfter} seconds`,
     expected_outcome: outcome,
   },
+  pairedItem: { item: 0 },
 };
 ```
 
@@ -165,7 +167,7 @@ if (body.finished !== true || body.outcome !== requested.expected_outcome) {
   throw new Error("v2_finish_ack_unconfirmed");
 }
 
-return { json: { finished: true, outcome: requested.expected_outcome } };
+return { json: { finished: true, outcome: requested.expected_outcome }, pairedItem: { item: 0 } };
 ```
 
 A missing or mismatched acknowledgement is not success. Alert and stop; do not immediately re-handoff the provider request. The database lease and provider-attempt reconciliation determine when work is safe to claim again.
@@ -201,6 +203,7 @@ return {
     worker_id: input.worker_id,
     correlation_id: input.correlation_id,
   },
+  pairedItem: { item: 0 },
 };
 ```
 
@@ -211,13 +214,13 @@ Use a Switch on `work_type`. The two HTTP Request bodies must be separate. Confi
 Checkout branch:
 
 ```javascript
-return { json: { intervention_id: $input.item.json.work_id } };
+return { json: { intervention_id: $input.item.json.work_id }, pairedItem: { item: 0 } };
 ```
 
 Pixel branch:
 
 ```javascript
-return { json: { opportunity_id: $input.item.json.work_id } };
+return { json: { opportunity_id: $input.item.json.work_id }, pairedItem: { item: 0 } };
 ```
 
 Route checkout only to `/functions/v1/henvalt-shopify-contact-delivery-v2` and pixel only to `/functions/v1/henvalt-shopify-pixel-delivery-v2`. Use the corresponding server-held delivery bearer credential. Do not call MailerSend from n8n.
@@ -281,6 +284,7 @@ return {
     reason,
     retry_after_seconds: retry,
   },
+  pairedItem: { item: 0 },
 };
 ```
 
