@@ -127,11 +127,12 @@ Call the service-role RPC:
 
 Endpoint: `POST /rest/v1/rpc/claim_shopify_recovery_work_v2`, with `apikey` and bearer authorization held only in the n8n credential store, and `accept-profile: henvalt` / `content-profile: henvalt`.
 
-The response contains opaque IDs only:
+The response contains exactly three opaque fields per item: `lease_id`, `work_type`, and `work_id`. Tenant/store/opportunity lineage remains private in the lease table and is not returned to n8n.
+
 - `CHECKOUT_INTERVENTION`: `work_id` and `intervention_id` are the same intervention UUID; `opportunity_id` is its exact-store opportunity.
 - `PIXEL_OPPORTUNITY`: `work_id` and `opportunity_id` are the same pixel opportunity UUID; `intervention_id` is null.
 
-Each item also contains `lease_id`, tenant ID, immutable Shopify connection ID, opportunity type, expiry and attempt count. It contains no recipient email, Shopify token, provider secret, message body or send authority. The queue filters inactive stores/apps/tenants, same-store conversions, existing attempts, non-due work and ineligible source states. The claim write is atomic under the unique (work type, work ID) key, so concurrent workers cannot own the same active lease.
+No tenant ID, Shopify connection ID, opportunity lineage, expiry or attempt count is returned. No recipient email, Shopify token, provider secret, message body or send authority is returned. The queue filters inactive stores/apps/tenants, same-store conversions, existing attempts, non-due work and ineligible source states. The claim write is atomic under the unique (work type, work ID) key, so concurrent workers cannot own the same active lease.
 
 ### Finish or defer
 
