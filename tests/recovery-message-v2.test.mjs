@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { renderRecoveryMessageV2, mailerSendUnsubscribeReady } from "../supabase/functions/_shared/recovery-message-v2.mjs";
+import { renderRecoveryMessageV2, mailerSendV2DeliveryReady } from "../supabase/functions/_shared/recovery-message-v2.mjs";
 
 test("server renderer supports only the three explicitly approved recovery opportunity types", () => {
   for (const opportunityType of ["ABANDONED_CHECKOUT", "ABANDONED_CART", "BROWSE_ABANDONMENT"]) {
@@ -57,42 +57,93 @@ test("rendered messages never contain customer identifiers, cart data, discounts
   }
 });
 
-test("MailerSend unsubscribe gate requires verified exact sender domain and both HTML/plain tracking", async () => {
-  const fetcher = async (_url, options) => {
+test("MailerSend V2 readiness requires verified unsubscribe settings and exact enabled webhook", async () => {
+  const token = "x".repeat(24);
+  const providerKey = "provider-key-1234567890123456";
+  const expectedUrl = "https://project.supabase.co/functions/v1/henvalt-mailersend-webhook-v2/" + providerKey;
+  const requiredEvents = [
+    "activity.sent", "activity.delivered", "activity.soft_bounced",
+    "activity.hard_bounced", "activity.unsubscribed", "activity.spam_complaint",
+    "activity.opened", "activity.clicked",
+  ];
+  const responses = [
+    { data: [{
+      id: "domain-123",
+      name: "mail.merchant.com",
+      is_verified: true,
+      domain_settings: {
+        track_unsubscribe: true,
+        track_unsubscribe_html_enabled: true,
+        track_unsubscribe_plain_enabled: true,
+      },
+    }] },
+    { data: [{
+      id: "webhook-123",
+      url: expectedUrl,
+      enabled: true,
+      version: 2,
+      events: requiredEvents,
+    }] },
+  ];
+  let call = 0;
+  const fetcher = async (url, options) => {
     assert.equal(options.method, "GET");
-    assert.equal(options.headers.authorization, "Bearer " + "x".repeat(24));
-    return {
-      ok: true,
-      json: async () => ({ data: [{
-        name: "mail.merchant.com",
-        is_verified: true,
-        domain_settings: {
-          track_unsubscribe: true,
-          track_unsubscribe_html_enabled: true,
-          track_unsubscribe_plain_enabled: true,
-        },
-      }] }),
-    };
+    assert.equal(options.headers.authorization, "Bearer " + token);
+    assert.equal(options.signal instanceof AbortSignal, true);
+    if (call++ === 0) {
+      assert.equal(url, "https://api.mailersend.com/v1/domains?limit=100");
+      return { ok: true, json: async () => responses[0] };
+    }
+    assert.equal(url, "https://api.mailersend.com/v1/webhooks?domain_id=domain-123&limit=100");
+    return { ok: true, json: async () => responses[1] };
   };
-  assert.equal(await mailerSendUnsubscribeReady("x".repeat(24), "recovery@mail.merchant.com", fetcher), true);
+  assert.equal(await mailerSendV2DeliveryReady(
+    token, "recovery@mail.merchant.com", providerKey, "https://project.supabase.co", fetcher
+  ), true);
+  assert.equal(call, 2);
 });
 
-test("MailerSend unsubscribe gate fails closed for missing, unverified or incomplete domain settings", async () => {
-  const payloads = [
-    { data: [] },
-    { data: [{ name: "merchant.com", is_verified: false, domain_settings: { track_unsubscribe: true, track_unsubscribe_html_enabled: true, track_unsubscribe_plain_enabled: true } }] },
-    { data: [{ name: "merchant.com", is_verified: true, domain_settings: { track_unsubscribe: true, track_unsubscribe_html_enabled: true, track_unsubscribe_plain_enabled: false } }] },
-    { data: [{ name: "merchant.com", is_verified: true, domain_settings: { track_unsubscribe: false, track_unsubscribe_html_enabled: true, track_unsubscribe_plain_enabled: true } }] },
+test("MailerSend V2 readiness fails closed for missing domains, disabled unsubscribe, or wrong webhook", async () => {
+  const token = "x".repeat(24);
+  const providerKey = "provider-key-1234567890123456";
+  const expectedUrl = "https://project.supabase.co/functions/v1/henvalt-mailersend-webhook-v2/" + providerKey;
+  const validDomain = {
+    id: "domain-123", name: "merchant.com", is_verified: true,
+    domain_settings: {
+      track_unsubscribe: true,
+      track_unsubscribe_html_enabled: true,
+      track_unsubscribe_plain_enabled: true,
+    },
+  };
+  const validEvents = [
+    "activity.sent", "activity.delivered", "activity.soft_bounced",
+    "activity.hard_bounced", "activity.unsubscribed", "activity.spam_complaint",
+    "activity.opened", "activity.clicked",
   ];
-  for (const payload of payloads) {
-    assert.equal(await mailerSendUnsubscribeReady("x".repeat(24), "recovery@merchant.com", async () => ({
-      ok: true, json: async () => payload,
-    })), false);
+  const cases = [
+    [{ data: [] }, { data: [] }],
+    [{ data: [{ ...validDomain, is_verified: false }] }, { data: [] }],
+    [{ data: [{ ...validDomain, domain_settings: { ...validDomain.domain_settings, track_unsubscribe_plain_enabled: false } }] }, { data: [] }],
+    [{ data: [validDomain] }, { data: [{ url: expectedUrl, enabled: false, version: 2, events: validEvents }] }],
+    [{ data: [validDomain] }, { data: [{ url: expectedUrl + "/wrong", enabled: true, version: 2, events: validEvents }] }],
+    [{ data: [validDomain] }, { data: [{ url: expectedUrl, enabled: true, version: 1, events: validEvents }] }],
+    [{ data: [validDomain] }, { data: [{ url: expectedUrl, enabled: true, version: 2, events: validEvents.slice(1) }] }],
+  ];
+  for (const [domains, webhooks] of cases) {
+    let call = 0;
+    const fetcher = async () => ({
+      ok: true,
+      json: async () => call++ === 0 ? domains : webhooks,
+    });
+    assert.equal(await mailerSendV2DeliveryReady(
+      token, "recovery@merchant.com", providerKey, "https://project.supabase.co", fetcher
+    ), false);
   }
-  assert.equal(await mailerSendUnsubscribeReady("short", "recovery@merchant.com", async () => { throw new Error("must not fetch"); }), false);
-  assert.equal(await mailerSendUnsubscribeReady("x".repeat(24), "invalid", async () => { throw new Error("must not fetch"); }), false);
-  assert.equal(await mailerSendUnsubscribeReady("x".repeat(24), "recovery@merchant.com", async () => ({ ok: false })), false);
-  assert.equal(await mailerSendUnsubscribeReady("x".repeat(24), "recovery@merchant.com", async () => { throw new Error("network"); }), false);
+  assert.equal(await mailerSendV2DeliveryReady("short", "recovery@merchant.com", providerKey, "https://project.supabase.co"), false);
+  assert.equal(await mailerSendV2DeliveryReady(token, "invalid", providerKey, "https://project.supabase.co"), false);
+  assert.equal(await mailerSendV2DeliveryReady(token, "recovery@merchant.com", "bad", "https://project.supabase.co"), false);
+  assert.equal(await mailerSendV2DeliveryReady(token, "recovery@merchant.com", providerKey, "http://project.supabase.co"), false);
+  assert.equal(await mailerSendV2DeliveryReady(token, "recovery@merchant.com", providerKey, "https://project.supabase.co", async () => { throw new Error("network"); }), false);
 });
 
 test("checkout and pixel Edge Functions accept only opaque work identifiers and render messages server-side", async () => {
@@ -100,12 +151,12 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
   const pixel = readFileSync(new URL("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts", import.meta.url), "utf8");
   for (const edge of [checkout, pixel]) {
     assert.match(edge, /resolve_shopify_recovery_message_context_v2/);
-    assert.match(edge, /mailerSendUnsubscribeReady/);
+    assert.match(edge, /mailerSendV2DeliveryReady/);
     assert.match(edge, /renderRecoveryMessageV2/);
     assert.match(edge, /subject:message.subject/);
     assert.match(edge, /html:message.html/);
     assert.match(edge, /text:message.text/);
-    assert.match(edge, /mailer_send_unsubscribe_tracking_not_enabled/);
+    assert.match(edge, /mailer_send_v2_delivery_preflight_failed/);
     assert.match(edge, /HENVALT_V2_MAILERSEND_EVENTS_READY/);
     assert.match(edge, /v2_provider_event_path_not_ready/);
     assert.doesNotMatch(edge, /input.subject|input.html|input.text/);
