@@ -140,6 +140,23 @@ BEGIN
     WHERE id=v_order_id AND financial_status='voided' AND cancelled_at IS NOT NULL
       AND checkout_token='shared-checkout-token'
   ) THEN RAISE EXCEPTION 'Order cancellation did not preserve exact-store checkout lineage and update state'; END IF;
+
+  -- A delayed older paid update must not overwrite the later cancellation.
+  v_body:='{"shop_id":"1001","id":987654,"financial_status":"paid","updated_at":"2026-11-17T10:15:00Z"}';
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-a.myshopify.com','orders/updated','order-stale-update-a','order-stale-event-a'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Stale order update receipt rejected'; END IF;
+  v_projection:=henvalt.project_verified_shopify_order_v2(v_token,'order-stale-update-a',encode(convert_to(v_body,'UTF8'),'base64'));
+  IF v_projection->>'status'<>'STALE_EVENT_IGNORED' THEN RAISE EXCEPTION 'Stale order update was not ignored: %',v_projection; END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_order_identity_v2
+    WHERE id=v_order_id AND financial_status='voided'
+      AND cancelled_at IS NOT NULL
+      AND source_updated_at='2026-11-17T10:31:00Z'::timestamptz
+  ) THEN RAISE EXCEPTION 'Stale order update overwrote newer financial or cancellation state'; END IF;
 END;
 $order_lifecycle_v2$;
 
