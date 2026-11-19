@@ -93,7 +93,7 @@ test("offline Recovery→Delivery acceptance: malformed Edge JSON safely defers 
     }
     if (url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")) {
       finished.push(JSON.parse(init.body));
-      return rpcSuccess({ finished: true });
+      return rpcSuccess({ finished: true, outcome: JSON.parse(init.body).p_outcome });
     }
     if (url.includes("/rest/v1/rpc/")) return rpcSuccess();
     throw new Error("unexpected_network_target");
@@ -115,7 +115,7 @@ test("offline Recovery→Delivery acceptance: transport timeout does not expose 
     }
     if (url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")) {
       finished.push(JSON.parse(init.body));
-      return rpcSuccess({ finished: true });
+      return rpcSuccess({ finished: true, outcome: JSON.parse(init.body).p_outcome });
     }
     if (url.includes("/rest/v1/rpc/")) return rpcSuccess();
     throw new Error("unexpected_network_target");
