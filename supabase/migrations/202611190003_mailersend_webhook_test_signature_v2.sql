@@ -47,7 +47,7 @@ BEGIN
   END;
 
   IF pg_catalog.octet_length(v_body)=0 OR pg_catalog.octet_length(v_body)>2097152
-     OR pg_catalog.jsonb_typeof(v_payload)<>'object' THEN
+     OR pg_catalog.jsonb_typeof(v_payload) IS DISTINCT FROM 'object' THEN
     RETURN jsonb_build_object('accepted',false,'code','INVALID_BODY_SIZE');
   END IF;
 
