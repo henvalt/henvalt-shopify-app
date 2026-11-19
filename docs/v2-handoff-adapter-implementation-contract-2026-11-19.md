@@ -50,3 +50,40 @@ Finish the lease exactly once using `finish_shopify_recovery_work_claim_v2` with
 This adapter is only the orchestration-to-Edge-Function handoff. It does not call MailerSend, authorize a send, create a delivery permit, resolve a recipient, or process signed provider events. The Edge Functions retain those responsibilities and their independent authorization checks.
 
 The adapter tests inject a fake fetch implementation and fake lease finisher. No network request to Supabase, Shopify or MailerSend is made by the test suite. The adapter has not been connected to the active n8n workflows, and this document does not authorize a workflow import, execution, activation or production cutover.
+
+## Composed scheduler/runtime reference
+
+The preparation branch now also contains:
+
+- `n8n/v2-supabase-rpc.mjs`: a bounded PostgREST service-role RPC client and lease-finisher. It uses the private `henvalt` schema profile, keeps service-role credentials in headers only, validates RPC names, and converts bounded retry seconds into PostgreSQL intervals.
+- `n8n/v2-recovery-orchestrator.mjs`: executes the five candidate discovery/materialization stages in order, stops before claiming if any stage rejects, then atomically claims a bounded batch and strips the tenant/store metadata returned by the claim RPC before handoff.
+- `n8n/v2-recovery-runtime.mjs`: composes the RPC client, lease finisher and V2 handoff adapter behind one `runTick` entry point.
+- `tests/n8n-v2-recovery-orchestrator.test.mjs` and `tests/n8n-v2-recovery-runtime.test.mjs`: injected-fake-fetch tests for stage ordering, invalid-stage stop, bounded policies, checkout routing, lease finish, no PII forwarding, and no MailerSend network escape.
+
+The tick currently uses 30-minute checkout inactivity, 60-minute pixel inactivity, 24-hour pixel max age, candidate batches up to 100/200, a 25-item claim and a 180-second lease. These are candidate defaults, not production policy approval. Worker IDs must be unique per execution. The service-role key and Edge Function delivery token are separate credentials.
+
+## Live n8n topology re-check — 19 November 2026
+
+Read-only inspection confirmed the three active workflows and their active versions remain unchanged:
+
+| Workflow | Active version | Nodes | Material finding |
+|---|---|---:|---|
+| `HENVALT_INGEST` | `6368d539-708f-494a-8be8-b9601d0e8607` | 51 | Still includes legacy checkout opportunity, recovery sequence and intervention creation, alongside Shopify HMAC, order/refund, consent and uninstall paths |
+| `HENVALT_RECOVERY` | `32e50bf7-4cbd-4070-bbba-f259ed17b369` | 46 | Still runs legacy job/intervention claims, AI generation, message/token creation and legacy Delivery handoff; no V2 tick is connected |
+| `HENVALT_DELIVERY` | `621ae6ce-a006-4fed-a70e-acf774c360fb` | 62 | Still exposes the legacy delivery endpoint, legacy MailerSend event receiver, tracking/unsubscribe/inbound routes, and a manual one-off send branch containing a hard-coded historical delivery request and recipient |
+
+The manual one-off send branch was not executed. It is a production safety blocker until an owner reviews and removes or disables it. No recipient value is reproduced here.
+
+## Cutover blockers — do not activate the candidate runtime yet
+
+1. **Dual recovery path:** Ingest still creates legacy recovery sequences/interventions while the V2 candidate tables and scheduler are separate. Before enabling V2 for overlapping event classes, establish an exact event/store cutover boundary and prove the legacy scheduler cannot send the same abandoned checkout/cart/browse event.
+2. **Legacy Recovery remains active:** the old AI/message/token pipeline still hands full delivery payloads to the old Delivery workflow. Do not redirect its URL to V2; the request contracts are incompatible.
+3. **Legacy Delivery remains active:** old send and event-processing routes remain published. The V2 provider-event URL must be tested with raw body and signature, and exactly one receiver must own each MailerSend event before cutover.
+4. **Manual one-off sender:** the historical hard-coded one-off send branch must be reviewed and disabled/removed under explicit production change approval before general launch.
+5. **Runtime packaging:** the repository ESM modules are tested as Node reference code; the current n8n runtime has not been verified to import them. Port logic into a reviewed native-node workflow draft or verify a supported, versioned module distribution before importing.
+6. **Operational configuration:** service-role RPC key, separate delivery auth token, Edge Function URLs, event-readiness attestation, timeouts, execution redaction and alerting must be provisioned and verified without exposing secrets or PII.
+7. **End-to-end proof:** use a dedicated test store and provider stub/test account to prove both event classes, consent and suppression stops, order conversion, refund adjustment, provider event deduplication, lease reclaim and no duplicate sends.
+
+The new composed tests are deliberately offline: fake fetch handles every RPC and Edge Function response, and the tests fail on any unexpected network target. They do not prove live Supabase/n8n/MailerSend integration.
+
+No live n8n workflow, active version, Supabase project, Edge Function, Shopify app or MailerSend configuration was modified during this work.
