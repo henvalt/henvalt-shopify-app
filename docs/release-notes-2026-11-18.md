@@ -14,7 +14,7 @@
 - Migration 043 adds idempotent checkout intervention materialization.
 - Disposable PostgreSQL integration and true concurrent worker tests cover
   lease exclusion, retry and completion semantics.
-- Existing candidate migrations 001–045 pass against the synthetic PostgreSQL
+- Existing candidate migrations 001–046 pass against the synthetic PostgreSQL
   17 baseline; none were applied to production.
 
 ### Trusted ingress and delivery boundaries
@@ -54,7 +54,7 @@ The latest successful candidate validation reported:
 - 330/330 repository Node tests passed.
 - 209/209 focused V2 contract tests passed.
 - Configured Deno Edge Function checks passed.
-- Candidate migrations 001–045 applied successfully to disposable PostgreSQL.
+- Candidate migrations 001–046 applied successfully to disposable PostgreSQL.
 - Two-store isolation, cost reservation, attribution/refund, privacy and
   concurrent recovery work-claim SQL tests passed.
 - Gitleaks secret scan passed.
