@@ -16,6 +16,7 @@ DECLARE
  v_receipt uuid; v_checkout uuid; v_checkout_candidate uuid; v_checkout_opportunity uuid;
  v_intervention uuid; v_materialized jsonb; v_checkout_token text;
  v_provider_key text; v_sender_id uuid; v_sender_context jsonb; v_other_connection uuid;
+ v_test_body bytea; v_test_signature text; v_webhook_test jsonb;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key
  FROM henvalt.shopify_connections
@@ -152,6 +153,27 @@ BEGIN
  ) VALUES(v_tenant,v_provider_key,'sender-preflight-domain-'||replace(gen_random_uuid()::text,'-',''),
   'vault://sender-preflight-webhook','vault://sender-preflight-fingerprint',
   'ACTIVE',0.01,'USD');
+ v_test_body:=pg_catalog.convert_to(
+  '{"type":"webhook.test","message":"This is a ping test message","created_at":"2026-03-27T07:24:20.577080Z"}',
+  'UTF8'
+ );
+ v_test_signature:=pg_catalog.encode(extensions.hmac(
+  v_test_body,
+  pg_catalog.convert_to('test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8','UTF8'),
+  'sha256'
+ ),'hex');
+ v_webhook_test:=henvalt.ingest_mailersend_webhook_v2(
+  v_provider_key,v_test_signature,pg_catalog.encode(v_test_body,'base64')
+ );
+ IF v_webhook_test->>'accepted'<>'true'
+    OR v_webhook_test->>'status'<>'WEBHOOK_TEST_VERIFIED'
+    OR v_webhook_test->>'event_persisted'<>'false' THEN
+  RAISE EXCEPTION 'MailerSend URL-validation test ping was not verified: %',v_webhook_test;
+ END IF;
+ IF EXISTS(SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
+           WHERE provider_account_key=v_provider_key) THEN
+  RAISE EXCEPTION 'MailerSend URL-validation ping must not persist a provider event';
+ END IF;
  INSERT INTO henvalt.shopify_sender_profiles_v2(
   tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,
   status,verified_at
