@@ -31,6 +31,13 @@ test("store changes and failed dashboard requests clear previously rendered merc
   assert.match(load, /if\(e\?\.name==="AbortError"\|\|requestId!==dashboardRequestId\)return;\s*clearDashboardData\(\)/);
 });
 
+test("account changes clear previous store names and IDs as well as metrics", () => {
+  assert.match(dashboard, /function clearStoreSelection\(\)/);
+  assert.match(dashboard, /ownerUserId!==nextUserId\)\{cancelDashboardLoad\(\);clearDashboardData\(\);clearStoreSelection\(\)\}/);
+  assert.match(ownerState, /clearDashboardData\(\);clearStoreSelection\(\)/);
+  assert.match(load, /owner_controlled_shop_connection_required"\)\{\s*clearDashboardData\(\);\s*clearStoreSelection\(\)/);
+});
+
 test("dashboard loading and store-selection feedback are announced accessibly", () => {
   assert.match(dashboard, /id="notice" role="status" aria-live="polite"/);
   assert.match(dashboard, /id="status" aria-live="polite"/);
