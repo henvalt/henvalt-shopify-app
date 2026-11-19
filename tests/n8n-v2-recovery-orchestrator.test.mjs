@@ -196,7 +196,7 @@ test("Recovery output allowlists Delivery reason codes and HTTP status", async (
   const result = await runV2RecoveryTick({
     workerId: "worker-v2-01",
     rpc: async name => name === "claim_shopify_recovery_work_v2"
-      ? { accepted: true, items: [item] }
+      ? { accepted: true, claimed: 1, items: [item] }
       : { accepted: true },
     handoff: async claim => ({
       ...claim,
