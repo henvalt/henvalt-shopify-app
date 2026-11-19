@@ -40,6 +40,21 @@ BEGIN
     RAISE EXCEPTION 'Empty dashboard metrics were not zero-safe: %',v_metrics;
   END IF;
 
+  IF jsonb_array_length(v_result->'byEvent')<>3
+     OR jsonb_array_length(v_result->'activity')<>0 THEN
+    RAISE EXCEPTION 'Empty dashboard must return three event categories and no activity rows: %',v_result;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_result->'byEvent') AS categories(value)
+    WHERE (value->>'opportunities')::bigint<>0
+       OR (value->>'messagesSent')::bigint<>0
+       OR (value->>'recovered')::bigint<>0
+       OR (value->>'revenueRecovered')::numeric<>0
+       OR value->>'currencyMixed' IS DISTINCT FROM 'false'
+  ) THEN
+    RAISE EXCEPTION 'Empty per-event dashboard breakdown was not zero-safe: %',v_result->'byEvent';
+  END IF;
+
   v_series := v_result->'revenueSeries';
   IF jsonb_array_length(v_series)<>3 THEN
     RAISE EXCEPTION 'Dashboard revenue series must include every UTC day in the inclusive range: %',v_series;
