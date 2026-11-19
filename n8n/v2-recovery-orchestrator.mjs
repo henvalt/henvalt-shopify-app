@@ -142,6 +142,16 @@ export async function runV2RecoveryTick({
         retry_after_seconds: 3600,
       };
     }
+    // A subworkflow must return the same opaque work identity it received.
+    // A mismatched or missing identity cannot complete this lease as accepted.
+    if (result?.work_type !== safeClaim.work_type || result?.work_id !== safeClaim.work_id) {
+      result = {
+        outcome: "DEFERRED",
+        reason: "delivery_subworkflow_failed",
+        http_status: null,
+        retry_after_seconds: 3600,
+      };
+    }
     let outcome = result?.outcome;
     if (!["HANDOFF_ACCEPTED", "TERMINAL", "DEFERRED"].includes(outcome)) {
       result = {
