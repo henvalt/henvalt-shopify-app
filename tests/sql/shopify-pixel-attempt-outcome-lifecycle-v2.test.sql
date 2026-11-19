@@ -10,6 +10,7 @@ DECLARE
  v_source_delivery uuid; v_order_id uuid; v_attr_id uuid; v_attributed_order_id uuid; v_store_a uuid;
  v_provider_event_id text; v_provider_message_id text;
  v_policy_result jsonb; v_dashboard jsonb;
+ -- Isolate this lifecycle fixture from prior cost-reservation test rows.
  v_order_body text; v_order_hmac text; v_shopify_order_id text;
  v_order_delivery_id text; v_order_event_id text;
  v_webhook_result record; v_order_projection jsonb;
@@ -17,6 +18,7 @@ DECLARE
  v_checkout_identity uuid; v_checkout_candidate uuid; v_checkout_opp uuid;
  v_intervention uuid; v_checkout_lease uuid; v_checkout_token text;
 BEGIN
+ UPDATE henvalt.billing_accounts SET monthly_email_limit=2147483647,usage_cap_amount=2147483647 WHERE tenant_id=v_tenant;
  SELECT id,app_key INTO v_connection,v_app_key FROM henvalt.shopify_connections
   WHERE tenant_id=v_tenant AND shop_domain='store-b.myshopify.com';
  SELECT id INTO v_customer FROM henvalt.shopify_customer_identity_v2
