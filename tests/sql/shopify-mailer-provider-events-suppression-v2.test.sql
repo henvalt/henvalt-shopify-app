@@ -16,6 +16,9 @@ DECLARE
   v_attempt uuid;
   v_intervention_late uuid;
   v_attempt_late uuid;
+  v_intervention_sent uuid;
+  v_attempt_sent uuid;
+  v_sent_body text:='{"type":"activity.sent","created_at":"2026-11-17T04:40:00Z","data":{"id":"provider-event-sent-003","domain_id":"domain-123","message_id":"provider-message-sent-003","email_id":"provider-email-sent-003","type":"sent","recipient":"shared@example.invalid","meta":[]}}';
   v_reconcile jsonb;
   v_late_body text:='{"type":"activity.delivered","created_at":"2026-11-17T04:35:00Z","data":{"id":"provider-event-late-002","domain_id":"domain-123","message_id":"provider-message-late-002","email_id":"provider-email-late-002","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
   v_provider_key text:=repeat('p',32);
@@ -153,6 +156,38 @@ BEGIN
     SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
     WHERE send_attempt_id=v_attempt_late AND status='SETTLED'
   ) THEN RAISE EXCEPTION 'Late provider event did not reconcile the ambiguous send and settle its cost'; END IF;
+
+  -- A signed activity.sent event that arrives after the ambiguous ID is stored settles it.
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
+  ) VALUES(v_tenant,v_store_b,v_opportunity_b,v_customer_b,3,'AUTHORIZED',now())
+  RETURNING id INTO v_intervention_sent;
+  INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
+    tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
+    provider_account_key,idempotency_key,provider_message_id,status,submitted_at
+  ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention_sent,v_provider_key,
+    'store-b-send-sent-003',NULL,'AUTHORIZED',NULL)
+  RETURNING id INTO v_attempt_sent;
+  v_result:=henvalt.record_shopify_delivery_submission_v2(
+    v_attempt_sent,'AMBIGUOUS','provider-message-sent-003'
+  );
+  IF v_result->>'recorded'<>'true' THEN
+    RAISE EXCEPTION 'Second ambiguous checkout attempt could not retain provider ID: %',v_result;
+  END IF;
+  v_signature:=encode(extensions.hmac(convert_to(v_sent_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_sent_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED'
+    OR NOT EXISTS(
+      SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
+      WHERE id=v_attempt_sent AND status='SUBMITTED'
+    ) OR NOT EXISTS(
+      SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
+      WHERE send_attempt_id=v_attempt_sent AND status='SETTLED'
+    ) THEN
+    RAISE EXCEPTION 'Signed activity.sent event did not settle ambiguous checkout attempt: %',v_result;
+  END IF;
 
   IF EXISTS(
     SELECT 1 FROM information_schema.columns
