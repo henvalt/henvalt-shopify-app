@@ -73,11 +73,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const appKeyFilter = "in.(" + activeAppKeys.map(key => encodeURIComponent(key)).join(",") + ")";
-    const connections = await rest("shopify_connections?select=id,shop_domain,active&tenant_id=eq." +
+    const connections = await rest("shopify_connections?select=id,shop_domain,active,tenants!inner(status)&tenant_id=eq." +
       encodeURIComponent(tenantId) + "&active=eq.true&app_key=" + appKeyFilter +
       "&shopify_shop_id=not.is.null&access_token_secret_ref=not.is.null" +
       "&refresh_token_secret_ref=not.is.null&reauth_required_at=is.null" +
-      "&tenants!inner(status)&tenants.status=eq.ACTIVE&order=shop_domain.asc&limit=100");
+      "&tenants.status=eq.ACTIVE&order=shop_domain.asc&limit=100");
     if (!Array.isArray(connections) || connections.length === 0) {
       return reply(409, { error: "owner_controlled_shop_connection_required" });
     }
