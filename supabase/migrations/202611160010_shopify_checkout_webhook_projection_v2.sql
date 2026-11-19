@@ -13,7 +13,8 @@ ALTER TABLE henvalt.shopify_checkout_identity_v2
   ADD COLUMN IF NOT EXISTS shopify_checkout_token text,
   ADD COLUMN IF NOT EXISTS total_value numeric,
   ADD COLUMN IF NOT EXISTS currency text,
-  ADD COLUMN IF NOT EXISTS completed_at timestamptz;
+  ADD COLUMN IF NOT EXISTS completed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS source_updated_at timestamptz;
 
 ALTER TABLE henvalt.shopify_checkout_identity_v2
   ADD CONSTRAINT shopify_checkout_identity_v2_token_nonempty
@@ -46,6 +47,7 @@ DECLARE
   v_total_value numeric;
   v_currency text;
   v_completed_at timestamptz;
+  v_source_updated_at timestamptz;
   v_status text;
   v_inserted_id uuid;
   v_updated integer;
@@ -164,6 +166,12 @@ BEGIN
     v_completed_at := NULL;
   END;
 
+  BEGIN
+    v_source_updated_at := NULLIF(v_payload->>'updated_at', '')::timestamptz;
+  EXCEPTION WHEN OTHERS THEN
+    v_source_updated_at := NULL;
+  END;
+
   v_status := CASE WHEN v_completed_at IS NOT NULL THEN 'COMPLETED' ELSE 'OPEN' END;
 
   INSERT INTO henvalt.shopify_checkout_identity_v2 (
@@ -174,6 +182,7 @@ BEGIN
     total_value,
     currency,
     completed_at,
+    source_updated_at,
     customer_identity_id,
     source_delivery_id,
     checkout_status,
@@ -187,6 +196,7 @@ BEGIN
     v_total_value,
     v_currency,
     v_completed_at,
+    v_source_updated_at,
     v_customer_identity_id,
     v_route.receipt_id,
     v_status,
@@ -204,22 +214,37 @@ BEGIN
       WHEN EXCLUDED.checkout_status = 'COMPLETED' THEN 'COMPLETED'
       ELSE henvalt.shopify_checkout_identity_v2.checkout_status
     END,
+    source_updated_at = EXCLUDED.source_updated_at,
     updated_at = pg_catalog.now()
+  WHERE
+    (EXCLUDED.source_updated_at IS NULL
+      AND henvalt.shopify_checkout_identity_v2.source_updated_at IS NULL)
+    OR (EXCLUDED.source_updated_at IS NOT NULL
+      AND (henvalt.shopify_checkout_identity_v2.source_updated_at IS NULL
+        OR EXCLUDED.source_updated_at >= henvalt.shopify_checkout_identity_v2.source_updated_at))
   RETURNING id INTO v_inserted_id;
+
+  IF v_inserted_id IS NULL THEN
+    SELECT id INTO v_inserted_id
+    FROM henvalt.shopify_checkout_identity_v2
+    WHERE shopify_connection_id = v_route.connection_id
+      AND shopify_checkout_token = v_token;
+    v_status := 'STALE_EVENT_IGNORED';
+  END IF;
 
   UPDATE henvalt.shopify_webhook_deliveries
      SET processing_status = 'PROCESSED',
          processed_at = pg_catalog.now(),
          failure_code = NULL,
          metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
-           'checkout_projection', 'PROCESSED',
+           'checkout_projection', v_status,
            'checkout_reference_type', 'token'
          )
    WHERE id = v_route.receipt_id;
 
   RETURN jsonb_build_object(
     'accepted', true,
-    'status', 'PROCESSED',
+    'status', v_status,
     'checkout_identity_id', v_inserted_id,
     'reference_type', 'token'
   );
