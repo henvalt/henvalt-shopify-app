@@ -112,8 +112,8 @@ test("Delivery snippets reject extra claim data and route distinct opaque reques
   const requestHeading = "Checkout branch:";
   const checkout = codeAfter(requestHeading, deliveryStart);
   const pixel = codeAfter("Pixel branch:", deliveryStart);
-  assert.deepEqual(run(checkout, { json: { work_id: claim.work_id } }), { json: { intervention_id: claim.work_id } });
-  assert.deepEqual(run(pixel, { json: { work_id: claim.work_id } }), { json: { opportunity_id: claim.work_id } });
+  assert.deepEqual(run(checkout, { input: { work_id: claim.work_id } }), { json: { intervention_id: claim.work_id } });
+  assert.deepEqual(run(pixel, { input: { work_id: claim.work_id } }), { json: { opportunity_id: claim.work_id } });
 });
 
 test("Delivery classification defers missing routes and accepts ambiguous provider outcomes without resubmission", () => {
