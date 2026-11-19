@@ -50,6 +50,7 @@ Worker hostname inherited from a former collaborator. Its runtime configuration
 requires both values below before its health check reports configured or an
 install/callback can proceed:
 
+- `SHOPIFY_REDIRECT_URI`: exact HTTPS URL on the same Supabase project origin, with path `/functions/v1/henvalt-shopify-oauth-v2/callback` and no query, fragment or credentials. The function fails closed if the deployed secret does not match its own callback route.
 - `SHOPIFY_WEBHOOK_INGRESS_BASE_URL`: HTTPS origin only (no path, query,
   fragment or credentials). OAuth appends
   `/shopify/webhooks/{per-install-route-token}`.
@@ -147,3 +148,5 @@ ambiguous reservations or reactivate unsafe tenant-scoped cart/browse paths.
 
 The current decision is **HOLD / NOT LAUNCH-READY**. This runbook does not
 grant deployment authority.
+
+The OAuth V2 callback runtime secret is now validated against the exact callback route and Supabase project origin; a merely non-empty or mismatched redirect secret is not accepted. This is source-level fail-closed validation, not proof of the deployed secret value.
