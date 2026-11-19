@@ -179,14 +179,10 @@ BEGIN
       WHEN 'activity.hard_bounced' THEN 'HARD_BOUNCE'
       ELSE NULL END;
 
-    IF v_event.event_type='activity.sent' AND v_attempt.status='AMBIGUOUS' THEN
+    IF v_event.event_type='activity.sent' THEN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='SUBMITTED',submitted_at=coalesce(submitted_at,pg_catalog.now()),updated_at=pg_catalog.now()
       WHERE id=v_attempt.id AND status='AMBIGUOUS';
-      UPDATE henvalt.shopify_recovery_intervention_v2
-      SET status='SUBMITTED',updated_at=pg_catalog.now()
-      WHERE id=v_attempt.intervention_id AND tenant_id=v_attempt.tenant_id
-        AND shopify_connection_id=v_attempt.shopify_connection_id AND status='AMBIGUOUS';
     ELSIF v_event.event_type='activity.delivered' AND v_attempt.status IN ('SUBMITTED','AMBIGUOUS') THEN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='DELIVERED',delivered_at=coalesce(delivered_at,pg_catalog.now()),updated_at=pg_catalog.now()
@@ -213,6 +209,24 @@ BEGIN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='COMPLAINED',updated_at=pg_catalog.now()
       WHERE id=v_attempt.id AND status IN ('SUBMITTED','AMBIGUOUS','DELIVERED','SOFT_BOUNCED');
+    END IF;
+
+    IF v_event.event_type='activity.sent' THEN
+      UPDATE henvalt.shopify_recovery_intervention_v2 i
+      SET status='SUBMITTED',updated_at=pg_catalog.now()
+      FROM henvalt.shopify_recovery_send_attempt_v2 a
+      WHERE a.id=v_attempt.id AND a.status='SUBMITTED'
+        AND a.intervention_id=i.id AND a.tenant_id=i.tenant_id
+        AND a.shopify_connection_id=i.shopify_connection_id
+        AND i.status='AMBIGUOUS';
+    ELSIF v_event.event_type='activity.delivered' THEN
+      UPDATE henvalt.shopify_recovery_intervention_v2 i
+      SET status='DELIVERED',updated_at=pg_catalog.now()
+      FROM henvalt.shopify_recovery_send_attempt_v2 a
+      WHERE a.id=v_attempt.id AND a.status='DELIVERED'
+        AND a.intervention_id=i.id AND a.tenant_id=i.tenant_id
+        AND a.shopify_connection_id=i.shopify_connection_id
+        AND i.status IN ('SUBMITTED','AMBIGUOUS');
     END IF;
 
     IF v_suppression_type IS NOT NULL THEN
