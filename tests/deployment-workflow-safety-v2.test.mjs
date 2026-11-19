@@ -32,11 +32,12 @@ test("Shopify preparation job has one unambiguous job-level condition", () => {
 });
 
 test("release documentation tracks the exact candidate migration chain", () => {
-  assert.match(identity, /Apply candidate migrations 001 through 047/);
+  assert.match(identity, /Apply candidate migrations 001 through 058/);
+  assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 58);
   assert.match(identity, /202611190004_shopify_checkout_candidate_terminal_state_v2\.sql/);
-  assert.match(runbook, /candidate migrations 001–047/i);
-  assert.match(runbook, /Candidate migrations 001–047: CI fixture only; not production-applied\./);
-  assert.match(launchMatrix, /Candidate migrations 001–047 apply in disposable PostgreSQL CI/);
+  assert.match(runbook, /candidate migrations 001–058/i);
+  assert.match(runbook, /Candidate migrations 001–058: CI fixture only; not production-applied\./);
+  assert.match(launchMatrix, /Candidate migrations 001–058 apply in disposable PostgreSQL CI/);
   assert.doesNotMatch(runbook, /migrations 001–046/);
   assert.doesNotMatch(launchMatrix, /migrations 001–046/);
 });
