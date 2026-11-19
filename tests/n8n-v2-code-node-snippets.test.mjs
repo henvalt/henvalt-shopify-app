@@ -62,6 +62,7 @@ test("Recovery claim snippet enforces exact three-field database items and emits
       worker_id: workerId,
       correlation_id: `v2:${item.work_id}`,
     },
+    pairedItem: { item: 0 },
   }]);
   assert.throws(() => run(code, {
     input: { statusCode: 200, body: { accepted: true, claimed: 1, items: [{ ...item, recipient_email: "pii@example.com" }] } },
@@ -95,7 +96,7 @@ test("Recovery finish snippet defers mismatched work and requires exact finish a
     input: { statusCode: 200, body: { finished: true, outcome: "HANDOFF_ACCEPTED" } },
     nodes: { "Validate Delivery Result and Build Finish RPC Body": { item: { json: { expected_outcome: "HANDOFF_ACCEPTED" } } } },
   });
-  assert.deepEqual(acknowledged, { json: { finished: true, outcome: "HANDOFF_ACCEPTED" } });
+  assert.deepEqual(acknowledged, { json: { finished: true, outcome: "HANDOFF_ACCEPTED" }, pairedItem: { item: 0 } });
   assert.throws(() => run(verify, {
     input: { statusCode: 200, body: { finished: true, outcome: "TERMINAL" } },
     nodes: { "Validate Delivery Result and Build Finish RPC Body": { item: { json: { expected_outcome: "HANDOFF_ACCEPTED" } } } },
@@ -112,14 +113,14 @@ test("Delivery snippets reject extra claim data and route distinct opaque reques
     worker_id: "worker-v2-01",
     correlation_id: "v2:11111111-1111-4111-8111-111111111111",
   };
-  assert.deepEqual(run(validate, { input: claim }), { json: claim });
+  assert.deepEqual(run(validate, { input: claim }), { json: claim, pairedItem: { item: 0 } });
   assert.throws(() => run(validate, { input: { ...claim, email: "pii@example.com" } }), /v2_delivery_claim_invalid/);
 
   const requestHeading = "Checkout branch:";
   const checkout = codeAfter(requestHeading, deliveryStart);
   const pixel = codeAfter("Pixel branch:", deliveryStart);
-  assert.deepEqual(run(checkout, { input: { work_id: claim.work_id } }), { json: { intervention_id: claim.work_id } });
-  assert.deepEqual(run(pixel, { input: { work_id: claim.work_id } }), { json: { opportunity_id: claim.work_id } });
+  assert.deepEqual(run(checkout, { input: { work_id: claim.work_id } }), { json: { intervention_id: claim.work_id }, pairedItem: { item: 0 } });
+  assert.deepEqual(run(pixel, { input: { work_id: claim.work_id } }), { json: { opportunity_id: claim.work_id }, pairedItem: { item: 0 } });
 });
 
 test("Delivery classification defers missing routes and accepts ambiguous provider outcomes without resubmission", () => {
@@ -149,4 +150,5 @@ test("Delivery classification defers missing routes and accepts ambiguous provid
     nodes: node,
   });
   assert.equal(rejection.json.outcome, "TERMINAL");
+  assert.deepEqual(rejection.pairedItem, { item: 0 });
 });
