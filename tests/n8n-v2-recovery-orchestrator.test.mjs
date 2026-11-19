@@ -57,6 +57,34 @@ test("recovery tick runs all candidate stages in order before claiming opaque wo
   assert.equal(result.provider_called_by_orchestrator, false);
 });
 
+test("mismatched Delivery work identity is deferred instead of completing another lease", async () => {
+  const item = {
+    work_type: "CHECKOUT_INTERVENTION",
+    work_id: "11111111-1111-4111-8111-111111111111",
+    lease_id: "22222222-2222-4222-8222-222222222222",
+  };
+  const finishes = [];
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 1, items: [item] }
+      : { accepted: true },
+    handoff: async () => ({
+      work_type: "PIXEL_OPPORTUNITY",
+      work_id: "33333333-3333-4333-8333-333333333333",
+      outcome: "HANDOFF_ACCEPTED",
+      retry_after_seconds: 0,
+    }),
+    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+  });
+  assert.equal(finishes.length, 1);
+  assert.equal(finishes[0].outcome, "DEFERRED");
+  assert.equal(finishes[0].retry_after_seconds, 3600);
+  assert.equal(result.summary.deferred, 1);
+  assert.equal(result.summary.handoff_accepted, 0);
+  assert.equal(result.summary.outcomes[0].reason_code, "delivery_subworkflow_failed");
+});
+
 test("a failed or rejected discovery stage stops before claim and handoff", async () => {
   const calls = [];
   let handoffs = 0;
