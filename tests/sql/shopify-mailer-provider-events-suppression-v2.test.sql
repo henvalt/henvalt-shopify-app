@@ -18,6 +18,10 @@ DECLARE
   v_attempt_late uuid;
   v_intervention_sent uuid;
   v_attempt_sent uuid;
+  v_intervention_suppression uuid;
+  v_attempt_suppression uuid;
+  v_sender_profile uuid;
+  v_suppression_body text:='{"type":"activity.unsubscribed","created_at":"2026-11-17T04:45:00Z","data":{"id":"provider-event-unmatched-unsubscribe-004","domain_id":"domain-123","message_id":"provider-message-unmatched-unsubscribe-004","email_id":"provider-email-unmatched-unsubscribe-004","type":"unsubscribed","recipient":"shared@example.invalid","meta":[]}}';
   v_sent_body text:='{"type":"activity.sent","created_at":"2026-11-17T04:40:00Z","data":{"id":"provider-event-sent-003","domain_id":"domain-123","message_id":"provider-message-sent-003","email_id":"provider-email-sent-003","type":"sent","recipient":"shared@example.invalid","meta":[]}}';
   v_reconcile jsonb;
   v_late_body text:='{"type":"activity.delivered","created_at":"2026-11-17T04:35:00Z","data":{"id":"provider-event-late-002","domain_id":"domain-123","message_id":"provider-message-late-002","email_id":"provider-email-late-002","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
@@ -190,6 +194,67 @@ BEGIN
       WHERE send_attempt_id=v_attempt_sent AND status='SETTLED'
     ) THEN
     RAISE EXCEPTION 'Signed activity.sent event did not settle ambiguous checkout attempt: %',v_result;
+  END IF;
+
+  -- Late unsubscribe uses the original permit fingerprint, not the webhook's recipient string.
+  INSERT INTO henvalt.shopify_sender_profiles_v2(
+    tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,status,verified_at
+  ) VALUES(v_tenant,v_store_b,v_provider_key,'recovery@store-b.example.invalid','Store B','ACTIVE',now())
+  RETURNING id INTO v_sender_profile;
+
+  v_signature:=encode(extensions.hmac(convert_to(v_suppression_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_suppression_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'UNMATCHED' THEN
+    RAISE EXCEPTION 'Late unsubscribe was not retained as UNMATCHED: %',v_result;
+  END IF;
+
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
+  ) VALUES(v_tenant,v_store_b,v_opportunity_b,v_customer_b,4,'AUTHORIZED',now())
+  RETURNING id INTO v_intervention_suppression;
+  INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
+    tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
+    provider_account_key,idempotency_key,provider_message_id,status,submitted_at
+  ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention_suppression,v_provider_key,
+    'store-b-send-unsubscribe-004',NULL,'AUTHORIZED',NULL)
+  RETURNING id INTO v_attempt_suppression;
+  v_result:=henvalt.record_shopify_delivery_submission_v2(
+    v_attempt_suppression,'AMBIGUOUS','provider-message-unmatched-unsubscribe-004'
+  );
+  IF v_result->>'recorded'<>'true' THEN
+    RAISE EXCEPTION 'Late unsubscribe attempt did not retain provider identity: %',v_result;
+  END IF;
+
+  INSERT INTO henvalt.shopify_delivery_permits_v2(
+    tenant_id,shopify_connection_id,intervention_id,customer_identity_id,
+    provider_account_key,sender_profile_id,permit_token_sha256,recipient_fingerprint,
+    expires_at,consumed_at,send_attempt_id
+  ) VALUES(v_tenant,v_store_b,v_intervention_suppression,v_customer_b,v_provider_key,
+    v_sender_profile,encode(extensions.digest(convert_to(gen_random_uuid()::text,'UTF8'),'sha256'),'hex'),
+    decode(repeat('ab',32),'hex'),now()+interval '1 hour',now(),v_attempt_suppression);
+
+  v_reconcile:=henvalt.reconcile_unmatched_shopify_checkout_provider_events_v2(10);
+  IF v_reconcile->>'accepted'<>'true' OR (v_reconcile->>'reconciled')::integer<>1 THEN
+    RAISE EXCEPTION 'Late unsubscribe was not correlated through the original permit: %',v_reconcile;
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_delivery_suppressions_v2
+    WHERE tenant_id=v_tenant AND shopify_connection_id=v_store_b
+      AND customer_identity_id=v_customer_b
+      AND suppression_type='UNSUBSCRIBED'
+      AND source_send_attempt_id=v_attempt_suppression
+      AND source_provider_event_id='provider-event-unmatched-unsubscribe-004'
+      AND recipient_fingerprint=decode(repeat('ab',32),'hex')
+  ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
+    WHERE provider_account_key=v_provider_key
+      AND provider_event_id='provider-event-unmatched-unsubscribe-004'
+      AND processing_status='PROCESSED'
+      AND send_attempt_id=v_attempt_suppression
+  ) THEN
+    RAISE EXCEPTION 'Late unsubscribe suppression did not use exact original permit fingerprint';
   END IF;
 
   IF EXISTS(
