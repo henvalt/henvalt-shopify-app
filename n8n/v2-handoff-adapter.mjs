@@ -64,7 +64,7 @@ export function classifyHandoffResponse(status, body) {
   return Object.freeze({ outcome: "DEFERRED", reason: "handoff_not_confirmed", retryAfterSeconds: 3600 });
 }
 
-export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = fetch, finishClaim }) {
+export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = fetch }) {
   if (typeof supabaseUrl !== "string" || !/^https:\/\//i.test(supabaseUrl) ||
       typeof bearerToken !== "string" || bearerToken.length < 16 ||
       typeof fetchImpl !== "function") {
