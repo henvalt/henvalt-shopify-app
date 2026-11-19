@@ -59,8 +59,20 @@ export function classifyHandoffResponse(status, body) {
   if (status === 400 || status === 404 || status === 410 || status === 422) {
     return Object.freeze({ outcome: "TERMINAL", reason: "permanent_request_rejection", retryAfterSeconds: 0 });
   }
-  // 401/403, 409, throttling, 5xx, malformed JSON and all unknown responses
-  // are conservative deferrals. They never trigger a second provider submission.
+  if (status === 401 || status === 403) {
+    return Object.freeze({ outcome: "DEFERRED", reason: "delivery_auth_incident", retryAfterSeconds: 3600 });
+  }
+  if (status === 409) {
+    return Object.freeze({ outcome: "DEFERRED", reason: "delivery_preflight_or_eligibility_review", retryAfterSeconds: 3600 });
+  }
+  if (status === 429) {
+    return Object.freeze({ outcome: "DEFERRED", reason: "handoff_rate_limited", retryAfterSeconds: 3600 });
+  }
+  if (status === 408 || status >= 500) {
+    return Object.freeze({ outcome: "DEFERRED", reason: "edge_or_provider_unavailable", retryAfterSeconds: 3600 });
+  }
+  // Malformed JSON, unknown statuses and unconfirmed 2xx are conservative
+  // deferrals. They never trigger a second provider submission.
   return Object.freeze({ outcome: "DEFERRED", reason: "handoff_not_confirmed", retryAfterSeconds: 3600 });
 }
 
@@ -77,6 +89,7 @@ export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = f
       ? { intervention_id: valid.workId }
       : { opportunity_id: valid.workId };
     let classification;
+    let httpStatus = null;
     try {
       const response = await fetchImpl(`${base}/functions/v1/${valid.endpoint}`, {
         method: "POST",
@@ -88,6 +101,7 @@ export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = f
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(20000),
       });
+      httpStatus = response.status;
       let parsed = null;
       try { parsed = await response.json(); } catch { /* malformed response is ambiguous */ }
       classification = classifyHandoffResponse(response.status, parsed);
@@ -106,6 +120,7 @@ export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = f
       correlation_id: valid.correlationId,
       outcome: classification.outcome,
       reason: classification.reason,
+      http_status: httpStatus,
       retry_after_seconds: classification.retryAfterSeconds,
     });
   };
