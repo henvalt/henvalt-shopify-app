@@ -18,7 +18,7 @@ BEGIN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501';
   END IF;
 
-  IF p_work_id IS NULL OR p_work_type NOT IN ('CHECKOUT_INTERVENTION','PIXEL_OPPORTUNITY') THEN
+  IF p_work_id IS NULL OR p_work_type IS NULL OR p_work_type NOT IN ('CHECKOUT_INTERVENTION','PIXEL_OPPORTUNITY') THEN
     RETURN jsonb_build_object('ready',false,'code','INVALID_MESSAGE_CONTEXT_REQUEST');
   END IF;
 
