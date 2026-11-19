@@ -52,7 +52,7 @@ npm test
 npm run check
 ```
 
-The GitHub Actions identity workflow additionally applies migrations 001–043
+The GitHub Actions identity workflow additionally applies migrations 001–044
 to a disposable PostgreSQL 17 database and runs the SQL integration and
 concurrency tests. A passing run is necessary but does not prove production
 parity.
@@ -82,8 +82,11 @@ After written owner approval for each stage:
    activate one controlled store behind a feature gate. Do not enable legacy
    and V2 delivery for the same opportunity.
 6. **Provider:** verify sender/domain, unit cost, cap and signed webhook event
-   correlation. Begin with a controlled test recipient only after explicit
-   authorization. Never retry an AMBIGUOUS submission blindly.
+   correlation. Route MailerSend signed events to the V2 webhook and disable
+   the duplicate legacy n8n event path. Only after end-to-end verification may
+   the owner set `HENVALT_V2_MAILERSEND_EVENTS_READY=true`. Begin with a
+   controlled test recipient only after explicit authorization. Never retry
+   an AMBIGUOUS submission blindly.
 7. **Shopify:** run the manually gated unreleased-version preparation workflow,
    verify the Shopify-generated Pixel UID and app scopes, test install and
    webhooks on the owner-controlled test shop, then use the separate
@@ -116,7 +119,7 @@ ambiguous reservations or reactivate unsafe tenant-scoped cart/browse paths.
 
 ## 6. Current deployment state
 
-- Candidate migrations 001–043: CI fixture only; not production-applied.
+- Candidate migrations 001–044: CI fixture only; not production-applied.
 - Candidate V2 Edge Functions: branch only; not production-deployed.
 - Candidate Worker changes: not deployed.
 - Active n8n workflows: three legacy workflows, unchanged.
