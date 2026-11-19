@@ -32,9 +32,11 @@ test("privacy receipts minimize stored personal data and never auto-delete", () 
   assert.match(sql, /REVOKE ALL ON henvalt\.shopify_privacy_webhook_deliveries FROM PUBLIC, anon, authenticated/);
 });
 
-test("Edge ingress routes by app key and reports receipt separately from processing", () => {
-  assert.match(edge, /const appKey = url\.pathname/);
+test("Edge ingress resolves the active app key from the trusted registry, not the request path", () => {
+  assert.match(edge, /resolve_shopify_app_oauth_identity/);
   assert.match(edge, /p_shopify_client_id: SHOPIFY_API_KEY/);
+  assert.match(edge, /const appKey = await resolveActiveAppKey\(\)/);
+  assert.doesNotMatch(edge, /const appKey = url\.pathname/);
   assert.match(edge, /accept_shopify_privacy_webhook_v2/);
   assert.match(edge, /review_required: true/);
   assert.doesNotMatch(edge, /redact_shopify_shop_data|redact_shopify_customer_data/);
