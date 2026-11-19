@@ -191,7 +191,26 @@ BEGIN
   IF NOT EXISTS(
     SELECT 1 FROM henvalt.shopify_order_identity_v2
     WHERE id=v_order_id AND financial_status='partially_refunded'
-  ) THEN RAISE EXCEPTION 'Partial refund did not update order financial status'; END IF;
+      AND last_refund_at='2026-11-17T11:00:00Z'::timestamptz
+  ) THEN RAISE EXCEPTION 'Partial refund did not establish the financial-event ordering watermark'; END IF;
+
+  -- A delayed order update older than the refund must not restore the paid state.
+  v_body:='{"shop_id":"2002","id":987654,"financial_status":"paid","updated_at":"2026-11-17T10:30:00Z"}';
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-b.myshopify.com','orders/updated','order-before-refund-delivery','order-before-refund-event'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Pre-refund delayed order receipt rejected'; END IF;
+  v_projection:=henvalt.project_verified_shopify_order_v2(v_token,'order-before-refund-delivery',encode(convert_to(v_body,'UTF8'),'base64'));
+  IF v_projection->>'status'<>'STALE_EVENT_IGNORED' THEN
+    RAISE EXCEPTION 'Order update older than refund was not ignored: %',v_projection;
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_order_identity_v2
+    WHERE id=v_order_id AND financial_status='partially_refunded'
+      AND last_refund_at='2026-11-17T11:00:00Z'::timestamptz
+  ) THEN RAISE EXCEPTION 'Delayed order update reversed the refund financial state'; END IF;
 
   -- A distinct verified receipt with the same refund ID but altered
   -- financial facts must be rejected, never overwrite the original ledger row.
