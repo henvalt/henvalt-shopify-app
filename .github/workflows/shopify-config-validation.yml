@@ -14,7 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Validate Shopify TOML and extension source
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check privacy Edge Functions
+        run: deno check supabase/functions/henvalt-shopify-privacy/index.ts supabase/functions/henvalt-privacy-export/index.ts
+      - name: Validate Shopify TOML, Pixel source, collector, and ingest contract
         run: |
           python3 - <<'PY'
           import json
@@ -35,11 +40,101 @@ jobs:
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
           assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
+
           source = pathlib.Path("extensions/henvalt-pixel/src/index.js").read_text()
-          for event in ("page_viewed", "product_viewed", "product_added_to_cart", "checkout_started"):
+          collector = pathlib.Path("cloudflare/pixel-collector.js").read_text()
+          ingest = pathlib.Path("supabase/migrations/202611140001_allow_product_removed_from_cart_pixel_event.sql").read_text()
+          for event in ("page_viewed", "product_viewed", "product_added_to_cart", "product_removed_from_cart", "checkout_started"):
               assert event in source, f"Missing pixel subscription: {event}"
+              assert event in collector, f"Collector rejects subscribed pixel event: {event}"
+              assert event in ingest, f"Supabase ingest rejects subscribed pixel event: {event}"
           assert "fetch(" in source, "Missing collector delivery"
-          print("HENVALT Shopify app configuration and Pixel source checks passed.")
+
+          privacy_topics = {"customers/data_request", "customers/redact", "shop/redact"}
+          subscriptions = app.get("webhooks", {}).get("subscriptions", [])
+          configured = set()
+          for subscription in subscriptions:
+              configured.update(subscription.get("compliance_topics", []))
+          assert privacy_topics <= configured, f"Missing Shopify compliance topics: {privacy_topics - configured}"
+          privacy_uri = next((s.get("uri", "") for s in subscriptions if privacy_topics <= set(s.get("compliance_topics", []))), "")
+          assert privacy_uri == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy", "Unexpected privacy webhook destination"
+
+          privacy_handler = pathlib.Path("supabase/functions/henvalt-shopify-privacy/index.ts").read_text()
+          privacy_migration = pathlib.Path("supabase/migrations/202611140002_shopify_privacy_request_queue.sql").read_text()
+          for required in ("x-shopify-hmac-sha256", "customers/data_request", "customers/redact", "shop/redact", "invalid_hmac"):
+              assert required in privacy_handler, f"Privacy handler missing {required}"
+          assert "shopify_privacy_requests" in privacy_handler and "shopify_privacy_requests" in privacy_migration, "Privacy queue schema/handler mismatch"
+          assert "active=eq.true" not in privacy_handler, "Compliance requests must still resolve after app/uninstalled deactivates the connection"
+          assert "enable row level security" in privacy_migration.lower(), "Privacy queue must have RLS enabled"
+
+          customer_privacy = pathlib.Path("supabase/migrations/202611140003_shopify_customer_privacy_rpcs.sql").read_text().lower()
+          export_storage = pathlib.Path("supabase/migrations/202611140004_shopify_privacy_export_storage.sql").read_text().lower()
+          export_scheduler = pathlib.Path("supabase/migrations/202611140005_schedule_privacy_export_purge.sql").read_text().lower()
+          for required in (
+              "export_shopify_customer_data",
+              "redact_shopify_customer_data",
+              "redact_shopify_shop_data",
+              "security definer",
+              "set search_path = henvalt, pg_temp",
+              "revoke all on function",
+              "grant execute on function",
+              "p_tenant_id",
+              "p_shopify_customer_id",
+              "canonical_events",
+              "conversation_messages",
+              "delivery_attempts",
+              "delivery_requests",
+              "provider_events",
+              "messages",
+              "recovery_interventions",
+              "tracking_tokens",
+              "unsubscribe_tokens",
+              "webhook_events",
+              "audit_log",
+              "processing_errors",
+          ):
+              assert required in customer_privacy, f"Customer privacy RPC migration missing {required}"
+          assert "from public, anon, authenticated" in customer_privacy, "Customer privacy RPCs must not be public"
+          assert "where c.tenant_id = p_tenant_id" in customer_privacy, "Customer lookup must be tenant scoped"
+          assert "delete from henvalt.email_suppressions" in customer_privacy, "Customer suppression rows must be removed without unique-key collisions"
+          assert "delete from henvalt.tracking_tokens" in customer_privacy, "Customer tracking tokens must be removed"
+          assert "dr.opportunity_id=any(v_opportunity_ids)" in customer_privacy and "cc.customer_id=any(v_customer_ids)" in customer_privacy, "Delivery redaction must be linked by customer even when email is absent"
+          assert "result_payload jsonb" in export_storage and "result_expires_at timestamptz" in export_storage, "Customer export storage must be time-limited"
+          assert "result_expires_at" in export_storage and "service_role" in export_storage, "Customer export storage must remain service-role only"
+          assert "purge_expired_shopify_privacy_exports" in export_storage and "purge_expired_shopify_privacy_exports" in privacy_handler, "Expired customer exports must be purged on verified webhook traffic"
+          assert "export_shopify_customer_data" in privacy_handler and "redact_shopify_customer_data" in privacy_handler and "redact_shopify_shop_data" in privacy_handler, "Privacy webhook does not invoke all scoped processors"
+          assert "customerEmail" in privacy_handler and "p_customer_email" in privacy_handler, "Privacy data requests must support Shopify email-only customer payloads"
+          assert 'if (!customerId && !customerEmail)' in privacy_handler, "Shopify customer redaction must support email-only payloads"
+          assert "either shopify customer id or customer email are required" in customer_privacy, "Customer redaction RPC must accept email-only identifiers"
+          assert "p_customer_email text default null" in customer_privacy and "lower(c.email) = v_email" in customer_privacy, "Customer export RPC must resolve email-only requests within tenant scope"
+          assert "coalesce(max(lower(c.email)), v_email)" in customer_privacy and "or exists (select 1 from henvalt.checkouts" in customer_privacy, "Customer export must preserve email-only identifiers and find checkout-only records"
+          assert "x.checkout_id in (select co.id" in customer_privacy, "Customer export must include orders linked through email-matched checkouts"
+          assert "v_checkout_ids" in customer_privacy and "v_opportunity_ids" in customer_privacy, "Email-only redaction must cover checkout-linked orders and interventions"
+          assert "raw events and processing records can still be keyed by the shopify customer id" in customer_privacy, "ID-only redaction must continue without a customer row"
+          assert "henvalt.webhook_events x where x.tenant_id=p_tenant_id" in customer_privacy and "henvalt.processing_errors x where x.tenant_id=p_tenant_id" in customer_privacy, "ID-only exports must detect raw webhook and processing records"
+          assert "henvalt.email_suppressions x where x.tenant_id=p_tenant_id" in customer_privacy, "Email-only exports must detect suppression records even without a customer row"
+          assert "awaiting_secure_delivery" in privacy_handler, "Data export must not be marked complete before secure delivery"
+          privacy_export = pathlib.Path("supabase/functions/henvalt-privacy-export/index.ts").read_text()
+          dashboard = pathlib.Path("dashboard/index.html").read_text()
+          assert r"replace(/^Bearer\s+/i" in privacy_export, "Privacy export must parse standard Bearer authorization headers"
+          for required in ("auth/v1/user", "tenant_memberships", "role=in.(OWNER,ADMIN)", "tenant_id=eq.", "result_expires_at=gt.", "content-disposition"):
+              assert required in privacy_export, f"Secure export endpoint missing {required}"
+          assert "result_payload" in privacy_export and "result_delivered_at" in privacy_export, "Export delivery must audit downloads"
+          assert "access-control-expose-headers" in privacy_export and "content-disposition" in privacy_export, "Dashboard must be able to read the export filename header"
+          assert "purge_expired_shopify_privacy_exports" in privacy_export, "Dashboard access must also purge expired export data"
+          assert "select=id,shop_domain,request_id,received_at,result_expires_at,result_delivered_at,status,last_error" in privacy_export, "Merchant privacy page must list unmatched requests needing review"
+          assert "Manual review required" in dashboard and "Review required" in dashboard, "Dashboard must distinguish pending review from downloadable exports"
+          assert "Export expired" in dashboard and '"Expired"' in dashboard, "Dashboard must distinguish expired exports from requests needing review"
+          assert "customer_id: exportFound ? null : customerId" in privacy_handler, "Generated exports must minimise retained request identifiers"
+          assert "customer_id: null" in privacy_handler, "Completed redactions must clear the stored customer identifier"
+          assert "PRIVACY_EXPORT_API" in dashboard and "loadPrivacyRequests" in dashboard and "downloadPrivacyExport" in dashboard, "Merchant dashboard missing privacy export UI"
+          assert "data-page=\"privacy\"" in dashboard and "id=\"page-privacy\"" in dashboard, "Merchant dashboard privacy page is missing"
+          assert "service_role" in export_storage, "Export storage must be service-role only"
+          assert "cron.schedule" in export_scheduler and "henvalt-privacy-export-expiry-purge" in export_scheduler, "Privacy export expiry must have a named recurring Cron job"
+          assert "*/15 * * * *" in export_scheduler and "purge_expired_shopify_privacy_exports" in export_scheduler, "Privacy export purge must run every 15 minutes"
+          assert "to_regnamespace('cron')" in export_scheduler, "Scheduler migration must fail clearly when Supabase Cron is not enabled"
+          print("HENVALT pixel contract and Shopify privacy webhook/export/redaction checks passed.")
+          print("HENVALT pixel contract and Shopify privacy webhook configuration checks passed.")
           PY
 
   deploy-shopify-version:
