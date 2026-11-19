@@ -235,4 +235,11 @@ test("n8n cutover specification blocks legacy event duplication and gates V2 sen
   assert.ok(docs.includes("HENVALT_INGEST"));
   assert.ok(docs.includes("HENVALT_RECOVERY"));
   assert.ok(docs.includes("HENVALT_DELIVERY"));
+  assert.ok(docs.includes('with exactly `{"intervention_id":"<UUID>"}`'));
+  assert.ok(docs.includes('with exactly `{"opportunity_id":"<UUID>"}`'));
+  assert.ok(docs.includes("Message-rendering contract is implemented in this branch."));
+  assert.ok(docs.includes("mailer_send_v2_delivery_preflight_failed"));
+  assert.doesNotMatch(docs, /with `intervention_id`, `subject`, `html`/);
+  assert.doesNotMatch(docs, /with `opportunity_id`, `subject`, `html`/);
+  assert.doesNotMatch(docs, /Both Edge Functions currently require subject and HTML\/text from the caller/);
 });
