@@ -112,3 +112,6 @@ The candidate TOML now routes Shopify compliance topics to `henvalt-shopify-priv
 The candidate `shopify.app.toml` compliance subscription now targets the V2 privacy Edge Function at a stable URL. The function resolves the active app identity through the service-role-only `resolve_shopify_app_oauth_identity` RPC, checks that its client ID matches `SHOPIFY_API_KEY`, and passes the returned app key to the exact-store privacy inbox RPC. It does not derive identity from request path, shop domain, or caller-supplied fields. The Vault secret remains inside the trusted server/database boundary; SQL performs raw-body HMAC verification. Missing registry/secret state fails closed with 503.
 
 The candidate change does not seed a production app registry row, deploy the Edge Function, provision Vault secrets, or prove a real Shopify compliance webhook. Keep the route disabled from release until those prerequisites and a signed non-production test are verified.
+
+
+The OAuth V2 configuration gate also validates the runtime `SHOPIFY_REDIRECT_URI` against the exact callback path and the Supabase project origin. This prevents an incorrect non-empty redirect secret from being treated as configured. It does not verify the deployed secret value.
