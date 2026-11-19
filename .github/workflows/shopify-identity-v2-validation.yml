@@ -122,7 +122,7 @@ jobs:
             supabase/migrations/202611180041_shopify_v2_dashboard_read_model.sql \
             supabase/migrations/202611180042_shopify_recovery_work_claims_v2.sql \
             supabase/migrations/202611180043_shopify_checkout_intervention_materializer_v2.sql \
-            supabase/migrations/202611190001_shopify_recovery_message_context_v2.sql; do
+            supabase/migrations/202611190001_shopify_recovery_message_context_v2.sql \
             supabase/migrations/202611190002_shopify_sender_profile_preflight_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
