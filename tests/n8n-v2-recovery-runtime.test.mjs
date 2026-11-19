@@ -57,10 +57,13 @@ test("three-workflow runtime composes Recovery → Delivery and finishes checkou
   assert.equal(result.summary.lease_finish_unconfirmed, 0);
   assert.equal(result.provider_called_by_orchestrator, false);
   assert.equal(calls.some(x => x.url.includes("api.mailersend.com")), false);
+  assert.equal(JSON.stringify(result).includes("recipient_email_returned"), false);
   assert.equal(calls.some(x => x.url.includes("henvalt-shopify-pixel-delivery-v2")), false);
   assert.equal(calls.filter(x => x.url.includes("/rest/v1/rpc/")).length, 7);
   const handoff = calls.find(x => x.url.includes("/functions/v1/henvalt-shopify-contact-delivery-v2"));
   assert.equal(JSON.stringify(handoff.body).includes("must-not-forward"), false);
+  assert.equal(JSON.stringify(result).includes("must-not-forward"), false);
+  assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
 });
 
 test("ambiguous 202 is returned by Delivery, then Recovery completes the lease exactly once", async () => {
