@@ -2,18 +2,18 @@
 
 **Disposition: REVIEW REQUIRED — NOT APPROVED FOR PRODUCTION.**
 
-This register is a source-level inventory of the 47 candidate migration files listed by the identity V2 CI workflow. It records the principal object/operation surface and identifies migrations requiring heightened production-parity review. It is not a substitute for a complete SQL semantic review, production schema comparison, historical-row disposition, or replay against a restorable production-like clone. The current live database baseline recorded in the 19 November readiness review is 178 migrations ending at `20261114174204`; none of this candidate chain is recorded as production-applied.
+This register is a source-level inventory of the 58 candidate migration files listed by the identity V2 CI workflow. It records the principal object/operation surface and identifies migrations requiring heightened production-parity review. It is not a substitute for a complete SQL semantic review, production schema comparison, historical-row disposition, or replay against a restorable production-like clone. The current live database baseline recorded in the 19 November readiness review is 178 migrations ending at `20261114174204`; none of this candidate chain is recorded as production-applied.
 
 ## Review rules
 
-- Treat all 47 migrations as unapplied candidate SQL. CI applies them only to a disposable baseline.
+- Treat all 58 migrations as unapplied candidate SQL. CI applies them only to a disposable baseline.
 - `CREATE TABLE IF NOT EXISTS` does not prove an existing production table has the expected columns, constraints, indexes, owner, RLS or grants.
 - Every `CREATE OR REPLACE FUNCTION` requires signature, owner, SECURITY DEFINER, search_path, dependency and EXECUTE-grant comparison against production.
 - Every ALTER/DROP/trigger replacement requires an object-existence check and a before/after data and behavior comparison.
 - Do not run this chain against production as a diagnostic. Use a restorable clone first.
 - The CI workflow's filename list is the source of truth for ordering; do not infer order from filesystem sorting.
 
-## Ordered 47-file inventory
+## Ordered 58-file inventory
 
 | # | Migration | Primary surface / operation class | Production-parity focus |
 |---:|---|---|---|
@@ -65,4 +65,20 @@ This register is a source-level inventory of the 47 candidate migration files li
 | 46 | `202611180035_shopify_pixel_delivery_context_v2.sql` | Pixel delivery context RPC | Opaque ID boundary and recipient/content secrecy |
 | 47 | `202611180036_shopify_pixel_provider_submission_gate_v2.sql` | Pixel provider submission authorization RPC | Consent, jurisdiction, cap, sender and suppression checks at the final submission boundary |
 
-**Important correction:** the workflow currently lists additional files numbered 037–043 and 202611190001–004 after the entries above. The complete ordered sequence is 55? No — the 47-file count must be taken from the workflow's complete shell list, not this abbreviated table. This register must not be used as an execution manifest until the remaining entries are appended and count-checked.
+| 48 | `202611180037_shopify_pixel_attempt_outcome_reconciliation_v2.sql` | Replaces pixel send-attempt result RPC and updates attempt state | Outcome transition validity, provider reference idempotency and stale/ambiguous preservation |
+| 49 | `202611180038_shopify_pixel_stale_attempt_reconciler_v2.sql` | Marks stale pixel provider attempts ambiguous through bounded reconciliation RPC | **High risk:** age threshold, claim races and prevention of blind resend |
+| 50 | `202611180039_shopify_pixel_provider_event_reconciliation_v2.sql` | Alters provider event/send-attempt/suppression lineage; adds provider-message uniqueness and reconciliation RPC | **High risk:** existing provider event duplicates, shared suppression semantics and exact attempt mapping |
+| 51 | `202611180040_shopify_pixel_recovery_attribution_v2.sql` | Alters attribution nullability for pixel lineage; adds pixel attribution evaluator and triggers | **Critical financial review:** checkout and pixel attribution coexistence, exact order/connection matching and fee idempotency |
+| 52 | `202611180041_shopify_v2_dashboard_read_model.sql` | Replaces V2 dashboard summary RPC | Tenant/store scope, date boundaries, fee/recovered revenue definitions and query performance |
+| 53 | `202611180042_shopify_recovery_work_claims_v2.sql` | Creates recovery work claim table/indexes and claim/finish RPCs | **High risk:** table creation is not IF NOT EXISTS; lease uniqueness, stale worker rejection, retry deadlines and role grants |
+| 54 | `202611180043_shopify_checkout_intervention_materializer_v2.sql` | Adds intervention scheduling index and checkout intervention materializer RPC | Duplicate intervention prevention, scheduling windows and exact opportunity linkage |
+| 55 | `202611190001_shopify_recovery_message_context_v2.sql` | Recovery message context resolver RPC | PII/message rendering boundary, opaque ID validation and tenant/store scoping |
+| 56 | `202611190002_shopify_sender_profile_preflight_v2.sql` | Sender profile preflight resolver RPC | Verified sender/domain readiness, merchant branding and no-send behavior on missing sender |
+| 57 | `202611190003_mailersend_webhook_test_signature_v2.sql` | Alters MailerSend webhook function and replaces signature verification behavior | **High risk:** raw-body signature compatibility, secret source, constant-time comparison and legacy receiver coexistence |
+| 58 | `202611190004_shopify_checkout_candidate_terminal_state_v2.sql` | Replaces checkout candidate refresh RPC to preserve converted/closed/inactive terminal states | Terminal-state monotonicity, same-store order conversion, closed checkout handling and service-role-only execution |
+
+## Count and verification
+
+The workflow's explicit ordered shell list contains **58 distinct migration paths**. The step label was stale and has been corrected to “Apply candidate migrations 001 through 058”. The last file is `202611190004_shopify_checkout_candidate_terminal_state_v2.sql`; its filename suffix “0004” is a date-bucket sequence, not the total chain count.
+
+This is still a source-level operation inventory, not a production approval. The complete chain must be reviewed against a production-like restored clone, including all historical data, grants, RLS, trigger dependencies, locks and post-migration verification.
