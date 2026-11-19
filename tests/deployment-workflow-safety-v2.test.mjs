@@ -37,7 +37,7 @@ test("Shopify preparation job has one unambiguous job-level condition", () => {
 test("release documentation tracks the exact candidate migration chain", () => {
   assert.match(identity, /Apply candidate migrations 001 through 060/);
   assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 60);
-  assert.equal((migrationRegister.match(/^\| \d{2} \|/gm) || []).length, 59);
+  assert.equal((migrationRegister.match(/^\| \d{2} \|/gm) || []).length, 60);
   const workflowManifest = [...identity.matchAll(/supabase\/migrations\/([A-Za-z0-9_.-]+\.sql)/g)].map(([, name]) => name);
   const registeredManifest = [...migrationRegister.matchAll(/^\| \d{2} \| `([^`]+)`/gm)].map(([, name]) => name);
   assert.equal(new Set(workflowManifest).size, 60);
