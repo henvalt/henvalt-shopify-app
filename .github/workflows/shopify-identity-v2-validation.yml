@@ -224,14 +224,14 @@ jobs:
         run: bash tests/sql/shopify-recovery-work-claims-concurrency-v2.test.sh
 
       - name: Exercise final checkout provider submission authorization gate
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-provider-submission-gate-v2.test.sql
+
       - name: Exercise checkout ambiguous provider event reconciliation
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-ambiguous-provider-reconciliation-v2.test.sql
-
-        env:
-          PGPASSWORD: postgres
-        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-provider-submission-gate-v2.test.sql
 
       - name: Exercise pixel delivery outcome, attribution and cost lifecycle
         env:
