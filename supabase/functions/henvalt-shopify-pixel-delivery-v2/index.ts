@@ -1,4 +1,4 @@
-import { mailerSendUnsubscribeReady, renderRecoveryMessageV2 } from "../_shared/recovery-message-v2.mjs";
+import { mailerSendV2DeliveryReady, renderRecoveryMessageV2 } from "../_shared/recovery-message-v2.mjs";
 
 declare const Deno: {
  env: { get(name: string): string | undefined };
@@ -125,7 +125,7 @@ Deno.serve(async(req:Request)=>{
     !gid.startsWith("gid://shopify/Customer/")||!uuid(connectionId)||!uuid(customerIdentityId)||
     !providerKey||providerToken.length<20||fpSecret.length<32||!validEmail(senderEmail)||
     !senderName.trim()||!uuid(senderId))return json(503,{error:"pixel_delivery_context_incomplete"});
-  if(!(await mailerSendUnsubscribeReady(providerToken,senderEmail)))
+  if(!(await mailerSendV2DeliveryReady(providerToken,senderEmail,providerKey,SUPABASE_URL)))
     return json(409,{error:"mailer_send_unsubscribe_tracking_not_enabled"});
   let message;
   try{message=renderRecoveryMessageV2({shopDomain:String(messageContext.shop_domain??""),opportunityType:String(messageContext.opportunity_type??""),brandName:senderName});}
