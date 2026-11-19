@@ -38,8 +38,8 @@ test("release documentation tracks the exact candidate migration chain", () => {
   assert.match(identity, /Apply candidate migrations 001 through 058/);
   assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 58);
   assert.equal((migrationRegister.match(/^\| \d{2} \|/gm) || []).length, 58);
-  const workflowManifest = [...identity.matchAll(/supabase\\/migrations\\/([A-Za-z0-9_.-]+\\.sql)/g)].map(([, name]) => name);
-  const registeredManifest = [...migrationRegister.matchAll(/^\\| \\d{2} \\| `([^`]+)`/gm)].map(([, name]) => name);
+  const workflowManifest = [...identity.matchAll(/supabase\/migrations\/([A-Za-z0-9_.-]+\.sql)/g)].map(([, name]) => name);
+  const registeredManifest = [...migrationRegister.matchAll(/^\| \d{2} \| `([^`]+)`/gm)].map(([, name]) => name);
   assert.equal(new Set(workflowManifest).size, 58);
   assert.deepEqual(registeredManifest, workflowManifest);
   assert.match(migrationRegister, /58 distinct migration paths/);
