@@ -80,7 +80,7 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
   let trustedUrl = false;
   try {
     const parsed = new URL(supabaseUrl);
-    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(parsed.hostname) &&
+    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\.supabase\.co$/i.test(parsed.hostname) &&
       (parsed.pathname === "" || parsed.pathname === "/") && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
   } catch { trustedUrl = false; }
   if (!trustedUrl ||
