@@ -10,9 +10,9 @@ const sql=readFileSync("tests/sql/shopify-checkout-provider-submission-gate-v2.t
 test("checkout final gate rebinds attempt, permit, reservation and exact store lineage",()=>{
   assert.match(migration,/JOIN henvalt\.shopify_delivery_permits_v2[\s\S]*?permit_row\.send_attempt_id=a\.id[\s\S]*?JOIN henvalt\.shopify_delivery_cost_reservations_v2[\s\S]*?reservation_row\.send_attempt_id=a\.id/);
   assert.match(migration,/sc\.id=a\.shopify_connection_id AND sc\.tenant_id=a\.tenant_id/);
-  assert.match(migration,/sc\.active IS DISTINCT FROM true/);
+  assert.match(migration,/v_attempt\.connection_active IS DISTINCT FROM true/);
   assert.match(migration,/PERFORM 1[\s\S]*?FROM henvalt\.shopify_connections[\s\S]*?FOR UPDATE/);
-  assert.match(migration,/sc\.app_key IS DISTINCT FROM v_attempt\.app_key/);
+  assert.match(migration,/v_attempt\.connection_app_key IS DISTINCT FROM v_attempt\.app_key/);
   assert.match(migration,/v_attempt\.tenant_status<>'ACTIVE'/);
 });
 
