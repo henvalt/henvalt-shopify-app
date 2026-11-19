@@ -174,6 +174,13 @@ BEGIN
            WHERE provider_account_key=v_provider_key) THEN
   RAISE EXCEPTION 'MailerSend URL-validation ping must not persist a provider event';
  END IF;
+ v_webhook_test:=henvalt.ingest_mailersend_webhook_v2(
+  v_provider_key,repeat('0',64),pg_catalog.encode(v_test_body,'base64')
+ );
+ IF v_webhook_test->>'accepted'<>'false'
+    OR v_webhook_test->>'code'<>'SIGNATURE_INVALID' THEN
+  RAISE EXCEPTION 'MailerSend URL-validation ping accepted an invalid signature: %',v_webhook_test;
+ END IF;
  INSERT INTO henvalt.shopify_sender_profiles_v2(
   tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,
   status,verified_at
