@@ -385,7 +385,7 @@ test("lease finish transport failure is contained and later claimed work is stil
       : { accepted: true },
     handoff: async claim => {
       handedOff.push(claim.work_type);
-      return { outcome: "HANDOFF_ACCEPTED", reason: "explicit_handoff_accepted", retry_after_seconds: 0 };
+      return { ...claim, outcome: "HANDOFF_ACCEPTED", reason: "explicit_handoff_accepted", retry_after_seconds: 0 };
     },
     finishClaim: async claim => {
       finished.push(claim.lease_id);
