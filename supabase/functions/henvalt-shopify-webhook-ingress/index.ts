@@ -55,7 +55,12 @@ async function rpc(name: string, body: Record<string, unknown>): Promise<{ ok: b
     console.error("Webhook RPC failed", name, response.status);
     return { ok: false, row: null };
   }
-  const payload = await readBoundedJson(response);\n  if (payload === null) {\n    console.error("Webhook RPC response rejected", name);\n    return { ok: false, row: null };\n  }\n  return { ok: true, row: firstRow(payload) };
+  const payload = await readBoundedJson(response);
+  if (payload === null) {
+    console.error("Webhook RPC response rejected", name);
+    return { ok: false, row: null };
+  }
+  return { ok: true, row: firstRow(payload) };
 }
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405,{error:"method_not_allowed"});
