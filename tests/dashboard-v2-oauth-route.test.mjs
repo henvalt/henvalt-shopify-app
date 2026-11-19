@@ -9,7 +9,7 @@ test("dashboard Shopify connection uses the V2 owner-authenticated install route
   assert.doesNotMatch(dashboard, /functions\/v1\/henvalt-shopify-oauth\/auth/);
   assert.match(dashboard, /Authorization:\s*"Bearer "\+session\.access_token/);
   assert.match(dashboard, /JSON\.stringify\(\{shop\}\)/);
-  assert.match(dashboard, /valid_shop_required|canonical \\*\.myshopify\.com domain/);
+  assert.match(dashboard, /canonical \*\.myshopify\.com domain/);
   assert.match(dashboard, /app registry, Vault secret, and owner-controlled endpoints must be ready first/);
 });
 
