@@ -45,7 +45,7 @@ unmerged.
 The latest integrated runtime audit recorded:
 
 - Production Supabase had 178 applied migrations, latest
-  `20261114174204`; none of candidate migrations 001–045 were in its
+  `20261114174204`; none of candidate migrations 001–046 were in its
   migration history.
 - Candidate V2 relations were absent from the live `henvalt` schema.
 - Four active Shopify connections existed across three tenants, including
@@ -72,7 +72,7 @@ deployment topology.
 | Shopify app and OAuth | Merchant install, app identity, scopes and token lifecycle | Candidate V2 OAuth is branch-only; current app config still points to legacy settings |
 | Cloudflare Worker | Shopify raw webhook ingress and forwarding | Existing live Worker is legacy; candidate Worker source must be compared before any deployment |
 | Supabase Edge Functions | Trusted API boundaries, Shopify lookups, delivery, dashboard and privacy | Several legacy functions are live; V2 functions are branch-only |
-| Supabase PostgreSQL | Exact-store identity, recovery state, permits, provider events, attribution and fee measurements | Candidate migrations 001–045 are not applied to production |
+| Supabase PostgreSQL | Exact-store identity, recovery state, permits, provider events, attribution and fee measurements | Candidate migrations 001–046 are not applied to production |
 | n8n | Scheduled recovery orchestration and delivery handoff | Exactly three production workflows remain active; they are not V2-wired |
 | MailerSend | Provider submission and signed delivery/suppression events | V2 provider integration is candidate code; production sender/billing readiness is unverified |
 | Cloudflare Pages | Merchant dashboard static UI | The production Pages project is connected to `main`; this branch is preview-only until merged |
@@ -132,7 +132,7 @@ The GitHub Actions validation additionally:
 - runs the complete Node regression suite and focused V2 contracts;
 - checks the configured Edge Functions with Deno;
 - creates a disposable PostgreSQL 17 database;
-- applies candidate migrations 001–045 in order;
+- applies candidate migrations 001–046 in order;
 - executes two-store isolation, privacy, consent, attribution, cost-reservation
   and true concurrent work-claim tests;
 - validates Shopify TOML and extension source.
@@ -182,7 +182,7 @@ credentials.
 
 ### Supabase
 
-Candidate migrations 001–045 and V2 Edge Functions are not deployed to the
+Candidate migrations 001–046 and V2 Edge Functions are not deployed to the
 audited production project. The live project has a separate migration history
 and legacy operational schema. **Do not run `supabase db push` or deploy
 candidate functions until the production schema has been reconciled and an
@@ -233,7 +233,7 @@ configuration.
    privacy endpoint and install-flow settings; generate and validate the
    Shopify Pixel UID.
 2. **Production database parity:** reconcile the 178-migration live baseline
-   with candidate migrations 001–045, map every V1/V2 foreign-key lineage and
+   with candidate migrations 001–046, map every V1/V2 foreign-key lineage and
    resolve historical ambiguous rows before any migration.
 3. **Runtime cutover:** design, test and explicitly approve the V2 adapters
    for the three existing n8n workflows. Prevent duplicate V1/V2 ingestion or
