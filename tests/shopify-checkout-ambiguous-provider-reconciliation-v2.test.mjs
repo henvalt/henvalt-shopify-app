@@ -39,7 +39,7 @@ test("late provider suppression events reconcile from the original attempt finge
   assert.match(outcome,/SET status='DELIVERED'[\s\S]*?AND status IN \('SUBMITTED','AMBIGUOUS'\)/);
   assert.match(outcome,/ON CONFLICT\(shopify_connection_id,customer_identity_id,suppression_type,source_provider_event_id\)/);
   assert.match(outcome,/SELECT e\.id,e\.provider_event_id,e\.provider_account_key/);
-  assert.match(outcome,/v_attempt\.id,v_event\.provider_event_id/);
+  assert.match(outcome,/v_attempt\.id,v_event\.id/);
 });
 
 test("checkout provider reconciliation is service-role-only and does not retry or resend",()=>{
