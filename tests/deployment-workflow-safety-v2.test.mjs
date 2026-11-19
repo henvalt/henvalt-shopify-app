@@ -35,19 +35,19 @@ test("Shopify preparation job has one unambiguous job-level condition", () => {
 });
 
 test("release documentation tracks the exact candidate migration chain", () => {
-  assert.match(identity, /Apply candidate migrations 001 through 058/);
-  assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 58);
-  assert.equal((migrationRegister.match(/^\| \d{2} \|/gm) || []).length, 58);
+  assert.match(identity, /Apply candidate migrations 001 through 059/);
+  assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 59);
+  assert.equal((migrationRegister.match(/^\| \d{2} \|/gm) || []).length, 59);
   const workflowManifest = [...identity.matchAll(/supabase\/migrations\/([A-Za-z0-9_.-]+\.sql)/g)].map(([, name]) => name);
   const registeredManifest = [...migrationRegister.matchAll(/^\| \d{2} \| `([^`]+)`/gm)].map(([, name]) => name);
   assert.equal(new Set(workflowManifest).size, 58);
   assert.deepEqual(registeredManifest, workflowManifest);
-  assert.match(migrationRegister, /58 distinct migration paths/);
+  assert.match(migrationRegister, /59 distinct migration paths/);
   assert.match(migrationRegister, /REVIEW REQUIRED — NOT APPROVED FOR PRODUCTION/);
   assert.match(identity, /202611190004_shopify_checkout_candidate_terminal_state_v2\.sql/);
-  assert.match(runbook, /candidate migrations 001–058/i);
-  assert.match(runbook, /Candidate migrations 001–058: CI fixture only; not production-applied\./);
-  assert.match(launchMatrix, /Candidate migrations 001–058 apply in disposable PostgreSQL CI/);
+  assert.match(runbook, /candidate migrations 001–059/i);
+  assert.match(runbook, /Candidate migrations 001–059: CI fixture only; not production-applied\./);
+  assert.match(launchMatrix, /Candidate migrations 001–059 apply in disposable PostgreSQL CI/);
   assert.doesNotMatch(runbook, /migrations 001–046/);
   assert.doesNotMatch(launchMatrix, /migrations 001–046/);
 });
