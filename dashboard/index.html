@@ -180,6 +180,12 @@ async function load(){
       $("notice").innerHTML="<strong>Select a Shopify store.</strong> This workspace has multiple active V2 stores. Choose one store to view its isolated recovery and revenue data.";
       return;
     }
+    if(res.status===404&&data.error==="store_not_available"){
+      clearDashboardData();
+      clearStoreSelection();
+      await load();
+      return;
+    }
     if(res.status===409&&data.error==="owner_controlled_shop_connection_required"){
       clearDashboardData();
       clearStoreSelection();
