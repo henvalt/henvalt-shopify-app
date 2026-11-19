@@ -28,6 +28,7 @@ BEGIN
     OR position('permit_row.recipient_fingerprint' in v_reconcile)=0
     OR position('v_attempt.id,v_event.id' in v_reconcile)=0
     OR position('activity.spam_complaint' in v_reconcile)=0
+    OR position('processing_status=''PROCESSED''' in v_reconcile)>=position('INSERT INTO henvalt.shopify_delivery_suppressions_v2' in v_reconcile)
     OR position('FOR UPDATE SKIP LOCKED' in v_stale)=0
     OR position('provider_cost_reservation_released' in v_stale)=0
     OR position('automatic_retry_performed' in v_stale)=0 THEN
