@@ -239,9 +239,7 @@ The current graph:
   body, tracking token and other legacy IDs.
 - Calls the existing `HENVALT_DELIVERY` subworkflow synchronously.
 
-This is the old copy pipeline. It must not be adapted by simply changing its
-HTTP URL: the V2 contract intentionally removes recipient and message body
-from n8n execution data. The V2 Recovery graph should be simplified to
+This is the old copy pipeline. Its current node data includes customer first name, product details, previous message bodies, recipient reference and destination URL in n8n execution items. The actual n8n execution-retention/redaction configuration was not verified during this read-only graph inspection; this is a privacy review item before launch. Do not broaden retention or copy these fields into V2 execution data. It must not be adapted by simply changing its HTTP URL: the V2 contract intentionally removes recipient and message body from n8n execution data. The V2 Recovery graph should be simplified to
 candidate discovery/promotion/materialization, exact-store work claim, and
 synchronous subworkflow handoff. The old AI renderer, legacy message queue,
 legacy delivery request and recipient-bearing payload must be bypassed for
