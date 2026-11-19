@@ -176,6 +176,25 @@ test("duplicate work items in a claimed batch are rejected before a second hando
   assert.equal(finishes, 0);
 });
 
+test("duplicate lease IDs reject the full batch before any handoff", async () => {
+  const items = [
+    { work_type: "CHECKOUT_INTERVENTION", work_id: "11111111-1111-4111-8111-111111111111", lease_id: "22222222-2222-4222-8222-222222222222" },
+    { work_type: "PIXEL_OPPORTUNITY", work_id: "33333333-3333-4333-8333-333333333333", lease_id: "22222222-2222-4222-8222-222222222222" },
+  ];
+  let handoffs = 0;
+  let finishes = 0;
+  await assert.rejects(runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 2, items }
+      : { accepted: true },
+    handoff: async () => { handoffs++; return { outcome: "DEFERRED" }; },
+    finishClaim: async () => { finishes++; return { finished: true }; },
+  }), /v2_duplicate_lease_id/);
+  assert.equal(handoffs, 0);
+  assert.equal(finishes, 0);
+});
+
 test("claim RPC cannot return more items than the configured bound", async () => {
   let handoffs = 0;
   await assert.rejects(runV2RecoveryTick({
