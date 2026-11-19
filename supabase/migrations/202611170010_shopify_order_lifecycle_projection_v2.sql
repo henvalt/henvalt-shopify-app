@@ -6,7 +6,8 @@
 BEGIN;
 
 ALTER TABLE henvalt.shopify_order_identity_v2
-  ADD COLUMN IF NOT EXISTS source_updated_at timestamptz;
+  ADD COLUMN IF NOT EXISTS source_updated_at timestamptz,
+  ADD COLUMN IF NOT EXISTS last_refund_at timestamptz;
 
 CREATE OR REPLACE FUNCTION henvalt.project_verified_shopify_order_v2(
   p_route_token text,
@@ -200,10 +201,13 @@ BEGIN
     updated_at = pg_catalog.now()
   WHERE
     (EXCLUDED.source_updated_at IS NULL
-      AND henvalt.shopify_order_identity_v2.source_updated_at IS NULL)
+      AND henvalt.shopify_order_identity_v2.source_updated_at IS NULL
+      AND henvalt.shopify_order_identity_v2.last_refund_at IS NULL)
     OR (EXCLUDED.source_updated_at IS NOT NULL
-      AND (henvalt.shopify_order_identity_v2.source_updated_at IS NULL
-        OR EXCLUDED.source_updated_at >= henvalt.shopify_order_identity_v2.source_updated_at))
+      AND EXCLUDED.source_updated_at >= GREATEST(
+        COALESCE(henvalt.shopify_order_identity_v2.source_updated_at,'-infinity'::timestamptz),
+        COALESCE(henvalt.shopify_order_identity_v2.last_refund_at,'-infinity'::timestamptz)
+      ))
   RETURNING id INTO v_order_identity_id;
 
   IF v_order_identity_id IS NULL THEN
