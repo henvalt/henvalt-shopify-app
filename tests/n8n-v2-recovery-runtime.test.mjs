@@ -66,6 +66,37 @@ test("three-workflow runtime composes Recovery → Delivery and finishes checkou
   assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
 });
 
+test("mismatched database lease-finish acknowledgement keeps the Recovery tick incomplete", async () => {
+  const fakeFetch = async (url, init) => {
+    if (url.includes("/rest/v1/rpc/claim_shopify_recovery_work_v2")) {
+      return new Response(JSON.stringify({
+        accepted: true,
+        claimed: 1,
+        items: [{
+          work_type: "CHECKOUT_INTERVENTION",
+          work_id: "11111111-1111-4111-8111-111111111111",
+          lease_id: "22222222-2222-4222-8222-222222222222",
+        }],
+      }), { status: 200 });
+    }
+    if (url.includes("/functions/v1/henvalt-shopify-contact-delivery-v2")) {
+      return new Response(JSON.stringify({ accepted: true, status: "submitted" }), { status: 202 });
+    }
+    if (url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")) {
+      const requested = JSON.parse(init.body).p_outcome;
+      assert.equal(requested, "HANDOFF_ACCEPTED");
+      return new Response(JSON.stringify({ finished: true, outcome: "TERMINAL" }), { status: 200 });
+    }
+    if (url.includes("/rest/v1/rpc/")) return new Response(JSON.stringify({ accepted: true }), { status: 200 });
+    throw new Error("unexpected_network_target");
+  };
+  const result = await compose(fakeFetch).runTick({ workerId: "worker-v2-03" });
+  assert.equal(result.accepted, false);
+  assert.equal(result.status, "LEASE_FINISH_UNCONFIRMED");
+  assert.equal(result.summary.lease_finish_unconfirmed, 1);
+  assert.equal(result.summary.outcomes[0].reason_code, "lease_finish_unconfirmed");
+});
+
 test("ambiguous 202 is returned by Delivery, then Recovery completes the lease exactly once", async () => {
   const calls = [];
   const fakeFetch = async (url, init) => {
