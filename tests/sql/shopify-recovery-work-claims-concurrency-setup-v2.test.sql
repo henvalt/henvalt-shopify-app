@@ -13,6 +13,8 @@ DECLARE
  v_tenant uuid:='00000000-0000-4000-8000-000000000001';
  v_connection uuid; v_customer uuid; v_app_key text;
  v_inbox uuid; v_session uuid; v_candidate uuid; v_opportunity uuid; v_message_context jsonb;
+ v_receipt uuid; v_checkout uuid; v_checkout_candidate uuid; v_checkout_opportunity uuid;
+ v_intervention uuid; v_materialized jsonb;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key
  FROM henvalt.shopify_connections
@@ -70,5 +72,73 @@ BEGIN
     OR v_message_context->>'delivery_authorized'<>'false' THEN
   RAISE EXCEPTION 'Pixel recovery message context did not return safe exact-store metadata: %',v_message_context;
  END IF;
+
+ -- Exercise the separate checkout intervention branch using a fresh synthetic
+ -- checkout identity bound to a verified Store B receipt from earlier CI setup.
+ UPDATE henvalt.shopify_connections SET active=true
+ WHERE id=v_connection AND tenant_id=v_tenant;
+ SELECT source_delivery_id INTO v_receipt
+ FROM henvalt.shopify_checkout_identity_v2
+ WHERE tenant_id=v_tenant AND shopify_connection_id=v_connection
+   AND source_delivery_id IS NOT NULL
+ LIMIT 1;
+ IF v_receipt IS NULL THEN
+  RAISE EXCEPTION 'Checkout message-context fixture requires an existing verified Store B receipt';
+ END IF;
+
+ INSERT INTO henvalt.shopify_checkout_identity_v2(
+  tenant_id,shopify_connection_id,shopify_checkout_id,checkout_token,
+  customer_identity_id,source_delivery_id,checkout_status,created_at,updated_at
+ ) VALUES(
+  v_tenant,v_connection,'message-context-checkout-'||gen_random_uuid()::text,
+  'message-context-token-'||gen_random_uuid()::text,
+  v_customer,v_receipt,'OPEN',now()-interval '2 hours',now()-interval '2 hours'
+ ) RETURNING id INTO v_checkout;
+
+ INSERT INTO henvalt.shopify_checkout_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,checkout_identity_id,checkout_token,
+  source_delivery_id,last_activity_at,eligible_after,state
+ ) SELECT v_tenant,v_connection,v_checkout,ch.shopify_checkout_token,
+  v_receipt,now()-interval '2 hours',now()-interval '1 hour',
+  'READY_FOR_CONTACT_RESOLUTION'
+ FROM henvalt.shopify_checkout_identity_v2 ch WHERE ch.id=v_checkout
+ RETURNING id INTO v_checkout_candidate;
+
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,
+  customer_identity_id,source_delivery_id,opportunity_type,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,v_checkout_candidate,v_checkout,
+  v_customer,v_receipt,'ABANDONED_CHECKOUT','CONTACT_RESOLUTION_PENDING',
+  'message-context-checkout-'||gen_random_uuid()::text)
+ RETURNING id INTO v_checkout_opportunity;
+
+ v_materialized:=henvalt.materialize_shopify_checkout_interventions_v2(10);
+ SELECT id INTO v_intervention
+ FROM henvalt.shopify_recovery_intervention_v2
+ WHERE opportunity_id=v_checkout_opportunity
+  AND tenant_id=v_tenant AND shopify_connection_id=v_connection
+  AND step_number=1 AND status='READY_FOR_AUTHORIZATION';
+ IF v_materialized->>'accepted'<>'true' OR v_intervention IS NULL THEN
+  RAISE EXCEPTION 'Checkout message-context fixture did not materialize an intervention: %, %',v_materialized,v_intervention;
+ END IF;
+
+ v_message_context:=henvalt.resolve_shopify_recovery_message_context_v2(
+  'CHECKOUT_INTERVENTION',v_intervention
+ );
+ IF v_message_context->>'ready'<>'true'
+    OR v_message_context->>'shop_domain'<>'store-b.myshopify.com'
+    OR v_message_context->>'opportunity_type'<>'ABANDONED_CHECKOUT'
+    OR v_message_context->>'recipient_pii_returned'<>'false'
+    OR v_message_context->>'provider_secrets_returned'<>'false'
+    OR v_message_context->>'delivery_authorized'<>'false' THEN
+  RAISE EXCEPTION 'Checkout recovery message context did not return safe exact-store metadata: %',v_message_context;
+ END IF;
+
+ -- Remove only this disposable checkout fixture; leave the shared verified
+ -- webhook receipt and customer identity untouched.
+ DELETE FROM henvalt.shopify_recovery_intervention_v2 WHERE id=v_intervention;
+ DELETE FROM henvalt.shopify_recovery_opportunity_v2 WHERE id=v_checkout_opportunity;
+ DELETE FROM henvalt.shopify_checkout_recovery_candidate_v2 WHERE id=v_checkout_candidate;
+ DELETE FROM henvalt.shopify_checkout_identity_v2 WHERE id=v_checkout;
 END;
 $setup$;
