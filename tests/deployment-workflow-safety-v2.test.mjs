@@ -9,6 +9,7 @@ const runbook = readFileSync("docs/deployment-and-release-runbook-2026-11-18.md"
 const launchMatrix = readFileSync("docs/launch-readiness-matrix-2026-11-19.md", "utf8");
 const cutover = readFileSync("docs/production-cutover-preflight-and-rollback-2026-11-19.md", "utf8");
 const migrationRegister = readFileSync("docs/migration-compatibility-risk-register-2026-11-19.md", "utf8");
+const lineageFoundation = readFileSync("supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql", "utf8");
 
 test("production Shopify release cannot run automatically on push", () => {
   assert.match(release, /workflow_dispatch:/);
@@ -44,6 +45,13 @@ test("release documentation tracks the exact candidate migration chain", () => {
   assert.match(launchMatrix, /Candidate migrations 001–058 apply in disposable PostgreSQL CI/);
   assert.doesNotMatch(runbook, /migrations 001–046/);
   assert.doesNotMatch(launchMatrix, /migrations 001–046/);
+});
+
+test("exact-store lineage foundation never guesses or backfills legacy connection identity", () => {
+  assert.match(lineageFoundation, /ADD COLUMN IF NOT EXISTS shopify_connection_id uuid/);
+  assert.match(lineageFoundation, /NOT VALID/);
+  assert.match(lineageFoundation, /NULL means historical or unresolved/);
+  assert.doesNotMatch(lineageFoundation, /UPDATE henvalt\\.(customers|sessions|session_aliases|checkouts|canonical_events)\\s+SET\\s+shopify_connection_id/i);
 });
 
 test("production cutover contract preserves explicit stage gates and fail-closed rollback", () => {
