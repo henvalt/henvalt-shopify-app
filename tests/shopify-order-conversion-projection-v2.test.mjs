@@ -86,6 +86,12 @@ test("recovered revenue requires explicit exact-store policy and creates no exte
   assert.match(attributionMigration, /credit_amount numeric\\(18,4\\) NOT NULL DEFAULT 0/);
   assert.match(attributionMigration, /original measured charge is immutable/);
   assert.match(attributionMigration, /f\.fee_amount-CASE WHEN v_status='CONFIRMED'/);
+  assert.match(attributionMigration, /reconciliation_status text NOT NULL DEFAULT 'CURRENT'/);
+  assert.match(attributionMigration, /recovered_amount=CASE[\\s\\S]*f\.status IN/);
+  assert.match(attributionMigration, /fee_amount=CASE[\\s\\S]*f\.status IN/);
+  assert.match(attributionMigration, /credit_amount=CASE/);
+  assert.match(attributionMigration, /reconciliation_status=CASE/);
+  assert.match(attributionMigration, /WHEN f\.status IN \\('INVOICED','PAID'\\) THEN f\.status/);
   assert.match(attributionMigration, /AFTER INSERT OR UPDATE OF status,test_mode,henvalt_percentage,currency ON henvalt\.billing_accounts/);
   assert.match(attributionMigration, /require_delivery_confirmation/);
 });
