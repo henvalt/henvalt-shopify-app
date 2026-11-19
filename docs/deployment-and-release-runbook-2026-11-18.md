@@ -17,6 +17,17 @@ Before any production operation, the HENVALT owner must confirm control of:
 Do not use a former partner's Shopify app credentials or account-owned
 infrastructure as a production dependency.
 
+Shopify's Dev Dashboard app list is organization-scoped. The App developer role
+can develop/manage apps in that organization; Organization administrators
+have broader organization access. If access to the former partner's organization
+cannot be restored, do not assume the existing app can be transferred. Create
+a replacement app under an owner-controlled Shopify organization and treat it
+as a new identity: new client ID/secret, new Vault binding, new callback and
+webhook registration, and merchant reauthorization. Existing installs are not
+considered migrated merely because the replacement app uses the same name.
+References: [Dev Dashboard](https://shopify.dev/docs/apps/build/dev-dashboard)
+and [Dev Dashboard user permissions](https://shopify.dev/docs/apps/build/dev-dashboard/user-permissions).
+
 ## 2. Pre-deployment evidence gate
 
 All items below must be attached to the release record before deployment:
