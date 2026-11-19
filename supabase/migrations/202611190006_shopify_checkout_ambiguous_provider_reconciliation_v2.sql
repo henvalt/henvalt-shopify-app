@@ -236,6 +236,54 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION henvalt.mark_stale_shopify_checkout_send_attempts_ambiguous_v2(
+  p_before timestamptz DEFAULT (pg_catalog.now()-interval '2 minutes'),
+  p_limit integer DEFAULT 100
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $function$
+DECLARE
+  v_count integer:=0;
+BEGIN
+  IF current_setting('request.jwt.claim.role',true) IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501';
+  END IF;
+  IF p_before IS NULL OR p_before>pg_catalog.now()-interval '2 minutes'
+    OR p_before<pg_catalog.now()-interval '24 hours'
+    OR p_limit IS NULL OR p_limit<1 OR p_limit>500 THEN
+    RETURN jsonb_build_object('accepted',false,'code','INVALID_RECONCILIATION_WINDOW');
+  END IF;
+
+  WITH stale AS (
+    SELECT a.id,a.tenant_id,a.shopify_connection_id,a.intervention_id
+    FROM henvalt.shopify_recovery_send_attempt_v2 a
+    WHERE a.status='AUTHORIZED' AND a.created_at<=p_before
+    ORDER BY a.created_at,a.id
+    LIMIT p_limit
+    FOR UPDATE SKIP LOCKED
+  ), changed AS (
+    UPDATE henvalt.shopify_recovery_send_attempt_v2 a
+    SET status='AMBIGUOUS',updated_at=pg_catalog.now()
+    FROM stale
+    WHERE a.id=stale.id AND a.status='AUTHORIZED'
+    RETURNING a.id,a.tenant_id,a.shopify_connection_id,a.intervention_id
+  ), interventions AS (
+    UPDATE henvalt.shopify_recovery_intervention_v2 i
+    SET status='AMBIGUOUS',updated_at=pg_catalog.now()
+    FROM changed
+    WHERE i.id=changed.intervention_id
+      AND i.tenant_id=changed.tenant_id
+      AND i.shopify_connection_id=changed.shopify_connection_id
+      AND i.status='AUTHORIZED'
+    RETURNING i.id
+  )
+  SELECT count(*)::integer INTO v_count FROM changed;
+
+  RETURN jsonb_build_object('accepted',true,'marked_ambiguous',v_count,
+    'provider_cost_reservation_released',false,'automatic_retry_performed',false);
+END;
+$function$;
+
 REVOKE ALL ON FUNCTION henvalt.record_shopify_delivery_submission_v2(uuid,text,text)
   FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.record_shopify_delivery_submission_v2(uuid,text,text)
@@ -245,6 +293,10 @@ REVOKE ALL ON FUNCTION henvalt.reconcile_shopify_checkout_provider_event_mapping
 REVOKE ALL ON FUNCTION henvalt.reconcile_unmatched_shopify_checkout_provider_events_v2(integer)
   FROM PUBLIC,anon,authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.reconcile_unmatched_shopify_checkout_provider_events_v2(integer)
+  TO service_role;
+REVOKE ALL ON FUNCTION henvalt.mark_stale_shopify_checkout_send_attempts_ambiguous_v2(timestamptz,integer)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.mark_stale_shopify_checkout_send_attempts_ambiguous_v2(timestamptz,integer)
   TO service_role;
 
 COMMIT;
