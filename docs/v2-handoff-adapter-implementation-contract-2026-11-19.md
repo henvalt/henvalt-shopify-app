@@ -56,7 +56,7 @@ The adapter tests inject a fake fetch implementation and fake lease finisher. No
 The preparation branch now also contains:
 
 - `n8n/v2-supabase-rpc.mjs`: a bounded PostgREST service-role RPC client and lease-finisher. It uses the private `henvalt` schema profile, keeps service-role credentials in headers only, validates RPC names, and converts bounded retry seconds into PostgreSQL intervals.
-- `n8n/v2-recovery-orchestrator.mjs`: executes the five candidate discovery/materialization stages in order, stops before claiming if any stage rejects, then atomically claims a bounded batch and strips the tenant/store metadata returned by the claim RPC before handoff.
+- `n8n/v2-recovery-orchestrator.mjs`: executes the five candidate discovery/materialization stages in order, stops before claiming if any stage rejects, then atomically claims a bounded batch. The SQL claim response is now minimized to `lease_id`, `work_type`, and `work_id`; the orchestrator applies a second explicit allowlist before handoff.
 - `n8n/v2-recovery-runtime.mjs`: composes the RPC client, lease finisher and V2 handoff adapter behind one `runTick` entry point.
 - `tests/n8n-v2-recovery-orchestrator.test.mjs` and `tests/n8n-v2-recovery-runtime.test.mjs`: injected-fake-fetch tests for stage ordering, invalid-stage stop, bounded policies, checkout routing, lease finish, no PII forwarding, and no MailerSend network escape.
 
