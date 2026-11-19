@@ -55,7 +55,7 @@ The tests inject fake fetch and a fake Delivery subworkflow. No network request 
 
 The preparation branch now also contains:
 
-- `n8n/v2-supabase-rpc.mjs`: a bounded PostgREST service-role RPC client and lease-finisher. It uses the private `henvalt` schema profile, keeps service-role credentials in headers only, validates RPC names, and converts bounded retry seconds into PostgreSQL intervals.
+- `n8n/v2-supabase-rpc.mjs`: a bounded PostgREST service-role RPC client and lease-finisher. It uses the private `henvalt` schema profile, keeps service-role credentials in headers only, allowlists only the six V2 scheduler/claim RPCs plus the lease-finisher, validates lease UUID/worker/outcome, and converts bounded retry seconds into PostgreSQL intervals.
 - `n8n/v2-recovery-orchestrator.mjs`: executes the five candidate discovery/materialization stages in order, stops before claiming if any stage rejects, then atomically claims a bounded batch. The SQL claim response is now minimized to `lease_id`, `work_type`, and `work_id`; the orchestrator applies a second explicit allowlist before handoff.
 - `n8n/v2-recovery-runtime.mjs`: composes the RPC client and lease finisher behind one `runTick` entry point; it requires an injected Delivery-subworkflow handoff.
 - `n8n/v2-delivery-runtime.mjs`: adapts the opaque claim inside the Delivery workflow to the correct V2 Edge Function. Delivery returns only the classified outcome; Recovery completes the lease after the synchronous subworkflow returns.
