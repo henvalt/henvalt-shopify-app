@@ -40,6 +40,18 @@ A fresh read-only inspection of the connected Supabase project `ocyplckdojdubyrs
 
 This is a read-only verification. No SQL write, migration, function deployment, secret read/change, webhook registration, workflow edit or customer send was performed. The production project remains untouched.
 
+## 19 November — bounded webhook ingress and acknowledgement
+
+The candidate V2 webhook path now applies explicit bounds in both directions:
+
+- Cloudflare Worker reads Shopify request bytes incrementally and rejects bodies above 1,000,000 bytes before forwarding.
+- The Supabase ingress Edge Function uses the shared streaming reader with the same 1,000,000-byte ceiling before base64 encoding and invoking the verified inbox RPC.
+- Worker-to-Edge acknowledgement JSON is read incrementally with a 16 KiB ceiling. Missing, malformed or oversized responses fail closed with 503; only a JSON object with `accepted: true` is acknowledged to Shopify.
+- Edge-to-PostgREST RPC responses are read incrementally with a 32 KiB ceiling. The RPC request has an 8-second abort deadline; malformed/oversized responses fail closed rather than being interpreted as a receipt.
+- Regression tests cover oversized inbound request bodies, rejected upstream destinations, oversized acknowledgement responses, finite RPC deadlines and the durable-acceptance gate.
+
+These are candidate source and offline CI protections only. They do not establish production latency, Shopify retry behavior, deployed Worker/Edge configuration or durable production receipt availability. The legacy webhook route remains separately wired and unchanged pending an approved cutover.
+
 ## Readiness by system
 
 | Area | Current evidence | Status | Launch requirement |
