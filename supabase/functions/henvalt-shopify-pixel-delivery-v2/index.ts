@@ -1,3 +1,5 @@
+import { mailerSendUnsubscribeReady, renderRecoveryMessageV2 } from "../_shared/recovery-message-v2.mjs";
+
 declare const Deno: {
  env: { get(name: string): string | undefined };
  serve(handler: (request: Request) => Response | Promise<Response>): void;
