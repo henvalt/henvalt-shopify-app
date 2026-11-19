@@ -37,11 +37,11 @@ The adapter never forwards tenant IDs, Shopify connection IDs, customer identifi
 | Result | Lease outcome | Rule |
 |---|---|---|
 | 2xx + `accepted: true` + status `submitted`, `accepted`, or `handed_off` | `HANDOFF_ACCEPTED` | Explicit positive handoff only |
-| 2xx + known ambiguous provider status | `DEFERRED` | Provider reconciliation required |
-| 400, 404, 410, 422 | `TERMINAL` | Permanent request rejection allowlist |
+| 2xx + `accepted: true` + known ambiguous/pending provider status | `HANDOFF_ACCEPTED` | Edge Function already crossed provider boundary and owns reconciliation; complete lease so n8n never calls it again |
+| 400, 404, 410, 422; or 502 with `accepted: false` and `error: provider_submission_rejected` | `TERMINAL` | Permanent request rejection or explicitly recorded provider rejection |
 | 401, 403, 409, 429, 5xx, timeout, malformed JSON, unknown status | `DEFERRED` | Conservative; never infer acceptance |
 
-The current Edge Functions return `202` with `accepted: true, status: submitted` only after a recorded submission; their ambiguous outcomes use explicit non-success statuses. Any unknown response is deferred.
+The current Edge Functions return `202` with `accepted: true` for both a recorded submission and an ambiguous/pending provider outcome. Both mean the Edge Function accepted ownership of the work; ambiguous/pending states must complete the n8n lease as `HANDOFF_ACCEPTED`, because the Edge Function's send-attempt ledger and signed webhook reconciler own the provider outcome. Releasing that lease as `DEFERRED` would misrepresent ownership and must never cause another handoff. Any unknown response is deferred.
 
 Finish the lease exactly once using `finish_shopify_recovery_work_claim_v2` with the original `lease_id`, `worker_id`, the classified outcome, and a bounded retry interval. The SQL function itself validates the active lease and rejects stale lease IDs. Do not retry a possibly submitted provider call as a fresh send.
 
