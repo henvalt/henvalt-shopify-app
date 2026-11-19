@@ -166,3 +166,10 @@ No active n8n version was changed. No fourth workflow was created. The candidate
 ### Cutover consequence
 
 There is no safe URL-only switch from the active V1 Recovery→Delivery payload to the V2 endpoints. V1 sends recipient, subject, body, tenant and delivery-request context; V2 accepts only an opaque checkout intervention ID or pixel opportunity ID and resolves trusted context server-side. A separately reviewed, no-send draft migration inside the existing three workflows is required before any live route change.
+
+
+### Dashboard API version boundary
+
+The live Supabase `henvalt-merchant-dashboard` Edge Function is version 4 and still calls the legacy `control_plane_dashboard_summary` and tenant-scoped `revenue_ledger` read path. The candidate repository implementation instead calls `control_plane_dashboard_summary_v2` with an exact `shopify_connection_id`, returns explicit store-selection metadata, and is designed for the new dashboard's selected-store contract.
+
+The static `dashboard/index.html` now calls the same function slug but expects the candidate V2 response shape (`stores`, `selectedStoreId`, V2 metrics/activity). Until the candidate Edge Function is deployed after migration 041, the new dashboard page and live API are not a verified compatible pair. Do not infer dashboard launch readiness from the existing live V1 function being ACTIVE. Keep the V2 function deployment behind the schema/owner approval gate.
