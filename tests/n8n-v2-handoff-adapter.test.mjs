@@ -27,7 +27,7 @@ test("claim validator rejects unknown work, malformed IDs and unsafe worker meta
   assert.throws(() => validateClaim({ ...checkout, worker_id: "x\nsecret" }), /invalid_claim/);
 });
 
-test("only explicit accepted handoff is completed; ambiguous and security responses defer", () => {
+test("accepted ambiguous handoffs complete; security responses defer", () => {
   assert.equal(classifyHandoffResponse(202, { accepted: true, status: "submitted" }).outcome, "HANDOFF_ACCEPTED");
   assert.equal(classifyHandoffResponse(202, { accepted: true, status: "ambiguous_provider_submission" }).outcome, "HANDOFF_ACCEPTED");
   assert.equal(classifyHandoffResponse(202, { accepted: true, status: "provider_accepted_record_pending" }).outcome, "HANDOFF_ACCEPTED");
@@ -79,10 +79,9 @@ test("transport errors and malformed provider responses defer without exposing e
   assert.equal(result.retry_after_seconds, 3600);
 });
 
-test("adapter refuses non-HTTPS endpoints or missing service credentials", () => {
+test("adapter refuses non-HTTPS endpoints or missing delivery credentials", () => {
   assert.throws(() => createV2HandoffAdapter({
     supabaseUrl: "http://project.supabase.co",
     bearerToken: "x".repeat(32),
-    finishClaim: async () => ({ finished: true }),
   }), /invalid_adapter_configuration/);
 });
