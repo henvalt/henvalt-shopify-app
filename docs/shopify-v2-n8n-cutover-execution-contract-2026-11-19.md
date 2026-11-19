@@ -78,13 +78,13 @@ Each request must use its distinct server-held delivery authorization token. Nev
 
 The Edge Function HTTP result is not interchangeable with an email delivery receipt.
 
-- 2xx accepted response: `HANDOFF_ACCEPTED` only when response JSON explicitly reports accepted submission/accepted status. Preserve provider message reference only if safe and non-PII.
+- 2xx response with `accepted: true` and an allowlisted status (`submitted`, `accepted`, `handed_off`, `ambiguous_provider_submission`, `provider_accepted_record_pending`, or `provider_outcome_requires_reconciliation`): `HANDOFF_ACCEPTED`. An ambiguous/pending 202 means the Edge Function already crossed the provider boundary and owns reconciliation; Recovery must complete the lease so Delivery is never invoked again for that work item.
 - Explicit ineligible/authorization/context failure (4xx): classify as `TERMINAL` only for documented permanent reasons. A configuration or policy-not-ready response should be deferred/retried only where the DB contract explicitly allows it; otherwise stop and alert rather than spin.
 - 401/403: configuration/security incident; do not retry in a tight loop.
-- 429/5xx/network timeout/invalid JSON/ambiguous response: `DEFERRED`, never accepted.
+- 429/5xx/network timeout/invalid JSON or any response without explicit accepted state: `DEFERRED`. A 502 with `accepted: false` and `error: provider_submission_rejected` is `TERMINAL` because the Edge Function has already recorded the definite provider rejection.
 - Never retry a possibly submitted provider call as a fresh send until the ambiguous-attempt reconciler determines the outcome.
 
-Finish the claim through `finish_shopify_recovery_work_claim_v2(p_lease_id,p_worker_id,p_outcome,p_retry_after)`. The RPC's result must be checked. A rejected/stale lease finish is an operational error, not success.
+Recovery finishes the claim through `finish_shopify_recovery_work_claim_v2(p_lease_id,p_worker_id,p_outcome,p_retry_after)` only after the synchronous Delivery subworkflow returns its sanitized result. Delivery never finishes the lease. The RPC's result must be checked. A rejected/stale lease finish is an operational error, not success.
 
 ## MailerSend event cutover: one receiver only
 
