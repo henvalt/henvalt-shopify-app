@@ -319,3 +319,8 @@ The Edge Functions also query the MailerSend Domains and Webhooks APIs on each a
 
 The V2 ingress also supports MailerSend's fixed-secret `webhook.test` URL-validation ping through migration 046, without persisting a fake provider event. Normal provider events still use the account-specific signing secret. The active graph remains unchanged. These findings are a cutover specification,
 not authorization to update or publish the three active workflows.
+
+
+## 9. Execution-level cutover contract
+
+The full node-by-node handoff, claim lease invariants, Edge Function payload allowlist, result classification, signed MailerSend event cutover, legacy test-send hazard, and no-send acceptance suite are maintained in [Shopify V2 n8n cutover execution contract](./shopify-v2-n8n-cutover-execution-contract-2026-11-19.md). That contract is authoritative for the next preparation work. It does not authorize live workflow changes.
