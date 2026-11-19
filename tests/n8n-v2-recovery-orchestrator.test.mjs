@@ -15,7 +15,11 @@ test("recovery tick runs all candidate stages in order before claiming opaque wo
         { work_type: "PIXEL_OPPORTUNITY", work_id: "33333333-3333-4333-8333-333333333333", lease_id: "44444444-4444-4444-8444-444444444444", tenant_id: "private-tenant", shopify_connection_id: "private-store" },
       ],
     };
-    return { accepted: true, upserted: 1 };
+    if (name === "refresh_shopify_checkout_recovery_candidates_v2") return { accepted: true, eligible_upserted: 2 };
+    if (name === "promote_shopify_checkout_recovery_candidates_v2") return { accepted: true, opportunities_created: 1 };
+    if (name === "refresh_shopify_pixel_recovery_candidates_v2") return { accepted: true, candidates_upserted: 3 };
+    if (name === "promote_shopify_pixel_recovery_candidates_v2") return { accepted: true, opportunities_created: 2 };
+    return { accepted: true, interventions_created: 1 };
   };
   const handoffs = [];
   const finishes = [];
@@ -44,6 +48,11 @@ test("recovery tick runs all candidate stages in order before claiming opaque wo
   assert.equal(JSON.stringify(handoffs).includes("private-store"), false);
   assert.equal(finishes.length, 2);
   assert.equal(finishes[0].outcome, "HANDOFF_ACCEPTED");
+  assert.equal(result.stages.refresh_checkout.count, 2);
+  assert.equal(result.stages.promote_checkout.count, 1);
+  assert.equal(result.stages.refresh_pixel.count, 3);
+  assert.equal(result.stages.promote_pixel.count, 2);
+  assert.equal(result.stages.materialize_checkout.count, 1);
   assert.equal(result.summary.handoff_accepted, 2);
   assert.equal(result.provider_called_by_orchestrator, false);
 });
