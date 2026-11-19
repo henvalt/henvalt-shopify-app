@@ -106,7 +106,11 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
     assert.match(edge, /html:message.html/);
     assert.match(edge, /text:message.text/);
     assert.match(edge, /mailer_send_unsubscribe_tracking_not_enabled/);
+    assert.match(edge, /HENVALT_V2_MAILERSEND_EVENTS_READY/);
+    assert.match(edge, /v2_provider_event_path_not_ready/);
     assert.doesNotMatch(edge, /input.subject|input.html|input.text/);
+    assert.ok(edge.indexOf("v2_provider_event_path_not_ready") < edge.indexOf("resolve_shopify_recovery_message_context_v2"));
+    assert.ok(edge.indexOf("v2_provider_event_path_not_ready") < edge.indexOf("api.mailersend.com/v1/email"));
   }
   assert.match(checkout, /key!=="intervention_id"/);
   assert.match(checkout, /providerSubmissionStarted=true/);
