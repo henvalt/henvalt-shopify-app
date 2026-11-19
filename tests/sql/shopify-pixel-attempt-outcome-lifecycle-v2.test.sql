@@ -524,11 +524,20 @@ BEGIN
  FROM jsonb_array_elements(v_claim->'items') AS x(item)
  WHERE x.item->>'work_type'='CHECKOUT_INTERVENTION'
   AND x.item->>'work_id'=v_intervention::text
-  AND x.item->>'opportunity_id'=v_checkout_opp::text
-  AND x.item->>'shopify_connection_id'=v_connection::text
-  AND x.item->>'intervention_id'=v_intervention::text;
+  AND (SELECT count(*) FROM jsonb_object_keys(x.item))=3
+  AND NOT (x.item ? 'opportunity_id')
+  AND NOT (x.item ? 'shopify_connection_id')
+  AND NOT (x.item ? 'intervention_id');
  IF v_checkout_lease IS NULL THEN
-  RAISE EXCEPTION 'Checkout intervention was not claimed with its exact-store lineage: %',v_claim;
+  RAISE EXCEPTION 'Checkout intervention was not exposed as an opaque claim: %',v_claim;
+ END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_work_claims_v2
+  WHERE id=v_checkout_lease AND work_type='CHECKOUT_INTERVENTION'
+   AND work_id=v_intervention AND tenant_id=v_tenant
+   AND shopify_connection_id=v_connection
+ ) THEN
+  RAISE EXCEPTION 'Private checkout work lease lost exact-store lineage';
  END IF;
  v_claim:=henvalt.claim_shopify_recovery_work_v2('checkout-worker-b',10,120);
  IF EXISTS(
