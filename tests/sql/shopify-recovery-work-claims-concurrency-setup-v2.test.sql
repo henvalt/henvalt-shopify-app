@@ -12,7 +12,7 @@ DO $setup$
 DECLARE
  v_tenant uuid:='00000000-0000-4000-8000-000000000001';
  v_connection uuid; v_customer uuid; v_app_key text;
- v_inbox uuid; v_session uuid; v_candidate uuid; v_opportunity uuid;
+ v_inbox uuid; v_session uuid; v_candidate uuid; v_opportunity uuid; v_message_context jsonb;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key
  FROM henvalt.shopify_connections
@@ -57,5 +57,18 @@ BEGIN
   opportunity_id,pixel_candidate_id,session_identity_id,inbox_event_id,
   tenant_id,shopify_connection_id
  ) VALUES(v_opportunity,v_candidate,v_session,v_inbox,v_tenant,v_connection);
+
+ PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+ v_message_context:=henvalt.resolve_shopify_recovery_message_context_v2(
+  'PIXEL_OPPORTUNITY',v_opportunity
+ );
+ IF v_message_context->>'ready'<>'true'
+    OR v_message_context->>'shop_domain'<>'store-b.myshopify.com'
+    OR v_message_context->>'opportunity_type'<>'ABANDONED_CART'
+    OR v_message_context->>'recipient_pii_returned'<>'false'
+    OR v_message_context->>'provider_secrets_returned'<>'false'
+    OR v_message_context->>'delivery_authorized'<>'false' THEN
+  RAISE EXCEPTION 'Pixel recovery message context did not return safe exact-store metadata: %',v_message_context;
+ END IF;
 END;
 $setup$;
