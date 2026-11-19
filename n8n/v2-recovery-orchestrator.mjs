@@ -1,3 +1,5 @@
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const WORK_TYPES = new Set(["CHECKOUT_INTERVENTION", "PIXEL_OPPORTUNITY"]);
 const SAFE_REASONS = new Set([
   "explicit_handoff_accepted",
   "accepted_provider_reconciliation_pending",
@@ -100,6 +102,9 @@ export async function runV2RecoveryTick({
     const workKey = `${String(item?.work_type ?? "")}:${String(item?.work_id ?? "")}`;
     if (seenWork.has(workKey)) throw new Error("v2_duplicate_claim_item");
     seenWork.add(workKey);
+    if (!WORK_TYPES.has(item?.work_type) || !UUID.test(item?.work_id ?? "") || !UUID.test(item?.lease_id ?? "")) {
+      throw new Error("v2_claim_item_invalid");
+    }
     // Project an explicit allowlist even though the SQL claim RPC now returns only
     // three opaque fields. This prevents future claim metadata from reaching the handoff.
     const safeClaim = {
