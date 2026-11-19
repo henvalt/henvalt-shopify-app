@@ -41,7 +41,7 @@ ALTER TABLE henvalt.shopify_recovery_work_claims_v2 ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON henvalt.shopify_recovery_work_claims_v2 FROM PUBLIC,anon,authenticated,service_role;
 
 COMMENT ON TABLE henvalt.shopify_recovery_work_claims_v2 IS
- 'Service-only exact-store work lease ledger for n8n orchestration. Stores opaque work IDs only; no recipient PII, tokens, message content or delivery authority.';
+ 'Service-only exact-store work lease ledger for n8n orchestration. Stores tenant/store lineage and opaque work IDs privately; no recipient PII, tokens, message content or delivery authority. Claim responses expose only lease/work identifiers.';
 
 CREATE OR REPLACE FUNCTION henvalt.claim_shopify_recovery_work_v2(
  p_worker_id text,
