@@ -6,6 +6,27 @@ Status: evidence-based preparation checkpoint. This matrix distinguishes committ
 
 **Not launch-ready yet.** The V2 recovery lifecycle is now represented by executable, offline-tested candidate code and a three-workflow native n8n build sheet. The live n8n workflows remain on the legacy implementation; V2 migrations, Edge Functions, Worker route and MailerSend event cutover have not been deployed/verified. There is no proven live Shopify event → eligible recovery → authorized email → provider event → recovered order → fee ledger end-to-end run.
 
+## 19 November — owner-controlled Worker endpoint hardening
+
+A source review found the OAuth V2 callback still hard-coded two Worker URLs
+under a former collaborator's `workers.dev` namespace: the per-install
+Shopify webhook ingress and the storefront pixel collector. These are not
+acceptable as assumed production dependencies.
+
+The candidate now reads `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` and
+`SHOPIFY_PIXEL_COLLECTOR_URL` from server-side runtime configuration, validates
+HTTPS/origin/path shape, and fails closed when either is missing or malformed.
+The callback builds its per-install webhook URI from the configured ingress
+origin; the Shopify pixel receives only the configured collector URL. A new
+offline regression test prevents the former collaborator hostname from
+returning.
+
+This removes the hard-coded dependency from candidate source; it does not
+prove that owner-controlled Worker routes or runtime secrets exist. Both
+endpoints must be provisioned and tested before OAuth V2 can report configured
+or accept an install. No Worker or Edge Function was deployed and no Shopify
+subscription was changed.
+
 ## Readiness by system
 
 | Area | Current evidence | Status | Launch requirement |
