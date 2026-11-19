@@ -290,6 +290,49 @@ return {
 
 A 404/410 can be a gateway-level missing/retired function route. It must defer, never terminalize the opportunity. A 202 ambiguous response means the Edge Function owns provider reconciliation; Recovery may complete the handoff lease but must not submit again.
 
+### 4. Periodic checkout provider-event reconciliation (same Delivery workflow)
+
+Add a Schedule Trigger branch **inside the existing `HENVALT_DELIVERY` workflow** (for example, every minute); do not create another workflow. It calls the bounded database RPC to match signed MailerSend events that arrived before the checkout attempt's provider message ID was durably recorded.
+
+HTTP Request node:
+
+- Method: `POST`
+- URL: `https://<project>.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_checkout_provider_events_v2`
+- Authentication: existing server-held Supabase service-role credential for Delivery's verified provider-event processing; never use a browser credential or the per-function delivery bearer.
+- Headers: `Content-Type: application/json`, `Content-Profile: henvalt`, `Accept-Profile: henvalt`
+- Body: `{ "p_limit": 100 }`
+- Timeout: 15 seconds; do not fan out per event.
+
+After the RPC, use a Code node (Run Once for Each Item) to validate and reduce the acknowledgement:
+
+```javascript
+const response = $input.item.json ?? {};
+const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
+  ? response.body
+  : response;
+const status = Number(response.statusCode ?? 200);
+
+if (!Number.isInteger(status) || status < 200 || status >= 300 ||
+    body.accepted !== true || !Number.isInteger(body.reconciled) ||
+    body.reconciled < 0 || body.reconciled > 100 ||
+    body.automatic_resend_performed !== false ||
+    body.ambiguous_cost_reservation_released !== false) {
+  throw new Error("provider_event_reconciliation_unconfirmed");
+}
+
+return {
+  json: {
+    accepted: true,
+    reconciled: body.reconciled,
+    automatic_resend_performed: false,
+    ambiguous_cost_reservation_released: false,
+  },
+  pairedItem: { item: 0 },
+};
+```
+
+This sweep is idempotent: it claims the matching attempt before locking the event, maps only the exact provider account + message ID, applies late bounce/unsubscribe/complaint suppression from the original permit fingerprint, and never submits another provider request. If the RPC response is lost, the next scheduled tick is safe; never route this branch to a send node.
+
 ## Mandatory node-level safeguards
 
 - Use only the three existing workflow IDs. This document is not a fourth workflow.
