@@ -82,3 +82,24 @@ This register is a source-level inventory of the 58 candidate migration files li
 The workflow's explicit ordered shell list contains **58 distinct migration paths**. The step label was stale and has been corrected to “Apply candidate migrations 001 through 058”. The last file is `202611190004_shopify_checkout_candidate_terminal_state_v2.sql`; its filename suffix “0004” is a date-bucket sequence, not the total chain count.
 
 This is still a source-level operation inventory, not a production approval. The complete chain must be reviewed against a production-like restored clone, including all historical data, grants, RLS, trigger dependencies, locks and post-migration verification.
+
+## Connected production parity observations — read-only, 19 November 2026
+
+The connected production project was queried read-only after the 58-file manifest correction:
+
+- Migration history: **178 applied migrations**, latest `20261114174204`.
+- Candidate V2 objects: **0 of 18 sampled candidate tables** and **0 of 6 sampled candidate RPCs** exist in the live `henvalt` schema.
+- Existing legacy populations are not empty: 4 Shopify connections, 3 customers, 5 sessions, 2 session aliases, 2 checkouts, 166 canonical events, 30 OAuth state rows, 5 opportunities, 5 recovery interventions, 5 delivery attempts, 4 provider events and 16 pixel keys. `shopify_privacy_requests` had 0 rows at inspection time.
+- Live `shopify_connections` does not yet contain the candidate `app_key` column; live `shopify_oauth_states` likewise does not contain candidate `app_key`. Candidate migrations 001 and 003 add these fields. The four existing connection rows and 30 OAuth state rows therefore require an explicit identity/expiry disposition; do not assume they automatically become V2-owned installations.
+- Live `customers`, `sessions`, `session_aliases`, `checkouts` and `canonical_events` do not yet contain `shopify_connection_id`. Migration 007 adds these columns as nullable, deliberately performs no historical backfill, and adds composite foreign keys as `NOT VALID`. Existing legacy rows will therefore remain unresolved (NULL lineage) unless a separately reviewed reconciliation is performed. Never infer exact store identity from tenant, email, checkout token or session reference alone.
+- The existing legacy tables and row counts mean this is not an empty-database install. Migration 007's deliberate no-backfill design is protective, but the cutover must explicitly quarantine or map legacy rows and prove V1 writers cannot create mixed lineage during promotion.
+- Migration 010 alters only the candidate `shopify_checkout_identity_v2` table, which is absent in production; it adds a token non-empty CHECK and explicitly drops/recreates the candidate token unique index. This is a candidate-table dependency, not an existing live checkout-table rewrite.
+- No production DDL, DML, function deployment, secret access/change or workflow modification was performed by these queries.
+
+### Required preflight queries for the clone report
+
+1. Count and classify all rows in the 13 overlapping legacy tables above, including rows whose source store cannot be proven.
+2. For each legacy customer/session/alias/checkout/event, produce a disposition: exact connection mapped from trusted source evidence, retained as legacy-only, quarantined, or manually reconciled. Do not auto-backfill unresolved records.
+3. Inspect the four existing Shopify connections and app ownership before assigning any `app_key`; require an owner-controlled Shopify app identity.
+4. Expire or otherwise explicitly disposition stale OAuth state rows before enabling the V2 app-aware OAuth finalizer.
+5. Replay all 58 migrations on a restorable clone of this exact schema and data snapshot; capture constraints, indexes, function ACLs, RLS, triggers, execution time and row diffs.
