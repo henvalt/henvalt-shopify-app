@@ -616,3 +616,39 @@ A repository regression test checks both conditions. These gates reduce
 accidental releases; they do not make the checked-in Shopify app configuration
 release-ready. The app TOML still contains legacy URLs and install-flow
 settings, and the owner-controlled app identity and Pixel UID remain open.
+
+## 17. Trusted recovery message rendering and provider unsubscribe gate
+
+The candidate branch now includes migration
+`202611190001_shopify_recovery_message_context_v2.sql` (migration 044),
+which adds a service-role-only exact-store message-context resolver. It returns
+only a canonical Shopify store domain and one of the three allowlisted
+opportunity types. It does not return recipient PII, provider secrets or
+delivery authority.
+
+The shared `recovery-message-v2.mjs` module produces fixed checkout, cart and
+browse templates. Merchant display branding comes only from the verified
+sender profile and is HTML-escaped. Delivery Edge Functions now reject all
+caller-supplied message fields and accept only `intervention_id` or
+`opportunity_id`; n8n no longer supplies the subject or body.
+
+Each template includes MailerSend's `{{unsubscribe}}` placeholder in HTML and
+plain text. Before provider submission, the trusted Edge Function checks the
+exact sender domain through MailerSend's domains API and requires verified
+domain status plus HTML and plain-text unsubscribe tracking. Any missing,
+unverified, disabled or unreachable domain configuration blocks the send.
+
+Checkout and pixel provider request failures now both preserve AMBIGUOUS
+outcomes and reservations when the provider may have accepted a request.
+Neither path tells n8n to blindly retry an ambiguous item.
+
+The current CTA deliberately links to the canonical verified Shopify store
+root. It does not pretend to resume an abandoned checkout; a checkout deep link
+or item-level personalization requires a future trusted exact-store context
+source. The production n8n workflows remain unchanged and no provider send
+was performed.
+
+The disposable concurrency setup now also checks that the pixel message
+context RPC returns the exact Store B domain and opportunity type, with
+explicit no-PII, no-secret and no-delivery-authority flags. The CI workflow
+applies candidate migrations 001–044 in its disposable PostgreSQL database.
