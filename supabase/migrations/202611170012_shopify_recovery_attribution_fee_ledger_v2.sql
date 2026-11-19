@@ -483,7 +483,7 @@ BEGIN
   IF NOT FOUND OR v_billing.billing_status<>'ACTIVE'
      OR v_billing.test_mode IS DISTINCT FROM false
      OR v_billing.henvalt_percentage IS NULL OR v_billing.henvalt_percentage<=0 OR v_billing.henvalt_percentage>100
-     OR v_billing.billing_currency<>NEW.currency THEN
+     OR v_billing.billing_currency IS NULL OR v_billing.billing_currency<>NEW.currency THEN
     RETURN NEW;
   END IF;
 
