@@ -30,7 +30,9 @@ test("provider event retries are idempotent and unmatched events can later be co
  assert.match(migration,/UNMATCHED/);
  assert.match(docs,/1 December 2026/);
  const sql=readFileSync("tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql","utf8");
- assert.match(sql,/Unmatched provider event did not correlate on retry/);
+ assert.match(sql,/reconcile_unmatched_shopify_checkout_provider_events_v2/);
+ assert.match(sql,/record_shopify_delivery_submission_v2/);
+ assert.match(sql,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
  assert.match(sql,/Late provider event did not reconcile the ambiguous send and settle its cost/);
  assert.match(sql,/MailerSend URL-validation test was not safely accepted/);
 });
