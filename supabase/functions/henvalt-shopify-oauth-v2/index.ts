@@ -48,7 +48,7 @@ async function db(path: string, init: RequestInit = {}, schema = "henvalt"): Pro
 function validHttpsOrigin(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.origin === value.replace(/\\/+$/, "") &&
+    return url.protocol === "https:" && (value === url.origin || value === url.origin + "/") &&
       url.username === "" && url.password === "" && url.pathname === "/" &&
       url.search === "" && url.hash === "";
   } catch {
@@ -359,7 +359,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Registration is intentionally explicit and checked; never silently mark it successful.
-    const webhookUri = `${SHOPIFY_WEBHOOK_INGRESS_BASE_URL.replace(/\\/+$/, "")}/shopify/webhooks/${routeToken}`;
+    const webhookUri = `${new URL(SHOPIFY_WEBHOOK_INGRESS_BASE_URL).origin}/shopify/webhooks/${routeToken}`;
     const specs = [{topic:"orders/create",gql:"ORDERS_CREATE"},{topic:"orders/updated",gql:"ORDERS_UPDATED"},{topic:"orders/paid",gql:"ORDERS_PAID"},{topic:"orders/cancelled",gql:"ORDERS_CANCELLED"},{topic:"refunds/create",gql:"REFUNDS_CREATE"},{topic:"order_transactions/create",gql:"ORDER_TRANSACTIONS_CREATE"},{topic:"checkouts/create",gql:"CHECKOUTS_CREATE"},{topic:"checkouts/update",gql:"CHECKOUTS_UPDATE"},{topic:"carts/create",gql:"CARTS_CREATE"},{topic:"carts/update",gql:"CARTS_UPDATE"},{topic:"customers_email_marketing_consent/update",gql:"CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE"},{topic:"app/uninstalled",gql:"APP_UNINSTALLED"}];
     const results: Array<Record<string, unknown>> = [];
     async function gql(query:string,variables:Record<string,unknown>={}) {
