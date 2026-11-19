@@ -139,7 +139,7 @@ test("duplicate work items in a claimed batch are rejected before a second hando
   await assert.rejects(runV2RecoveryTick({
     workerId: "worker-v2-01",
     rpc: async name => name === "claim_shopify_recovery_work_v2"
-      ? { accepted: true, items: [item, item] }
+      ? { accepted: true, claimed: 2, items: [item, item] }
       : { accepted: true },
     handoff: async claim => { handoffs++; return { ...claim, outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 }; },
     finishClaim: async () => { finishes++; return { finished: true }; },
@@ -154,7 +154,7 @@ test("claim RPC cannot return more items than the configured bound", async () =>
     workerId: "worker-v2-01",
     limits: { claimLimit: 1 },
     rpc: async name => name === "claim_shopify_recovery_work_v2"
-      ? { accepted: true, items: [{}, {}] }
+      ? { accepted: true, claimed: 2, items: [{}, {}] }
       : { accepted: true },
     handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
     finishClaim: async () => ({ finished: true }),
@@ -219,7 +219,7 @@ test("Recovery validates claim work type and UUIDs before invoking Delivery", as
   await assert.rejects(runV2RecoveryTick({
     workerId: "worker-v2-01",
     rpc: async name => name === "claim_shopify_recovery_work_v2"
-      ? { accepted: true, items: [{ work_type: "UNKNOWN", work_id: "bad", lease_id: "bad" }] }
+      ? { accepted: true, claimed: 1, items: [{ work_type: "UNKNOWN", work_id: "bad", lease_id: "bad" }] }
       : { accepted: true },
     handoff: async () => { handoffs++; return { outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 }; },
     finishClaim: async () => { finishes++; return { finished: true }; },
