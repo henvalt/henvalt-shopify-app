@@ -14,7 +14,7 @@ For Supabase RPC and V2 Edge Function HTTP Request nodes:
 - Route network/timeout errors to a sanitized `DEFERRED` result. Never retry the provider call from n8n.
 - Use the Recovery service-role credential only on Recovery's Supabase RPC nodes. Delivery receives only the per-function delivery bearer.
 
-The snippets below assume Code nodes run once for all items unless stated otherwise.
+The Recovery setup/claim snippets run once for all items. Delivery's per-claim validation/classification and Recovery's per-claim finish/acknowledgement snippets must be configured as **Run Once for Each Item** and return one `{ json: ... }` item (not an array).
 
 ## HENVALT_RECOVERY
 
@@ -117,7 +117,7 @@ Use an Execute Sub-workflow node to call the existing `HENVALT_DELIVERY` synchro
 
 ### 5. Validate Delivery Result and Build Finish RPC Body
 
-After the Delivery sub-workflow returns:
+After the Delivery sub-workflow returns. Configure this Code node as **Run Once for Each Item**:
 
 ```javascript
 const claim = $("Validate Claim Batch").item.json;
@@ -128,13 +128,16 @@ let outcome = result.outcome;
 let retryAfter = Number(result.retry_after_seconds ?? 3600);
 
 if (result.work_type !== claim.work_type || result.work_id !== claim.work_id ||
-    !allowedOutcomes.has(outcome) || !Number.isInteger(retryAfter) ||
-    retryAfter < 0 || retryAfter > 86400) {
+    !allowedOutcomes.has(outcome)) {
   outcome = "DEFERRED";
+  retryAfter = 3600;
+} else if (outcome !== "DEFERRED") {
+  retryAfter = 0;
+} else if (!Number.isInteger(retryAfter) || retryAfter < 0 || retryAfter > 86400) {
   retryAfter = 3600;
 }
 
-return [{
+return {
   json: {
     p_lease_id: claim.lease_id,
     p_worker_id: claim.worker_id,
@@ -142,14 +145,14 @@ return [{
     p_retry_after: `${retryAfter} seconds`,
     expected_outcome: outcome,
   },
-}];
+};
 ```
 
 Send only `p_lease_id`, `p_worker_id`, `p_outcome`, and `p_retry_after` to `finish_shopify_recovery_work_claim_v2`. Keep `expected_outcome` in the local execution item for the acknowledgement check; do not send it to the RPC.
 
 ### 6. Verify Finish Acknowledgement
 
-After the finish RPC:
+After the finish RPC. Configure this Code node as **Run Once for Each Item**:
 
 ```javascript
 const response = $input.first().json ?? {};
@@ -162,7 +165,7 @@ if (body.finished !== true || body.outcome !== requested.expected_outcome) {
   throw new Error("v2_finish_ack_unconfirmed");
 }
 
-return [{ json: { finished: true, outcome: requested.expected_outcome } }];
+return { json: { finished: true, outcome: requested.expected_outcome } };
 ```
 
 A missing or mismatched acknowledgement is not success. Alert and stop; do not immediately re-handoff the provider request. The database lease and provider-attempt reconciliation determine when work is safe to claim again.
@@ -171,7 +174,7 @@ A missing or mismatched acknowledgement is not success. Alert and stop; do not i
 
 ### 1. Validate Opaque Claim
 
-Run once per input item. This rejects extra fields and prevents PII or provider data from entering the workflow.
+Configure as **Run Once for Each Item**. This rejects extra fields and prevents PII or provider data from entering the workflow.
 
 ```javascript
 const input = $input.item.json ?? {};
@@ -190,7 +193,7 @@ if (keys.length !== expected.length || keys.some((key, i) => key !== expected[i]
   throw new Error("v2_delivery_claim_invalid");
 }
 
-return [{
+return {
   json: {
     work_type: input.work_type,
     work_id: input.work_id,
@@ -198,30 +201,30 @@ return [{
     worker_id: input.worker_id,
     correlation_id: input.correlation_id,
   },
-}];
+};
 ```
 
 ### 2. Switch and Build Opaque Edge Request
 
-Use a Switch on `work_type`. The two HTTP Request bodies must be separate:
+Use a Switch on `work_type`. The two HTTP Request bodies must be separate. Configure each small Code node as **Run Once for Each Item**:
 
 Checkout branch:
 
 ```javascript
-return [{ json: { intervention_id: $json.work_id } }];
+return { json: { intervention_id: $json.work_id } };
 ```
 
 Pixel branch:
 
 ```javascript
-return [{ json: { opportunity_id: $json.work_id } }];
+return { json: { opportunity_id: $json.work_id } };
 ```
 
 Route checkout only to `/functions/v1/henvalt-shopify-contact-delivery-v2` and pixel only to `/functions/v1/henvalt-shopify-pixel-delivery-v2`. Use the corresponding server-held delivery bearer credential. Do not call MailerSend from n8n.
 
 ### 3. Classify Handoff Result
 
-Run once per item after the corresponding HTTP Request. Configure the HTTP node to expose status and JSON body; its error output for network/timeout failures must produce the same deferred shape without exposing the error body.
+Configure as **Run Once for Each Item** after the corresponding HTTP Request. Configure the HTTP node to expose status and JSON body; its error output for network/timeout failures must produce the same deferred shape without exposing the error body.
 
 ```javascript
 const response = $input.item.json ?? {};
@@ -270,7 +273,7 @@ if (status >= 200 && status < 300 && body.accepted === true && accepted.has(stat
 
 const claim = $("Validate Opaque Claim").item.json;
 
-return [{
+return {
   json: {
     work_type: claim.work_type,
     work_id: claim.work_id,
@@ -278,7 +281,7 @@ return [{
     reason,
     retry_after_seconds: retry,
   },
-}];
+};
 ```
 
 A 404/410 can be a gateway-level missing/retired function route. It must defer, never terminalize the opportunity. A 202 ambiguous response means the Edge Function owns provider reconciliation; Recovery may complete the handoff lease but must not submit again.
