@@ -31,7 +31,7 @@ BEGIN
   );
   IF v_receipt.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Store A checkout receipt rejected'; END IF;
   v_result := henvalt.project_verified_shopify_checkout_v2(v_token_a,'eligibility-checkout-a',encode(convert_to(v_checkout_a,'UTF8'),'base64'));
-  IF v_result->>'status'<>'PROCESSED' THEN RAISE EXCEPTION 'Store A checkout projection failed: %',v_result; END IF;
+  IF v_result->>'status'<>'OPEN' THEN RAISE EXCEPTION 'Store A checkout projection failed: %',v_result; END IF;
 
   v_hmac := encode(extensions.hmac(convert_to(v_checkout_b,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
   SELECT * INTO v_receipt FROM henvalt.accept_shopify_webhook_v2(
@@ -40,7 +40,7 @@ BEGIN
   );
   IF v_receipt.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Store B checkout receipt rejected'; END IF;
   v_result := henvalt.project_verified_shopify_checkout_v2(v_token_b,'eligibility-checkout-b',encode(convert_to(v_checkout_b,'UTF8'),'base64'));
-  IF v_result->>'status'<>'PROCESSED' THEN RAISE EXCEPTION 'Store B checkout projection failed: %',v_result; END IF;
+  IF v_result->>'status'<>'OPEN' THEN RAISE EXCEPTION 'Store B checkout projection failed: %',v_result; END IF;
 
   -- Simulate inactivity without relying on wall-clock sleeps.
   UPDATE henvalt.shopify_checkout_identity_v2
