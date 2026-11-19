@@ -190,6 +190,15 @@ BEGIN
       CONTINUE;
     END IF;
 
+    -- Establish the exact store lineage before suppression inserts that reference this event.
+    UPDATE henvalt.shopify_mailer_provider_events_v2
+    SET tenant_id=v_attempt.tenant_id,
+        shopify_connection_id=v_attempt.shopify_connection_id,
+        send_attempt_id=v_attempt.id,
+        processing_status='PROCESSED'
+    WHERE id=v_event.id AND processing_status='UNMATCHED';
+    IF NOT FOUND THEN CONTINUE; END IF;
+
     IF v_event.event_type='activity.sent' THEN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='SUBMITTED',submitted_at=coalesce(submitted_at,pg_catalog.now()),updated_at=pg_catalog.now()
@@ -254,13 +263,6 @@ BEGIN
       ON CONFLICT(shopify_connection_id,customer_identity_id,suppression_type,source_provider_event_id)
       DO NOTHING;
     END IF;
-
-    UPDATE henvalt.shopify_mailer_provider_events_v2
-    SET tenant_id=v_attempt.tenant_id,
-        shopify_connection_id=v_attempt.shopify_connection_id,
-        send_attempt_id=v_attempt.id,
-        processing_status='PROCESSED'
-    WHERE id=v_event.id AND processing_status='UNMATCHED';
 
     v_count:=v_count+1;
   END LOOP;
