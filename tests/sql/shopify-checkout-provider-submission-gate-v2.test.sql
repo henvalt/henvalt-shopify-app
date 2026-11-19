@@ -10,8 +10,8 @@ BEGIN
   ) INTO v_definition;
 
   IF v_definition IS NULL
-    OR position('sc.active IS DISTINCT FROM true' in v_definition)=0
-    OR position('sc.app_key IS DISTINCT FROM v_attempt.app_key' in v_definition)=0
+    OR position('v_attempt.connection_active IS DISTINCT FROM true' in v_definition)=0
+    OR position('v_attempt.connection_app_key IS DISTINCT FROM v_attempt.app_key' in v_definition)=0
     OR position('v_attempt.checkout_status IS DISTINCT FROM' in v_definition)=0
     OR position('v_attempt.marketing_state IS DISTINCT FROM' in v_definition)=0
     OR position('shopify_order_identity_v2' in v_definition)=0
