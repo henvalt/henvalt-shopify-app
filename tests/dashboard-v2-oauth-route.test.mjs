@@ -11,6 +11,8 @@ test("dashboard Shopify connection uses the V2 owner-authenticated install route
   assert.match(dashboard, /JSON\.stringify\(\{shop\}\)/);
   assert.match(dashboard, /canonical \*\.myshopify\.com domain/);
   assert.match(dashboard, /app registry, Vault secret, and owner-controlled endpoints must be ready first/);
+  assert.match(dashboard, /owner_controlled_shop_connection_required/);
+  assert.match(dashboard, /No owner-controlled Shopify connection yet/);
 });
 
 test("dashboard connection UI does not claim to reinstall or authorize a legacy app", () => {
