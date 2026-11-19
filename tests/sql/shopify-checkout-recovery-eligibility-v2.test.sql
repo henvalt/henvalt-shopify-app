@@ -127,5 +127,42 @@ BEGIN
       AND checkout_token='eligibility-shared-token'
       AND state='CONVERTED'
   ) THEN RAISE EXCEPTION 'Store B candidate was not marked converted by its own order'; END IF;
+
+  -- A separate open checkout becomes terminal when its exact store is deactivated.
+  DECLARE
+    v_inactive_checkout text := '{"shop_id":"2002","id":777002,"token":"eligibility-inactive-store-token","customer":{"id":12346},"total_price":"50.00","currency":"GBP","completed_at":null}';
+  BEGIN
+    v_hmac := encode(extensions.hmac(convert_to(v_inactive_checkout,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+    SELECT * INTO v_receipt FROM henvalt.accept_shopify_webhook_v2(
+      v_token_b,v_hmac,encode(convert_to(v_inactive_checkout,'UTF8'),'base64'),
+      'store-b.myshopify.com','checkouts/create','eligibility-checkout-inactive-b','eligibility-event-inactive-b'
+    );
+    IF v_receipt.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Inactive-state checkout receipt rejected'; END IF;
+    v_result := henvalt.project_verified_shopify_checkout_v2(
+      v_token_b,'eligibility-checkout-inactive-b',encode(convert_to(v_inactive_checkout,'UTF8'),'base64')
+    );
+    IF v_result->>'status'<>'OPEN' THEN RAISE EXCEPTION 'Inactive-state checkout projection failed: %',v_result; END IF;
+    UPDATE henvalt.shopify_checkout_identity_v2
+       SET updated_at=now()-interval '2 hours'
+     WHERE shopify_connection_id=v_store_b AND shopify_checkout_token='eligibility-inactive-store-token';
+    PERFORM henvalt.refresh_shopify_checkout_recovery_candidates_v2(interval '1 hour',100);
+    UPDATE henvalt.shopify_connections SET active=false WHERE id=v_store_b;
+    v_result := henvalt.refresh_shopify_checkout_recovery_candidates_v2(interval '1 hour',100);
+    IF v_result->>'accepted'<>'true' THEN RAISE EXCEPTION 'Inactive-store candidate refresh failed: %',v_result; END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM henvalt.shopify_checkout_recovery_candidate_v2
+       WHERE shopify_connection_id=v_store_b
+         AND checkout_token='eligibility-inactive-store-token'
+         AND state='STORE_INACTIVE'
+    ) THEN RAISE EXCEPTION 'Inactive store candidate was not terminalized'; END IF;
+    UPDATE henvalt.shopify_connections SET active=true WHERE id=v_store_b;
+    PERFORM henvalt.refresh_shopify_checkout_recovery_candidates_v2(interval '1 hour',100);
+    IF NOT EXISTS (
+      SELECT 1 FROM henvalt.shopify_checkout_recovery_candidate_v2
+       WHERE shopify_connection_id=v_store_b
+         AND checkout_token='eligibility-inactive-store-token'
+         AND state='STORE_INACTIVE'
+    ) THEN RAISE EXCEPTION 'Reactivated store resurrected a terminal candidate'; END IF;
+  END;
 END;
 $eligibility_v2$;
