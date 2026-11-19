@@ -210,6 +210,18 @@ test("verified sender preflight migration is service-only and exact-store scoped
   assert.doesNotMatch(sql, /customer_email|recipient_email|access_token|api_token/);
 });
 
+test("MailerSend webhook.test uses the documented fixed signature and does not persist a provider event", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/202611190003_mailersend_webhook_test_signature_v2.sql", import.meta.url), "utf8");
+  assert.match(sql, /ALTER FUNCTION henvalt\.ingest_mailersend_webhook_v2[\s\S]*?RENAME TO ingest_mailersend_webhook_v2_legacy/);
+  assert.ok(sql.includes("test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8"));
+  assert.ok(!sql.includes("test_Am3L3GuOIc4blLUuHqAPxxwkZaJyEk5"));
+  assert.match(sql, /v_event_type IS DISTINCT FROM 'webhook\.test'/);
+  assert.match(sql, /'WEBHOOK_TEST_VERIFIED'/);
+  assert.match(sql, /'event_persisted',false/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION henvalt\.ingest_mailersend_webhook_v2/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION henvalt\.ingest_mailersend_webhook_v2[\s\S]*?TO service_role/);
+});
+
 test("n8n cutover specification blocks legacy event duplication and gates V2 sends", () => {
   const docs = readFileSync(new URL("../docs/n8n-v2-cutover-boundary.md", import.meta.url), "utf8");
   assert.ok(docs.includes("henvalt-mailersend-delivery"));
