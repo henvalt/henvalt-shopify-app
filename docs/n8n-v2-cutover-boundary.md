@@ -300,12 +300,7 @@ environment variable `HENVALT_V2_MAILERSEND_EVENTS_READY=true`. If it is
 absent or false, they return 503 before message-context resolution, permit
 issue or provider submission.
 
-Set this flag only after the MailerSend account's signed event URL has been
-changed to the V2 webhook function, the provider's signature has been verified
-end-to-end, unsubscribe/bounce/complaint events are confirmed to create V2
-exact-store suppression/reconciliation records, and the old n8n event route
-is no longer processing those same events. The flag is an explicit operator
-attestation, not an automated verification of provider settings.
+The Edge Functions also query the MailerSend Domains and Webhooks APIs on each attempted delivery. They require the exact verified sender domain, enabled HTML/plain unsubscribe insertion, and an enabled version-2 webhook at `SUPABASE_URL/functions/v1/henvalt-mailersend-webhook-v2/{provider_account_key}` with all eight V2 reconciliation/suppression events. Set this flag only after the provider's signed event URL has been verified end-to-end and the old n8n event route is no longer processing those same events. Dynamic API checks verify the configured V2 route; the flag remains an explicit operator attestation that the legacy duplicate route is disabled.
 
 ### Safe three-workflow destination graph
 
