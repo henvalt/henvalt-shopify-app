@@ -35,6 +35,7 @@ test("lease completion rejects stale workers and supports bounded deferral",()=>
  assert.match(sql,/SET lease_expires_at=now\(\),next_attempt_at=now\(\)\+p_retry_after/);
  assert.match(sql,/p_retry_after>interval '24 hours'/);
  assert.match(sql,/REVOKE ALL ON FUNCTION henvalt\.finish_shopify_recovery_work_claim_v2/);
+ assert.match(integration,/Deferred work was reclaimed before its retry deadline/);
  assert.match(integration,/Deferred work was not reclaimed with a fresh lease identity/);
  assert.match(integration,/Stale worker was able to complete a reclaimed lease/);
  assert.match(integration,/Completed pixel work was claimed again/);
