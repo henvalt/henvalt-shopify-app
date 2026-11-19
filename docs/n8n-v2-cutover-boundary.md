@@ -64,14 +64,36 @@ The V2 path instead has exact-store checkout permits and a separate pixel permit
 
 The V2 SQL/provider-event and order-projection lifecycle owns recovered-order attribution. n8n must never mark an order recovered merely because an email was accepted, sent, opened or clicked.
 
-## 4. Existing V2 delivery Edge Function contracts
+## 4. V2 delivery and trusted message contracts
 
-The branch already has two distinct server-side delivery boundaries:
+The two delivery Edge Functions now accept **opaque work identifiers only**:
 
-- Checkout recovery: `henvalt-shopify-contact-delivery-v2` accepts an opaque `intervention_id` plus `subject`, `html` and/or `text`. It resolves the exact-store checkout intervention, refreshes Shopify customer consent, issues and consumes the checkout permit, rechecks recipient identity, reserves provider cost, and submits to MailerSend.
-- Cart/browse pixel recovery: `henvalt-shopify-pixel-delivery-v2` accepts an opaque `opportunity_id` plus `subject`, `html` and/or `text`. It resolves the exact-store pixel context, refreshes Shopify consent/contact evidence, issues and consumes a pixel-specific permit, rechecks recipient identity, reserves provider cost, and submits to MailerSend.
+- Checkout: `POST /functions/v1/henvalt-shopify-contact-delivery-v2` with JSON `{"intervention_id":"<UUID>"}`.
+- Cart/browse: `POST /functions/v1/henvalt-shopify-pixel-delivery-v2` with JSON `{"opportunity_id":"<UUID>"}`.
 
-Both require the server-held delivery bearer secret. Neither accepts a recipient email from n8n, and both keep the raw recipient email inside the trusted Edge Function/provider request. Both record SUBMITTED/FAILED/AMBIGUOUS outcomes internally; n8n must not call the legacy result RPC afterward. The V2 signed MailerSend webhook Edge Function owns provider-event correlation, suppression and ambiguous-attempt reconciliation.
+Any additional request property (including caller-supplied `subject`, `html`, `text`, email, store domain or template fields) is rejected. The n8n workflow must not run a renderer or pass message bodies to these functions.
+
+Migration `202611190001_shopify_recovery_message_context_v2.sql` adds the service-only `resolve_shopify_recovery_message_context_v2(work_type,work_id)` RPC. It revalidates exact tenant + connection + active app/store + source lineage and returns only:
+- canonical `*.myshopify.com` domain;
+- allowlisted `opportunity_type`;
+- template version marker.
+
+It never returns recipient PII, provider/Shopify secrets or delivery authority. The trusted Edge Function then renders the message using `recovery-message-v2.mjs` and the verified sender display name. Current copy is deliberately conservative: no customer name, product title, cart contents, discount, fabricated checkout URL or untrusted HTML. The CTA points to the verified store's HTTPS `myshopify.com` root, not a guessed checkout permalink. This is a safe fallback, not yet a saved-checkout deep link or item-level personalization.
+
+### Mandatory unsubscribe gate
+
+All three templates include MailerSend's `{{unsubscribe}}` placeholder in both HTML and plain text. Before provider submission, the Edge Function calls MailerSend's domains API using the server-held API token and requires the exact sender domain to be verified with:
+- `track_unsubscribe=true`;
+- `track_unsubscribe_html_enabled=true`;
+- `track_unsubscribe_plain_enabled=true`.
+
+If the account/domain lookup fails, the domain is not verified, or either body insertion option is disabled, delivery fails closed with `mailer_send_unsubscribe_tracking_not_enabled`. The placeholder is never sent knowingly as literal text. The checkout path records the already-consumed attempt as FAILED (releasing its reserved cost); the pixel path blocks before issuing a permit. The sending domain must be configured and verified in MailerSend before any test send.
+
+### Provider outcome and retry boundary
+
+Both Edge Functions mark the provider boundary before the HTTP request. A network exception, HTTP 408/5xx, missing provider message ID, or post-request ledger failure is treated as AMBIGUOUS; its cost reservation remains held for signed webhook/manual reconciliation. The response is 202 with an explicit ambiguous/pending status. n8n must finish the lease as `HANDOFF_ACCEPTED` and must never call the delivery function again for that work item. A definite provider rejection is recorded FAILED; because the claim query excludes any existing send attempt, it must not be blindly retried. n8n must not call the legacy delivery-result RPC. The V2 signed MailerSend webhook Edge Function owns provider-event correlation, suppression and ambiguous-attempt reconciliation.
+
+Both functions require their independent server-held delivery bearer secret. Recipient email remains inside the trusted Edge Function and provider request; n8n receives only the opaque IDs and structured status.
 
 The V2 claim/lease adapter now exists in migration 042, and migration 043 now materializes step-1 checkout interventions from eligible exact-store checkout opportunities. Disposable PostgreSQL tests cover both checkout intervention and pixel opportunity work, intervention materialization idempotency, true concurrent claim exclusion, deferred retry with a fresh lease identity, stale-worker rejection and terminal completion. The active Recovery workflow is still not wired to it; production cutover remains pending.
 
@@ -143,7 +165,7 @@ For each claim item, Recovery passes the opaque `work_type`, `work_id`, `opportu
 5. A 5xx before provider submission can be deferred. If provider submission may have started, the Edge Function marks the attempt AMBIGUOUS and retains its cost reservation; do not manually release it or create a second send. Let the signed MailerSend webhook reconciler resolve it.
 6. Recovery calls `finish_shopify_recovery_work_claim_v2` after the subworkflow returns. Network timeouts are deferred, never treated as accepted. Never pass raw email or Shopify/provider credentials between n8n nodes. Keep message content limited to the requested subject/body and avoid logging complete HTTP request/response bodies.
 
-**Still required before this routing can be safely wired:** the V2 message-template/context contract. Both Edge Functions currently require subject and HTML/text from the caller. The active workflow's legacy content renderer must not be reused until its inputs are proven to be exact-store and PII-safe. The V2 branch needs a tested renderer that can produce checkout/cart/browse copy from safe server-side context without exposing recipient email or tokens to n8n. Also decide whether MailerSend's signed event URL points directly to the V2 webhook Edge Function or is safely forwarded with raw body/signature; do not process the same provider event through both legacy and V2 event handlers.
+**Still required before this routing can be safely wired:** the V2 message-template/context contract. Both Edge Functions currently require subject and HTML/text from the caller. The active workflow's legacy content renderer must not be reused until its inputs are proven to be exact-store and PII-safe. The branch now has a tested server-side renderer and service-only safe message-context RPC. Its conservative root-store CTA is not a checkout deep link; richer item/checkout personalization remains gated on a trusted, exact-store URL/context source. Also decide whether MailerSend's signed event URL points directly to the V2 webhook Edge Function or is safely forwarded with raw body/signature; do not process the same provider event through both legacy and V2 event handlers.
 
 The `HENVALT_INGEST` workflow remains outside this claim queue: verified Shopify webhooks are ingested by the Worker/Edge Function boundary, not duplicated through legacy n8n ingestion. The active `HENVALT_RECOVERY` and `HENVALT_DELIVERY` versions remain unchanged.
 
@@ -164,7 +186,7 @@ Do not edit or publish the active workflows until each gate is satisfied:
 
 ## 8. Migrations 042–043 validation
 
-The V2 work-claim and checkout intervention lifecycle passed disposable CI run #962 on 18 November 2026, including true concurrent workers. Latest branch head 0932059e also passed full CI runs #968 and #969, including checkout materializer idempotency and pixel/checkout separation:
+The V2 work-claim and checkout intervention lifecycle passed disposable CI run #962 on 18 November 2026, including true concurrent workers. Earlier branch head 0932059e passed full CI runs #968 and #969, including checkout materializer idempotency and pixel/checkout separation. The message-context and server-rendered delivery changes are later candidate work and require their own current CI run:
 - migrations 042 and 043 apply after migrations 001–041 on disposable PostgreSQL;
 - a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
 - a second worker cannot claim an active lease;
