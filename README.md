@@ -239,24 +239,24 @@ configuration.
    sends.
 4. **Message rendering and unsubscribe configuration:** the candidate now has a server-side allowlisted renderer and opaque-ID-only delivery contracts. Its CTA points to the verified Shopify store root, not a checkout deep link. Configure and verify MailerSend unsubscribe tracking for the exact sender domain before any controlled send.
 5. **Signed provider-event cutover:** the V2 delivery functions now require `HENVALT_V2_MAILERSEND_EVENTS_READY=true`. The active legacy n8n MailerSend event route must be replaced with the V2 signed webhook route, with no duplicate event processing, before this flag may be set.
-5. **Provider and billing readiness:** configure an owner-controlled
+6. **Provider and billing readiness:** configure an owner-controlled
    MailerSend account, verified sender, Vault references, provider cost and
    merchant-funded caps. Confirm the performance percentage and billing
    principal; fee measurements are non-charging records.
-6. **Protected customer data:** obtain Shopify approval for the required
+7. **Protected customer data:** obtain Shopify approval for the required
    customer email access and confirm scopes/fields on an owner-controlled
    test store.
-7. **End-to-end proof:** run a controlled, consent-eligible checkout/cart/browse
+8. **End-to-end proof:** run a controlled, consent-eligible checkout/cart/browse
    event through the verified ingress, recovery claim, trusted delivery,
    signed provider event, Shopify order/refund projection and confirmed
    attribution. A provider-accepted email is not recovered revenue.
-8. **Privacy lifecycle:** finish exact-store export delivery, customer/shop
+9. **Privacy lifecycle:** finish exact-store export delivery, customer/shop
    redaction and retention approval; legacy tenant-scoped lineage remains an
    explicit blocker.
-9. **Merchant dashboard:** deploy the exact-store API/read model only after
+10. **Merchant dashboard:** deploy the exact-store API/read model only after
    the matching migrations and authorization contract are live; verify
    two-store switching and reconciliation against source records.
-10. **Operational readiness:** monitoring, retry/reconciliation queues,
+11. **Operational readiness:** monitoring, retry/reconciliation queues,
     incident response, rollback, privacy deadlines, app review and support
     processes must be approved before launch.
 
@@ -264,7 +264,6 @@ configuration.
 
 - [Integrated launch execution and verified live baseline](docs/launch-readiness-execution-2026-11-18.md)
 - [Three-workflow V2 cutover boundary](docs/n8n-v2-cutover-boundary.md)
-- [Trusted recovery message rendering and unsubscribe contract](docs/recovery-message-rendering-v2.md)
 - [Trusted recovery message rendering and unsubscribe contract](docs/recovery-message-rendering-v2.md)
 - [Checkout recovery eligibility](docs/shopify-checkout-recovery-eligibility-v2.md)
 - [Contact resolution and delivery boundary](docs/shopify-contact-resolution-delivery-v2.md)
