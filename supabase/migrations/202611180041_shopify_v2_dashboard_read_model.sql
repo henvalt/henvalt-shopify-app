@@ -26,6 +26,7 @@ DECLARE
   v_revenue numeric(18,4):=0;
   v_activity jsonb:='[]'::jsonb;
   v_by_event jsonb:='[]'::jsonb;
+  v_revenue_series jsonb:='[]'::jsonb;
 BEGIN
   SELECT sc.shop_domain,sc.tenant_id
     INTO v_shop,v_tenant_id
@@ -269,6 +270,35 @@ BEGIN
          AND a.attributed_at>=p_from AND a.attributed_at<p_to+interval '1 day') AS revenue
   ) stats;
 
+  -- Daily confirmed recovery values for the selected exact store only.
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'date',x.day::date,
+      'amount',CASE WHEN x.currency_count<=1 THEN x.amount ELSE NULL END,
+      'currencyMixed',x.currency_count>1,
+      'currency',CASE WHEN x.currency_count=1 THEN x.currency ELSE v_currency END
+    ) ORDER BY x.day
+  ),'[]'::jsonb) INTO v_revenue_series
+  FROM (
+    SELECT d.day,
+      count(DISTINCT a.currency) AS currency_count,
+      max(a.currency) AS currency,
+      COALESCE(sum(a.net_recovered_amount),0) AS amount
+    FROM generate_series(
+      date_trunc('day',p_from AT TIME ZONE 'UTC'),
+      date_trunc('day',p_to AT TIME ZONE 'UTC'),
+      interval '1 day'
+    ) AS d(day)
+    LEFT JOIN henvalt.shopify_recovery_attributions_v2 a
+      ON a.tenant_id=v_tenant_id
+     AND a.shopify_connection_id=p_shopify_connection_id
+     AND a.status='CONFIRMED'
+     AND a.net_recovered_amount>0
+     AND a.attributed_at >= (d.day AT TIME ZONE 'UTC')
+     AND a.attributed_at < ((d.day+interval '1 day') AT TIME ZONE 'UTC')
+    GROUP BY d.day
+  ) x;
+
   RETURN jsonb_build_object(
     'linked',true,
     'shopName',v_shop,
@@ -285,6 +315,7 @@ BEGIN
       'recoveredOrders',v_recovered
     ),
     'activity',v_activity,
+    'revenueSeries',v_revenue_series,
     'totals',jsonb_build_object(
       'opportunities',v_opportunities,
       'interventions',v_interventions,
