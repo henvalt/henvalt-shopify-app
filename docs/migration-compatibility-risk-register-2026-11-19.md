@@ -80,7 +80,7 @@ This register is a source-level inventory of the 59 candidate migration files li
 
 ## Count and verification
 
-The workflow's explicit ordered shell list contains **59 distinct migration paths**. The step label was stale and has been corrected to “Apply candidate migrations 001 through 058”. The final files are `202611190004_shopify_checkout_candidate_terminal_state_v2.sql` and `202611190005_shopify_checkout_provider_submission_gate_v2.sql`; filename suffixes are date-bucket sequences, not the total chain count.
+The workflow's explicit ordered shell list contains **59 distinct migration paths**. The step label was stale and has been corrected to “Apply candidate migrations 001 through 059”. The final files are `202611190004_shopify_checkout_candidate_terminal_state_v2.sql` and `202611190005_shopify_checkout_provider_submission_gate_v2.sql`; filename suffixes are date-bucket sequences, not the total chain count.
 
 This is still a source-level operation inventory, not a production approval. The complete chain must be reviewed against a production-like restored clone, including all historical data, grants, RLS, trigger dependencies, locks and post-migration verification.
 
