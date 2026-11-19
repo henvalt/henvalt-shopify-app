@@ -69,9 +69,11 @@ BEGIN
      SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
      WHERE x.item->>'work_type'='PIXEL_OPPORTUNITY'
        AND x.item->>'work_id'=v_opportunity::text
-       AND x.item->>'tenant_id'=v_tenant::text
-       AND x.item->>'shopify_connection_id'=v_connection::text
-       AND x.item->>'intervention_id' IS NULL
+       AND jsonb_object_length(x.item)=3
+       AND NOT (x.item ? 'tenant_id')
+       AND NOT (x.item ? 'shopify_connection_id')
+       AND NOT (x.item ? 'opportunity_id')
+       AND NOT (x.item ? 'intervention_id')
    ) THEN
   RAISE EXCEPTION 'Pixel opportunity was not safely exposed by the exact-store work lease: %',v_claim;
  END IF;
@@ -80,6 +82,14 @@ BEGIN
  WHERE x.item->>'work_id'=v_opportunity::text;
  IF v_lease_id IS NULL THEN
   RAISE EXCEPTION 'Pixel work lease did not return its opaque lease ID';
+ END IF;
+ IF NOT EXISTS(
+  SELECT 1 FROM henvalt.shopify_recovery_work_claims_v2
+  WHERE id=v_lease_id AND work_type='PIXEL_OPPORTUNITY'
+   AND work_id=v_opportunity AND tenant_id=v_tenant
+   AND shopify_connection_id=v_connection
+ ) THEN
+  RAISE EXCEPTION 'Private pixel work lease lost exact-store lineage';
  END IF;
  v_claim:=henvalt.claim_shopify_recovery_work_v2('test-worker-b',10,120);
  IF EXISTS(
