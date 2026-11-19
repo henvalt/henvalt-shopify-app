@@ -68,6 +68,19 @@ The active versions have not changed during this work:
 
 No V2 Recovery schedule or V2 Delivery subworkflow has been imported or activated. No fourth workflow was created.
 
+
+## 19 November — live Supabase advisor review (read-only)
+
+The live project advisor scan returned:
+
+- **Security:** 11 tables have RLS enabled and no policies. These are internal/service-role tables (billing, provider usage, pixel keys/rate limits, OAuth state, privacy request queue, etc.); absent policies means normal client roles are denied by default. Do not add broad policies just to silence this advisory.
+- **Security:** `henvalt.is_tenant_member(uuid)` is SECURITY DEFINER and executable by `authenticated`. Inspection confirms it is the predicate used by the existing tenant-isolation policies across core tenant tables. This is a deliberate RLS helper pattern, but because the `henvalt` schema is used through PostgREST, the function's direct RPC exposure should be explicitly reviewed for tenant-membership enumeration. Do not revoke it blindly: doing so would break the policies that call it.
+- **Auth:** leaked-password protection is disabled. Enable Supabase Auth's leaked-password protection in project Auth security settings before public merchant onboarding.
+- **Performance:** one existing foreign key, `shopify_privacy_requests.tenant_id`, lacks a covering index. Add a reviewed index migration before material privacy-request volume; do not change production schema during this preparation session. The 72 unused-index notices are not a reason to delete indexes before the workload has meaningful traffic.
+- **Health:** no advisor health lints were returned.
+
+No production configuration or schema was changed. These findings are added to the launch checklist rather than silently patched in production.
+
 ## Critical safety rules
 
 1. Do not run V2 and legacy recovery for the same store/topic concurrently. Legacy Ingest creates old recovery records while V2 has separate exact-store candidate tables.
