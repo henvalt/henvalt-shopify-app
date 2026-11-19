@@ -156,3 +156,8 @@ Added `tests/n8n-v2-offline-acceptance.test.mjs`, which composes the candidate R
 - Lease-finisher invocation and no MailerSend host escape for each composed scenario.
 
 This is an **offline adapter/orchestration acceptance suite**, not a substitute for the database-backed no-send cases in the 15-point plan above. It does not prove production consent, store isolation, sender verification, cost reservation or provider webhook behavior. Provider transport is structurally absent from the test doubles; production Edge Functions are not called.
+
+
+## Lease-finish acknowledgement is part of tick success
+
+The Recovery runtime now reports `accepted: false` with status `LEASE_FINISH_UNCONFIRMED` whenever any claimed item's finish RPC does not confirm `finished: true`. It does not report a completed scheduler tick merely because Delivery returned an accepted handoff. The regression test proves that an accepted handoff plus an unconfirmed lease finish remains an operationally incomplete tick. Operators must inspect/reconcile the lease rather than treat that tick as successful.
