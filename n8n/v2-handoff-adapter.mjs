@@ -76,18 +76,21 @@ export function classifyHandoffResponse(status, body) {
   return Object.freeze({ outcome: "DEFERRED", reason: "handoff_not_confirmed", retryAfterSeconds: 3600 });
 }
 
-export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = fetch }) {
+export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixelBearerToken, fetchImpl = fetch }) {
   if (typeof supabaseUrl !== "string" || !/^https:\/\//i.test(supabaseUrl) ||
-      typeof bearerToken !== "string" || bearerToken.length < 16 ||
+      typeof checkoutBearerToken !== "string" || checkoutBearerToken.length < 16 ||
+      typeof pixelBearerToken !== "string" || pixelBearerToken.length < 16 ||
       typeof fetchImpl !== "function") {
     throw new TypeError("invalid_adapter_configuration");
   }
   const base = supabaseUrl.replace(/\/+$/, "");
   return async function handoff(claim) {
     const valid = validateClaim(claim);
-    const body = valid.workType === "CHECKOUT_INTERVENTION"
+    const isCheckout = valid.workType === "CHECKOUT_INTERVENTION";
+    const body = isCheckout
       ? { intervention_id: valid.workId }
       : { opportunity_id: valid.workId };
+    const bearerToken = isCheckout ? checkoutBearerToken : pixelBearerToken;
     let classification;
     let httpStatus = null;
     try {
