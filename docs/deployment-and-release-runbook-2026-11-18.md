@@ -43,6 +43,24 @@ All items below must be attached to the release record before deployment:
 8. Exact-store privacy export/redaction and retention decisions, plus a
    monitored incident and rollback plan.
 
+## Owner-controlled Shopify infrastructure endpoints
+
+The app-aware OAuth V2 function must not register webhooks or pixels against a
+Worker hostname inherited from a former collaborator. Its runtime configuration
+requires both values below before its health check reports configured or an
+install/callback can proceed:
+
+- `SHOPIFY_WEBHOOK_INGRESS_BASE_URL`: HTTPS origin only (no path, query,
+  fragment or credentials). OAuth appends
+  `/shopify/webhooks/{per-install-route-token}`.
+- `SHOPIFY_PIXEL_COLLECTOR_URL`: HTTPS URL with the exact path
+  `/v1/events`, without query, fragment or credentials.
+
+Both values must point to infrastructure controlled by the current HENVALT
+owner and tested against the candidate Worker source. Do not copy a URL from an
+old account or infer a production hostname. Missing or malformed values fail
+closed; the callback must not silently register a legacy endpoint.
+
 ## 3. Candidate validation
 
 Run from the repository root with Node.js 22 and Deno 2:
