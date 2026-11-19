@@ -216,3 +216,85 @@ to 1 MB before raw-body signature verification. Content type, UTF-8, JSON
 shape and streamed byte count are validated without relying on Content-Length.
 This is a branch-only hardening change. It does not change the active n8n
 graphs or the live MailerSend webhook route.
+
+## 10. Read-only inspection of the active workflow graphs — 19 November 2026
+
+The connected n8n service was inspected again in read-only mode. The active
+versions and graph paths confirm that the current runtime is still legacy:
+
+### Active HENVALT_RECOVERY
+
+The current graph:
+- Claims legacy jobs through `henvalt.claim_next_job`.
+- Claims interventions through `henvalt.claim_intervention_for_send`.
+- Loads tenant-scoped data through `henvalt.get_recovery_worker_context`.
+- Runs `Preflight & AI Context`, which constructs AI context containing
+  customer first name, product details, previous message bodies, store name,
+  cart/checkout value, recipient reference and destination URL.
+- Runs Groq generation/validation, then persists a rendered message through
+  `henvalt.render_and_queue_message`.
+- Creates a legacy delivery request through
+  `henvalt.create_delivery_request`.
+- Builds a delivery payload containing recipient, subject, HTML body, text
+  body, tracking token and other legacy IDs.
+- Calls the existing `HENVALT_DELIVERY` subworkflow synchronously.
+
+This is the old copy pipeline. It must not be adapted by simply changing its
+HTTP URL: the V2 contract intentionally removes recipient and message body
+from n8n execution data. The V2 Recovery graph should be simplified to
+candidate discovery/promotion/materialization, exact-store work claim, and
+synchronous subworkflow handoff. The old AI renderer, legacy message queue,
+legacy delivery request and recipient-bearing payload must be bypassed for
+V2 work.
+
+### Active HENVALT_DELIVERY
+
+The current graph has an Execute Workflow Trigger and a separate internal
+webhook. Its legacy delivery path authorizes/contextualizes a legacy delivery
+request, calls the old
+`https://.../functions/v1/henvalt-mailersend-delivery` endpoint, and records
+the legacy delivery result. Its tracking and unsubscribe webhooks also use
+legacy HENVALT token/RPC paths.
+
+The current MailerSend event route is:
+1. n8n webhook `henvalt/mailersend/events` receives raw-body data;
+2. `Verify MailerSend Signature` calls the legacy
+   `verify_mailersend_webhook_signature_api` RPC;
+3. `Process MailerSend Event` calls legacy
+   `process_mailersend_webhook_event`.
+
+The V2 signed event processor is a separate Supabase Edge Function:
+`henvalt-mailersend-webhook-v2`. A V2 MailerSend event must be routed to that
+function directly with the untouched raw request body and provider signature,
+or through one explicitly tested raw-body-preserving adapter. It must not be
+processed by both the legacy n8n route and V2 function.
+
+### Explicit send interlock
+
+Both candidate V2 delivery Edge Functions now require the server-only
+environment variable `HENVALT_V2_MAILERSEND_EVENTS_READY=true`. If it is
+absent or false, they return 503 before message-context resolution, permit
+issue or provider submission.
+
+Set this flag only after the MailerSend account's signed event URL has been
+changed to the V2 webhook function, the provider's signature has been verified
+end-to-end, unsubscribe/bounce/complaint events are confirmed to create V2
+exact-store suppression/reconciliation records, and the old n8n event route
+is no longer processing those same events. The flag is an explicit operator
+attestation, not an automated verification of provider settings.
+
+### Safe three-workflow destination graph
+
+- `HENVALT_INGEST` remains the existing ingress workflow only for legacy
+  responsibilities that are not duplicated by the V2 Worker/Edge path.
+- `HENVALT_RECOVERY` performs V2 discovery, materialization and claim; passes
+  only work type, opaque IDs, exact connection/tenant IDs and lease ID into
+  the existing Delivery subworkflow.
+- `HENVALT_DELIVERY` branches by work type and sends only
+  `{"intervention_id":"..."}` or `{"opportunity_id":"..."}` to the
+  matching V2 Edge Function. It returns a bounded status to Recovery.
+- The MailerSend signed event webhook points directly to
+  `henvalt-mailersend-webhook-v2`; it is not a fourth n8n workflow.
+
+The active graph remains unchanged. These findings are a cutover specification,
+not authorization to update or publish the three active workflows.
