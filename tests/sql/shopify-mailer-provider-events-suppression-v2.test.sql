@@ -25,6 +25,7 @@ DECLARE
   v_signature text;
   v_result jsonb;
 BEGIN
+  PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
   SELECT id INTO v_store_b FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com';
   SELECT id INTO v_customer_a FROM henvalt.shopify_customer_identity_v2 WHERE shopify_connection_id=v_store_a AND external_customer_reference='12345';
