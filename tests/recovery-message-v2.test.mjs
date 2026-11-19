@@ -145,8 +145,9 @@ test("n8n cutover specification blocks legacy event duplication and gates V2 sen
   assert.ok(docs.includes("process_mailersend_webhook_event"));
   assert.ok(docs.includes("henvalt-mailersend-webhook-v2"));
   assert.ok(docs.includes("HENVALT_V2_MAILERSEND_EVENTS_READY=true"));
-  assert.ok(docs.includes("must not be processed by both"));
-  assert.ok(docs.includes("must not be adapted by simply changing its"));
+  const normalizedDocs = docs.replace(/\\s+/g, " ");
+  assert.ok(normalizedDocs.includes("processed by both the legacy n8n route and V2 function"));
+  assert.ok(normalizedDocs.includes("must not be adapted by simply changing its HTTP URL"));
   assert.ok(docs.includes("HENVALT_INGEST"));
   assert.ok(docs.includes("HENVALT_RECOVERY"));
   assert.ok(docs.includes("HENVALT_DELIVERY"));
