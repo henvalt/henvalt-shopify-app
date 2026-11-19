@@ -260,7 +260,7 @@ test("V2 n8n cutover contract keeps legacy delivery separate and requires opaque
     "DEFERRED",
     "henvalt-mailersend-webhook-v2",
     "original raw request body",
-    "no-send dry-run acceptance suite",
+    "No-send dry-run acceptance suite",
     "hard-coded historical delivery request and recipient address",
     "No production send, billing, PR merge or deployment is authorized",
   ]) assert.ok(docs.includes(required), required);
