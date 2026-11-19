@@ -129,6 +129,8 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_recovery_fee_measurements_v2 (
   adjusted_recovered_amount numeric(18,4) CHECK(adjusted_recovered_amount IS NULL OR adjusted_recovered_amount>=0),
   adjusted_fee_amount numeric(18,4) CHECK(adjusted_fee_amount IS NULL OR adjusted_fee_amount>=0),
   credit_amount numeric(18,4) NOT NULL DEFAULT 0 CHECK(credit_amount>=0),
+  reconciliation_status text NOT NULL DEFAULT 'CURRENT'
+    CHECK(reconciliation_status IN ('CURRENT','REVIEW_REQUIRED','CREDIT_REQUIRED','REVERSED')),
   CONSTRAINT shopify_recovery_fee_measurements_v2_connection_fkey
     FOREIGN KEY(shopify_connection_id,tenant_id)
     REFERENCES henvalt.shopify_connections(id,tenant_id)
@@ -282,25 +284,37 @@ BEGIN
            WHEN v_status='CONFIRMED' THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4)
            ELSE 0
          END,
-         adjusted_recovered_amount=CASE WHEN v_status='CONFIRMED' THEN v_net ELSE 0 END,
-         adjusted_fee_amount=CASE WHEN v_status='CONFIRMED'
-           THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4) ELSE 0 END,
+         adjusted_recovered_amount=CASE
+           WHEN v_status='REVIEW_REQUIRED' THEN NULL
+           ELSE v_net
+         END,
+         adjusted_fee_amount=CASE
+           WHEN v_status='REVIEW_REQUIRED' THEN NULL
+           WHEN v_status='CONFIRMED' THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4)
+           ELSE 0
+         END,
          credit_amount=CASE
+           WHEN f.status IN ('INVOICED','PAID','CREDIT_REQUIRED') AND v_status='REVIEW_REQUIRED'
+             THEN f.credit_amount
            WHEN f.status IN ('INVOICED','PAID','CREDIT_REQUIRED')
              THEN GREATEST(f.fee_amount-CASE WHEN v_status='CONFIRMED'
                THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4) ELSE 0 END,0)
            ELSE 0
          END,
-         status=CASE
+         reconciliation_status=CASE
            WHEN v_status='REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED'
-           WHEN v_status='REVERSED' AND f.status IN ('INVOICED','PAID','CREDIT_REQUIRED') THEN 'CREDIT_REQUIRED'
-           WHEN v_status='REVERSED' THEN 'VOIDED'
-           WHEN f.status='CREDIT_REQUIRED' THEN
-             CASE WHEN f.fee_amount>pg_catalog.round(v_net*f.henvalt_percentage/100,4)
-               THEN 'CREDIT_REQUIRED' ELSE 'CREDIT_REQUIRED' END
-           WHEN f.status IN ('INVOICED','PAID')
-             AND f.fee_amount<>pg_catalog.round(v_net*f.henvalt_percentage/100,4) THEN 'CREDIT_REQUIRED'
+           WHEN f.status IN ('INVOICED','PAID','CREDIT_REQUIRED')
+             AND f.fee_amount>CASE WHEN v_status='CONFIRMED'
+               THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4) ELSE 0 END
+             THEN 'CREDIT_REQUIRED'
+           WHEN v_status='REVERSED' THEN 'REVERSED'
+           ELSE 'CURRENT'
+         END,
+         status=CASE
            WHEN f.status IN ('INVOICED','PAID') THEN f.status
+           WHEN f.status='CREDIT_REQUIRED' THEN f.status
+           WHEN v_status='REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED'
+           WHEN v_status='REVERSED' THEN 'VOIDED'
            ELSE 'PENDING'
          END,
          updated_at=pg_catalog.now()
