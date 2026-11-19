@@ -21,3 +21,10 @@ test("OAuth V2 fails closed unless ingress is an HTTPS origin and collector is t
   assert.match(source, /validPixelCollectorUrl\(SHOPIFY_PIXEL_COLLECTOR_URL\)/);
   assert.match(source, /function configOk\(\): boolean/);
 });
+
+test("OAuth V2 rejects a redirect secret that does not exactly match its own callback route", () => {
+  assert.match(source, /function validOAuthRedirectUri\(value: string\)/);
+  assert.match(source, /redirect\.origin === supabase\.origin/);
+  assert.match(source, /redirect\.pathname === "\/functions\/v1\/henvalt-shopify-oauth-v2\/callback"/);
+  assert.match(source, /validOAuthRedirectUri\(SHOPIFY_REDIRECT_URI\)/);
+});
