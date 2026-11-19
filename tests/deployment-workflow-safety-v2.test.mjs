@@ -8,6 +8,7 @@ const identity = readFileSync(".github/workflows/shopify-identity-v2-validation.
 const runbook = readFileSync("docs/deployment-and-release-runbook-2026-11-18.md", "utf8");
 const launchMatrix = readFileSync("docs/launch-readiness-matrix-2026-11-19.md", "utf8");
 const cutover = readFileSync("docs/production-cutover-preflight-and-rollback-2026-11-19.md", "utf8");
+const n8nBuildSheet = readFileSync("docs/n8n-native-v2-three-workflow-build-sheet-2026-11-19.md", "utf8");
 const migrationRegister = readFileSync("docs/migration-compatibility-risk-register-2026-11-19.md", "utf8");
 const lineageFoundation = readFileSync("supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql", "utf8");
 
@@ -49,6 +50,19 @@ test("release documentation tracks the exact candidate migration chain", () => {
   assert.match(launchMatrix, /Candidate migrations 001–058 apply in disposable PostgreSQL CI/);
   assert.doesNotMatch(runbook, /migrations 001–046/);
   assert.doesNotMatch(launchMatrix, /migrations 001–046/);
+});
+
+test("three-workflow V2 build contract preserves active V1 runtime and prevents a fourth workflow", () => {
+  assert.match(n8nBuildSheet, /Preserve exactly three production workflows/);
+  assert.match(n8nBuildSheet, /Do not import this build sheet as a fourth workflow/);
+  assert.match(n8nBuildSheet, /Recovery, not Delivery, owns the lease/);
+  assert.match(n8nBuildSheet, /must not call the legacy `henvalt-mailersend-delivery`/);
+  assert.match(cutover, /HENVALT_INGEST.*VTpfGKNtu1CSQ4Rv.*Active V1/);
+  assert.match(cutover, /HENVALT_RECOVERY.*3GEDoeCA4paXTaDF.*Active V1/);
+  assert.match(cutover, /HENVALT_DELIVERY.*CvVyybGJZSnklxiZ.*Active V1/);
+  assert.match(cutover, /manual-trigger one-off test-email branch/);
+  assert.match(cutover, /do not establish instance-wide execution retention or sensitive-data redaction/i);
+  assert.match(cutover, /No active n8n version was changed/);
 });
 
 test("exact-store lineage foundation never guesses or backfills legacy connection identity", () => {
