@@ -36,7 +36,7 @@ test("Delivery provider-event reconciliation calls only the bounded service RPC"
   });
   const result=await runtime.reconcile({limit:75});
   assert.deepEqual(result,{
-    accepted:true,reconciled:3,
+    accepted:true,events_reconciled:3,stale_attempts_marked_ambiguous:2,
     automatic_resend_performed:false,
     ambiguous_cost_reservation_released:false,
     provider_called:false,recipient_pii_returned:false,
