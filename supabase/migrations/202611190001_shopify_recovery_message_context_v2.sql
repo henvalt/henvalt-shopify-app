@@ -60,7 +60,7 @@ BEGIN
       AND sc.app_key=o.app_key
       AND i.customer_identity_id IS NOT NULL
       AND o.customer_identity_id IS NOT NULL;
-  ELSE
+  ELSIF p_work_type='PIXEL_OPPORTUNITY' THEN
     SELECT sc.shop_domain,o.opportunity_type
       INTO v_shop_domain,v_opportunity_type
     FROM henvalt.shopify_recovery_opportunity_v2 o
@@ -91,6 +91,8 @@ BEGIN
           AND i.tenant_id=o.tenant_id
           AND i.shopify_connection_id=o.shopify_connection_id
       );
+  ELSE
+    RETURN jsonb_build_object('ready',false,'code','INVALID_MESSAGE_CONTEXT_REQUEST');
   END IF;
 
   IF v_shop_domain IS NULL
