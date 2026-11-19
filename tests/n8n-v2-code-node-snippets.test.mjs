@@ -83,6 +83,12 @@ test("Recovery finish snippet defers mismatched work and requires exact finish a
   });
   assert.equal(built.json.p_outcome, "DEFERRED");
   assert.equal(built.json.p_retry_after, "3600 seconds");
+  const accepted = run(build, {
+    input: { ...claim, outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 3600 },
+    nodes: { "Validate Claim Batch": { item: { json: claim } } },
+  });
+  assert.equal(accepted.json.p_outcome, "HANDOFF_ACCEPTED");
+  assert.equal(accepted.json.p_retry_after, "0 seconds");
 
   const verify = codeAfter("### 6. Verify Finish Acknowledgement");
   const acknowledged = run(verify, {
