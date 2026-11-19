@@ -15,6 +15,7 @@ DECLARE
   v_upserted integer := 0;
   v_converted integer := 0;
   v_closed integer := 0;
+  v_store_inactive integer := 0;
 BEGIN
   IF p_minimum_inactive_for IS NULL
      OR p_minimum_inactive_for < interval '15 minutes'
@@ -31,6 +32,22 @@ BEGIN
      AND o.checkout_token = c.checkout_token
      AND c.state <> 'CONVERTED';
   GET DIAGNOSTICS v_converted = ROW_COUNT;
+
+  -- Deactivation is terminal for outstanding candidates. Reactivation must not re-queue old work.
+  UPDATE henvalt.shopify_checkout_recovery_candidate_v2 c
+     SET state = 'STORE_INACTIVE', updated_at = pg_catalog.now()
+    FROM henvalt.shopify_connections sc
+    JOIN henvalt.shopify_app_registry ar ON ar.app_key = sc.app_key
+    JOIN henvalt.tenants t ON t.id = sc.tenant_id
+   WHERE sc.id = c.shopify_connection_id
+     AND sc.tenant_id = c.tenant_id
+     AND (
+       sc.active IS DISTINCT FROM true
+       OR ar.lifecycle_status IS DISTINCT FROM 'active'
+       OR t.status::text IS DISTINCT FROM 'ACTIVE'
+     )
+     AND c.state = 'READY_FOR_CONTACT_RESOLUTION';
+  GET DIAGNOSTICS v_store_inactive = ROW_COUNT;
 
   UPDATE henvalt.shopify_checkout_recovery_candidate_v2 c
      SET state = 'CHECKOUT_CLOSED', updated_at = pg_catalog.now()
@@ -105,6 +122,7 @@ BEGIN
     'eligible_upserted', v_upserted,
     'converted_marked', v_converted,
     'closed_marked', v_closed,
+    'store_inactive_marked', v_store_inactive,
     'delivery_authorized', false
   );
 END;
