@@ -144,8 +144,8 @@ test("duplicate work items in a claimed batch are rejected before a second hando
     handoff: async claim => { handoffs++; return { ...claim, outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 }; },
     finishClaim: async () => { finishes++; return { finished: true }; },
   }), /v2_duplicate_claim_item/);
-  assert.equal(handoffs, 1);
-  assert.equal(finishes, 1);
+  assert.equal(handoffs, 0);
+  assert.equal(finishes, 0);
 });
 
 test("claim RPC cannot return more items than the configured bound", async () => {
@@ -320,4 +320,58 @@ test("a tick with an unconfirmed lease finish is not reported as completed", asy
   assert.equal(result.status, "LEASE_FINISH_UNCONFIRMED");
   assert.equal(result.summary.lease_finish_unconfirmed, 1);
   assert.equal(result.summary.handoff_accepted, 1);
+});
+
+
+test("malformed later claim item rejects the entire batch before any handoff", async () => {
+  const valid = {
+    work_type: "CHECKOUT_INTERVENTION",
+    work_id: "11111111-1111-4111-8111-111111111111",
+    lease_id: "22222222-2222-4222-8222-222222222222",
+  };
+  let handoffs = 0;
+  let finishes = 0;
+  await assert.rejects(runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 2, items: [valid, { ...valid, work_type: "UNSUPPORTED" }] }
+      : { accepted: true },
+    handoff: async () => { handoffs++; return { outcome: "HANDOFF_ACCEPTED" }; },
+    finishClaim: async () => { finishes++; return { finished: true }; },
+  }), /v2_duplicate_claim_item|v2_claim_item_invalid/);
+  assert.equal(handoffs, 0);
+  assert.equal(finishes, 0);
+});
+
+test("lease finish transport failure is contained and later claimed work is still processed", async () => {
+  const items = [
+    { work_type: "CHECKOUT_INTERVENTION", work_id: "11111111-1111-4111-8111-111111111111", lease_id: "22222222-2222-4222-8222-222222222222" },
+    { work_type: "PIXEL_OPPORTUNITY", work_id: "33333333-3333-4333-8333-333333333333", lease_id: "44444444-4444-4444-8444-444444444444" },
+  ];
+  const handedOff = [];
+  const finished = [];
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 2, items }
+      : { accepted: true },
+    handoff: async claim => {
+      handedOff.push(claim.work_type);
+      return { outcome: "HANDOFF_ACCEPTED", reason: "explicit_handoff_accepted", retry_after_seconds: 0 };
+    },
+    finishClaim: async claim => {
+      finished.push(claim.lease_id);
+      if (claim.lease_id === items[0].lease_id) throw new Error("secret recipient@example.com");
+      return { finished: true };
+    },
+  });
+  assert.equal(handedOff.length, 2);
+  assert.equal(finished.length, 2);
+  assert.equal(result.accepted, false);
+  assert.equal(result.status, "LEASE_FINISH_UNCONFIRMED");
+  assert.equal(result.summary.lease_finish_unconfirmed, 1);
+  assert.equal(result.summary.handoff_accepted, 2);
+  assert.equal(result.summary.outcomes[0].reason_code, "lease_finish_unconfirmed");
+  assert.equal(result.summary.outcomes[1].lease_finished, true);
+  assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
 });
