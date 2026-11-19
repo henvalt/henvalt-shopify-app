@@ -147,6 +147,7 @@ BEGIN
     UPDATE henvalt.shopify_connections SET active=false WHERE id=v_store_b;
     v_result := henvalt.refresh_shopify_checkout_recovery_candidates_v2(interval '1 hour',100);
     IF v_result->>'accepted'<>'true' THEN RAISE EXCEPTION 'Inactive-store candidate refresh failed: %',v_result; END IF;
+    IF COALESCE((v_result->>'store_inactive_marked')::integer,0)<>1 THEN RAISE EXCEPTION 'Inactive-store transition count mismatch: %',v_result; END IF;
     IF NOT EXISTS (
       SELECT 1 FROM henvalt.shopify_checkout_recovery_candidate_v2
        WHERE shopify_connection_id=v_store_b
