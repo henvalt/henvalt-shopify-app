@@ -63,7 +63,7 @@ These are candidate source and offline CI protections only. They do not establis
 | Area | Current evidence | Status | Launch requirement |
 |---|---|---|---|
 | Repository / PR #6 | V2 code, tests, migration sequence and docs on preparation branch; PR open/draft | Candidate | Latest-head CI green; code review; explicit merge approval |
-| PostgreSQL V2 schema | Candidate migrations 001–058 apply in disposable PostgreSQL CI; checkout terminal-state preservation, deferred retry deadlines, claim concurrency and lifecycle tests pass | Candidate only | Review migration diff, backup/rollback plan, production apply approval, post-migration verification |
+| PostgreSQL V2 schema | Candidate migrations 001–059 apply in disposable PostgreSQL CI; checkout terminal-state preservation, deferred retry deadlines, claim concurrency and lifecycle tests pass | Candidate only | Review migration diff, backup/rollback plan, production apply approval, post-migration verification |
 | Shopify webhook ingress | Branch Worker has V2 route to protected Edge Function; Vault-backed HMAC receipt and exact-store projections in source | Not deployed | App-specific secret registry, per-install route token provisioning, Worker/Edge secrets, one callback per topic, signed non-production tests |
 | Shopify OAuth / app identity | App-aware OAuth and exact-store connection code/tests in branch | Not live-verified | Confirm app ownership/registry identity, install/reauthorize test store, callback and webhook registration |
 | Recovery candidates | Checkout and pixel candidate refresh/promote/materialize/claim SQL in candidate migrations | Candidate only | Production schema applied; source events actually populating V2 tables; test candidate creation on dedicated store |
@@ -186,3 +186,14 @@ A source review found the candidate Supabase config did not explicitly disable g
 - Added a regression assertion and documented the provider retry/correlation contract and remaining connected gates.
 - Exact code head `4081803ce930b1a69d14dd206e245613142729f4` passed the full Node suite **418/418**, focused identity/cost/privacy suite **215/215**, Gitleaks, Deno checks (including the MailerSend V2 webhook function), and disposable PostgreSQL migrations/lifecycle tests. Shopify app configuration validation passed and deployment was skipped.
 - Documentation-only head `607c254d37e9075696c3e0ba13b9616730a36c81` also passed the latest identity validation and Shopify configuration workflows. PR #6 remains open, draft and unmerged. No production webhook, MailerSend account, Supabase project, n8n workflow, customer send or billing state was changed.
+
+
+## 19 November — final checkout send authorization boundary added
+
+- The checkout delivery Edge Function previously consumed a one-use permit and proceeded toward MailerSend without the final database recheck already present in the separate cart/browse delivery path.
+- Added candidate migration 059, `202611190005_shopify_checkout_provider_submission_gate_v2.sql`, with a service-role-only final gate that rebinds the attempt to its exact permit, reservation, intervention, opportunity, checkout, consent, connection, app, tenant, provider, sender and billing rows. It rechecks active install/app/tenant state, open checkout and matching token, allowed jurisdiction, subscribed consent, same-store order absence, recipient suppression, privacy redaction guard, verified sender and reserved provider cost.
+- The gate takes the exact Shopify connection row lock before locking permit/attempt rows, matching the uninstall processor's connection-first order and avoiding a lock-order inversion. Null jurisdiction and unknown consent fail closed.
+- The checkout Edge Function now invokes this gate after permit consumption and immediately before the provider request. A rejected gate records the attempt as FAILED and does not call MailerSend.
+- Added Node regression coverage for gate contents, lock ordering and Edge call order, plus a disposable PostgreSQL contract for the function definition, service-role-only grant and invalid-input fail-closed behavior. The CI workflow now applies 59 candidate migrations and executes both SQL and Node contracts.
+- This is candidate source only. It does not eliminate the unavoidable narrow race between a completed database authorization transaction and an external provider request, and it is not a live uninstall/send test. No production database, Edge Function, MailerSend account, n8n workflow, Shopify installation or customer send was changed.
+- Validation for the newest commit is pending; earlier CI attempts exposed stale 58-migration assertions and incorrect test aliases, which have been corrected before this final run.
