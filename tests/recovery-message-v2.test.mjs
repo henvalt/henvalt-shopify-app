@@ -167,9 +167,12 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
   assert.match(checkout, /providerSubmissionStarted=true/);
   assert.ok(checkout.includes('providerSubmissionStarted?"AMBIGUOUS":"FAILED"'));
   assert.match(checkout, /sent.status>=500\|\|sent.status===408/);
+  assert.ok(checkout.indexOf("resolve_shopify_sender_profile_for_delivery_v2") < checkout.indexOf("issue_shopify_delivery_permit_v2"));
+  assert.ok(checkout.indexOf("mailerSendV2DeliveryReady") < checkout.indexOf("issue_shopify_delivery_permit_v2"));
   assert.match(pixel, /key!=="opportunity_id"/);
   assert.match(pixel, /providerSubmissionStarted=true/);
   assert.ok(pixel.includes('providerSubmissionStarted?"AMBIGUOUS":"FAILED"'));
+  assert.ok(pixel.indexOf("mailerSendV2DeliveryReady") < pixel.indexOf("issue_shopify_pixel_delivery_permit_v2"));
 });
 
 test("message context migration is service-only, exact-store and PII-free", () => {
@@ -187,6 +190,24 @@ test("message context migration is service-only, exact-store and PII-free", () =
   assert.match(sql, /REVOKE ALL ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2/);
   assert.match(sql, /GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2[\s\S]*?TO service_role/);
   assert.doesNotMatch(sql, /email_address|recipient_email|access_token|mailer_send_api_token|checkout_token,|customer_gid/);
+});
+
+test("verified sender preflight migration is service-only and exact-store scoped", () => {
+  const sql = readFileSync(new URL("../supabase/migrations/202611190002_shopify_sender_profile_preflight_v2.sql", import.meta.url), "utf8");
+  assert.match(sql, /request.jwt.claim.role[\s\S]*?service_role_required/);
+  assert.match(sql, /sp.id=p_sender_profile_id/);
+  assert.match(sql, /sp.shopify_connection_id=p_shopify_connection_id/);
+  assert.match(sql, /sp.provider_account_key=p_provider_account_key/);
+  assert.match(sql, /sp.status='ACTIVE'/);
+  assert.match(sql, /sp.verified_at IS NOT NULL/);
+  assert.match(sql, /sc.active IS TRUE/);
+  assert.match(sql, /ar.lifecycle_status='active'/);
+  assert.match(sql, /pr.status='ACTIVE'/);
+  assert.match(sql, /recipient_pii_returned',false/);
+  assert.match(sql, /delivery_authorized',false/);
+  assert.match(sql, /REVOKE ALL ON FUNCTION henvalt.resolve_shopify_sender_profile_for_delivery_v2/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_sender_profile_for_delivery_v2[\s\S]*?TO service_role/);
+  assert.doesNotMatch(sql, /customer_email|recipient_email|access_token|api_token/);
 });
 
 test("n8n cutover specification blocks legacy event duplication and gates V2 sends", () => {
