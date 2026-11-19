@@ -86,6 +86,7 @@ async function resolveAppIdentity(): Promise<{ appKey: string; clientId: string;
   const response = await db("/rest/v1/rpc/resolve_shopify_app_oauth_identity", {
     method: "POST",
     body: JSON.stringify({ p_shopify_client_id: SHOPIFY_API_KEY }),
+    signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) return null;
   const data = await response.json().catch(() => ({}));
