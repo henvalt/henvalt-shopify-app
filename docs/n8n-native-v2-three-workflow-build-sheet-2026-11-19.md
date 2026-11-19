@@ -21,7 +21,7 @@ The current live workflows are still legacy and must remain untouched until a se
 5. **HTTP Request — Promote Pixel Candidates** — `promote_shopify_pixel_recovery_candidates_v2`; `{p_limit:200}`.
 6. **HTTP Request — Materialize Checkout Interventions** — `materialize_shopify_checkout_interventions_v2`; `{p_limit:100}`.
 7. **IF/Code — Stage Accepted?** — every stage must return JSON `accepted:true`. Stop before claim if any stage rejects, returns malformed data, or times out. Do not continue after a failed discovery stage.
-8. **HTTP Request — Claim V2 Recovery Work** — `claim_shopify_recovery_work_v2`; `{p_worker_id,p_limit:25,p_lease_seconds:180}`. The database response must contain only `lease_id`, `work_type`, `work_id` per item. The migration now enforces this minimal response.
+8. **HTTP Request — Claim V2 Recovery Work** — `claim_shopify_recovery_work_v2`; `{p_worker_id,p_limit:25,p_lease_seconds:180}`. The database response must contain only `lease_id`, `work_type`, `work_id` per item; its `claimed` count must equal the item-array length. The migration now enforces this minimal response.
 9. **Split Out / Loop Over Items** — validate UUIDs and enum. Construct correlation ID `v2:<work_id>`. Build a new object containing exactly `work_type`, `work_id`, `lease_id`, `worker_id`, `correlation_id`; never pass the original claim item onward.
 10. **Execute Workflow — HENVALT_DELIVERY** — synchronous subworkflow call, wait for completion. Pass only the five allowlisted fields.
 11. **Code/IF — Validate Delivery Result** — accept only `HANDOFF_ACCEPTED`, `TERMINAL`, or `DEFERRED`; retry interval must be an integer 0–86400 seconds. No provider body or raw exception text in result.
