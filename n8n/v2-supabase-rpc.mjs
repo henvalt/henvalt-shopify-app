@@ -21,18 +21,23 @@ export function createSupabaseServiceRpc({ supabaseUrl, serviceRoleKey, fetchImp
         !args || typeof args !== "object" || Array.isArray(args)) {
       throw new TypeError("invalid_rpc_call");
     }
-    const response = await fetchImpl(`${base}/rest/v1/rpc/${functionName}`, {
-      method: "POST",
-      headers: {
-        apikey: serviceRoleKey,
-        authorization: `Bearer ${serviceRoleKey}`,
-        "content-type": "application/json",
-        "accept-profile": "henvalt",
-        "content-profile": "henvalt",
-      },
-      body: JSON.stringify(args),
-      signal: AbortSignal.timeout(15000),
-    });
+    let response;
+    try {
+      response = await fetchImpl(`${base}/rest/v1/rpc/${functionName}`, {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          authorization: `Bearer ${serviceRoleKey}`,
+          "content-type": "application/json",
+          "accept-profile": "henvalt",
+          "content-profile": "henvalt",
+        },
+        body: JSON.stringify(args),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch {
+      throw new Error("supabase_rpc_transport_failed");
+    }
     let payload = null;
     try { payload = await response.json(); } catch { /* handled as generic failure */ }
     if (!response.ok || !payload || typeof payload !== "object" || Array.isArray(payload)) {
