@@ -170,7 +170,13 @@ async function load(){
       renderStores(data.stores,null);
       $("status").textContent="Choose store";
       $("notice").classList.remove("hide");
-      $("notice").innerHTML="<strong>Select a Shopify store.</strong> This workspace has multiple active stores. Choose one store to view its isolated recovery and revenue data.";
+      $("notice").innerHTML="<strong>Select a Shopify store.</strong> This workspace has multiple active V2 stores. Choose one store to view its isolated recovery and revenue data.";
+      return;
+    }
+    if(res.status===409&&data.error==="owner_controlled_shop_connection_required"){
+      $("status").textContent="Connect store";
+      $("notice").classList.remove("hide");
+      $("notice").innerHTML="<strong>No owner-controlled Shopify connection yet.</strong> Connect the configured HENVALT Shopify app in Workspace settings. Legacy connections without an active app identity and valid token references are not shown as V2 stores.";
       return;
     }
     if(!res.ok)throw Error(data.error||"Dashboard unavailable");
