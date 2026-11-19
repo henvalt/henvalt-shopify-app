@@ -8,6 +8,7 @@ const identity = readFileSync(".github/workflows/shopify-identity-v2-validation.
 const runbook = readFileSync("docs/deployment-and-release-runbook-2026-11-18.md", "utf8");
 const launchMatrix = readFileSync("docs/launch-readiness-matrix-2026-11-19.md", "utf8");
 const cutover = readFileSync("docs/production-cutover-preflight-and-rollback-2026-11-19.md", "utf8");
+const migrationRegister = readFileSync("docs/migration-compatibility-risk-register-2026-11-19.md", "utf8");
 
 test("production Shopify release cannot run automatically on push", () => {
   assert.match(release, /workflow_dispatch:/);
@@ -34,6 +35,9 @@ test("Shopify preparation job has one unambiguous job-level condition", () => {
 test("release documentation tracks the exact candidate migration chain", () => {
   assert.match(identity, /Apply candidate migrations 001 through 058/);
   assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 58);
+  assert.equal((migrationRegister.match(/^\\| \\d{2} \\|/gm) || []).length, 58);
+  assert.match(migrationRegister, /58 distinct migration paths/);
+  assert.match(migrationRegister, /REVIEW REQUIRED — NOT APPROVED FOR PRODUCTION/);
   assert.match(identity, /202611190004_shopify_checkout_candidate_terminal_state_v2\.sql/);
   assert.match(runbook, /candidate migrations 001–058/i);
   assert.match(runbook, /Candidate migrations 001–058: CI fixture only; not production-applied\./);
