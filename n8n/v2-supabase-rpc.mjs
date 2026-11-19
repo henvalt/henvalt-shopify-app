@@ -14,7 +14,7 @@ export function createSupabaseServiceRpc({ supabaseUrl, serviceRoleKey, fetchImp
   try {
     const parsed = new URL(supabaseUrl);
     trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\.supabase\.co$/i.test(parsed.hostname) &&
-      (parsed.pathname === "" || parsed.pathname === "/") && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
+      (parsed.pathname === "" || parsed.pathname === "/") && !parsed.port && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
   } catch { trustedUrl = false; }
   if (!trustedUrl ||
       typeof serviceRoleKey !== "string" || serviceRoleKey.length < 32 ||
