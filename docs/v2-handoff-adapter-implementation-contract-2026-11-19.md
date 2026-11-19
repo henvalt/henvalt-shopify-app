@@ -49,7 +49,7 @@ Finish the lease exactly once using `finish_shopify_recovery_work_claim_v2` with
 
 This adapter is only the orchestration-to-Edge-Function handoff. It does not call MailerSend, authorize a send, create a delivery permit, resolve a recipient, or process signed provider events. The Edge Functions retain those responsibilities and their independent authorization checks.
 
-The adapter tests inject a fake fetch implementation and fake lease finisher. No network request to Supabase, Shopify or MailerSend is made by the test suite. The adapter has not been connected to the active n8n workflows, and this document does not authorize a workflow import, execution, activation or production cutover.
+The tests inject fake fetch and a fake Delivery subworkflow. No network request to Supabase, Shopify or MailerSend is made by the test suite. The adapter has not been connected to the active n8n workflows, and this document does not authorize a workflow import, execution, activation or production cutover.
 
 ## Composed scheduler/runtime reference
 
@@ -57,10 +57,11 @@ The preparation branch now also contains:
 
 - `n8n/v2-supabase-rpc.mjs`: a bounded PostgREST service-role RPC client and lease-finisher. It uses the private `henvalt` schema profile, keeps service-role credentials in headers only, validates RPC names, and converts bounded retry seconds into PostgreSQL intervals.
 - `n8n/v2-recovery-orchestrator.mjs`: executes the five candidate discovery/materialization stages in order, stops before claiming if any stage rejects, then atomically claims a bounded batch. The SQL claim response is now minimized to `lease_id`, `work_type`, and `work_id`; the orchestrator applies a second explicit allowlist before handoff.
-- `n8n/v2-recovery-runtime.mjs`: composes the RPC client, lease finisher and V2 handoff adapter behind one `runTick` entry point.
+- `n8n/v2-recovery-runtime.mjs`: composes the RPC client and lease finisher behind one `runTick` entry point; it requires an injected Delivery-subworkflow handoff.
+- `n8n/v2-delivery-runtime.mjs`: adapts the opaque claim inside the Delivery workflow to the correct V2 Edge Function. Delivery returns only the classified outcome; Recovery completes the lease after the synchronous subworkflow returns.
 - `tests/n8n-v2-recovery-orchestrator.test.mjs` and `tests/n8n-v2-recovery-runtime.test.mjs`: injected-fake-fetch tests for stage ordering, invalid-stage stop, bounded policies, checkout routing, lease finish, no PII forwarding, and no MailerSend network escape.
 
-The tick currently uses 30-minute checkout inactivity, 60-minute pixel inactivity, 24-hour pixel max age, candidate batches up to 100/200, a 25-item claim and a 180-second lease. These are candidate defaults, not production policy approval. Worker IDs must be unique per execution. The service-role key and Edge Function delivery token are separate credentials.
+The three-workflow boundary is preserved: Recovery performs discovery/claim, passes only opaque IDs to Delivery, and then finishes the lease; Delivery routes to the correct Edge Function and never finishes Recovery's lease. The tick currently uses 30-minute checkout inactivity, 60-minute pixel inactivity, 24-hour pixel max age, candidate batches up to 100/200, a 25-item claim and a 180-second lease. These are candidate defaults, not production policy approval. Worker IDs must be unique per execution. The service-role key and Edge Function delivery token are separate credentials.
 
 ## Live n8n topology re-check — 19 November 2026
 
