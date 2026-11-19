@@ -79,7 +79,7 @@ Each request must use its distinct server-held delivery authorization token. Nev
 The Edge Function HTTP result is not interchangeable with an email delivery receipt.
 
 - 2xx response with `accepted: true` and an allowlisted status (`submitted`, `accepted`, `handed_off`, `ambiguous_provider_submission`, `provider_accepted_record_pending`, or `provider_outcome_requires_reconciliation`): `HANDOFF_ACCEPTED`. An ambiguous/pending 202 means the Edge Function already crossed the provider boundary and owns reconciliation; Recovery must complete the lease so Delivery is never invoked again for that work item.
-- Explicit ineligible/authorization/context failure (4xx): classify as `TERMINAL` only for documented permanent reasons. A configuration or policy-not-ready response should be deferred/retried only where the DB contract explicitly allows it; otherwise stop and alert rather than spin.
+- Explicit ineligible/authorization/context failure (4xx): classify as `TERMINAL` only for documented permanent reasons. A configuration or policy-not-ready response should be deferred/retried only where the DB contract explicitly allows it; otherwise stop and alert rather than spin. Invalid-request 400/422 may be terminal when the function contract proves permanent invalidity; gateway-level 404/410 must defer and alert because a missing/retired function route must never terminalize every claimed opportunity.
 - 401/403: configuration/security incident; do not retry in a tight loop.
 - 429/5xx/network timeout/invalid JSON or any response without explicit accepted state: `DEFERRED`. A 502 with `accepted: false` and `error: provider_submission_rejected` is `TERMINAL` because the Edge Function has already recorded the definite provider rejection.
 - Never retry a possibly submitted provider call as a fresh send until the ambiguous-attempt reconciler determines the outcome.
@@ -150,7 +150,7 @@ The test harness must intercept outbound network calls and fail the test if any 
 
 Added `tests/n8n-v2-offline-acceptance.test.mjs`, which composes the candidate Recovery runtime, Delivery adapter and injected fake network in one test process. The matrix exercises:
 - 401/403 auth failures, 409 policy/preflight rejection, 429 throttling and 503 Edge unavailability → deferred lease outcome.
-- 400/404/410/422 permanent request/resource failures → terminal lease outcome.
+- 400/422 permanent invalid requests → terminal only when documented. 404/410 missing or retired routes → deferred with alert.
 - Explicit recorded provider rejection (502) → terminal; accepted-but-ambiguous 202 → handoff accepted so the Edge reconciler owns the result.
 - Malformed Edge JSON and transport exceptions → bounded deferral with sanitized result.
 - Lease-finisher invocation and no MailerSend host escape for each composed scenario.
