@@ -170,8 +170,10 @@ export async function runV2RecoveryTick({
     });
   }
 
+  const leaseFinishesConfirmed = summary.lease_finish_unconfirmed === 0;
   return Object.freeze({
-    accepted: true,
+    accepted: leaseFinishesConfirmed,
+    status: leaseFinishesConfirmed ? "COMPLETED" : "LEASE_FINISH_UNCONFIRMED",
     worker_id: workerId,
     stages: Object.freeze(Object.fromEntries(
       Object.entries(stageResults).map(([key, value]) => [key, {
