@@ -211,3 +211,19 @@ test("Recovery output allowlists Delivery reason codes and HTTP status", async (
   assert.equal(result.summary.outcomes[0].http_status, null);
   assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
 });
+
+
+test("Recovery validates claim work type and UUIDs before invoking Delivery", async () => {
+  let handoffs = 0;
+  let finishes = 0;
+  await assert.rejects(runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, items: [{ work_type: "UNKNOWN", work_id: "bad", lease_id: "bad" }] }
+      : { accepted: true },
+    handoff: async () => { handoffs++; return { outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 }; },
+    finishClaim: async () => { finishes++; return { finished: true }; },
+  }), /v2_claim_item_invalid/);
+  assert.equal(handoffs, 0);
+  assert.equal(finishes, 0);
+});
