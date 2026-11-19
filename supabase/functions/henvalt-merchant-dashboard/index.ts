@@ -58,10 +58,28 @@ Deno.serve(async (req: Request) => {
     }
     const tenantId = membership[0].tenant_id;
     const u = new URL(req.url);
-    const connections = await rest("shopify_connections?select=id,shop_domain,active,tenants!inner(status)&tenant_id=eq." +
-      encodeURIComponent(tenantId) + "&active=eq.true&tenants.status=eq.ACTIVE&order=shop_domain.asc&limit=100");
+
+    // Only show stores installed through an active, owner-controlled V2 app
+    // identity. Legacy rows marked active but missing app/token lineage must
+    // not appear as selectable V2 dashboard stores.
+    const appRows = await rest("shopify_app_registry?select=app_key&lifecycle_status=eq.active&limit=100");
+    if (!Array.isArray(appRows)) throw new Error("APP_REGISTRY_LOOKUP_INVALID");
+    const appKeyPattern = /^[a-z][a-z0-9_-]{2,63}$/;
+    const activeAppKeys = appRows
+      .map((item: any) => item?.app_key)
+      .filter((key: unknown): key is string => typeof key === "string" && appKeyPattern.test(key));
+    if (activeAppKeys.length === 0) {
+      return reply(409, { error: "owner_controlled_shop_connection_required" });
+    }
+
+    const appKeyFilter = "in.(" + activeAppKeys.map(key => encodeURIComponent(key)).join(",") + ")";
+    const connections = await rest("shopify_connections?select=id,shop_domain,active&tenant_id=eq." +
+      encodeURIComponent(tenantId) + "&active=eq.true&app_key=" + appKeyFilter +
+      "&shopify_shop_id=not.is.null&access_token_secret_ref=not.is.null" +
+      "&refresh_token_secret_ref=not.is.null&reauth_required_at=is.null" +
+      "&tenants!inner(status)&tenants.status=eq.ACTIVE&order=shop_domain.asc&limit=100");
     if (!Array.isArray(connections) || connections.length === 0) {
-      return reply(409, { error: "shop_not_connected" });
+      return reply(409, { error: "owner_controlled_shop_connection_required" });
     }
     const requestedConnectionId = u.searchParams.get("shopify_connection_id");
     let selectedConnection: any = null;
