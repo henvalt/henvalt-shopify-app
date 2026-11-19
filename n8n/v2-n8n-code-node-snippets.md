@@ -211,13 +211,13 @@ Use a Switch on `work_type`. The two HTTP Request bodies must be separate. Confi
 Checkout branch:
 
 ```javascript
-return { json: { intervention_id: $json.work_id } };
+return { json: { intervention_id: $input.item.json.work_id } };
 ```
 
 Pixel branch:
 
 ```javascript
-return { json: { opportunity_id: $json.work_id } };
+return { json: { opportunity_id: $input.item.json.work_id } };
 ```
 
 Route checkout only to `/functions/v1/henvalt-shopify-contact-delivery-v2` and pixel only to `/functions/v1/henvalt-shopify-pixel-delivery-v2`. Use the corresponding server-held delivery bearer credential. Do not call MailerSend from n8n.
