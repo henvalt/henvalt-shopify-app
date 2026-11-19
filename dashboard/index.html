@@ -151,6 +151,8 @@ function clearDashboardData(){
   $("activity").innerHTML='<tr><td colspan="5"><div class="empty"><strong>Sign in required</strong>Recovery activity is hidden until an owner session is active.</div></td></tr>';
   $("chart").innerHTML='<text x="320" y="88" text-anchor="middle" font-size="11" fill="#999">Sign in to view verified recovery data</text>';
   $("updated").textContent="";
+  $("start").textContent="START";
+  $("end").textContent="END";
 }
 async function load(){
   if(!token){
