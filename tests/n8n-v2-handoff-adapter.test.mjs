@@ -35,6 +35,9 @@ test("accepted ambiguous handoffs complete; security responses defer", () => {
   for (const status of [401, 403, 409, 429, 500, 503]) {
     assert.equal(classifyHandoffResponse(status, {}).outcome, "DEFERRED");
   }
+  assert.equal(classifyHandoffResponse(401, {}).reason, "delivery_auth_incident");
+  assert.equal(classifyHandoffResponse(409, {}).reason, "delivery_preflight_or_eligibility_review");
+  assert.equal(classifyHandoffResponse(429, {}).reason, "handoff_rate_limited");
   for (const status of [400, 404, 410, 422]) {
     assert.equal(classifyHandoffResponse(status, {}).outcome, "TERMINAL");
   }
@@ -62,7 +65,9 @@ test("checkout and pixel dispatch use distinct opaque-only bodies", async () => 
     assert.equal(request.init.headers.authorization, "Bearer " + "x".repeat(32));
   }
   assert.equal(a.outcome, "HANDOFF_ACCEPTED");
+  assert.equal(a.http_status, 202);
   assert.equal(b.outcome, "HANDOFF_ACCEPTED");
+  assert.equal(b.http_status, 202);
   assert.equal(JSON.stringify([a, b]).includes("Bearer"), false);
 });
 
@@ -77,6 +82,7 @@ test("transport errors and malformed provider responses defer without exposing e
   assert.equal(result.reason, "handoff_transport_ambiguous");
   assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
   assert.equal(result.retry_after_seconds, 3600);
+  assert.equal(result.http_status, null);
 });
 
 test("adapter refuses non-HTTPS endpoints or missing delivery credentials", () => {
