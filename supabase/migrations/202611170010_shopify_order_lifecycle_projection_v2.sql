@@ -5,6 +5,9 @@
 
 BEGIN;
 
+ALTER TABLE henvalt.shopify_order_identity_v2
+  ADD COLUMN IF NOT EXISTS source_updated_at timestamptz;
+
 CREATE OR REPLACE FUNCTION henvalt.project_verified_shopify_order_v2(
   p_route_token text,
   p_delivery_id text,
@@ -29,6 +32,8 @@ DECLARE
   v_financial_status text;
   v_ordered_at timestamptz;
   v_cancelled_at timestamptz;
+  v_source_updated_at timestamptz;
+  v_projection_status text := 'PROCESSED';
   v_match_status text := 'NO_CHECKOUT_TOKEN';
   v_order_identity_id uuid;
   v_updated integer := 0;
@@ -146,6 +151,14 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN
     v_cancelled_at := NULL;
   END;
+  BEGIN
+    v_source_updated_at := COALESCE(
+      NULLIF(v_payload->>'updated_at', ''),
+      NULLIF(v_payload->>'created_at', '')
+    )::timestamptz;
+  EXCEPTION WHEN OTHERS THEN
+    v_source_updated_at := NULL;
+  END;
 
   IF v_checkout_token IS NOT NULL THEN
     UPDATE henvalt.shopify_checkout_identity_v2
@@ -162,12 +175,12 @@ BEGIN
   INSERT INTO henvalt.shopify_order_identity_v2 (
     tenant_id, shopify_connection_id, shopify_order_id, checkout_token,
     customer_identity_id, total_value, currency, financial_status,
-    ordered_at, cancelled_at, source_delivery_id, checkout_match_status, updated_at
+    ordered_at, cancelled_at, source_updated_at, source_delivery_id, checkout_match_status, updated_at
   )
   VALUES (
     v_route.tenant_id, v_route.connection_id, v_order_id, v_checkout_token,
     v_customer_identity_id, v_total_value, v_currency, v_financial_status,
-    v_ordered_at, v_cancelled_at, v_route.receipt_id, v_match_status, pg_catalog.now()
+    v_ordered_at, v_cancelled_at, v_source_updated_at, v_route.receipt_id, v_match_status, pg_catalog.now()
   )
   ON CONFLICT (shopify_connection_id, shopify_order_id)
   DO UPDATE SET
@@ -183,22 +196,37 @@ BEGIN
       WHEN EXCLUDED.checkout_match_status = 'MATCHED' THEN 'MATCHED'
       ELSE henvalt.shopify_order_identity_v2.checkout_match_status
     END,
+    source_updated_at = EXCLUDED.source_updated_at,
     updated_at = pg_catalog.now()
+  WHERE
+    (EXCLUDED.source_updated_at IS NULL
+      AND henvalt.shopify_order_identity_v2.source_updated_at IS NULL)
+    OR (EXCLUDED.source_updated_at IS NOT NULL
+      AND (henvalt.shopify_order_identity_v2.source_updated_at IS NULL
+        OR EXCLUDED.source_updated_at >= henvalt.shopify_order_identity_v2.source_updated_at))
   RETURNING id INTO v_order_identity_id;
+
+  IF v_order_identity_id IS NULL THEN
+    SELECT id INTO v_order_identity_id
+    FROM henvalt.shopify_order_identity_v2
+    WHERE shopify_connection_id = v_route.connection_id
+      AND shopify_order_id = v_order_id;
+    v_projection_status := 'STALE_EVENT_IGNORED';
+  END IF;
 
   UPDATE henvalt.shopify_webhook_deliveries
      SET processing_status = 'PROCESSED',
          processed_at = pg_catalog.now(),
          failure_code = NULL,
          metadata = COALESCE(metadata, '{}'::jsonb) || jsonb_build_object(
-           'order_projection', 'PROCESSED',
+           'order_projection', v_projection_status,
            'checkout_match_status', v_match_status
          )
    WHERE id = v_route.receipt_id;
 
   RETURN jsonb_build_object(
     'accepted', true,
-    'status', 'PROCESSED',
+    'status', v_projection_status,
     'order_identity_id', v_order_identity_id,
     'checkout_match_status', v_match_status
   );
