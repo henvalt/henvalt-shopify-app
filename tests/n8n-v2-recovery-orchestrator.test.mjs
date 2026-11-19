@@ -241,3 +241,28 @@ test("Recovery rejects a claim count that disagrees with returned items", async 
   }), /v2_claim_count_mismatch/);
   assert.equal(handoffs, 0);
 });
+
+
+test("Delivery subworkflow failure is redacted, deferred and the Recovery lease is finished", async () => {
+  const finishes = [];
+  const item = {
+    work_type: "CHECKOUT_INTERVENTION",
+    work_id: "11111111-1111-4111-8111-111111111111",
+    lease_id: "22222222-2222-4222-8222-222222222222",
+  };
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 1, items: [item] }
+      : { accepted: true },
+    handoff: async () => { throw new Error("provider response contained customer@example.com"); },
+    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+  });
+  assert.equal(result.summary.deferred, 1);
+  assert.equal(result.summary.lease_finish_unconfirmed, 0);
+  assert.equal(finishes.length, 1);
+  assert.equal(finishes[0].outcome, "DEFERRED");
+  assert.equal(finishes[0].retry_after_seconds, 3600);
+  assert.equal(result.summary.outcomes[0].reason_code, "delivery_subworkflow_failed");
+  assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
+});
