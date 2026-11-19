@@ -88,4 +88,9 @@ No production Supabase migration, Edge Function deployment, Cloudflare Worker de
 
 The candidate `shopify.app.toml` OAuth redirect now targets `henvalt-shopify-oauth-v2/callback`, matching the app-aware OAuth Edge Function and per-install route-token provisioning path. A Node regression test checks this configuration-to-function alignment. The Shopify static/configuration workflow passed on the TOML/test commit; full exact-head validation for the subsequent documentation-only commit is running.
 
-This does **not** verify the deployed `SHOPIFY_REDIRECT_URI` secret or release the app configuration. The compliance webhook still targets the legacy privacy function because the V2 privacy endpoint requires the concrete public app key in its route. No registry key was guessed and no compliance callback was switched. The OAuth callback and privacy route therefore remain production configuration gates.
+This does **not** verify the deployed `SHOPIFY_REDIRECT_URI` secret or release the app configuration. The candidate compliance webhook now targets the stable V2 privacy Edge Function URL. V2 resolves the active app key from the trusted app registry using the configured Shopify client ID, instead of requiring a guessed key in the URL. This removes the path-key configuration blocker in candidate source, but the production registry row/Vault secret, deployed Edge Function, and signed Shopify compliance receipt are still unverified production gates.
+
+
+## 19 November — app-registry-bound Shopify privacy route
+
+The candidate Shopify TOML now routes mandatory compliance topics to `henvalt-shopify-privacy-v2`. That Edge Function resolves the active app identity from the trusted registry with the configured Shopify client ID and fails closed if the registry/Vault-backed secret is unavailable. It no longer trusts a URL path segment to select the app key. The privacy SQL RPC continues to verify the raw request body HMAC and exact app/store connection. This is candidate code only; no production registry row, Vault secret, deployment or webhook receipt has been verified.
