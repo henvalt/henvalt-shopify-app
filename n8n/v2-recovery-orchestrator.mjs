@@ -120,6 +120,8 @@ export async function runV2RecoveryTick({
       work_type: safeClaim.work_type,
       work_id: safeClaim.work_id,
       outcome,
+      reason_code: typeof result.reason === "string" ? result.reason : "unspecified",
+      http_status: Number.isInteger(result.http_status) ? result.http_status : null,
       lease_finished: leaseFinished,
     });
   }
