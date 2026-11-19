@@ -88,6 +88,24 @@ Before enabling an owner-controlled install:
 
 No app-registry seed or secret value is committed in this repository. This is an owner-controlled credential operation and must be performed only after the relevant schema is approved and applied to the intended environment.
 
+## Test-store and payment-gateway constraint
+
+A full checkout-to-paid-order acceptance test needs a Shopify store that can
+complete a simulated payment. Shopify's Test payment gateway and Shopify
+Payments test mode do not capture real payments, but Shopify states that a
+test payment gateway can be tested only after the store has chosen a paid
+plan. A development store cannot process real transactions. See
+[Placing a test order](https://help.shopify.com/en/manual/checkout-settings/test-orders)
+and [Activating a payment gateway in test mode](https://help.shopify.com/en/manual/checkout-settings/test-orders/payments-test-mode).
+
+Do not purchase or upgrade a store as part of this preparation work. With the
+current zero-purchase constraint, use an already-paid, owner-controlled store
+with explicit permission and test mode if one is available. Otherwise, finish
+the no-send CI and API-level tests, but keep real checkout/payment/order
+attribution marked **BLOCKED — TEST STORE PAYMENT CAPABILITY NOT AVAILABLE**.
+Never simulate success by directly inserting a paid order or attribution row
+into production.
+
 ## 3. Candidate validation
 
 Run from the repository root with Node.js 22 and Deno 2:
