@@ -27,6 +27,19 @@ endpoints must be provisioned and tested before OAuth V2 can report configured
 or accept an install. No Worker or Edge Function was deployed and no Shopify
 subscription was changed.
 
+
+## 19 November — read-only production Supabase verification
+
+A fresh read-only inspection of the connected Supabase project `ocyplckdojdubyrsxcxa` confirms the V2 candidate is **not deployed**:
+
+- Project reports `ACTIVE_HEALTHY`, PostgreSQL 17.6.1.
+- The production migration history contains 178 migrations and currently ends at `20261114174204` (`fix_mailersend_token_browse_case_expression`). No V2 app-identity/webhook/privacy/recovery migration versions dated 16–19 November are present.
+- The live `henvalt` schema has no V2 app registry, per-install webhook route-token table, V2 privacy inbox table, or V2 recovery claim/candidate tables.
+- The live Edge Function inventory contains 17 functions; the V2 OAuth, privacy, webhook-ingress, checkout-delivery, pixel-delivery and MailerSend webhook functions are not deployed. Existing dashboard functions are present.
+- The existing legacy schema and live n8n workflows therefore remain the production path. Candidate migration tests passing in GitHub Actions must not be interpreted as production schema readiness.
+
+This is a read-only verification. No SQL write, migration, function deployment, secret read/change, webhook registration, workflow edit or customer send was performed. The production project remains untouched.
+
 ## Readiness by system
 
 | Area | Current evidence | Status | Launch requirement |
