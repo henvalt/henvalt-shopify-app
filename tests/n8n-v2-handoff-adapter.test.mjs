@@ -48,7 +48,8 @@ test("checkout and pixel dispatch use distinct opaque-only bodies", async () => 
   const requests = [];
   const adapter = createV2HandoffAdapter({
     supabaseUrl: "https://project.supabase.co/",
-    bearerToken: "x".repeat(32),
+    checkoutBearerToken: "c".repeat(32),
+    pixelBearerToken: "p".repeat(32),
     fetchImpl: async (url, init) => {
       requests.push({ url, init, body: JSON.parse(init.body) });
       return new Response(JSON.stringify({ accepted: true, status: "submitted" }), { status: 202 });
@@ -62,7 +63,7 @@ test("checkout and pixel dispatch use distinct opaque-only bodies", async () => 
   assert.deepEqual(requests[1].body, { opportunity_id: pixel.work_id });
   for (const request of requests) {
     assert.deepEqual(Object.keys(request.body).sort(), [request.url.includes("contact") ? "intervention_id" : "opportunity_id"]);
-    assert.equal(request.init.headers.authorization, "Bearer " + "x".repeat(32));
+    assert.equal(request.init.headers.authorization, request.url.includes("contact") ? "Bearer " + "c".repeat(32) : "Bearer " + "p".repeat(32));
   }
   assert.equal(a.outcome, "HANDOFF_ACCEPTED");
   assert.equal(a.http_status, 202);
@@ -74,7 +75,8 @@ test("checkout and pixel dispatch use distinct opaque-only bodies", async () => 
 test("transport errors and malformed provider responses defer without exposing exception data", async () => {
   const adapter = createV2HandoffAdapter({
     supabaseUrl: "https://project.supabase.co",
-    bearerToken: "x".repeat(32),
+    checkoutBearerToken: "c".repeat(32),
+    pixelBearerToken: "p".repeat(32),
     fetchImpl: async () => { throw new Error("secret recipient@example.com"); },
   });
   const result = await adapter(checkout);
@@ -88,6 +90,7 @@ test("transport errors and malformed provider responses defer without exposing e
 test("adapter refuses non-HTTPS endpoints or missing delivery credentials", () => {
   assert.throws(() => createV2HandoffAdapter({
     supabaseUrl: "http://project.supabase.co",
-    bearerToken: "x".repeat(32),
+    checkoutBearerToken: "c".repeat(32),
+    pixelBearerToken: "p".repeat(32),
   }), /invalid_adapter_configuration/);
 });
