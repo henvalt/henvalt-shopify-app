@@ -117,6 +117,23 @@ BEGIN
     RAISE EXCEPTION 'Checkout retry created duplicate identity rows';
   END IF;
 
+  -- Shopify may deliver checkout updates out of order. The newest source
+  -- updated_at wins; an older delivery is acknowledged but cannot regress state.
+  v_body_a := '{"shop_id":"1001","token":"shared-checkout-token","customer":{"id":12345},"total_price":"200.00","currency":"USD","completed_at":null,"updated_at":"2026-11-19T12:00:00Z"}';
+  v_hmac := encode(extensions.hmac(convert_to(v_body_a,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(v_token_a,v_hmac,encode(convert_to(v_body_a,'UTF8'),'base64'),'store-a.myshopify.com','checkouts/update','checkout-delivery-newer','checkout-event-newer');
+  v_projection := henvalt.project_verified_shopify_checkout_v2(v_token_a,'checkout-delivery-newer',encode(convert_to(v_body_a,'UTF8'),'base64'));
+  IF v_projection->>'status'<>'PROCESSED' THEN RAISE EXCEPTION 'Newer checkout update was not applied: %',v_projection; END IF;
+
+  v_body_a := '{"shop_id":"1001","token":"shared-checkout-token","customer":{"id":12345},"total_price":"150.00","currency":"USD","completed_at":null,"updated_at":"2026-11-19T11:00:00Z"}';
+  v_hmac := encode(extensions.hmac(convert_to(v_body_a,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(v_token_a,v_hmac,encode(convert_to(v_body_a,'UTF8'),'base64'),'store-a.myshopify.com','checkouts/update','checkout-delivery-older','checkout-event-older');
+  v_projection := henvalt.project_verified_shopify_checkout_v2(v_token_a,'checkout-delivery-older',encode(convert_to(v_body_a,'UTF8'),'base64'));
+  IF v_projection->>'status'<>'STALE_EVENT_IGNORED' THEN RAISE EXCEPTION 'Out-of-order checkout update was not rejected: %',v_projection; END IF;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.shopify_checkout_identity_v2 WHERE shopify_connection_id=v_store_a AND shopify_checkout_token='shared-checkout-token' AND total_value=200.00 AND source_updated_at='2026-11-19T12:00:00Z'::timestamptz) THEN
+    RAISE EXCEPTION 'Older checkout webhook regressed the newer projection';
+  END IF;
+
   -- A body not matching the verified receipt cannot be projected.
   v_projection := henvalt.project_verified_shopify_checkout_v2(
     v_token_a,'checkout-delivery-a',encode(convert_to(v_body_b,'UTF8'),'base64')
