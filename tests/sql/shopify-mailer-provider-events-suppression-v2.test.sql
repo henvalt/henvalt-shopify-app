@@ -16,6 +16,7 @@ DECLARE
   v_attempt uuid;
   v_intervention_late uuid;
   v_attempt_late uuid;
+  v_reconcile jsonb;
   v_late_body text:='{"type":"activity.delivered","created_at":"2026-11-17T04:35:00Z","data":{"id":"provider-event-late-002","domain_id":"domain-123","message_id":"provider-message-late-002","email_id":"provider-email-late-002","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
   v_provider_key text:=repeat('p',32);
   v_secret text:='synthetic-mailersend-webhook-secret';
@@ -114,7 +115,7 @@ BEGIN
 
   INSERT INTO henvalt.shopify_recovery_intervention_v2(
     tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
-  ) VALUES(v_tenant,v_store_b,v_opportunity_b,v_customer_b,2,'SUBMITTED',now())
+   ) VALUES(v_tenant,v_store_b,v_opportunity_b,v_customer_b,2,'AUTHORIZED',now())
   RETURNING id INTO v_intervention_late;
   INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
     tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
@@ -122,14 +123,24 @@ BEGIN
   ) VALUES(v_tenant,v_store_b,v_customer_b,v_intervention_late,v_provider_key,
     'store-b-send-late-002',NULL,'AUTHORIZED',NULL)
   RETURNING id INTO v_attempt_late;
-  UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='AMBIGUOUS',provider_message_id='provider-message-late-002',submitted_at=now() WHERE id=v_attempt_late;
-
-  -- The exact same signed event can now correlate without creating a duplicate inbox row.
-  v_result:=henvalt.ingest_mailersend_webhook_v2(
-    v_provider_key,v_signature,encode(convert_to(v_late_body,'UTF8'),'base64')
+  v_result:=henvalt.record_shopify_delivery_submission_v2(
+    v_attempt_late,'AMBIGUOUS','provider-message-late-002'
   );
-  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED' THEN
-    RAISE EXCEPTION 'Unmatched provider event did not correlate on retry: %',v_result;
+  IF v_result->>'recorded'<>'true' OR v_result->>'provider_message_id_retained'<>'true'
+    OR v_result->>'provider_cost_state'<>'RESERVED' THEN
+    RAISE EXCEPTION 'Checkout ambiguous outcome did not retain provider identity and reserved cost: %',v_result;
+  END IF;
+
+  -- Reconcile the signed event that arrived before the provider message ID was saved.
+  v_reconcile:=henvalt.reconcile_unmatched_shopify_checkout_provider_events_v2(10);
+  IF v_reconcile->>'accepted'<>'true' OR (v_reconcile->>'reconciled')::integer<>1
+    OR v_reconcile->>'automatic_resend_performed'<>'false'
+    OR v_reconcile->>'ambiguous_cost_reservation_released'<>'false' THEN
+    RAISE EXCEPTION 'Unmatched provider event was not safely reconciled: %',v_reconcile;
+  END IF;
+  v_reconcile:=henvalt.reconcile_unmatched_shopify_checkout_provider_events_v2(10);
+  IF v_reconcile->>'accepted'<>'true' OR (v_reconcile->>'reconciled')::integer<>0 THEN
+    RAISE EXCEPTION 'Duplicate reconciliation was not an idempotent no-op: %',v_reconcile;
   END IF;
   IF NOT EXISTS(
     SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
