@@ -180,15 +180,13 @@ BEGIN
 
   IF v_claim_id IS NOT NULL THEN
    v_claimed:=v_claimed+1;
+   -- Return only the three opaque fields required for the handoff.
+   -- Tenant/store lineage remains in the private lease row and is revalidated
+   -- by the delivery Edge Function; it must not enter n8n execution data.
    v_items:=v_items||jsonb_build_array(jsonb_build_object(
-    'lease_id',v_claim_id,'work_type',v_work.work_type,
-    'work_id',v_work.work_id,'tenant_id',v_work.tenant_id,
-    'shopify_connection_id',v_work.shopify_connection_id,
-    'opportunity_id',v_work.opportunity_id,
-    'intervention_id',v_work.intervention_id,
-    'opportunity_type',v_work.opportunity_type,
-    'lease_expires_at',now()+make_interval(secs=>p_lease_seconds),
-    'attempt_count',(SELECT attempt_count FROM henvalt.shopify_recovery_work_claims_v2 WHERE id=v_claim_id)
+    'lease_id',v_claim_id,
+    'work_type',v_work.work_type,
+    'work_id',v_work.work_id
    ));
   END IF;
   v_claim_id:=NULL;
