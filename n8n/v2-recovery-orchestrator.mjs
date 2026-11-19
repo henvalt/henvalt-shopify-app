@@ -86,6 +86,7 @@ export async function runV2RecoveryTick({
     p_lease_seconds: leaseSeconds,
   }));
   if (!Array.isArray(claim.items) || claim.items.length > claimLimit) throw new Error("v2_claim_items_invalid");
+  if (!Number.isInteger(claim.claimed) || claim.claimed !== claim.items.length) throw new Error("v2_claim_count_mismatch");
 
   const summary = {
     worker_id: workerId,
