@@ -40,7 +40,7 @@ The Recovery workflow owns the lease because it owns the claim. Delivery only re
 5. **Code — Classify Handoff**:
    - 2xx + `accepted:true` + `submitted`, `accepted`, `handed_off`, `ambiguous_provider_submission`, `provider_accepted_record_pending`, or `provider_outcome_requires_reconciliation` → `HANDOFF_ACCEPTED`.
    - 502 + `accepted:false` + `error:"provider_submission_rejected"` → `TERMINAL` (Edge Function has recorded the failed provider attempt).
-   - documented permanent 400/404/410/422 → `TERMINAL`.
+   - invalid-request 400/422 → `TERMINAL` only where the Edge Function contract defines the request as permanently invalid. Gateway-level 404/410 → `DEFERRED` with an operational alert: a missing/retired Edge Function route must never close every claimed opportunity as terminal.
    - 401/403, 409, 429, 5xx, timeout, malformed/unknown response → `DEFERRED` plus operational alert where appropriate.
 6. **Return to Recovery** — only `work_type`, `work_id`, `outcome`, `reason_code`, `retry_after_seconds`. Never return customer/provider payloads.
 
