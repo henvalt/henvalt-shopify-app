@@ -45,6 +45,8 @@ test("work claims never carry recipient data or perform provider sends",()=>{
  assert.match(sql,/'provider_called',false/);
  assert.match(sql,/'delivery_authorized',false/);
  assert.doesNotMatch(sql,/recipient_email|mailer_send_api_token|access_token|html_body|text_body/);
+ assert.match(sql,/'lease_id',v_claim_id[\\s\\S]*?'work_type',v_work\.work_type[\\s\\S]*?'work_id',v_work\.work_id/);
+ assert.doesNotMatch(sql,/'tenant_id',v_work\.tenant_id|'shopify_connection_id',v_work\.shopify_connection_id|'opportunity_id',v_work\.opportunity_id|'intervention_id',v_work\.intervention_id/);
 });
 
 test("parallel workers race against one durable work item and exactly one lease wins",()=>{
