@@ -16,7 +16,7 @@ An order created after checkout must suppress further abandoned-checkout recover
 - If the payload contains `checkout_token`, it marks only the checkout with the same token on the same connection as COMPLETED.
 - If no checkout record exists yet, the order is recorded as `CHECKOUT_NOT_FOUND`; no cross-store or fuzzy match is attempted.
 - If the order has no checkout token, it is recorded as `NO_CHECKOUT_TOKEN` and does not mutate any checkout.
-- SQL integration tests cover paid and cancelled updates while preserving the existing exact-store checkout lineage.
+- SQL integration tests cover paid and cancelled updates while preserving the existing exact-store checkout lineage. Order upserts are monotonic by Shopify `updated_at` (falling back to `created_at` only when absent); older deliveries are acknowledged as processed but cannot overwrite newer financial or cancellation state.
 - Customer identity references are pseudonymous and exact-store scoped. No email, phone, address, line items or raw body are stored.
 
 ## Boundaries
