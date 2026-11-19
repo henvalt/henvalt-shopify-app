@@ -8,7 +8,7 @@ Status: evidence-based preparation checkpoint. This matrix distinguishes committ
 
 ## 19 November — checkout candidate terminal-state and lease retry hardening
 
-The candidate chain now includes migration 047 (`202611190004_shopify_checkout_candidate_terminal_state_v2.sql`). Checkout candidate refresh preserves `CONVERTED` and `CHECKOUT_CLOSED` states rather than re-queueing closed work. SQL regression coverage proves a closed candidate is not resurrected by a contradictory later open projection, while a matching same-store order can still convert it. The lease lifecycle test also verifies deferred work cannot be reclaimed before its retry deadline and receives a fresh lease identity after becoming due.
+The candidate chain now includes migration 058 (`202611190004_shopify_checkout_candidate_terminal_state_v2.sql`). Checkout candidate refresh preserves `CONVERTED` and `CHECKOUT_CLOSED` states rather than re-queueing closed work. SQL regression coverage proves a closed candidate is not resurrected by a contradictory later open projection, while a matching same-store order can still convert it. The lease lifecycle test also verifies deferred work cannot be reclaimed before its retry deadline and receives a fresh lease identity after becoming due.
 
 Exact-head CI at `975d293b77dc050292b41efa4cba53b1bd5659dd` passed the complete Node suite, secret scan, Deno checks, disposable migration application, checkout eligibility, parallel merchant-wide cost cap, concurrent recovery claims and pixel outcome/attribution/cost lifecycle tests. The Shopify configuration workflow's static and database validation passed; the Shopify deploy job was skipped. This remains candidate-only validation, not production readiness.
 
@@ -63,7 +63,7 @@ These are candidate source and offline CI protections only. They do not establis
 | Area | Current evidence | Status | Launch requirement |
 |---|---|---|---|
 | Repository / PR #6 | V2 code, tests, migration sequence and docs on preparation branch; PR open/draft | Candidate | Latest-head CI green; code review; explicit merge approval |
-| PostgreSQL V2 schema | Candidate migrations 001–047 apply in disposable PostgreSQL CI; checkout terminal-state preservation, deferred retry deadlines, claim concurrency and lifecycle tests pass | Candidate only | Review migration diff, backup/rollback plan, production apply approval, post-migration verification |
+| PostgreSQL V2 schema | Candidate migrations 001–058 apply in disposable PostgreSQL CI; checkout terminal-state preservation, deferred retry deadlines, claim concurrency and lifecycle tests pass | Candidate only | Review migration diff, backup/rollback plan, production apply approval, post-migration verification |
 | Shopify webhook ingress | Branch Worker has V2 route to protected Edge Function; Vault-backed HMAC receipt and exact-store projections in source | Not deployed | App-specific secret registry, per-install route token provisioning, Worker/Edge secrets, one callback per topic, signed non-production tests |
 | Shopify OAuth / app identity | App-aware OAuth and exact-store connection code/tests in branch | Not live-verified | Confirm app ownership/registry identity, install/reauthorize test store, callback and webhook registration |
 | Recovery candidates | Checkout and pixel candidate refresh/promote/materialize/claim SQL in candidate migrations | Candidate only | Production schema applied; source events actually populating V2 tables; test candidate creation on dedicated store |
