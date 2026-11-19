@@ -52,7 +52,7 @@ npm test
 npm run check
 ```
 
-The GitHub Actions identity workflow additionally applies migrations 001–045
+The GitHub Actions identity workflow additionally applies migrations 001–046
 to a disposable PostgreSQL 17 database and runs the SQL integration and
 concurrency tests. A passing run is necessary but does not prove production
 parity.
@@ -119,7 +119,7 @@ ambiguous reservations or reactivate unsafe tenant-scoped cart/browse paths.
 
 ## 6. Current deployment state
 
-- Candidate migrations 001–045: CI fixture only; not production-applied.
+- Candidate migrations 001–046: CI fixture only; not production-applied.
 - Candidate V2 Edge Functions: branch only; not production-deployed.
 - Candidate Worker changes: not deployed.
 - Active n8n workflows: three legacy workflows, unchanged.
