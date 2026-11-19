@@ -46,3 +46,13 @@ test("refresh preserves terminal candidate states and never resurrects a closed 
   assert.match(lifecycleSqlTest, /Closed checkout did not move its candidate into the terminal closed state/);
   assert.match(lifecycleSqlTest, /Terminal closed checkout candidate was resurrected by refresh/);
 });
+
+test("refresh terminalizes ready candidates when the exact store, app or tenant becomes inactive", () => {
+  assert.match(terminalStateMigration, /SET state = 'STORE_INACTIVE'/);
+  assert.match(terminalStateMigration, /sc\.active IS DISTINCT FROM true/);
+  assert.match(terminalStateMigration, /ar\.lifecycle_status IS DISTINCT FROM 'active'/);
+  assert.match(terminalStateMigration, /t\.status::text IS DISTINCT FROM 'ACTIVE'/);
+  assert.match(terminalStateMigration, /store_inactive_marked/);
+  assert.match(lifecycleSqlTest, /Inactive store candidate was not terminalized/);
+  assert.match(lifecycleSqlTest, /Reactivated store resurrected a terminal candidate/);
+});
