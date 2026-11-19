@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { readBoundedBody, RequestBodyError } from "../_shared/request-body-v2.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const INGRESS_AUTH_TOKEN = Deno.env.get("HENVALT_INGRESS_AUTH_TOKEN") ?? "";
@@ -44,8 +45,12 @@ Deno.serve(async (req: Request) => {
   if (!/^[A-Za-z0-9_-]{40,128}$/.test(routeToken) || !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ||
       !/^[a-z0-9_./-]{1,128}$/.test(topic) || !/^[A-Za-z0-9+/]{43}=$/.test(hmac) ||
       deliveryId.length<1 || deliveryId.length>255 || (eventId!==null && eventId.length>255)) return json(400,{error:"invalid_webhook_metadata"});
-  const raw=new Uint8Array(await req.arrayBuffer());
-  if(raw.length===0 || raw.length>1_000_000) return json(413,{error:"invalid_body_size"});
+  let raw: Uint8Array;
+  try { raw = await readBoundedBody(req,1_000_000); }
+  catch (error) {
+    if (error instanceof RequestBodyError) return json(error.code === "BODY_TOO_LARGE" ? 413 : 400,{error:error.code.toLowerCase()});
+    return json(400,{error:"invalid_webhook_body"});
+  }
   const encodedBody=base64(raw);
 
   const accepted=await rpc("accept_shopify_webhook_v2",{
