@@ -21,7 +21,7 @@ function firstRow(value: unknown): Record<string, unknown> | null {
 }
 async function readBoundedJson(response: Response, maxBytes = 32_768): Promise<unknown | null> {
   const declared = response.headers.get("content-length");
-  if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > maxBytes)) return null;
+  if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) return null;
   const reader = response.body?.getReader();
   if (!reader) return null;
   const chunks: Uint8Array[] = []; let total = 0;
@@ -49,6 +49,7 @@ async function rpc(name: string, body: Record<string, unknown>): Promise<{ ok: b
     method: "POST",
     headers: { apikey: SERVICE_ROLE_KEY, authorization: "Bearer " + SERVICE_ROLE_KEY, "content-type": "application/json", accept: "application/json", "accept-profile": "henvalt", "content-profile": "henvalt" },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(8_000),
   });
   if (!response.ok) {
     console.error("Webhook RPC failed", name, response.status);
