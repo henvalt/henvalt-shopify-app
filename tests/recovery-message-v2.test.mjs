@@ -110,11 +110,11 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
   }
   assert.match(checkout, /key!=="intervention_id"/);
   assert.match(checkout, /providerSubmissionStarted=true/);
-  assert.match(checkout, /providerSubmissionStarted?"AMBIGUOUS":"FAILED"/);
+  assert.ok(checkout.includes('providerSubmissionStarted?"AMBIGUOUS":"FAILED"'));
   assert.match(checkout, /sent.status>=500\|\|sent.status===408/);
   assert.match(pixel, /key!=="opportunity_id"/);
   assert.match(pixel, /providerSubmissionStarted=true/);
-  assert.match(pixel, /providerSubmissionStarted?"AMBIGUOUS":"FAILED"/);
+  assert.ok(pixel.includes('providerSubmissionStarted?"AMBIGUOUS":"FAILED"'));
 });
 
 test("message context migration is service-only, exact-store and PII-free", () => {
