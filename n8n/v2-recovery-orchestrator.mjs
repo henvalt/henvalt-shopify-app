@@ -131,15 +131,25 @@ export async function runV2RecoveryTick({
         retry_after_seconds: 3600,
       };
     }
-    const outcome = result?.outcome;
+    let outcome = result?.outcome;
+    if (!["HANDOFF_ACCEPTED", "TERMINAL", "DEFERRED"].includes(outcome)) {
+      result = {
+        outcome: "DEFERRED",
+        reason: "delivery_subworkflow_failed",
+        http_status: null,
+        retry_after_seconds: 3600,
+      };
+      outcome = "DEFERRED";
+    }
     if (outcome === "HANDOFF_ACCEPTED") summary.handoff_accepted += 1;
     else if (outcome === "TERMINAL") summary.terminal += 1;
-    else if (outcome === "DEFERRED") summary.deferred += 1;
-    else throw new Error("v2_handoff_outcome_invalid");
-    const retryAfterSeconds = Number(result.retry_after_seconds ?? 0);
-    if (!Number.isInteger(retryAfterSeconds) || retryAfterSeconds < 0 || retryAfterSeconds > 86400) {
-      throw new Error("v2_handoff_retry_policy_invalid");
-    }
+    else summary.deferred += 1;
+    const retryCandidate = Number(result.retry_after_seconds ?? 3600);
+    const retryAfterSeconds = outcome === "HANDOFF_ACCEPTED" || outcome === "TERMINAL"
+      ? 0
+      : Number.isInteger(retryCandidate) && retryCandidate >= 0 && retryCandidate <= 86400
+        ? retryCandidate
+        : 3600;
     // Recovery, not Delivery, owns the lease. Finish only after the synchronous
     // Delivery subworkflow has returned its sanitized outcome.
     const finished = await finishClaim({
