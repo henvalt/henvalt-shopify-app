@@ -168,3 +168,12 @@ A source review found the candidate Supabase config did not explicitly disable g
 - Dashboard stale-store recovery now clears a removed selection and reloads the eligible store list. A regression test covers the 404 store_not_available path.
 - Exact candidate head 38b86861bed1bc986be6b815aa42fa2f3f4f4b4b: full repository Node suite **414/414 passed**; focused identity/cost/privacy contracts **214/214 passed**; Gitleaks passed; Deno Edge Function type checks passed; all 58 candidate migrations applied to disposable PostgreSQL and the exact-store, privacy, cost-reservation and concurrency SQL suites passed. Shopify static/configuration and disposable migration validation passed; Shopify deployment was skipped.
 - This is CI evidence for candidate code only. PR #6 remains open, draft and unmerged; no production database, Edge Function, Worker, Shopify release, active n8n workflow, MailerSend configuration or customer send was changed.
+
+## 19 November — seeded dashboard read-model integration verified
+
+- Added a disposable PostgreSQL integration test for the V2 dashboard read model after candidate migrations 001–058 and the synthetic two-store webhook fixture.
+- The test invokes the actual `control_plane_dashboard_summary_v2` function against an active synthetic store and verifies zero-safe metrics, all three inclusive UTC daily buckets, zero daily amounts, and the inactive-store fail-closed response.
+- The test also verifies the 366-day range guard and confirms the RPC is executable by `service_role` only.
+- Added the SQL test to the identity V2 GitHub Actions migration pipeline and a Node regression test that guards the CI wiring and exact-store/confirmed-attribution contract.
+- **Exact candidate head `78fed9e439a572a2046ac550a92fb9225c795a53` passed:** full Node suite **417/417**, focused identity/cost/privacy contracts **214/214**, Gitleaks, Deno Edge Function type checks, migrations 001–058, and the new seeded dashboard SQL integration (`shopify_v2_dashboard_read_model_passed`). Shopify static/configuration and disposable migration validation also passed; the Shopify deployment job was skipped.
+- This validates the empty/zero-data read-model path, inclusive UTC date buckets, inactive connection behavior and RPC privileges in disposable PostgreSQL. It does **not** yet prove non-zero seeded attribution totals against a populated recovery/send/attribution graph, nor does it prove the production dashboard is deployed. Production remains untouched.
