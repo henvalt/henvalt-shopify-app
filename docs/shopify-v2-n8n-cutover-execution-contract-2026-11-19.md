@@ -161,3 +161,10 @@ This is an **offline adapter/orchestration acceptance suite**, not a substitute 
 ## Lease-finish acknowledgement is part of tick success
 
 The Recovery runtime now reports `accepted: false` with status `LEASE_FINISH_UNCONFIRMED` whenever any claimed item's finish RPC does not confirm `finished: true`. It does not report a completed scheduler tick merely because Delivery returned an accepted handoff. The regression test proves that an accepted handoff plus an unconfirmed lease finish remains an operationally incomplete tick. Operators must inspect/reconcile the lease rather than treat that tick as successful.
+
+
+## Batch validation and lease-finisher transport failure
+
+Recovery now validates every item in the claimed batch (work enum, work UUID, lease UUID and duplicate work key) before the first Delivery handoff or lease mutation. A malformed later item therefore cannot cause a partially processed batch.
+
+Each lease-finisher call is also isolated. If the finisher throws or its response is lost, Recovery does not blindly retry the finish RPC (it may already have committed); it marks that lease `lease_finish_unconfirmed`, continues processing the remaining claimed items, and returns `accepted:false` / `LEASE_FINISH_UNCONFIRMED` for the overall tick. The operator must reconcile the lease state before considering the run complete.
