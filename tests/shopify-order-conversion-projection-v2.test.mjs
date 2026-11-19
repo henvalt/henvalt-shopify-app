@@ -34,7 +34,9 @@ test("order projection verifies exact receipt digest and server-derived install"
 
 test("order lifecycle updates are monotonic by Shopify source updated_at", () => {
   assert.match(lifecycleMigration, /ADD COLUMN IF NOT EXISTS source_updated_at timestamptz/);
-  assert.match(lifecycleMigration, /EXCLUDED\.source_updated_at >= henvalt\.shopify_order_identity_v2\.source_updated_at/);
+  assert.match(lifecycleMigration, /last_refund_at timestamptz/);
+  assert.match(lifecycleMigration, /EXCLUDED\.source_updated_at >= GREATEST/);
+  assert.match(lifecycleMigration, /shopify_order_identity_v2\.last_refund_at/);
   assert.match(lifecycleMigration, /STALE_EVENT_IGNORED/);
   assert.match(lifecycleMigration, /v_payload->>'updated_at'/);
 });
@@ -62,6 +64,7 @@ test("refund projection stores exact-store idempotent financial adjustments", ()
   assert.match(refundMigration, /shopify_order_refund_adjustments_v2/);
   assert.match(refundMigration, /UNIQUE \(shopify_connection_id,shopify_refund_id\)/);
   assert.match(refundMigration, /REFUND_ID_PAYLOAD_CONFLICT/);
+  assert.match(refundMigration, /SET last_refund_at=GREATEST/);
   assert.match(refundMigration, /ON CONFLICT.*DO NOTHING/);
   assert.match(refundMigration, /REFUND_AMOUNT_OR_CURRENCY_UNVERIFIED/);
   assert.match(refundMigration, /project_verified_shopify_refund_v2/);
