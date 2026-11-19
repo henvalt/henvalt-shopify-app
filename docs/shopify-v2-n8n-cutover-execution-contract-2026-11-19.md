@@ -37,7 +37,7 @@ The scheduled Recovery workflow must execute these database functions in order, 
 5. `materialize_shopify_checkout_interventions_v2(limit)`
 6. `claim_shopify_recovery_work_v2(worker_id,limit,lease_seconds)`
 
-Migrations 042–043 by filename establish the shared claims and checkout materializer. The three 19 November files establish safe message context, sender-profile preflight and MailerSend test-signature compatibility. The complete ordered CI manifest contains 58 candidate migration files; its final file is `202611190004_shopify_checkout_candidate_terminal_state_v2.sql`. These functions are service-role-only. No live database has been migrated by this branch work.
+Migrations 042–043 by filename establish the shared claims and checkout materializer. The three 19 November files establish safe message context, sender-profile preflight and MailerSend test-signature compatibility. The complete ordered CI manifest now contains 59 candidate migration files; its final files are `202611190004_shopify_checkout_candidate_terminal_state_v2.sql` and `202611190005_shopify_checkout_provider_submission_gate_v2.sql`. The latter rechecks exact-store install, checkout, consent, suppression, privacy, sender and reserved-cost state immediately before checkout provider submission. These functions are service-role-only. No live database has been migrated by this branch work.
 
 ### Claim handling invariants
 
