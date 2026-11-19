@@ -114,17 +114,17 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
 
 test("message context migration is service-only, exact-store and PII-free", () => {
   const sql = readFileSync(new URL("../supabase/migrations/202611190001_shopify_recovery_message_context_v2.sql", import.meta.url), "utf8");
-  assert.match(sql, /request.jwt.claim.role[sS]*?service_role_required/);
+  assert.match(sql, /request.jwt.claim.role[\s\S]*?service_role_required/);
   assert.match(sql, /p_work_type='CHECKOUT_INTERVENTION'/);
   assert.match(sql, /p_work_type='PIXEL_OPPORTUNITY'/);
   assert.match(sql, /p_work_type IS NULL/);
-  assert.match(sql, /JOIN henvalt.shopify_connections sc[sS]*?sc.tenant_id/);
+  assert.match(sql, /JOIN henvalt.shopify_connections sc[\s\S]*?sc.tenant_id/);
   assert.match(sql, /JOIN henvalt.shopify_app_registry ar/);
   assert.match(sql, /JOIN henvalt.tenants t/);
   assert.match(sql, /recipient_pii_returned',false/);
   assert.match(sql, /provider_secrets_returned',false/);
   assert.match(sql, /delivery_authorized',false/);
   assert.match(sql, /REVOKE ALL ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2/);
-  assert.match(sql, /GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2[sS]*?TO service_role/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2[\s\S]*?TO service_role/);
   assert.doesNotMatch(sql, /email_address|recipient_email|access_token|mailer_send_api_token|checkout_token,|customer_gid/);
 });
