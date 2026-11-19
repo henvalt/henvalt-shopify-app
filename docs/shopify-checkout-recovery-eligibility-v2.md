@@ -13,7 +13,7 @@ The service-only `henvalt.refresh_shopify_checkout_recovery_candidates_v2(interv
 - the owning HENVALT tenant is active; and
 - no order identity exists with the same connection and checkout token.
 
-A matching order in Store A cannot suppress a checkout in Store B, even when both stores reuse the same checkout token. Closed checkouts are marked `CHECKOUT_CLOSED`; matching orders mark existing candidates `CONVERTED`. `CHECKOUT_CLOSED` is preserved by refresh upserts, so a contradictory or delayed open projection cannot re-queue previously closed work. A later verified same-store order can still advance that candidate to `CONVERTED`.
+A matching order in Store A cannot suppress a checkout in Store B, even when both stores reuse the same checkout token. Closed checkouts are marked `CHECKOUT_CLOSED`; matching orders mark existing candidates `CONVERTED`. Deactivated stores, apps or tenants move ready candidates to `STORE_INACTIVE`; terminal states survive refreshes and do not silently re-queue after reactivation. `CHECKOUT_CLOSED` is preserved by refresh upserts, so a contradictory or delayed open projection cannot re-queue previously closed work. A later verified same-store order can still advance that candidate to `CONVERTED`.
 
 ## Important boundaries
 
