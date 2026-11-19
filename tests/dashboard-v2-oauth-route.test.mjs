@@ -15,6 +15,13 @@ test("dashboard Shopify connection uses the V2 owner-authenticated install route
   assert.match(dashboard, /No owner-controlled Shopify connection yet/);
 });
 
+test("all dashboard Edge Function requests include the publishable API key and owner bearer", () => {
+  assert.match(dashboard, /fetch\(API\+params,\{headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+token\}/);
+  assert.match(dashboard, /henvalt-shopify-oauth-v2\/install",\{method:"POST",headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+session\.access_token/);
+  assert.match(dashboard, /fetch\(SETUP,\{method:"POST",headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+ownerSession\.access_token/);
+  assert.equal((dashboard.match(/apikey:SUPABASE_KEY/g) || []).length, 3);
+});
+
 test("dashboard connection UI does not claim to reinstall or authorize a legacy app", () => {
   assert.match(dashboard, /Connect the configured HENVALT Shopify app/);
   assert.doesNotMatch(dashboard, /existing HENVALT OAuth Connection app/);
