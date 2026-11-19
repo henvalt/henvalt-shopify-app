@@ -590,7 +590,7 @@ The latest successful pull-request validation on commit
 - 209/209 focused V2 Node contract tests passed.
 - Gitleaks scan passed with full Git history available.
 - Configured Deno checks passed.
-- Candidate migrations 001–045 and the complete disposable PostgreSQL SQL
+- Candidate migrations 001–046 and the complete disposable PostgreSQL SQL
   integration/concurrency suite passed.
 
 The new dashboard HTML safety tests cover escaping of merchant/event-derived
@@ -651,7 +651,7 @@ was performed.
 The disposable concurrency setup now also checks that the pixel message
 context RPC returns the exact Store B domain and opportunity type, with
 explicit no-PII, no-secret and no-delivery-authority flags. The CI workflow
-applies candidate migrations 001–045 in its disposable PostgreSQL database.
+applies candidate migrations 001–046 in its disposable PostgreSQL database.
 
 ## 18. Active n8n graph inspection and privacy boundary
 
