@@ -45,6 +45,13 @@ test("merchant dashboard requires an explicit store selection when multiple acti
   assert.ok(merchantDashboard.includes("shopify_connections?select=id,shop_domain,active,tenants!inner(status)"));
   assert.ok(merchantDashboard.includes("&active=eq.true"));
   assert.ok(merchantDashboard.includes("requestedConnectionId"));
+  assert.ok(merchantDashboard.includes("shopify_app_registry?select=app_key&lifecycle_status=eq.active"));
+  assert.ok(merchantDashboard.includes("&app_key=" + " + appKeyFilter"));
+  assert.ok(merchantDashboard.includes("shopify_shop_id=not.is.null"));
+  assert.ok(merchantDashboard.includes("access_token_secret_ref=not.is.null"));
+  assert.ok(merchantDashboard.includes("refresh_token_secret_ref=not.is.null"));
+  assert.ok(merchantDashboard.includes("reauth_required_at=is.null"));
+  assert.ok(merchantDashboard.includes("owner_controlled_shop_connection_required"));
   assert.ok(merchantDashboard.includes("store_selection_required"));
   assert.ok(merchantDashboard.includes("stores: connections.map"));
   assert.ok(merchantDashboard.includes("control_plane_dashboard_summary_v2"));
