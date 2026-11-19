@@ -73,6 +73,39 @@ BEGIN
     RAISE EXCEPTION 'Cross-store conversion suppression failed: Store A candidates %, Store B eligible %',v_count_a,v_count_b;
   END IF;
 
+  -- Once a checkout is observed closed, a later contradictory/open projection
+  -- must not resurrect its terminal recovery candidate.
+  UPDATE henvalt.shopify_checkout_identity_v2
+     SET checkout_status='COMPLETED'
+   WHERE shopify_connection_id=v_store_b
+     AND shopify_checkout_token='eligibility-shared-token';
+  PERFORM henvalt.refresh_shopify_checkout_recovery_candidates_v2(interval '1 hour',100);
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_checkout_recovery_candidate_v2
+    WHERE shopify_connection_id=v_store_b
+      AND checkout_token='eligibility-shared-token'
+      AND state='CHECKOUT_CLOSED'
+  ) THEN
+    RAISE EXCEPTION 'Closed checkout did not move its candidate into the terminal closed state';
+  END IF;
+
+  -- Simulate a later open projection to exercise the refresh upsert itself.
+  -- The production checkout projection is monotonic for completion and cannot
+  -- reopen a completed checkout, but the candidate must remain fail-closed.
+  UPDATE henvalt.shopify_checkout_identity_v2
+     SET checkout_status='OPEN', updated_at=now()-interval '2 hours'
+   WHERE shopify_connection_id=v_store_b
+     AND shopify_checkout_token='eligibility-shared-token';
+  PERFORM henvalt.refresh_shopify_checkout_recovery_candidates_v2(interval '1 hour',100);
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_checkout_recovery_candidate_v2
+    WHERE shopify_connection_id=v_store_b
+      AND checkout_token='eligibility-shared-token'
+      AND state='CHECKOUT_CLOSED'
+  ) THEN
+    RAISE EXCEPTION 'Terminal closed checkout candidate was resurrected by refresh';
+  END IF;
+
   -- A later order from Store B converts its own candidate; the exact Store A
   -- order cannot mark Store B converted before this second order arrives.
   v_hmac := encode(extensions.hmac(convert_to('{"shop_id":"2002","id":888002,"checkout_token":"eligibility-shared-token","customer":{"id":12345},"total_price":"75.00","currency":"GBP","financial_status":"paid","created_at":"2026-11-17T00:01:00Z"}','UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
