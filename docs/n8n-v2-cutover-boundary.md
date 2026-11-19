@@ -87,7 +87,7 @@ All three templates include MailerSend's `{{unsubscribe}}` placeholder in both H
 - `track_unsubscribe_html_enabled=true`;
 - `track_unsubscribe_plain_enabled=true`.
 
-If the account/domain lookup fails, the domain is not verified, or either body insertion option is disabled, delivery fails closed with `mailer_send_unsubscribe_tracking_not_enabled`. The placeholder is never sent knowingly as literal text. The checkout path records the already-consumed attempt as FAILED (releasing its reserved cost); the pixel path blocks before issuing a permit. The sending domain must be configured and verified in MailerSend before any test send.
+If the account/domain lookup fails, the domain is not verified, or either body insertion option is disabled, delivery fails closed with `mailer_send_unsubscribe_tracking_not_enabled`. The placeholder is never sent knowingly as literal text. Both checkout and pixel paths perform this preflight before any permit issue/consume, so missing provider configuration creates no send attempt or cost reservation. The sending domain must be configured and verified in MailerSend before any test send.
 
 ### Provider outcome and retry boundary
 
