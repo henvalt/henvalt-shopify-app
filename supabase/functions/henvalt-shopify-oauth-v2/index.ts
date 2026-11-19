@@ -55,6 +55,18 @@ function validHttpsOrigin(value: string): boolean {
     return false;
   }
 }
+function validOAuthRedirectUri(value: string): boolean {
+  try {
+    const redirect = new URL(value);
+    const supabase = new URL(SUPABASE_URL);
+    return redirect.protocol === "https:" && redirect.origin === supabase.origin &&
+      redirect.pathname === "/functions/v1/henvalt-shopify-oauth-v2/callback" &&
+      redirect.username === "" && redirect.password === "" &&
+      redirect.search === "" && redirect.hash === "";
+  } catch {
+    return false;
+  }
+}
 function validPixelCollectorUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -65,7 +77,8 @@ function validPixelCollectorUrl(value: string): boolean {
   }
 }
 function configOk(): boolean {
-  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_REDIRECT_URI &&
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY &&
+    validOAuthRedirectUri(SHOPIFY_REDIRECT_URI) &&
     validHttpsOrigin(SHOPIFY_WEBHOOK_INGRESS_BASE_URL) &&
     validPixelCollectorUrl(SHOPIFY_PIXEL_COLLECTOR_URL));
 }
