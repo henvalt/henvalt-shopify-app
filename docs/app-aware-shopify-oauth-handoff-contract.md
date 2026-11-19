@@ -104,4 +104,11 @@ This matches the app-aware OAuth Edge Function slug and its `callback` route. A 
 
 Before any app configuration release, the deployed OAuth V2 function's `SHOPIFY_REDIRECT_URI` secret must be set to this exact URL. The actual Supabase secret value is not accessible/verified in this repository-only change.
 
-The TOML compliance webhook still points at the legacy privacy function. Do **not** change it to V2 yet: `henvalt-shopify-privacy-v2` requires a concrete registered `app_key` in its URL, and no production app registry row/key has been independently established. The V2 compliance route remains a launch blocker until the public app identity is provisioned, the app-key-specific URI is configured, and the exact-store privacy processor is approved.
+The candidate TOML now routes Shopify compliance topics to `henvalt-shopify-privacy-v2` at a stable function URL. The Edge Function resolves the active `app_key` from `resolve_shopify_app_oauth_identity` using the configured Shopify client ID; it never trusts a caller-controlled URL path to select an app. If the registry row or Vault secret is missing, it returns 503 and fails closed. The production app registry row, matching Vault secret, deployed Edge Function and Shopify-delivered HMAC receipt remain unverified and are mandatory launch gates.
+
+
+## 19 November — app-registry-bound privacy endpoint
+
+The candidate `shopify.app.toml` compliance subscription now targets the V2 privacy Edge Function at a stable URL. The function resolves the active app identity through the service-role-only `resolve_shopify_app_oauth_identity` RPC, checks that its client ID matches `SHOPIFY_API_KEY`, and passes the returned app key to the exact-store privacy inbox RPC. It does not derive identity from request path, shop domain, or caller-supplied fields. The Vault secret remains inside the trusted server/database boundary; SQL performs raw-body HMAC verification. Missing registry/secret state fails closed with 503.
+
+The candidate change does not seed a production app registry row, deploy the Edge Function, provision Vault secrets, or prove a real Shopify compliance webhook. Keep the route disabled from release until those prerequisites and a signed non-production test are verified.
