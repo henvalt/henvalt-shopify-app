@@ -18,17 +18,43 @@ function base64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+async function resolveActiveAppKey(): Promise<string | null> {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/resolve_shopify_app_oauth_identity", {
+    method: "POST",
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      authorization: "Bearer " + SERVICE_ROLE_KEY,
+      "content-type": "application/json",
+      "accept-profile": "henvalt",
+      "content-profile": "henvalt",
+    },
+    body: JSON.stringify({ p_shopify_client_id: SHOPIFY_API_KEY }),
+  });
+  if (!response.ok) {
+    console.error("Privacy app identity resolution failed", response.status);
+    return null;
+  }
+  const payload = await response.json().catch(() => null);
+  const row = Array.isArray(payload) ? payload[0] : payload;
+  if (!row || typeof row.app_key !== "string" ||
+      !/^[a-z][a-z0-9_-]{2,63}$/.test(row.app_key) ||
+      row.shopify_client_id !== SHOPIFY_API_KEY ||
+      typeof row.shopify_api_secret !== "string" || row.shopify_api_secret.length < 1) {
+    return null;
+  }
+  // SQL owns HMAC verification; this function never logs or returns the secret.
+  return row.app_key;
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !SHOPIFY_API_KEY) {
     return json(503, { error: "privacy_ingress_not_configured" });
   }
 
-  const url = new URL(req.url);
-  const appKey = url.pathname.replace(/\/+$/, "").split("/").pop() ?? "";
-  if (!/^[a-z][a-z0-9_-]{2,63}$/.test(appKey)) {
-    return json(404, { error: "app_route_not_found" });
-  }
+  // Resolve the app key from the trusted registry, never from a caller-controlled path.
+  const appKey = await resolveActiveAppKey();
+  if (!appKey) return json(503, { error: "privacy_app_identity_unavailable" });
 
   const topic = (req.headers.get("x-shopify-topic") ?? "").toLowerCase();
   const shop = (req.headers.get("x-shopify-shop-domain") ?? "").toLowerCase();
