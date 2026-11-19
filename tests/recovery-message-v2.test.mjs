@@ -137,3 +137,17 @@ test("message context migration is service-only, exact-store and PII-free", () =
   assert.match(sql, /GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2[\s\S]*?TO service_role/);
   assert.doesNotMatch(sql, /email_address|recipient_email|access_token|mailer_send_api_token|checkout_token,|customer_gid/);
 });
+
+test("n8n cutover specification blocks legacy event duplication and gates V2 sends", () => {
+  const docs = readFileSync(new URL("../docs/n8n-v2-cutover-boundary.md", import.meta.url), "utf8");
+  assert.ok(docs.includes("henvalt-mailersend-delivery"));
+  assert.ok(docs.includes("verify_mailersend_webhook_signature_api"));
+  assert.ok(docs.includes("process_mailersend_webhook_event"));
+  assert.ok(docs.includes("henvalt-mailersend-webhook-v2"));
+  assert.ok(docs.includes("HENVALT_V2_MAILERSEND_EVENTS_READY=true"));
+  assert.ok(docs.includes("must not be processed by both"));
+  assert.ok(docs.includes("must not be adapted by simply changing its"));
+  assert.ok(docs.includes("HENVALT_INGEST"));
+  assert.ok(docs.includes("HENVALT_RECOVERY"));
+  assert.ok(docs.includes("HENVALT_DELIVERY"));
+});
