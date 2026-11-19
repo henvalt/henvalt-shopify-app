@@ -48,7 +48,7 @@ BEGIN
 
   -- MailerSend URL validation uses its documented fixed test signing secret.
   v_signature:=encode(extensions.hmac(convert_to(v_test_body,'UTF8'),
-    convert_to('test_Am3L3GuOIc4blLUuHqAPxxwkZaJyEk5','UTF8'),'sha256'),'hex');
+    convert_to('test_Am3L1GuOIc4blLUuHqAPxxwkZaJyEk8','UTF8'),'sha256'),'hex');
   v_result:=henvalt.ingest_mailersend_webhook_v2(
     v_provider_key,v_signature,encode(convert_to(v_test_body,'UTF8'),'base64')
   );
