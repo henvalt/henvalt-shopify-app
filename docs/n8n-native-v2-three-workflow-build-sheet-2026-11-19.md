@@ -42,7 +42,7 @@ The Recovery workflow owns the lease because it owns the claim. Delivery only re
    - 502 + `accepted:false` + `error:"provider_submission_rejected"` → `TERMINAL` (Edge Function has recorded the failed provider attempt).
    - invalid-request 400/422 → `TERMINAL` only where the Edge Function contract defines the request as permanently invalid. Gateway-level 404/410 → `DEFERRED` with an operational alert: a missing/retired Edge Function route must never close every claimed opportunity as terminal.
    - 401/403, 409, 429, 5xx, timeout, malformed/unknown response → `DEFERRED` plus operational alert where appropriate.
-6. **Return to Recovery** — only `work_type`, `work_id`, `outcome`, `reason_code`, `retry_after_seconds`. Never return customer/provider payloads.
+6. **Return to Recovery** — only `work_type`, `work_id`, `outcome`, `reason`, `retry_after_seconds`. The Delivery adapter contract uses `reason`; Recovery maps it to the sanitized `reason_code` in its own summary. Never return customer/provider payloads.
 
 Delivery must not call the legacy `henvalt-mailersend-delivery`, `authorize_delivery_request`, `record_delivery_result`, or legacy MailerSend event RPCs for V2 claims. The trusted Edge Function owns consent/contact/suppression, sender verification, cost reservation, final order checks, server-side rendering, provider submission and ambiguous reconciliation.
 
