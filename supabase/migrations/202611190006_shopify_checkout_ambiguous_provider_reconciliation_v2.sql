@@ -143,7 +143,7 @@ BEGIN
   END IF;
 
   FOR v_event IN
-    SELECT e.id,e.provider_account_key,e.provider_message_id,e.event_type
+    SELECT e.id,e.provider_event_id,e.provider_account_key,e.provider_message_id,e.event_type
     FROM henvalt.shopify_mailer_provider_events_v2 e
     JOIN henvalt.shopify_recovery_send_attempt_v2 matched_attempt
       ON matched_attempt.provider_account_key=e.provider_account_key
@@ -246,7 +246,7 @@ BEGIN
         suppression_type,source_send_attempt_id,source_provider_event_id
       )
       SELECT v_attempt.tenant_id,v_attempt.shopify_connection_id,v_attempt.customer_identity_id,
-        permit_row.recipient_fingerprint,v_suppression_type,v_attempt.id,v_event.id
+        permit_row.recipient_fingerprint,v_suppression_type,v_attempt.id,v_event.provider_event_id
       FROM henvalt.shopify_delivery_permits_v2 permit_row
       WHERE permit_row.send_attempt_id=v_attempt.id
         AND permit_row.tenant_id=v_attempt.tenant_id
