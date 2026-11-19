@@ -67,7 +67,7 @@ export function classifyHandoffResponse(status, body) {
 export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = fetch, finishClaim }) {
   if (typeof supabaseUrl !== "string" || !/^https:\/\//i.test(supabaseUrl) ||
       typeof bearerToken !== "string" || bearerToken.length < 16 ||
-      typeof fetchImpl !== "function" || typeof finishClaim !== "function") {
+      typeof fetchImpl !== "function") {
     throw new TypeError("invalid_adapter_configuration");
   }
   const base = supabaseUrl.replace(/\/+$/, "");
@@ -98,21 +98,15 @@ export function createV2HandoffAdapter({ supabaseUrl, bearerToken, fetchImpl = f
         retryAfterSeconds: 3600,
       });
     }
-    const finished = await finishClaim({
-      lease_id: valid.leaseId,
-      worker_id: valid.workerId,
-      outcome: classification.outcome,
-      retry_after_seconds: classification.retryAfterSeconds,
-    });
-    // Deliberately return identifiers/outcome only. Never return provider bodies,
-    // request headers, bearer tokens, customer data or raw exception messages.
+    // Delivery returns only a classified handoff result. Recovery owns lease
+    // completion after its Execute Workflow subworkflow returns.
     return Object.freeze({
       work_type: valid.workType,
       work_id: valid.workId,
       correlation_id: valid.correlationId,
       outcome: classification.outcome,
       reason: classification.reason,
-      lease_finished: finished?.finished === true,
+      retry_after_seconds: classification.retryAfterSeconds,
     });
   };
 }
