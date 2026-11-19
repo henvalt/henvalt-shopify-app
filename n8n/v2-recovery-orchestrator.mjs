@@ -11,6 +11,7 @@ const SAFE_REASONS = new Set([
   "edge_or_provider_unavailable",
   "handoff_not_confirmed",
   "handoff_transport_ambiguous",
+  "delivery_subworkflow_failed",
 ]);
 
 const DEFAULTS = Object.freeze({
@@ -115,7 +116,21 @@ export async function runV2RecoveryTick({
       worker_id: workerId,
       correlation_id: `v2:${String(item?.work_id ?? "")}`,
     };
-    const result = await handoff(safeClaim);
+    let result;
+    try {
+      result = await handoff(safeClaim);
+    } catch {
+      // An Execute Workflow timeout/failure may occur after the Edge Function
+      // crossed the provider boundary. Defer safely and never expose raw errors.
+      result = {
+        work_type: safeClaim.work_type,
+        work_id: safeClaim.work_id,
+        outcome: "DEFERRED",
+        reason: "delivery_subworkflow_failed",
+        http_status: null,
+        retry_after_seconds: 3600,
+      };
+    }
     const outcome = result?.outcome;
     if (outcome === "HANDOFF_ACCEPTED") summary.handoff_accepted += 1;
     else if (outcome === "TERMINAL") summary.terminal += 1;
