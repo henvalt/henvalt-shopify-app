@@ -18,7 +18,8 @@ BEGIN
   IF position('WHEN p_outcome=''AMBIGUOUS'' THEN coalesce(v_attempt.provider_message_id,p_provider_message_id)' in v_record)=0
     OR position('p_outcome NOT IN (''SUBMITTED'',''AMBIGUOUS'')' in v_record)=0
     OR position('NEW.event_type=''activity.sent''' in v_trigger)=0
-    OR position('FOR UPDATE SKIP LOCKED' in v_reconcile)=0
+    OR position('LIMIT p_limit' in v_reconcile)=0
+    OR position('attempt-first, event-second lock order' in v_reconcile)=0
     OR position('permit_row.recipient_fingerprint' in v_reconcile)=0
     OR position('activity.spam_complaint' in v_reconcile)=0 THEN
     RAISE EXCEPTION 'Checkout provider ambiguity reconciliation contract is incomplete';
