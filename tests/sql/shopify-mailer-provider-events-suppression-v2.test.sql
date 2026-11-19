@@ -245,7 +245,11 @@ BEGIN
       AND customer_identity_id=v_customer_b
       AND suppression_type='UNSUBSCRIBED'
       AND source_send_attempt_id=v_attempt_suppression
-      AND source_provider_event_id='provider-event-unmatched-unsubscribe-004'
+      AND source_provider_event_id=(
+        SELECT id FROM henvalt.shopify_mailer_provider_events_v2
+        WHERE provider_account_key=v_provider_key
+          AND provider_event_id='provider-event-unmatched-unsubscribe-004'
+      )
       AND recipient_fingerprint=decode(repeat('ab',32),'hex')
   ) OR NOT EXISTS(
     SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
