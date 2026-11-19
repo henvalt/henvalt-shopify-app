@@ -151,3 +151,27 @@ test("claim RPC cannot return more items than the configured bound", async () =>
   }), /v2_claim_items_invalid/);
   assert.equal(handoffs, 0);
 });
+
+
+test("service RPC transport and HTTP errors never expose raw response or secret text", async () => {
+  const transport = createSupabaseServiceRpc({
+    supabaseUrl: "https://project.supabase.co",
+    serviceRoleKey: "s".repeat(40),
+    fetchImpl: async () => { throw new Error("service-role-secret recipient@example.com"); },
+  });
+  await assert.rejects(transport("claim_shopify_recovery_work_v2", {}), error => {
+    assert.equal(error.message, "supabase_rpc_transport_failed");
+    assert.equal(error.message.includes("recipient@example.com"), false);
+    return true;
+  });
+  const rejected = createSupabaseServiceRpc({
+    supabaseUrl: "https://project.supabase.co",
+    serviceRoleKey: "s".repeat(40),
+    fetchImpl: async () => new Response(JSON.stringify({ error: "customer@example.com" }), { status: 500 }),
+  });
+  await assert.rejects(rejected("claim_shopify_recovery_work_v2", {}), error => {
+    assert.equal(error.message, "supabase_rpc_failed");
+    assert.equal(error.message.includes("customer@example.com"), false);
+    return true;
+  });
+});
