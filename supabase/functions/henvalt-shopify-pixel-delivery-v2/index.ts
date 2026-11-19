@@ -6,6 +6,7 @@ declare const Deno: {
 const SUPABASE_URL=Deno.env.get("SUPABASE_URL")??"";
 const SERVICE_ROLE_KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const DELIVERY_AUTH_TOKEN=Deno.env.get("HENVALT_PIXEL_DELIVERY_AUTH_TOKEN")??"";
+const MAILERSEND_V2_EVENTS_READY=Deno.env.get("HENVALT_V2_MAILERSEND_EVENTS_READY")==="true";
 const API_VERSION="2026-10";
 const json=(status:number,body:Record<string,unknown>)=>new Response(JSON.stringify(body),{
  status,headers:{"content-type":"application/json; charset=utf-8","cache-control":"no-store"}
@@ -92,6 +93,7 @@ Deno.serve(async(req:Request)=>{
  if(!SUPABASE_URL||!SERVICE_ROLE_KEY||!DELIVERY_AUTH_TOKEN)return json(503,{error:"pixel_delivery_not_configured"});
  const bearer=(req.headers.get("authorization")??"").match(/^Bearer\s+(.+)$/i)?.[1]??"";
  if(!bearer||!equal(bearer,DELIVERY_AUTH_TOKEN))return json(401,{error:"unauthorized"});
+ if(!MAILERSEND_V2_EVENTS_READY)return json(503,{error:"v2_provider_event_path_not_ready"});
  const declaredLength=Number(req.headers.get("content-length")??"0");
  if(Number.isFinite(declaredLength)&&declaredLength>160000)return json(413,{error:"request_body_too_large"});
  let parsed:unknown;try{parsed=await parseJsonLimited(req,160000);}catch(error){
