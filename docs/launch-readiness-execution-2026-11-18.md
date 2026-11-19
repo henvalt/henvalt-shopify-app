@@ -681,3 +681,26 @@ cutover has been verified.
 
 No active workflow was updated, unpublished, published or executed during
 this inspection.
+
+## 19. Exact active n8n version IDs and ingress overlap
+
+Read-only metadata inspection confirmed the three active workflow versions:
+
+- `HENVALT_INGEST` — `VTpfGKNtu1CSQ4Rv`, active version
+  `6368d539-708f-494a-8be8-b9601d0e8607`.
+- `HENVALT_RECOVERY` — `3GEDoeCA4paXTaDF`, active version
+  `32e50bf7-4cbd-4070-bbba-f259ed17b369`.
+- `HENVALT_DELIVERY` — `CvVyybGJZSnklxiZ`, active version
+  `621ae6ce-a006-4fed-a70e-acf774c360fb`.
+
+The active Ingest graph's `henvalt/ingest` webhook verifies Shopify HMAC,
+resolves the legacy tenant, writes canonical events and checkout projections,
+and handles order attribution, recovery stop, uninstall, payment and refund
+events. These responsibilities overlap the V2 Worker/Edge receipt and
+projection path. Cutover must route each store/topic to one authoritative
+path; do not globally disable the legacy workflow and do not double-project
+the same V2 event.
+
+The active Recovery and Delivery graph details are captured in
+`docs/n8n-v2-cutover-boundary.md`. No active workflow was edited, executed,
+unpublished or republished during this inspection.
