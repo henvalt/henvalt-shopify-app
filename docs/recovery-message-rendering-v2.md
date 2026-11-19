@@ -99,6 +99,8 @@ The disposable PostgreSQL work-claim fixture also verifies the pixel message
 context RPC returns the expected exact store/type and explicit no-PII,
 no-secret, no-delivery-authority flags.
 
+Both V2 delivery functions also require `HENVALT_V2_MAILERSEND_EVENTS_READY=true`, an operator attestation set only after the provider's signed event URL is confirmed to route through the V2 reconciler and the legacy duplicate route is disabled. The functions return 503 before message-context resolution or permit issue when this flag is absent.
+
 These tests validate candidate code only. They do not establish live
 MailerSend domain settings, production schema parity, a real recovery message,
 or active n8n integration.
