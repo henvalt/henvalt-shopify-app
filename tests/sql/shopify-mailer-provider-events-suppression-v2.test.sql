@@ -377,7 +377,7 @@ BEGIN
   END;
   IF NOT v_failed THEN RAISE EXCEPTION 'Merchant monthly email limit was unexpectedly exceeded'; END IF;
   -- Leave headroom for the later pixel/checkout lifecycle integration fixtures in this same CI database.
-  UPDATE henvalt.billing_accounts SET monthly_email_limit=1000 WHERE tenant_id=v_tenant;
+  UPDATE henvalt.billing_accounts SET monthly_email_limit=2147483647 WHERE tenant_id=v_tenant;
 
   v_attempt:=pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-failed-a',v_provider_key);
   UPDATE henvalt.shopify_recovery_send_attempt_v2 SET status='FAILED' WHERE id=v_attempt;
