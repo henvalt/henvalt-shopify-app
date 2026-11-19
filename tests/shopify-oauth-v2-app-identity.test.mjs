@@ -11,6 +11,14 @@ test("OAuth V2 resolves app identity and secret server-side from the configured 
   assert.doesNotMatch(source, /Deno\.env\.get\(["']SHOPIFY_API_SECRET["']\)/);
 });
 
+test("OAuth health reports ready only when an active Vault-backed app identity resolves", () => {
+  const health = source.slice(source.indexOf('if (route === "health"'), source.indexOf('if (!configOk())', source.indexOf('if (route === "health"')));
+  assert.match(health, /resolveAppIdentity\(\)/);
+  assert.match(health, /app_identity_ready: ready/);
+  assert.match(health, /configured: false, app_identity_ready: false/);
+  assert.doesNotMatch(health, /shopify_api_secret|appKey|clientId/);
+});
+
 test("OAuth state is bound to the resolved app and callback rejects cross-app state", () => {
   assert.match(source, /app_key: appIdentity\.appKey/);
   assert.match(source, /initiated_by_user_id,app_key/);
