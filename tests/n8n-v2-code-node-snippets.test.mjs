@@ -101,6 +101,16 @@ test("Recovery finish snippet defers mismatched work and requires exact finish a
     input: { statusCode: 200, body: { finished: true, outcome: "TERMINAL" } },
     nodes: { "Validate Delivery Result and Build Finish RPC Body": { item: { json: { expected_outcome: "HANDOFF_ACCEPTED" } } } },
   }), /v2_finish_ack_unconfirmed/);
+
+  // Each per-item acknowledgement must read its own HTTP response, not the
+  // first item in a multi-claim batch.
+  assert.match(verify, /\$input\.item\.json/);
+  assert.doesNotMatch(verify, /\$input\.first\(\)\.json/);
+  const secondAck = run(verify, {
+    input: { statusCode: 200, body: { finished: true, outcome: "DEFERRED" } },
+    nodes: { "Validate Delivery Result and Build Finish RPC Body": { item: { json: { expected_outcome: "DEFERRED" } } } },
+  });
+  assert.deepEqual(secondAck, { json: { finished: true, outcome: "DEFERRED" }, pairedItem: { item: 0 } });
 });
 
 test("Delivery snippets reject extra claim data and route distinct opaque request bodies", () => {
