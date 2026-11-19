@@ -153,6 +153,9 @@ BEGIN
     SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
     WHERE id=v_attempt_late AND status='DELIVERED' AND delivered_at IS NOT NULL
   ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_intervention_v2
+    WHERE id=v_intervention_late AND status='DELIVERED'
+  ) OR NOT EXISTS(
     SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
     WHERE send_attempt_id=v_attempt_late AND status='SETTLED'
   ) THEN RAISE EXCEPTION 'Late provider event did not reconcile the ambiguous send and settle its cost'; END IF;
