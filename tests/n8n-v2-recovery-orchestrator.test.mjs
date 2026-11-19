@@ -227,3 +227,17 @@ test("Recovery validates claim work type and UUIDs before invoking Delivery", as
   assert.equal(handoffs, 0);
   assert.equal(finishes, 0);
 });
+
+
+test("Recovery rejects a claim count that disagrees with returned items", async () => {
+  let handoffs = 0;
+  await assert.rejects(runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 1, items: [] }
+      : { accepted: true },
+    handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
+    finishClaim: async () => ({ finished: true }),
+  }), /v2_claim_count_mismatch/);
+  assert.equal(handoffs, 0);
+});
