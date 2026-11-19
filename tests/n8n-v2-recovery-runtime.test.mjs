@@ -74,6 +74,7 @@ test("ambiguous 202 is returned by Delivery, then Recovery completes the lease e
     if (url.includes("/rest/v1/rpc/claim_shopify_recovery_work_v2")) {
       return new Response(JSON.stringify({
         accepted: true,
+        claimed: 1,
         items: [{
           work_type: "PIXEL_OPPORTUNITY",
           work_id: "33333333-3333-4333-8333-333333333333",
