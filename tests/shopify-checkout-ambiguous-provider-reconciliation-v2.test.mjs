@@ -27,6 +27,7 @@ test("signed activity.sent event settles ambiguous checkout attempts whether mat
   assert.match(outcome,/NEW\.event_type='activity\.sent'[\s\S]*?status='SUBMITTED'[\s\S]*?status='AMBIGUOUS'/);
   assert.match(outcome,/reconcile_unmatched_shopify_checkout_provider_events_v2/);
   assert.match(outcome,/e\.processing_status='UNMATCHED'[\s\S]*?e\.provider_message_id IS NOT NULL/);
+  assert.match(outcome,/JOIN henvalt\.shopify_recovery_send_attempt_v2 matched_attempt[\s\S]*?matched_attempt\.provider_message_id=e\.provider_message_id[\s\S]*?LIMIT p_limit/);
   assert.match(outcome,/ORDER BY e\.created_at,e\.id[\s\S]*?LIMIT p_limit[\s\S]*?FROM henvalt\.shopify_recovery_send_attempt_v2 a[\s\S]*?FOR UPDATE[\s\S]*?FROM henvalt\.shopify_mailer_provider_events_v2 e[\s\S]*?FOR UPDATE/);
 });
 
