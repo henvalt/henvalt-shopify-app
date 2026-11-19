@@ -34,6 +34,8 @@ test("signed activity.sent event settles ambiguous checkout attempts whether mat
 test("late provider suppression events reconcile from the original attempt fingerprint",()=>{
   for(const type of ["activity.hard_bounced","activity.unsubscribed","activity.spam_complaint"]) assert.ok(outcome.includes(type));
   assert.match(outcome,/permit_row\.recipient_fingerprint/);
+  assert.match(outcome,/Do not mark a suppression event processed without the original recipient fingerprint/);
+  assert.match(outcome,/octet_length\(permit_row\.recipient_fingerprint\)=32/);
   assert.match(outcome,/status='DELIVERED'[\s\S]*?i\.status IN \('SUBMITTED','AMBIGUOUS'\)/);
   assert.match(outcome,/ON CONFLICT\(shopify_connection_id,customer_identity_id,suppression_type,source_provider_event_id\)/);
 });
