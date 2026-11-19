@@ -29,7 +29,9 @@ test("claim validator rejects unknown work, malformed IDs and unsafe worker meta
 
 test("only explicit accepted handoff is completed; ambiguous and security responses defer", () => {
   assert.equal(classifyHandoffResponse(202, { accepted: true, status: "submitted" }).outcome, "HANDOFF_ACCEPTED");
-  assert.equal(classifyHandoffResponse(202, { accepted: true, status: "ambiguous_provider_submission" }).outcome, "DEFERRED");
+  assert.equal(classifyHandoffResponse(202, { accepted: true, status: "ambiguous_provider_submission" }).outcome, "HANDOFF_ACCEPTED");
+  assert.equal(classifyHandoffResponse(202, { accepted: true, status: "provider_accepted_record_pending" }).outcome, "HANDOFF_ACCEPTED");
+  assert.equal(classifyHandoffResponse(502, { accepted: false, error: "provider_submission_rejected" }).outcome, "TERMINAL");
   for (const status of [401, 403, 409, 429, 500, 503]) {
     assert.equal(classifyHandoffResponse(status, {}).outcome, "DEFERRED");
   }
