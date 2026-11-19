@@ -18,7 +18,9 @@ BEGIN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501';
   END IF;
 
-  IF p_work_id IS NULL OR p_work_type IS NULL OR p_work_type NOT IN ('CHECKOUT_INTERVENTION','PIXEL_OPPORTUNITY') THEN
+  IF p_work_id IS NULL
+     OR p_work_type IS NULL
+     OR p_work_type NOT IN ('CHECKOUT_INTERVENTION','PIXEL_OPPORTUNITY') THEN
     RETURN jsonb_build_object('ready',false,'code','INVALID_MESSAGE_CONTEXT_REQUEST');
   END IF;
 
@@ -96,30 +98,7 @@ BEGIN
   END IF;
 
   IF v_shop_domain IS NULL
-     OR v_shop_domain !~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.]myshopify[.]com
-     OR v_opportunity_type IS NULL THEN
-    RETURN jsonb_build_object('ready',false,'code','MESSAGE_CONTEXT_NOT_ELIGIBLE');
-  END IF;
-
-  RETURN jsonb_build_object(
-    'ready',true,
-    'shop_domain',v_shop_domain,
-    'opportunity_type',v_opportunity_type,
-    'message_context_version','recovery-v2-2026-11-19',
-    'recipient_pii_returned',false,
-    'provider_secrets_returned',false,
-    'delivery_authorized',false
-  );
-END;
-$function$;
-
-REVOKE ALL ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2(text,uuid)
-  FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2(text,uuid)
-  TO service_role;
-
-COMMIT;
-
+     OR v_shop_domain !~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.]myshopify[.]com$'
      OR v_opportunity_type IS NULL THEN
     RETURN jsonb_build_object('ready',false,'code','MESSAGE_CONTEXT_NOT_ELIGIBLE');
   END IF;
