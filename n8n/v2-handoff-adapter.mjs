@@ -45,8 +45,16 @@ export function classifyHandoffResponse(status, body) {
   if (status >= 200 && status < 300 && payload.accepted === true && ACCEPTED_STATUSES.has(state)) {
     return Object.freeze({ outcome: "HANDOFF_ACCEPTED", reason: "explicit_handoff_accepted", retryAfterSeconds: 0 });
   }
-  if (status >= 200 && status < 300 && (payload.accepted === true && AMBIGUOUS_STATUSES.has(state))) {
-    return Object.freeze({ outcome: "DEFERRED", reason: "provider_reconciliation_required", retryAfterSeconds: 3600 });
+  // A 202 ambiguous/pending response means the Edge Function already crossed
+  // the provider boundary and owns reconciliation. Complete the work lease;
+  // never release it for another handoff attempt.
+  if (status >= 200 && status < 300 && payload.accepted === true && AMBIGUOUS_STATUSES.has(state)) {
+    return Object.freeze({ outcome: "HANDOFF_ACCEPTED", reason: "accepted_provider_reconciliation_pending", retryAfterSeconds: 0 });
+  }
+  // The Edge Function records a definite provider rejection as FAILED before
+  // returning this explicit response. It must not be re-submitted.
+  if (status === 502 && payload.accepted === false && state === "" && payload.error === "provider_submission_rejected") {
+    return Object.freeze({ outcome: "TERMINAL", reason: "provider_rejection_recorded", retryAfterSeconds: 0 });
   }
   if (status === 400 || status === 404 || status === 410 || status === 422) {
     return Object.freeze({ outcome: "TERMINAL", reason: "permanent_request_rejection", retryAfterSeconds: 0 });
