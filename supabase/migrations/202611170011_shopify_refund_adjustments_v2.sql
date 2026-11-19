@@ -73,6 +73,7 @@ DECLARE
   v_currency text;
   v_order henvalt.shopify_order_identity_v2%rowtype;
   v_adjustment_id uuid;
+  v_existing record;
   v_total_refunded numeric(18,4);
 BEGIN
   IF p_route_token IS NULL OR length(p_route_token)<40 OR length(p_route_token)>128
@@ -213,20 +214,38 @@ BEGIN
     v_route.tenant_id,v_route.connection_id,v_order.id,v_refund_id,
     v_amount,v_currency,v_refunded_at,v_route.receipt_id,pg_catalog.now()
   )
-  ON CONFLICT(shopify_connection_id,shopify_refund_id)
-  DO UPDATE SET refund_amount=EXCLUDED.refund_amount,
-    currency=EXCLUDED.currency,refunded_at=EXCLUDED.refunded_at,
-    source_delivery_id=EXCLUDED.source_delivery_id,updated_at=pg_catalog.now()
-  WHERE henvalt.shopify_order_refund_adjustments_v2.currency=EXCLUDED.currency
-    AND henvalt.shopify_order_refund_adjustments_v2.order_identity_id=EXCLUDED.order_identity_id
-    AND henvalt.shopify_order_refund_adjustments_v2.tenant_id=EXCLUDED.tenant_id
+  ON CONFLICT(shopify_connection_id,shopify_refund_id) DO NOTHING
   RETURNING id INTO v_adjustment_id;
 
+  -- A Shopify refund ID is immutable in this projection. Exact financial
+  -- replays are idempotent; changed facts for an existing ID are rejected.
   IF v_adjustment_id IS NULL THEN
-    UPDATE henvalt.shopify_webhook_deliveries
-       SET processing_status='RETRYABLE',failure_code='REFUND_ID_CURRENCY_CONFLICT'
-     WHERE id=v_route.receipt_id;
-    RETURN jsonb_build_object('accepted',false,'status','RETRYABLE','code','REFUND_ID_CURRENCY_CONFLICT');
+    SELECT id,tenant_id,order_identity_id,refund_amount,currency,refunded_at
+    INTO v_existing
+    FROM henvalt.shopify_order_refund_adjustments_v2
+    WHERE shopify_connection_id=v_route.connection_id
+      AND shopify_refund_id=v_refund_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+      UPDATE henvalt.shopify_webhook_deliveries
+         SET processing_status='RETRYABLE',failure_code='REFUND_ID_CONFLICT_ROW_UNAVAILABLE'
+       WHERE id=v_route.receipt_id;
+      RETURN jsonb_build_object('accepted',false,'status','RETRYABLE','code','REFUND_ID_CONFLICT_ROW_UNAVAILABLE');
+    END IF;
+
+    IF v_existing.tenant_id IS DISTINCT FROM v_route.tenant_id
+       OR v_existing.order_identity_id IS DISTINCT FROM v_order.id
+       OR v_existing.currency IS DISTINCT FROM v_currency
+       OR v_existing.refund_amount IS DISTINCT FROM v_amount
+       OR v_existing.refunded_at IS DISTINCT FROM v_refunded_at THEN
+      UPDATE henvalt.shopify_webhook_deliveries
+         SET processing_status='REJECTED',failure_code='REFUND_ID_PAYLOAD_CONFLICT'
+       WHERE id=v_route.receipt_id;
+      RETURN jsonb_build_object('accepted',true,'status','REJECTED','code','REFUND_ID_PAYLOAD_CONFLICT');
+    END IF;
+
+    v_adjustment_id:=v_existing.id;
   END IF;
 
   SELECT COALESCE(sum(refund_amount),0) INTO v_total_refunded
