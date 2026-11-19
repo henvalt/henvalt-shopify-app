@@ -61,3 +61,10 @@ No V2 Recovery schedule or V2 Delivery subworkflow has been imported or activate
 ## Current production-change boundary
 
 No production Supabase migration, Edge Function deployment, Cloudflare Worker deployment, Shopify app release, Shopify webhook re-registration, n8n workflow edit/activation, MailerSend configuration change, customer email or billing charge was performed in this batch.
+
+
+## 19 November — OAuth callback route alignment
+
+The candidate `shopify.app.toml` OAuth redirect now targets `henvalt-shopify-oauth-v2/callback`, matching the app-aware OAuth Edge Function and per-install route-token provisioning path. A Node regression test checks this configuration-to-function alignment. The Shopify static/configuration workflow passed on the TOML/test commit; full exact-head validation for the subsequent documentation-only commit is running.
+
+This does **not** verify the deployed `SHOPIFY_REDIRECT_URI` secret or release the app configuration. The compliance webhook still targets the legacy privacy function because the V2 privacy endpoint requires the concrete public app key in its route. No registry key was guessed and no compliance callback was switched. The OAuth callback and privacy route therefore remain production configuration gates.
