@@ -81,5 +81,11 @@ test("recovered revenue requires explicit exact-store policy and creates no exte
   assert.match(attributionMigration, /shopify_recovery_fee_measurements_v2/);
   assert.match(attributionMigration, /paddle_transaction_reference text/);
   assert.match(attributionMigration, /CREDIT_REQUIRED/);
+  assert.match(attributionMigration, /adjusted_recovered_amount numeric\\(18,4\\)/);
+  assert.match(attributionMigration, /adjusted_fee_amount numeric\\(18,4\\)/);
+  assert.match(attributionMigration, /credit_amount numeric\\(18,4\\) NOT NULL DEFAULT 0/);
+  assert.match(attributionMigration, /original measured charge is immutable/);
+  assert.match(attributionMigration, /f\.fee_amount-CASE WHEN v_status='CONFIRMED'/);
+  assert.match(attributionMigration, /AFTER INSERT OR UPDATE OF status,test_mode,henvalt_percentage,currency ON henvalt\.billing_accounts/);
   assert.match(attributionMigration, /require_delivery_confirmation/);
 });
