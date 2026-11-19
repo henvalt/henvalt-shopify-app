@@ -82,8 +82,8 @@ export async function runV2RecoveryTick({
   };
 
   for (const item of claim.items) {
-    // Strip all tenant/store/opportunity metadata returned by the SQL claim RPC.
-    // The adapter receives only the opaque work ID, lease ID, type and worker.
+    // Project an explicit allowlist even though the SQL claim RPC now returns only
+    // three opaque fields. This prevents future claim metadata from reaching the handoff.
     const safeClaim = {
       work_type: item?.work_type,
       work_id: item?.work_id,
