@@ -175,3 +175,29 @@ test("service RPC transport and HTTP errors never expose raw response or secret 
     return true;
   });
 });
+
+
+test("Recovery output allowlists Delivery reason codes and HTTP status", async () => {
+  const item = {
+    work_type: "PIXEL_OPPORTUNITY",
+    work_id: "33333333-3333-4333-8333-333333333333",
+    lease_id: "44444444-4444-4444-8444-444444444444",
+  };
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, items: [item] }
+      : { accepted: true },
+    handoff: async claim => ({
+      ...claim,
+      outcome: "DEFERRED",
+      reason: "customer@example.com raw provider error",
+      http_status: 700,
+      retry_after_seconds: 3600,
+    }),
+    finishClaim: async () => ({ finished: true }),
+  });
+  assert.equal(result.summary.outcomes[0].reason_code, "unspecified");
+  assert.equal(result.summary.outcomes[0].http_status, null);
+  assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
+});
