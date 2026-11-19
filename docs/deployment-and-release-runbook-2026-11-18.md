@@ -62,6 +62,21 @@ owner and tested against the candidate Worker source. Do not copy a URL from an
 old account or infer a production hostname. Missing or malformed values fail
 closed; the callback must not silently register a legacy endpoint.
 
+## Shopify app registry and Vault binding
+
+The V2 OAuth function deliberately has no hard-coded app secret and migration 001 deliberately seeds no app identity. A successful deployment of the function is not sufficient: an owner-controlled app row and Vault secret reference must exist before the health endpoint reports ready.
+
+Before enabling an owner-controlled install:
+
+1. Confirm the Shopify Dev Dashboard app is owned by the current HENVALT owner. Verify its client ID against `client_id` in `shopify.app.toml`; do not reuse a former partner's app identity.
+2. Store the app's API secret in Supabase Vault using an owner-controlled, stable secret name. Do not put the secret value in Git, migration SQL, n8n, dashboard settings, or execution logs.
+3. Insert the corresponding `henvalt.shopify_app_registry` row using a stable app key, the exact Shopify client ID, and `webhook_secret_ref` set to the Vault secret name or ID—not the secret value. Set `distribution_class` to the verified app class. Keep the row pending until ownership, client ID, callback and secret binding have been checked.
+4. Activate the registry row only after the owner has approved the exact app identity and all required infrastructure endpoints. The resolver only returns active rows.
+5. Configure the Edge Function's `SHOPIFY_API_KEY` to the same client ID. Configure `SHOPIFY_REDIRECT_URI`, `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` and `SHOPIFY_PIXEL_COLLECTOR_URL` to the owner-controlled endpoints described above. The V2 OAuth function resolves the secret from Vault; it does not read a `SHOPIFY_API_SECRET` environment variable.
+6. Call the OAuth V2 `/health` route. It now reports `configured:true` only when both runtime endpoint configuration and the active Vault-backed app identity resolve. The response exposes readiness booleans only, never the client secret. A missing/inactive registry row or unavailable Vault secret returns 503.
+
+No app-registry seed or secret value is committed in this repository. This is an owner-controlled credential operation and must be performed only after the relevant schema is approved and applied to the intended environment.
+
 ## 3. Candidate validation
 
 Run from the repository root with Node.js 22 and Deno 2:
