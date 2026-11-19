@@ -13,18 +13,28 @@ export function createV2ProviderEventReconciliationRuntime({
       if(!Number.isInteger(limit)||limit<1||limit>500) {
         throw new TypeError("invalid_provider_event_reconciliation_limit");
       }
-      const result=await rpc("reconcile_unmatched_shopify_checkout_provider_events_v2",{
+      const events=await rpc("reconcile_unmatched_shopify_checkout_provider_events_v2",{
         p_limit:limit,
       });
-      if(result?.accepted!==true||!Number.isInteger(result.reconciled)||
-        result.reconciled<0||result.reconciled>limit||
-        result.automatic_resend_performed!==false||
-        result.ambiguous_cost_reservation_released!==false) {
+      if(events?.accepted!==true||!Number.isInteger(events.reconciled)||
+        events.reconciled<0||events.reconciled>limit||
+        events.automatic_resend_performed!==false||
+        events.ambiguous_cost_reservation_released!==false) {
         throw new Error("provider_event_reconciliation_unconfirmed");
+      }
+      const stale=await rpc("mark_stale_shopify_checkout_send_attempts_ambiguous_v2",{
+        p_limit:limit,
+      });
+      if(stale?.accepted!==true||!Number.isInteger(stale.marked_ambiguous)||
+        stale.marked_ambiguous<0||stale.marked_ambiguous>limit||
+        stale.automatic_retry_performed!==false||
+        stale.provider_cost_reservation_released!==false) {
+        throw new Error("stale_checkout_attempt_reconciliation_unconfirmed");
       }
       return Object.freeze({
         accepted:true,
-        reconciled:result.reconciled,
+        events_reconciled:events.reconciled,
+        stale_attempts_marked_ambiguous:stale.marked_ambiguous,
         automatic_resend_performed:false,
         ambiguous_cost_reservation_released:false,
         provider_called:false,
