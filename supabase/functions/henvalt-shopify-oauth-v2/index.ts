@@ -3,6 +3,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
+const SHOPIFY_WEBHOOK_INGRESS_BASE_URL = Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "";
+const SHOPIFY_PIXEL_COLLECTOR_URL = Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "";
 const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
 
@@ -43,8 +45,29 @@ async function db(path: string, init: RequestInit = {}, schema = "henvalt"): Pro
     },
   });
 }
+function validHttpsOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.origin === value.replace(/\\/+$/, "") &&
+      url.username === "" && url.password === "" && url.pathname === "/" &&
+      url.search === "" && url.hash === "";
+  } catch {
+    return false;
+  }
+}
+function validPixelCollectorUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.username === "" && url.password === "" &&
+      url.pathname === "/v1/events" && url.search === "" && url.hash === "";
+  } catch {
+    return false;
+  }
+}
 function configOk(): boolean {
-  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_REDIRECT_URI);
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_REDIRECT_URI &&
+    validHttpsOrigin(SHOPIFY_WEBHOOK_INGRESS_BASE_URL) &&
+    validPixelCollectorUrl(SHOPIFY_PIXEL_COLLECTOR_URL));
 }
 async function resolveAppIdentity(): Promise<{ appKey: string; clientId: string; secret: string } | null> {
   const response = await db("/rest/v1/rpc/resolve_shopify_app_oauth_identity", {
@@ -126,7 +149,7 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
   if (!keyId) return { activated: false, error: "PIXEL_KEY_ID_MISSING" };
 
   const settings = {
-    collectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    collectorUrl: SHOPIFY_PIXEL_COLLECTOR_URL,
     publicKey,
   };
   const isUpdate = typeof existing?.shopify_web_pixel_id === "string";
@@ -336,7 +359,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Registration is intentionally explicit and checked; never silently mark it successful.
-    const webhookUri = `https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks/${routeToken}`;
+    const webhookUri = `${SHOPIFY_WEBHOOK_INGRESS_BASE_URL.replace(/\\/+$/, "")}/shopify/webhooks/${routeToken}`;
     const specs = [{topic:"orders/create",gql:"ORDERS_CREATE"},{topic:"orders/updated",gql:"ORDERS_UPDATED"},{topic:"orders/paid",gql:"ORDERS_PAID"},{topic:"orders/cancelled",gql:"ORDERS_CANCELLED"},{topic:"refunds/create",gql:"REFUNDS_CREATE"},{topic:"order_transactions/create",gql:"ORDER_TRANSACTIONS_CREATE"},{topic:"checkouts/create",gql:"CHECKOUTS_CREATE"},{topic:"checkouts/update",gql:"CHECKOUTS_UPDATE"},{topic:"carts/create",gql:"CARTS_CREATE"},{topic:"carts/update",gql:"CARTS_UPDATE"},{topic:"customers_email_marketing_consent/update",gql:"CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE"},{topic:"app/uninstalled",gql:"APP_UNINSTALLED"}];
     const results: Array<Record<string, unknown>> = [];
     async function gql(query:string,variables:Record<string,unknown>={}) {
