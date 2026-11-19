@@ -148,3 +148,14 @@ OAuth V2 now validates `SHOPIFY_REDIRECT_URI` as the exact HTTPS callback path `
 ## 19 November — Shopify callback gateway authentication configuration
 
 A source review found the candidate Supabase config did not explicitly disable gateway JWT for the three browser/Shopify callback endpoints. Supabase's default gateway JWT would reject Shopify's unauthenticated redirect/webhook requests before the handlers could perform their own protocol authentication. Added explicit `verify_jwt = false` only for OAuth V2, privacy V2 and webhook ingress. Their handlers continue to validate merchant sessions, OAuth state/HMAC, app-specific privacy HMAC, and Worker bearer + Shopify HMAC respectively. A regression test asserts the exact three entries and the OAuth handler's merchant authentication. This config change is candidate-only and has not been deployed.
+
+
+## 19 November — dashboard V2 store eligibility and revenue visualization
+
+- The dashboard's Shopify connection action now targets the V2 OAuth install route; it no longer starts the legacy OAuth flow.
+- The V2 merchant dashboard API now lists only active connections whose app key belongs to an active app-registry entry and which have Shopify shop ID, access-token and refresh-token secret references, and no outstanding reauthorization requirement. Legacy rows marked active but missing V2 lineage are not offered as V2 stores.
+- The dashboard clears metrics and store identity on account changes, store changes, missing V2 connection, and failed requests. This prevents a previous store's metrics or label from remaining visible after a scope transition.
+- Migration 041 now returns a daily UTC series built only from positive, CONFIRMED exact-connection recovered-order attribution. The chart no longer derives revenue from individual recent activity rows. Mixed-currency totals are not combined.
+- Added regression coverage for the dashboard OAuth route, exact-store V2 eligibility, stale-data clearing, and server-aggregated daily revenue series.
+- Exact PR head `feee38f47422f88421ce43de3f89d242db81feb6`: full repository Node suite **412/412 passed**, focused identity/cost/privacy suite **213/213 passed**, Shopify static/configuration checks passed, disposable PostgreSQL migration validation passed, and app deployment was skipped. This is candidate CI evidence only; no live dashboard Edge Function or migration was deployed.
+- Important compatibility gate: the live `henvalt-merchant-dashboard` Edge Function is still V1 and does not return the V2 store-selection/revenue-series contract. The dashboard UI and V2 API are not a production-compatible pair until migration 041 and the candidate Edge Function are deployed together under approved cutover.
