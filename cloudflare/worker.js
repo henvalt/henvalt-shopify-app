@@ -6,7 +6,7 @@ function validShop(value) { return typeof value === "string" && /^[a-z0-9][a-z0-
 function validIngressUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(url.hostname) &&
+    return url.protocol === "https:" && /^[a-z0-9-]+\.supabase\.co$/i.test(url.hostname) &&
       url.pathname === "/functions/v1/henvalt-shopify-webhook-ingress" &&
       !url.username && !url.password && !url.search && !url.hash;
   } catch { return false; }
@@ -14,7 +14,7 @@ function validIngressUrl(value) {
 async function readBoundedBody(request, maxBytes) {
   const declared = request.headers.get("content-length");
   if (declared !== null) {
-    if (!/^\\d+$/.test(declared)) return { error: "invalid_content_length" };
+    if (!/^\d+$/.test(declared)) return { error: "invalid_content_length" };
     if (Number(declared) > maxBytes) return { error: "body_too_large" };
   }
   const reader = request.body?.getReader();
