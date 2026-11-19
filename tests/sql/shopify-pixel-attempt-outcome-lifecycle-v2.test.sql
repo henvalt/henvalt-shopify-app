@@ -69,7 +69,7 @@ BEGIN
      SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
      WHERE x.item->>'work_type'='PIXEL_OPPORTUNITY'
        AND x.item->>'work_id'=v_opportunity::text
-       AND jsonb_object_length(x.item)=3
+       AND (SELECT count(*) FROM jsonb_object_keys(x.item))=3
        AND NOT (x.item ? 'tenant_id')
        AND NOT (x.item ? 'shopify_connection_id')
        AND NOT (x.item ? 'opportunity_id')
