@@ -246,7 +246,7 @@ BEGIN
         suppression_type,source_send_attempt_id,source_provider_event_id
       )
       SELECT v_attempt.tenant_id,v_attempt.shopify_connection_id,v_attempt.customer_identity_id,
-        permit_row.recipient_fingerprint,v_suppression_type,v_attempt.id,v_event.provider_event_id
+        permit_row.recipient_fingerprint,v_suppression_type,v_attempt.id,v_event.id
       FROM henvalt.shopify_delivery_permits_v2 permit_row
       WHERE permit_row.send_attempt_id=v_attempt.id
         AND permit_row.tenant_id=v_attempt.tenant_id
