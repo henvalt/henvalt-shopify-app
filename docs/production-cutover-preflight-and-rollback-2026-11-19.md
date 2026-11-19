@@ -130,3 +130,39 @@ Until every applicable item is evidenced, the status remains **HOLD / NOT LAUNCH
 - Real event-to-send-to-recovered-order-to-fee proof: not demonstrated.
 
 This baseline must be refreshed read-only immediately before any future release decision.
+
+
+## 9. Connected runtime refresh — 19 November 2026, read-only
+
+The baseline above was refreshed against the connected Supabase and n8n accounts. These checks were read-only; no workflow execution, credential access, schema write, deployment or provider request occurred.
+
+### Supabase Edge Function inventory
+
+The live project returned 17 active Edge Functions. The following candidate V2 endpoints are **not deployed**:
+
+- `henvalt-shopify-oauth-v2`
+- `henvalt-shopify-webhook-ingress`
+- `henvalt-shopify-contact-delivery-v2`
+- `henvalt-shopify-pixel-delivery-v2`
+- `henvalt-shopify-privacy-v2`
+- `henvalt-mailersend-webhook-v2`
+
+The live project still has the legacy `henvalt-shopify-oauth`, `henvalt-mailersend-delivery`, `henvalt-pixel-ingest-proxy`, and legacy privacy/dashboard functions. The existence of those V1 functions is not evidence that the V2 routes or V2 secret contracts are ready.
+
+### n8n active workflow snapshot
+
+| Workflow | ID | Active version | Nodes | Current status |
+|---|---|---|---:|---|
+| `HENVALT_INGEST` | `VTpfGKNtu1CSQ4Rv` | `6368d539-708f-494a-8be8-b9601d0e8607` | 51 | Active V1 |
+| `HENVALT_RECOVERY` | `3GEDoeCA4paXTaDF` | `32e50bf7-4cbd-4070-bbba-f259ed17b369` | 46 | Active V1 |
+| `HENVALT_DELIVERY` | `CvVyybGJZSnklxiZ` | `621ae6ce-a006-4fed-a70e-acf774c360fb` | 62 | Active V1 |
+
+The active Delivery graph still contains a manual-trigger one-off test-email branch with a hard-coded historical delivery request and recipient. It was inspected but **not executed**. It remains a pre-launch safety blocker until reviewed and removed/disabled through an explicitly approved change.
+
+The current workflow-level settings expose execution order, binary mode, saved-time mode and caller policy; they do not establish instance-wide execution retention or sensitive-data redaction. That control remains unverified and must be checked in n8n instance settings before V2 cutover.
+
+No active n8n version was changed. No fourth workflow was created. The candidate V2 Recovery/Delivery modules remain source-level adapters and build specifications, not live workflow code.
+
+### Cutover consequence
+
+There is no safe URL-only switch from the active V1 Recovery→Delivery payload to the V2 endpoints. V1 sends recipient, subject, body, tenant and delivery-request context; V2 accepts only an opaque checkout intervention ID or pixel opportunity ID and resolves trusted context server-side. A separately reviewed, no-send draft migration inside the existing three workflows is required before any live route change.
