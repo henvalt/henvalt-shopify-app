@@ -243,3 +243,30 @@ test("n8n cutover specification blocks legacy event duplication and gates V2 sen
   assert.doesNotMatch(docs, /with `opportunity_id`, `subject`, `html`/);
   assert.doesNotMatch(docs, /Both Edge Functions currently require subject and HTML\/text from the caller/);
 });
+
+
+test("V2 n8n cutover contract keeps legacy delivery separate and requires opaque claims", () => {
+  const docs = readFileSync(new URL("../docs/shopify-v2-n8n-cutover-execution-contract-2026-11-19.md", import.meta.url), "utf8");
+  for (const required of [
+    "claim_shopify_recovery_work_v2",
+    "materialize_shopify_checkout_interventions_v2",
+    "CHECKOUT_INTERVENTION",
+    "PIXEL_OPPORTUNITY",
+    "henvalt-shopify-contact-delivery-v2",
+    "henvalt-shopify-pixel-delivery-v2",
+    "finish_shopify_recovery_work_claim_v2",
+    "HANDOFF_ACCEPTED",
+    "TERMINAL",
+    "DEFERRED",
+    "henvalt-mailersend-webhook-v2",
+    "original raw request body",
+    "no-send dry-run acceptance suite",
+    "hard-coded historical delivery request and recipient address",
+    "No production send, billing, PR merge or deployment is authorized",
+  ]) assert.ok(docs.includes(required), required);
+  assert.match(docs, /exactly one finish outcome/);
+  assert.match(docs, /Never retry a possibly submitted provider call as a fresh send/);
+  assert.match(docs, /Never proxy parsed\/re-serialized JSON/);
+  assert.match(docs, /must not be on the V2 send path/);
+  assert.doesNotMatch(docs, /recipient email.*payload/i);
+});
