@@ -56,10 +56,7 @@ and all three settings:
 - `domain_settings.track_unsubscribe_html_enabled === true`;
 - `domain_settings.track_unsubscribe_plain_enabled === true`.
 
-An HTTP failure, timeout, malformed response, missing domain or disabled
-setting blocks delivery. The template placeholder is not knowingly sent
-without expansion. Configure and verify these settings for the actual sender
-domain before a controlled test send.
+It then calls `GET https://api.mailersend.com/v1/webhooks?domain_id={domain_id}&limit=100` and requires an enabled version-2 webhook whose URL exactly matches `SUPABASE_URL/functions/v1/henvalt-mailersend-webhook-v2/{provider_account_key}` and whose event list includes `activity.sent`, `activity.delivered`, `activity.soft_bounced`, `activity.hard_bounced`, `activity.unsubscribed`, `activity.spam_complaint`, `activity.opened` and `activity.clicked`. Any HTTP failure, timeout, malformed response, missing domain/webhook, wrong URL/version, missing event or disabled setting blocks delivery with `mailer_send_v2_delivery_preflight_failed`. The template placeholder is not knowingly sent without expansion, and a delivery cannot proceed without the exact signed V2 event route registered.
 
 The checkout path has consumed its one-use permit before it can access the
 verified sender address; if unsubscribe verification fails, it records the
@@ -99,7 +96,7 @@ The disposable PostgreSQL work-claim fixture also verifies the pixel message
 context RPC returns the expected exact store/type and explicit no-PII,
 no-secret, no-delivery-authority flags.
 
-Both V2 delivery functions also require `HENVALT_V2_MAILERSEND_EVENTS_READY=true`, an operator attestation set only after the provider's signed event URL is confirmed to route through the V2 reconciler and the legacy duplicate route is disabled. The functions return 503 before message-context resolution or permit issue when this flag is absent.
+Both V2 delivery functions also require `HENVALT_V2_MAILERSEND_EVENTS_READY=true`. The functions dynamically verify the exact V2 webhook registration and require this operator attestation to confirm the legacy duplicate event route has been disabled. They return 503 before message-context resolution or permit issue when the flag is absent.
 
 These tests validate candidate code only. They do not establish live
 MailerSend domain settings, production schema parity, a real recovery message,
