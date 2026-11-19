@@ -22,6 +22,7 @@ test("sign-out invalidates in-flight requests and clears merchant metrics", () =
   assert.match(dashboard, /dashboardRequestId\+\+/);
   assert.match(ownerState, /cancelDashboardLoad\(\);clearDashboardData\(\)/);
   assert.match(dashboard, /function clearDashboardData\(\)/);
+  assert.match(dashboard, /\$\("start"\)\.textContent="START";\s*\$\("end"\)\.textContent="END";/);
   assert.match(dashboard, /No merchant metrics are retained in this view after sign-out/);
 });
 test("store changes and failed dashboard requests clear previously rendered merchant data", () => {
