@@ -259,7 +259,10 @@ BEGIN
      AND pg_catalog.upper(v_order.currency)=v_currency
      AND COALESCE(v_order.financial_status,'') NOT IN ('voided','cancelled') THEN
     UPDATE henvalt.shopify_order_identity_v2
-       SET financial_status=CASE
+       SET last_refund_at=GREATEST(
+         COALESCE(last_refund_at,'-infinity'::timestamptz),v_refunded_at
+       ),
+       financial_status=CASE
          WHEN v_total_refunded>=v_order.total_value THEN 'refunded'
          ELSE 'partially_refunded'
        END,
