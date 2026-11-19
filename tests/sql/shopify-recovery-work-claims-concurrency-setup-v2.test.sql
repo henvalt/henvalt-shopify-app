@@ -15,6 +15,7 @@ DECLARE
  v_inbox uuid; v_session uuid; v_candidate uuid; v_opportunity uuid; v_message_context jsonb;
  v_receipt uuid; v_checkout uuid; v_checkout_candidate uuid; v_checkout_opportunity uuid;
  v_intervention uuid; v_materialized jsonb; v_checkout_token text;
+ v_provider_key text; v_sender_id uuid; v_sender_context jsonb; v_other_connection uuid;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key
  FROM henvalt.shopify_connections
@@ -142,5 +143,47 @@ BEGIN
  DELETE FROM henvalt.shopify_recovery_opportunity_v2 WHERE id=v_checkout_opportunity;
  DELETE FROM henvalt.shopify_checkout_recovery_candidate_v2 WHERE id=v_checkout_candidate;
  DELETE FROM henvalt.shopify_checkout_identity_v2 WHERE id=v_checkout;
+
+ -- Sender profile resolution is a separate pre-permit, exact-store service RPC.
+ v_provider_key:='sender-preflight-'||replace(gen_random_uuid()::text,'-','');
+ INSERT INTO henvalt.shopify_mailer_provider_registry_v2(
+  tenant_id,provider_account_key,mailersend_domain_id,webhook_secret_ref,
+  recipient_fingerprint_secret_ref,status,email_unit_cost_amount,email_unit_cost_currency
+ ) VALUES(v_tenant,v_provider_key,'sender-preflight-domain-'||replace(gen_random_uuid()::text,'-',''),
+  'vault://sender-preflight-webhook','vault://sender-preflight-fingerprint',
+  'ACTIVE',0.01,'USD');
+ INSERT INTO henvalt.shopify_sender_profiles_v2(
+  tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,
+  status,verified_at
+ ) VALUES(v_tenant,v_connection,v_provider_key,'recovery@store-b.example',
+  'Store B Recovery','ACTIVE',now())
+ RETURNING id INTO v_sender_id;
+
+ v_sender_context:=henvalt.resolve_shopify_sender_profile_for_delivery_v2(
+  v_sender_id,v_connection,v_provider_key
+ );
+ IF v_sender_context->>'ready'<>'true'
+    OR v_sender_context->>'from_email'<>'recovery@store-b.example'
+    OR v_sender_context->>'from_name'<>'Store B Recovery'
+    OR v_sender_context->>'recipient_pii_returned'<>'false'
+    OR v_sender_context->>'delivery_authorized'<>'false' THEN
+  RAISE EXCEPTION 'Verified sender preflight did not return safe exact-store sender data: %',v_sender_context;
+ END IF;
+
+ SELECT id INTO v_other_connection
+ FROM henvalt.shopify_connections
+ WHERE tenant_id=v_tenant AND shop_domain='store-a.myshopify.com';
+ IF v_other_connection IS NOT NULL THEN
+  v_sender_context:=henvalt.resolve_shopify_sender_profile_for_delivery_v2(
+   v_sender_id,v_other_connection,v_provider_key
+  );
+  IF v_sender_context->>'ready'<>'false' THEN
+   RAISE EXCEPTION 'Sender profile crossed exact-store boundary: %',v_sender_context;
+  END IF;
+ END IF;
+
+ DELETE FROM henvalt.shopify_sender_profiles_v2 WHERE id=v_sender_id;
+ DELETE FROM henvalt.shopify_mailer_provider_registry_v2
+ WHERE tenant_id=v_tenant AND provider_account_key=v_provider_key;
 END;
 $setup$;
