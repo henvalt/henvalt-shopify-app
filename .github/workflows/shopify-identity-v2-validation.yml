@@ -63,7 +63,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
-      - name: Apply candidate migrations 001 through 045
+      - name: Apply candidate migrations 001 through 046
         env:
           PGPASSWORD: postgres
         run: |
