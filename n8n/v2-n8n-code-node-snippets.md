@@ -148,7 +148,7 @@ return {
 };
 ```
 
-Send only `p_lease_id`, `p_worker_id`, `p_outcome`, and `p_retry_after` to `finish_shopify_recovery_work_claim_v2`. Keep `expected_outcome` in the local execution item for the acknowledgement check; do not send it to the RPC.
+Configure the finish HTTP Request body with explicit field mapping for only `p_lease_id`, `p_worker_id`, `p_outcome`, and `p_retry_after`; do not pass the entire input item. Keep `expected_outcome` in the local execution item for the acknowledgement check; do not send it to the RPC.
 
 ### 6. Verify Finish Acknowledgement
 
