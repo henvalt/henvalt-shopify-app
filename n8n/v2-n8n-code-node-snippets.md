@@ -157,7 +157,7 @@ Configure the finish HTTP Request body with explicit field mapping for only `p_l
 After the finish RPC. Configure this Code node as **Run Once for Each Item**:
 
 ```javascript
-const response = $input.first().json ?? {};
+const response = $input.item.json ?? {};
 const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
   ? response.body
   : response;
