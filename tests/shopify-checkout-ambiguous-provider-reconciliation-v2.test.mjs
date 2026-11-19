@@ -53,7 +53,7 @@ test("checkout provider reconciliation is service-role-only and does not retry o
   assert.match(mailerIntegration,/reconcile_unmatched_shopify_checkout_provider_events_v2\(10\)/);
   assert.match(mailerIntegration,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
   assert.match(mailerIntegration,/provider-event-unmatched-unsubscribe-004/);
-  assert.match(mailerIntegration,/source_provider_event_id='provider-event-unmatched-unsubscribe-004'/);
+  assert.match(mailerIntegration,/source_provider_event_id=\(\s*SELECT id FROM henvalt\.shopify_mailer_provider_events_v2/);
   assert.match(mailerIntegration,/recipient_fingerprint=decode\(repeat\('ab',32\),'hex'\)/);
   assert.match(mailerIntegration,/provider_cost_reservation_released.*false/);
   assert.match(workflow,/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2\.sql/);
