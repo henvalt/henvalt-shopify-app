@@ -93,6 +93,7 @@ export async function runV2RecoveryTick({
   // Validate the complete batch before any handoff or lease mutation. A malformed
   // later item must not cause a partially processed batch.
   const seenWork = new Set();
+  const seenLeaseIds = new Set();
   const validatedItems = claim.items.map(item => {
     const workKey = `${String(item?.work_type ?? "")}:${String(item?.work_id ?? "")}`;
     if (seenWork.has(workKey)) throw new Error("v2_duplicate_claim_item");
@@ -100,6 +101,8 @@ export async function runV2RecoveryTick({
     if (!WORK_TYPES.has(item?.work_type) || !UUID.test(item?.work_id ?? "") || !UUID.test(item?.lease_id ?? "")) {
       throw new Error("v2_claim_item_invalid");
     }
+    if (seenLeaseIds.has(item.lease_id)) throw new Error("v2_duplicate_lease_id");
+    seenLeaseIds.add(item.lease_id);
     return {
       work_type: item.work_type,
       work_id: item.work_id,
