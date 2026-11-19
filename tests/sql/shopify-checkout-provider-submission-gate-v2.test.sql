@@ -12,12 +12,14 @@ BEGIN
   IF v_definition IS NULL
     OR position('sc.active IS DISTINCT FROM true' in v_definition)=0
     OR position('sc.app_key IS DISTINCT FROM v_attempt.app_key' in v_definition)=0
-    OR position('v_attempt.checkout_status<>' in v_definition)=0
-    OR position('v_attempt.marketing_state<>' in v_definition)=0
+    OR position('v_attempt.checkout_status IS DISTINCT FROM' in v_definition)=0
+    OR position('v_attempt.marketing_state IS DISTINCT FROM' in v_definition)=0
     OR position('shopify_order_identity_v2' in v_definition)=0
     OR position('shopify_delivery_suppressions_v2' in v_definition)=0
     OR position('shopify_customer_redaction_guards_v2' in v_definition)=0
-    OR position('reservation_row.status' in v_definition)=0 THEN
+    OR position('reservation_row.status' in v_definition)=0
+    OR position('jurisdiction_country_code IS NULL' in v_definition)=0
+    OR position('FOR UPDATE' in v_definition)=0 THEN
     RAISE EXCEPTION 'Final checkout gate is missing a required delivery boundary';
   END IF;
 
