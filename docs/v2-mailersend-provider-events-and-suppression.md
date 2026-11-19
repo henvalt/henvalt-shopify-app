@@ -37,6 +37,12 @@ Migration 039 adds a separate pixel-attempt correlation path to the same signed 
 - Replays are idempotent. Events without a matching message reference remain unmatched and cannot authorize a resend; the webhook returns a retryable 503 while correlation is pending, allowing MailerSend's signed-event retry schedule to deliver the same event again.
 - If the provider accepted a message but neither the response nor a later webhook exposes a correlatable message ID, the attempt remains AMBIGUOUS and its cost remains RESERVED for manual reconciliation. There is no automatic resend.
 
+## Checkout attempt correlation retry
+
+The shared signed-event receiver must preserve retry semantics for checkout attempts as well as pixel attempts. If the inbox reports UNMATCHED, the signed event contains a provider message ID, and the pixel reconciler confirms that the event is not a pixel event, the Edge Function returns HTTP 503. MailerSend can then redeliver the same signed event after the checkout delivery response has persisted its message ID; the idempotent inbox re-runs exact provider-account/message-ID correlation on that retry. Events without a provider message ID are not placed into this retry branch because they cannot be correlated by this mechanism.
+
+This closes an acknowledgement gap: previously, an unmatched checkout event could pass through the pixel-only reconciler as NOT_PIXEL_RECONCILABLE and receive HTTP 200, preventing the provider retry needed to correlate it later. The candidate receiver now distinguishes that case from an already-correlated checkout event and from an unmatched pixel event. The regression test guards the 503 decision. This is candidate source/CI behavior only; it does not establish provider retry delivery in a live MailerSend account.
+
 ## Critical implementation boundary
 
 The provider registry requires two separately provisioned Vault secrets: MailerSend webhook signing secret and recipient-fingerprint key. The candidate does not seed either secret or configure MailerSend. It does not create interventions from opportunities or authorize sends. During setup, the provider registry may remain PENDING while MailerSend performs its URL-validation ping; the documented fixed test secret is accepted only for `webhook.test`, and that ping is not persisted. Real provider events require ACTIVE status and the account-specific Vault signing secret. The existing deployed MailerSend sender function remains legacy and is not safe for V2 because it accepts caller-supplied recipient email and uses tenant-scoped authorization.
@@ -52,10 +58,9 @@ The provider registry requires two separately provisioned Vault secrets: MailerS
 - Recipient email and raw webhook payload are not stored.
 - Service-role only RPC; no browser role can call it.
 
-## Next connected work
+## Remaining connected work
 
-1. Implement V2 contact resolver with Shopify protected-customer-data approval handling.
-2. Implement atomic single-use delivery permit that checks exact-store consent, jurisdiction, suppression, checkout/order, app/store, sender and billing entitlement.
-3. Wire the V2 provider proxy to resolve the recipient server-side and submit to MailerSend; do not expose the recipient to n8n.
-4. Add provider account setup and webhook V2 creation only after the merchant explicitly configures the provider.
-5. Add full provider retry/ambiguous-send reconciliation and refund-aware attribution.
+- Validate this receiver against a dedicated MailerSend V2 test webhook after explicit production authorization; verify provider retries for both checkout and pixel correlation without enabling duplicate receivers.
+- Build and verify the native nodes inside the existing three n8n workflows; this reference code is not an importable/activated workflow.
+- Complete controlled end-to-end proof for consent-eligible event, delivery, signed provider event, paid-order attribution and refund adjustment.
+- Keep production sender, webhook registration, legacy event receiver and all customer sends unchanged until a reviewed cutover is explicitly approved.
