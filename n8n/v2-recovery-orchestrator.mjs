@@ -12,6 +12,7 @@ const SAFE_REASONS = new Set([
   "handoff_not_confirmed",
   "handoff_transport_ambiguous",
   "delivery_subworkflow_failed",
+  "lease_finish_unconfirmed",
 ]);
 
 const DEFAULTS = Object.freeze({
@@ -89,9 +90,26 @@ export async function runV2RecoveryTick({
   if (!Array.isArray(claim.items) || claim.items.length > claimLimit) throw new Error("v2_claim_items_invalid");
   if (!Number.isInteger(claim.claimed) || claim.claimed !== claim.items.length) throw new Error("v2_claim_count_mismatch");
 
+  // Validate the complete batch before any handoff or lease mutation. A malformed
+  // later item must not cause a partially processed batch.
+  const seenWork = new Set();
+  const validatedItems = claim.items.map(item => {
+    const workKey = `${String(item?.work_type ?? "")}:${String(item?.work_id ?? "")}`;
+    if (seenWork.has(workKey)) throw new Error("v2_duplicate_claim_item");
+    seenWork.add(workKey);
+    if (!WORK_TYPES.has(item?.work_type) || !UUID.test(item?.work_id ?? "") || !UUID.test(item?.lease_id ?? "")) {
+      throw new Error("v2_claim_item_invalid");
+    }
+    return {
+      work_type: item.work_type,
+      work_id: item.work_id,
+      lease_id: item.lease_id,
+    };
+  });
+
   const summary = {
     worker_id: workerId,
-    claimed: claim.items.length,
+    claimed: validatedItems.length,
     handoff_accepted: 0,
     terminal: 0,
     deferred: 0,
@@ -99,14 +117,7 @@ export async function runV2RecoveryTick({
     outcomes: [],
   };
 
-  const seenWork = new Set();
-  for (const item of claim.items) {
-    const workKey = `${String(item?.work_type ?? "")}:${String(item?.work_id ?? "")}`;
-    if (seenWork.has(workKey)) throw new Error("v2_duplicate_claim_item");
-    seenWork.add(workKey);
-    if (!WORK_TYPES.has(item?.work_type) || !UUID.test(item?.work_id ?? "") || !UUID.test(item?.lease_id ?? "")) {
-      throw new Error("v2_claim_item_invalid");
-    }
+  for (const item of validatedItems) {
     // Project an explicit allowlist even though the SQL claim RPC now returns only
     // three opaque fields. This prevents future claim metadata from reaching the handoff.
     const safeClaim = {
@@ -152,19 +163,26 @@ export async function runV2RecoveryTick({
         : 3600;
     // Recovery, not Delivery, owns the lease. Finish only after the synchronous
     // Delivery subworkflow has returned its sanitized outcome.
-    const finished = await finishClaim({
-      lease_id: item.lease_id,
-      worker_id: workerId,
-      outcome,
-      retry_after_seconds: retryAfterSeconds,
-    });
-    const leaseFinished = finished?.finished === true;
+    let leaseFinished = false;
+    try {
+      const finished = await finishClaim({
+        lease_id: item.lease_id,
+        worker_id: workerId,
+        outcome,
+        retry_after_seconds: retryAfterSeconds,
+      });
+      leaseFinished = finished?.finished === true;
+    } catch {
+      // The RPC may have committed before its response was lost. Do not blindly
+      // retry the finisher; continue the batch and report an unconfirmed lease.
+      leaseFinished = false;
+    }
     if (!leaseFinished) summary.lease_finish_unconfirmed += 1;
     summary.outcomes.push({
       work_type: safeClaim.work_type,
       work_id: safeClaim.work_id,
       outcome,
-      reason_code: SAFE_REASONS.has(result.reason) ? result.reason : "unspecified",
+      reason_code: !leaseFinished ? "lease_finish_unconfirmed" : SAFE_REASONS.has(result.reason) ? result.reason : "unspecified",
       http_status: Number.isInteger(result.http_status) && result.http_status >= 100 && result.http_status <= 599 ? result.http_status : null,
       lease_finished: leaseFinished,
     });
