@@ -92,3 +92,16 @@ existing connection has been assigned an app key. No route token has been
 created. No OAuth code or live configuration has been changed. No webhook
 subscription has been switched. This specification is not proof of an
 end-to-end working installation.
+
+
+## 19 November configuration alignment update
+
+The candidate `shopify.app.toml` now points its OAuth redirect URL to:
+
+`https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth-v2/callback`
+
+This matches the app-aware OAuth Edge Function slug and its `callback` route. A regression test now checks the TOML-to-function alignment and confirms the legacy callback remains a separate endpoint.
+
+Before any app configuration release, the deployed OAuth V2 function's `SHOPIFY_REDIRECT_URI` secret must be set to this exact URL. The actual Supabase secret value is not accessible/verified in this repository-only change.
+
+The TOML compliance webhook still points at the legacy privacy function. Do **not** change it to V2 yet: `henvalt-shopify-privacy-v2` requires a concrete registered `app_key` in its URL, and no production app registry row/key has been independently established. The V2 compliance route remains a launch blocker until the public app identity is provisioned, the app-key-specific URI is configured, and the exact-store privacy processor is approved.
