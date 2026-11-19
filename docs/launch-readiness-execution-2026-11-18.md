@@ -652,3 +652,32 @@ The disposable concurrency setup now also checks that the pixel message
 context RPC returns the exact Store B domain and opportunity type, with
 explicit no-PII, no-secret and no-delivery-authority flags. The CI workflow
 applies candidate migrations 001–044 in its disposable PostgreSQL database.
+
+## 18. Active n8n graph inspection and privacy boundary
+
+A second read-only inspection of the active `HENVALT_RECOVERY` and
+`HENVALT_DELIVERY` workflow graphs confirmed that the current production
+versions still execute the legacy tenant-scoped pipeline. Recovery loads the
+legacy worker context, constructs AI copy context, writes a legacy message
+record and delivery request, then passes recipient, subject, HTML and text to
+the existing Delivery subworkflow. Delivery still calls the legacy
+`henvalt-mailersend-delivery` Edge Function.
+
+The legacy Recovery AI context includes customer first name, product details,
+previous message bodies, recipient reference and destination URL in n8n
+execution items. The n8n execution-retention/redaction configuration was not
+verified during this inspection. This is a data-minimization and privacy
+review item before launch. V2 deliberately removes recipient and body data
+from n8n execution items; the active legacy graph has not been changed.
+
+The current Delivery workflow also receives MailerSend event webhooks through
+its own raw-body webhook, calls the legacy
+`verify_mailersend_webhook_signature_api` RPC, then processes events with
+`process_mailersend_webhook_event`. This must be cut over to the V2 signed
+Supabase Edge Function as one route, with no dual processing. Both V2
+delivery functions now fail closed unless
+`HENVALT_V2_MAILERSEND_EVENTS_READY=true` is explicitly set after that
+cutover has been verified.
+
+No active workflow was updated, unpublished, published or executed during
+this inspection.
