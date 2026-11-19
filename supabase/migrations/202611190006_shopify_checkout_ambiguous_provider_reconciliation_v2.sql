@@ -191,6 +191,12 @@ BEGIN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='DELIVERED',delivered_at=coalesce(delivered_at,pg_catalog.now()),updated_at=pg_catalog.now()
       WHERE id=v_attempt.id AND status IN ('SUBMITTED','AMBIGUOUS');
+      UPDATE henvalt.shopify_recovery_intervention_v2
+      SET status='DELIVERED',updated_at=pg_catalog.now()
+      WHERE id=v_attempt.intervention_id
+        AND tenant_id=v_attempt.tenant_id
+        AND shopify_connection_id=v_attempt.shopify_connection_id
+        AND status IN ('SUBMITTED','AMBIGUOUS');
     ELSIF v_event.event_type='activity.soft_bounced' AND v_attempt.status IN ('SUBMITTED','AMBIGUOUS') THEN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='SOFT_BOUNCED',updated_at=pg_catalog.now()
