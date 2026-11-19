@@ -66,4 +66,8 @@ test("dashboard UI selects one store and never combines unlike currencies", () =
   assert.ok(dashboardHtml.includes("store_selection_required"));
   assert.ok(dashboardHtml.includes("Multiple currencies"));
   assert.ok(dashboardHtml.includes("x.currency||currency"));
+  assert.ok(dashboardHtml.includes("Array.isArray(data.revenueSeries)"));
+  assert.ok(dashboardHtml.includes("revenueSeries.map(x=>Number(x.amount)||0)"));
+  assert.ok(dashboardHtml.includes("DAILY CONFIRMED REVENUE"));
+  assert.ok(!dashboardHtml.includes('a.filter(x=>x.outcome==="recovered"&&x.amount!=null)'));
 });
