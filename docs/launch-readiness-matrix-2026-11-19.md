@@ -94,3 +94,8 @@ This does **not** verify the deployed `SHOPIFY_REDIRECT_URI` secret or release t
 ## 19 November — app-registry-bound Shopify privacy route
 
 The candidate Shopify TOML now routes mandatory compliance topics to `henvalt-shopify-privacy-v2`. That Edge Function resolves the active app identity from the trusted registry with the configured Shopify client ID and fails closed if the registry/Vault-backed secret is unavailable. It no longer trusts a URL path segment to select the app key. The privacy SQL RPC continues to verify the raw request body HMAC and exact app/store connection. This is candidate code only; no production registry row, Vault secret, deployment or webhook receipt has been verified.
+
+
+## 19 November — exact OAuth redirect secret gate
+
+OAuth V2 now validates `SHOPIFY_REDIRECT_URI` as the exact HTTPS callback path `/functions/v1/henvalt-shopify-oauth-v2/callback` on the same Supabase project origin. A non-empty but mismatched secret no longer passes the OAuth configuration gate. Added a regression test and included both infrastructure-endpoint and callback-alignment tests in Shopify static validation. The deployed secret value remains unverified; no secret was read or changed.
