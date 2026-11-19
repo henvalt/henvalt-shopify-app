@@ -77,7 +77,13 @@ export function classifyHandoffResponse(status, body) {
 }
 
 export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixelBearerToken, fetchImpl = fetch }) {
-  if (typeof supabaseUrl !== "string" || !/^https:\/\//i.test(supabaseUrl) ||
+  let trustedUrl = false;
+  try {
+    const parsed = new URL(supabaseUrl);
+    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(parsed.hostname) &&
+      (parsed.pathname === "" || parsed.pathname === "/") && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
+  } catch { trustedUrl = false; }
+  if (!trustedUrl ||
       typeof checkoutBearerToken !== "string" || checkoutBearerToken.length < 16 ||
       typeof pixelBearerToken !== "string" || pixelBearerToken.length < 16 ||
       typeof fetchImpl !== "function") {
