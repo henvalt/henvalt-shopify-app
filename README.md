@@ -172,6 +172,7 @@ verified to route through the V2 webhook reconciler. Do not set this flag while
 the active legacy n8n event route is still processing the same events.
 Do not place secret values in this README, app TOML, Worker vars, browser code,
 n8n item payloads or GitHub source.
+The MailerSend API token stored in Vault must have permission to send email and read the account's domain and webhook metadata. The V2 send preflight fails closed if either read endpoint is unavailable or unauthorized.
 
 The public Shopify client ID and Supabase publishable/anon key are identifiers
 intended for client configuration; they are not substitutes for server
