@@ -15,12 +15,23 @@ test("Delivery provider-event reconciliation calls only the bounded service RPC"
       assert.equal(init.headers["accept-profile"],"henvalt");
       assert.equal(init.headers["content-profile"],"henvalt");
       assert.equal(init.headers.authorization,"Bearer "+"s".repeat(40));
-      assert.deepEqual(JSON.parse(init.body),{p_limit:75});
-      return new Response(JSON.stringify({
-        accepted:true,reconciled:3,
-        automatic_resend_performed:false,
-        ambiguous_cost_reservation_released:false,
-      }),{status:200});
+      const body=JSON.parse(init.body);
+      assert.deepEqual(body,{p_limit:75});
+      if(url.endsWith("/reconcile_unmatched_shopify_checkout_provider_events_v2")) {
+        return new Response(JSON.stringify({
+          accepted:true,reconciled:3,
+          automatic_resend_performed:false,
+          ambiguous_cost_reservation_released:false,
+        }),{status:200});
+      }
+      if(url.endsWith("/mark_stale_shopify_checkout_send_attempts_ambiguous_v2")) {
+        return new Response(JSON.stringify({
+          accepted:true,marked_ambiguous:2,
+          automatic_retry_performed:false,
+          provider_cost_reservation_released:false,
+        }),{status:200});
+      }
+      throw new Error("unexpected_rpc");
     },
   });
   const result=await runtime.reconcile({limit:75});
@@ -30,8 +41,9 @@ test("Delivery provider-event reconciliation calls only the bounded service RPC"
     ambiguous_cost_reservation_released:false,
     provider_called:false,recipient_pii_returned:false,
   });
-  assert.equal(calls.length,1);
+  assert.equal(calls.length,2);
   assert.equal(calls[0].url,"https://project.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_checkout_provider_events_v2");
+  assert.equal(calls[1].url,"https://project.supabase.co/rest/v1/rpc/mark_stale_shopify_checkout_send_attempts_ambiguous_v2");
   assert.equal(calls.some(x=>x.url.includes("api.mailersend.com")),false);
   assert.equal(JSON.stringify(result).includes("recipient@example.com"),false);
 });
@@ -61,5 +73,6 @@ test("reconciliation is a scheduled branch inside existing Delivery, not a fourt
   assert.match(n8nSpec,/Periodic checkout provider-event reconciliation \(same Delivery workflow\)/);
   assert.match(n8nSpec,/do not create another workflow/);
   assert.match(n8nSpec,/reconcile_unmatched_shopify_checkout_provider_events_v2/);
+  assert.match(n8nSpec,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
   assert.match(n8nSpec,/automatic_resend_performed !== false/);
 });
