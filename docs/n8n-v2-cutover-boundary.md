@@ -95,7 +95,7 @@ Both Edge Functions mark the provider boundary before the HTTP request. A networ
 
 Both functions require their independent server-held delivery bearer secret. Recipient email remains inside the trusted Edge Function and provider request; n8n receives only the opaque IDs and structured status.
 
-The V2 claim/lease adapter now exists in migration 042, and migration 043 now materializes step-1 checkout interventions from eligible exact-store checkout opportunities. Disposable PostgreSQL tests cover both checkout intervention and pixel opportunity work, intervention materialization idempotency, true concurrent claim exclusion, deferred retry with a fresh lease identity, stale-worker rejection and terminal completion. The active Recovery workflow is still not wired to it; production cutover remains pending.
+The V2 claim/lease adapter exists in migration 042, migration 043 materializes step-1 checkout interventions from eligible exact-store checkout opportunities, and migration 047 preserves terminal checkout candidate states across refreshes. Disposable PostgreSQL tests cover both checkout intervention and pixel opportunity work, intervention materialization idempotency, terminal closed-candidate preservation, deferred retry deadlines, true concurrent claim exclusion, deferred retry with a fresh lease identity, stale-worker rejection and terminal completion. The active Recovery workflow is still not wired to it; production cutover remains pending.
 
 ## 5. V2 claim/lease RPC contract — migration 042
 
@@ -318,7 +318,7 @@ The Edge Functions also query the MailerSend Domains and Webhooks APIs on each a
 - The MailerSend signed event webhook points directly to
   `henvalt-mailersend-webhook-v2`; it is not a fourth n8n workflow.
 
-The V2 ingress also supports MailerSend's fixed-secret `webhook.test` URL-validation ping through migration 046, without persisting a fake provider event. Normal provider events still use the account-specific signing secret. The active graph remains unchanged. These findings are a cutover specification,
+The V2 ingress also supports MailerSend's fixed-secret `webhook.test` URL-validation ping through migration 046; migration 047 preserves terminal checkout candidate states across refreshes, without persisting a fake provider event. Normal provider events still use the account-specific signing secret. The active graph remains unchanged. These findings are a cutover specification,
 not authorization to update or publish the three active workflows.
 
 
