@@ -100,14 +100,15 @@ Deno.serve(async(req:Request)=>{
  }
  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed))return json(400,{error:"invalid_pixel_delivery_request"});
  const input=parsed as Record<string,unknown>;
- const opportunityId=input.opportunity_id,subject=typeof input.subject==="string"?input.subject:"";
- const html=typeof input.html==="string"?input.html:"",textBody=typeof input.text==="string"?input.text:"";
- if(!uuid(opportunityId)||!subject.trim()||subject.length>180||html.length>100000||textBody.length>50000||(!html.trim()&&!textBody.trim()))
+ const opportunityId=input.opportunity_id;
+ if(Object.keys(input).some(key=>key!=="opportunity_id")||!uuid(opportunityId))
   return json(400,{error:"invalid_pixel_delivery_request"});
  let attemptId="";
  let providerSubmissionStarted=false;
  let providerMessageReference="";
  try{
+  const messageContext=await rpc("resolve_shopify_recovery_message_context_v2",{p_work_type:"PIXEL_OPPORTUNITY",p_work_id:opportunityId});
+  if(messageContext?.ready!==true)return json(409,{error:"recovery_message_context_not_ready"});
   const ctx=await rpc("resolve_shopify_pixel_delivery_context_v2",{p_opportunity_id:opportunityId});
   if(!ctx||ctx.ready!==true)return json(409,{error:typeof ctx?.code==="string"?ctx.code.toLowerCase():"pixel_delivery_context_not_ready"});
   const shop=String(ctx.shop_domain??""),shopToken=String(ctx.shopify_access_token??"");
@@ -120,6 +121,11 @@ Deno.serve(async(req:Request)=>{
     !gid.startsWith("gid://shopify/Customer/")||!uuid(connectionId)||!uuid(customerIdentityId)||
     !providerKey||providerToken.length<20||fpSecret.length<32||!validEmail(senderEmail)||
     !senderName.trim()||!uuid(senderId))return json(503,{error:"pixel_delivery_context_incomplete"});
+  if(!(await mailerSendUnsubscribeReady(providerToken,senderEmail)))
+    return json(409,{error:"mailer_send_unsubscribe_tracking_not_enabled"});
+  let message;
+  try{message=renderRecoveryMessageV2({shopDomain:String(messageContext.shop_domain??""),opportunityType:String(messageContext.opportunity_type??""),brandName:senderName});}
+  catch{return json(409,{error:"recovery_message_context_invalid"});}
 
   // First live Shopify read refreshes PII-free contact and consent evidence before permit issue.
   const first=await lookupCustomer(shop,shopToken,gid);
@@ -172,7 +178,7 @@ Deno.serve(async(req:Request)=>{
    providerResponse=await fetch("https://api.mailersend.com/v1/email",{
     method:"POST",headers:{authorization:"Bearer "+providerToken,"content-type":"application/json","x-requested-with":"XMLHttpRequest"},
     body:JSON.stringify({from:{email:senderEmail,name:senderName},to:[{email:finalCustomer.email}],
-     subject,...(html.trim()?{html}:{}),...(textBody.trim()?{text:textBody}:{})}),
+     subject:message.subject,html:message.html,text:message.text}),
     signal:AbortSignal.timeout(20000)
    });
   }catch{
