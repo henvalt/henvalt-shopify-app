@@ -24,10 +24,11 @@ function boundedInt(value, fallback, min, max) {
 export async function runV2RecoveryTick({
   rpc,
   handoff,
+  finishClaim,
   workerId,
   limits = {},
 }) {
-  if (typeof rpc !== "function" || typeof handoff !== "function" ||
+  if (typeof rpc !== "function" || typeof handoff !== "function" || typeof finishClaim !== "function" ||
       typeof workerId !== "string" || !/^[A-Za-z0-9._:-]{3,80}$/.test(workerId)) {
     throw new TypeError("invalid_tick_configuration");
   }
@@ -97,12 +98,25 @@ export async function runV2RecoveryTick({
     else if (outcome === "TERMINAL") summary.terminal += 1;
     else if (outcome === "DEFERRED") summary.deferred += 1;
     else throw new Error("v2_handoff_outcome_invalid");
-    if (result.lease_finished !== true) summary.lease_finish_unconfirmed += 1;
+    const retryAfterSeconds = Number(result.retry_after_seconds ?? 0);
+    if (!Number.isInteger(retryAfterSeconds) || retryAfterSeconds < 0 || retryAfterSeconds > 86400) {
+      throw new Error("v2_handoff_retry_policy_invalid");
+    }
+    // Recovery, not Delivery, owns the lease. Finish only after the synchronous
+    // Delivery subworkflow has returned its sanitized outcome.
+    const finished = await finishClaim({
+      lease_id: item.lease_id,
+      worker_id: workerId,
+      outcome,
+      retry_after_seconds: retryAfterSeconds,
+    });
+    const leaseFinished = finished?.finished === true;
+    if (!leaseFinished) summary.lease_finish_unconfirmed += 1;
     summary.outcomes.push({
       work_type: result.work_type,
       work_id: result.work_id,
       outcome,
-      lease_finished: result.lease_finished === true,
+      lease_finished: leaseFinished,
     });
   }
 
