@@ -191,7 +191,7 @@ Do not edit or publish the active workflows until each gate is satisfied:
 
 The V2 work-claim and checkout intervention lifecycle passed disposable CI run #962 on 18 November 2026, including true concurrent workers. Earlier branch head 0932059e passed full CI runs #968 and #969, including checkout materializer idempotency and pixel/checkout separation. The message-context and server-rendered delivery changes are later candidate work and require their own current CI run:
 - migrations 042 and 043 apply after migrations 001–041 on disposable PostgreSQL;
-- a pixel opportunity is claimed with exact tenant/store lineage and no intervention/checkout identity;
+- a pixel opportunity's private lease row retains exact tenant/store lineage and no intervention/checkout identity; the n8n claim response remains opaque.
 - a second worker cannot claim an active lease;
 - deferred work is reclaimed under a new lease UUID;
 - the stale worker cannot finish the reclaimed lease;
