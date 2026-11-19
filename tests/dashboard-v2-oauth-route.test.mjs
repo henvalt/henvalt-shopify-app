@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const dashboard = readFileSync(new URL("../dashboard/index.html", import.meta.url), "utf8");
+const oauthFunction = readFileSync(new URL("../supabase/functions/henvalt-shopify-oauth-v2/index.ts", import.meta.url), "utf8");
+const mailerSetupFunction = readFileSync(new URL("../supabase/functions/henvalt-mailersend-setup/index.ts", import.meta.url), "utf8");
 
 test("dashboard Shopify connection uses the V2 owner-authenticated install route", () => {
   assert.match(dashboard, /functions\/v1\/henvalt-shopify-oauth-v2\/install/);
@@ -20,6 +22,8 @@ test("all dashboard Edge Function requests include the publishable API key and o
   assert.match(dashboard, /henvalt-shopify-oauth-v2\/install",\{method:"POST",headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+session\.access_token/);
   assert.match(dashboard, /fetch\(SETUP,\{method:"POST",headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+ownerSession\.access_token/);
   assert.equal((dashboard.match(/apikey:SUPABASE_KEY/g) || []).length, 3);
+  assert.match(oauthFunction, /access-control-allow-headers[^\n]*authorization, apikey, content-type/);
+  assert.match(mailerSetupFunction, /access-control-allow-headers[^\n]*authorization, apikey, content-type/);
 });
 
 test("dashboard connection UI does not claim to reinstall or authorize a legacy app", () => {
