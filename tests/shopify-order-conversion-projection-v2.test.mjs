@@ -94,5 +94,6 @@ test("recovered revenue requires explicit exact-store policy and creates no exte
   assert.ok(attributionMigration.includes("WHEN f.status IN ('INVOICED','PAID') THEN f.status"));
   assert.ok(attributionMigration.includes("AFTER INSERT OR UPDATE OF status,test_mode,henvalt_percentage,currency ON henvalt.billing_accounts"));
   assert.match(attributionMigration, /require_delivery_confirmation/);
+  assert.ok(attributionMigration.includes("v_order.checkout_match_status IS DISTINCT FROM 'MATCHED'"));
   assert.ok(attributionMigration.includes("billing_currency IS NULL OR v_billing.billing_currency<>NEW.currency"));
 });
