@@ -325,15 +325,15 @@ BEGIN
   SELECT count(*),coalesce(sum(amount),0) INTO v_count,v_total
   FROM henvalt.shopify_delivery_cost_reservations_v2
   WHERE tenant_id=v_tenant AND status IN ('RESERVED','SETTLED');
-  IF v_count<>3 OR v_total<>0.03 OR EXISTS(
+  IF v_count<>4 OR v_total<>0.04 OR EXISTS(
     SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
     WHERE tenant_id=v_tenant AND shopify_connection_id<>v_store_b
   ) THEN
-    RAISE EXCEPTION 'Expected three settled Store B reservations before cross-store cap test: count %, total %',v_count,v_total;
+    RAISE EXCEPTION 'Expected four settled Store B reservations before cross-store cap test: count %, total %',v_count,v_total;
   END IF;
 
   -- The two Store B sends already consume the merchant-wide cap for Store A.
-  UPDATE henvalt.billing_accounts SET usage_cap_amount=0.03 WHERE tenant_id=v_tenant;
+  UPDATE henvalt.billing_accounts SET usage_cap_amount=0.04 WHERE tenant_id=v_tenant;
   v_failed:=false;
   BEGIN
     PERFORM pg_temp.make_cost_test_attempt(v_tenant,v_store_a,v_customer_a,v_opportunity_a,1,'cost-cap-cross-store-a',v_provider_key);
@@ -396,7 +396,7 @@ BEGIN
   SELECT count(*),coalesce(sum(amount),0) INTO v_count,v_total
   FROM henvalt.shopify_delivery_cost_reservations_v2
   WHERE tenant_id=v_tenant AND status IN ('RESERVED','SETTLED');
-  IF v_count<>5 OR v_total<>0.05 THEN
+  IF v_count<>6 OR v_total<>0.06 THEN
     RAISE EXCEPTION 'Merchant-wide reserved/settled ledger mismatch: count %, total %',v_count,v_total;
   END IF;
 END;
