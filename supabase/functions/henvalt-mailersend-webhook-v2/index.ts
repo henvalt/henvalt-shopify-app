@@ -57,6 +57,9 @@ Deno.serve(async(req:Request)=>{
   try{payload=JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(raw));}catch{return json(400,{error:"invalid_provider_event_body"});}
   const event=payload&&typeof payload==="object"&&!Array.isArray(payload)?payload as Record<string,unknown>:null;
   const eventData=event?.data&&typeof event.data==="object"&&!Array.isArray(event.data)?event.data as Record<string,unknown>:null;
+  const rawMessageId=eventData?.message_id;
+  const eventHasMessageId=(typeof rawMessageId==="string"&&rawMessageId.trim().length>0)||
+    (typeof rawMessageId==="number"&&Number.isSafeInteger(rawMessageId));
   const rawEventId=eventData?.id;
   const eventId=typeof rawEventId==="string"?rawEventId:
     typeof rawEventId==="number"&&Number.isSafeInteger(rawEventId)?String(rawEventId):"";
@@ -83,6 +86,12 @@ Deno.serve(async(req:Request)=>{
     if(reconciliationRow.status==="UNMATCHED"){
       // Preserve provider retry semantics while a send response/message reference is still being persisted.
       return json(503,{error:"pixel_provider_event_waiting_for_attempt_correlation"});
+    }
+    if(row.status==="UNMATCHED"&&eventHasMessageId&&reconciliationRow.status==="NOT_PIXEL_RECONCILABLE"){
+      // The signed event may belong to a checkout attempt whose message reference
+      // is being persisted concurrently. Ask the provider to retry so the inbox
+      // can correlate it on the next identical delivery; do not acknowledge it lost.
+      return json(503,{error:"provider_event_waiting_for_attempt_correlation"});
     }
     pixelReconciled=reconciliationRow.pixel_attempt_reconciled===true;
     pixelSuppressionApplied=reconciliationRow.suppression_applied===true;
