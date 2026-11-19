@@ -26,6 +26,7 @@ BEGIN
     OR position('LIMIT p_limit' in v_reconcile)=0
     OR position('attempt-first, event-second lock order' in v_reconcile)=0
     OR position('permit_row.recipient_fingerprint' in v_reconcile)=0
+    OR position('v_attempt.id,v_event.provider_event_id' in v_reconcile)=0
     OR position('activity.spam_complaint' in v_reconcile)=0
     OR position('FOR UPDATE SKIP LOCKED' in v_stale)=0
     OR position('provider_cost_reservation_released' in v_stale)=0
