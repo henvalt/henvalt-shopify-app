@@ -75,3 +75,12 @@ That is tenant-level configuration. There is no explicit store override or conne
 ## Current status and limits
 
 This is a definition audit, not a successful end-to-end test. No workflow runs were started. The workflow graphs remain unchanged. The database function, caller and schema inventories still need a full reconciliation before any migration SQL is considered complete.
+
+
+## 19 November production correlation refresh
+
+A read-only Supabase check confirms **4 active Shopify connections across 3 tenants**, so at least one tenant has multiple connections. The active legacy Ingest/Recovery definitions still pass tenant-level context and do not carry a typed connection ID through the legacy event → customer/checkout → opportunity → intervention → delivery chain.
+
+Three of the four active connection rows have no Shopify shop ID, access-token Vault reference or refresh-token Vault reference. One of those rows stores a custom host rather than a canonical `*.myshopify.com` identity. Only one connection has both token references and a Shopify shop ID; all 16 legacy pixel-key rows are bound to that connection (1 active, 15 inactive). This is not proof that this store is owned by the current app owner or can be used for a V2 acceptance test.
+
+The production consequence is that `active=true` alone is not a safe store-readiness signal. The V2 app registry and exact connection lineage must be resolved from a new owner-controlled Shopify app installation. Do not automatically map legacy events, customers or checkouts by tenant, email, custom storefront domain or token alone.
