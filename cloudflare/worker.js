@@ -40,7 +40,7 @@ async function readBoundedBody(request, maxBytes) {
 }
 async function readBoundedJson(response, maxBytes = 16_384) {
   const declared = response.headers.get("content-length");
-  if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > maxBytes)) return null;
+  if (declared !== null && (!/^\d+$/.test(declared) || Number(declared) > maxBytes)) return null;
   const reader = response.body?.getReader();
   if (!reader) return null;
   const chunks = []; let total = 0;
@@ -101,6 +101,7 @@ async function handleV2(request, env, routeToken) {
     return json(503, { error: "verified_inbox_unavailable" });
   }
   const result = await readBoundedJson(upstream);
+  if (!result) return json(503, { error: "verified_inbox_invalid_response" });
   if (!upstream.ok) {
     const status = upstream.status === 401 ? 401 : upstream.status === 400 ? 400 : 503;
     return json(status, { error: typeof result.error === "string" ? result.error : "verified_inbox_rejected" });
