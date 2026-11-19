@@ -56,7 +56,10 @@ BEGIN
       AND ch.customer_identity_id=i.customer_identity_id
       AND o.customer_identity_id=i.customer_identity_id
       AND ch.shopify_checkout_token=c.checkout_token
-      AND sc.active IS TRUE;
+      AND sc.active IS TRUE
+      AND sc.app_key=o.app_key
+      AND i.customer_identity_id IS NOT NULL
+      AND o.customer_identity_id IS NOT NULL;
   ELSE
     SELECT sc.shop_domain,o.opportunity_type
       INTO v_shop_domain,v_opportunity_type
@@ -81,6 +84,7 @@ BEGIN
       AND c.customer_identity_id=o.customer_identity_id
       AND c.status='PROMOTED'
       AND sc.active IS TRUE
+      AND sc.app_key=o.app_key
       AND NOT EXISTS (
         SELECT 1 FROM henvalt.shopify_recovery_intervention_v2 i
         WHERE i.opportunity_id=o.id
@@ -90,7 +94,30 @@ BEGIN
   END IF;
 
   IF v_shop_domain IS NULL
-     OR v_shop_domain !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$'
+     OR v_shop_domain !~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?[.]myshopify[.]com
+     OR v_opportunity_type IS NULL THEN
+    RETURN jsonb_build_object('ready',false,'code','MESSAGE_CONTEXT_NOT_ELIGIBLE');
+  END IF;
+
+  RETURN jsonb_build_object(
+    'ready',true,
+    'shop_domain',v_shop_domain,
+    'opportunity_type',v_opportunity_type,
+    'message_context_version','recovery-v2-2026-11-19',
+    'recipient_pii_returned',false,
+    'provider_secrets_returned',false,
+    'delivery_authorized',false
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2(text,uuid)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.resolve_shopify_recovery_message_context_v2(text,uuid)
+  TO service_role;
+
+COMMIT;
+
      OR v_opportunity_type IS NULL THEN
     RETURN jsonb_build_object('ready',false,'code','MESSAGE_CONTEXT_NOT_ELIGIBLE');
   END IF;
