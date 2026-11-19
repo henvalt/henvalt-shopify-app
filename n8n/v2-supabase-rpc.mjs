@@ -10,7 +10,13 @@ const ALLOWED_RPC = new Set([
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function createSupabaseServiceRpc({ supabaseUrl, serviceRoleKey, fetchImpl = fetch }) {
-  if (typeof supabaseUrl !== "string" || !/^https:\/\//i.test(supabaseUrl) ||
+  let trustedUrl = false;
+  try {
+    const parsed = new URL(supabaseUrl);
+    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(parsed.hostname) &&
+      (parsed.pathname === "" || parsed.pathname === "/") && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
+  } catch { trustedUrl = false; }
+  if (!trustedUrl ||
       typeof serviceRoleKey !== "string" || serviceRoleKey.length < 32 ||
       typeof fetchImpl !== "function") {
     throw new TypeError("invalid_supabase_rpc_configuration");
