@@ -721,3 +721,18 @@ unpublished or republished during this inspection.
 - Disposable PostgreSQL coverage now tests positive checkout and pixel message
   contexts and exact-store sender-profile resolution, including a cross-store
   rejection case.
+
+## 21. MailerSend webhook URL-validation compatibility
+
+The candidate V2 webhook ingress initially contained a fixed test-secret typo
+in its URL-validation ping handling. MailerSend's documented webhook setup
+request uses a fixed test signature before accepting a webhook URL. Migration
+046 now wraps only the `webhook.test` event, validates the documented fixed
+secret in constant time, confirms an ACTIVE/PENDING provider account, returns
+a successful non-persisting validation response, and delegates every normal
+event to the prior account-secret verification function.
+
+The disposable PostgreSQL test computes the documented HMAC, verifies the
+`WEBHOOK_TEST_VERIFIED` response and asserts that no provider-event row is
+created. The account-specific signing secret remains mandatory for all real
+events.
