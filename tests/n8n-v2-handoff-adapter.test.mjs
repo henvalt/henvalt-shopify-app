@@ -38,8 +38,11 @@ test("accepted ambiguous handoffs complete; security responses defer", () => {
   assert.equal(classifyHandoffResponse(401, {}).reason, "delivery_auth_incident");
   assert.equal(classifyHandoffResponse(409, {}).reason, "delivery_preflight_or_eligibility_review");
   assert.equal(classifyHandoffResponse(429, {}).reason, "handoff_rate_limited");
-  for (const status of [400, 404, 410, 422]) {
+  for (const status of [400, 422]) {
     assert.equal(classifyHandoffResponse(status, {}).outcome, "TERMINAL");
+  }
+  for (const status of [404, 410]) {
+    assert.equal(classifyHandoffResponse(status, {}).outcome, "DEFERRED");
   }
   assert.equal(classifyHandoffResponse(200, {}).outcome, "DEFERRED");
 });
