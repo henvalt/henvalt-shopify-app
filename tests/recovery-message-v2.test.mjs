@@ -13,7 +13,7 @@ test("server renderer supports only the three explicitly approved recovery oppor
     assert.ok(message.subject.length > 0);
     assert.match(message.html, /href="https:\/\/merchant-test\.myshopify\.com\//);
     assert.match(message.html, /Merchant &amp; Co/);
-    assert.equal(message.html.includes('href="{{unsubscribe}}">Unsubscribe'), true);
+    assert.equal(message.html.includes('href="{{unsubscribe}}"') && message.html.includes('>Unsubscribe</a>'), true);
     assert.equal(message.text.includes("Unsubscribe: {{unsubscribe}}"), true);
     assert.match(message.text, /https:\/\/merchant-test\.myshopify\.com\//);
     assert.equal(message.templateVersion, "recovery-v2-2026-11-19");
