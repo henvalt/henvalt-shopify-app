@@ -98,6 +98,11 @@ test("service RPC client uses isolated service-role headers and rejects malforme
   assert.equal(requests[0].init.headers.authorization, "Bearer " + "s".repeat(40));
   await assert.rejects(rpc("bad-name;drop", {}), /invalid_rpc_call/);
   await assert.rejects(rpc("delete_all_records", {}), /invalid_rpc_call/);
+  assert.throws(() => createSupabaseServiceRpc({
+    supabaseUrl: "https://attacker.example",
+    serviceRoleKey: "s".repeat(40),
+    fetchImpl: async () => new Response("{}", { status: 200 }),
+  }), /invalid_supabase_rpc_configuration/);
 });
 
 test("lease finisher converts bounded seconds to PostgreSQL interval and checks RPC result", async () => {
