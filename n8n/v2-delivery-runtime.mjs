@@ -2,12 +2,14 @@ import { createV2HandoffAdapter } from "./v2-handoff-adapter.mjs";
 
 export function createV2DeliveryRuntime({
   supabaseUrl,
-  deliveryAuthToken,
+  checkoutDeliveryAuthToken,
+  pixelDeliveryAuthToken,
   fetchImpl = fetch,
 }) {
   const handoff = createV2HandoffAdapter({
     supabaseUrl,
-    bearerToken: deliveryAuthToken,
+    checkoutBearerToken: checkoutDeliveryAuthToken,
+    pixelBearerToken: pixelDeliveryAuthToken,
     fetchImpl,
   });
   return Object.freeze({
