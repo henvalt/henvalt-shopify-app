@@ -19,6 +19,31 @@ function firstRow(value: unknown): Record<string, unknown> | null {
   if (Array.isArray(value)) return (value[0] && typeof value[0] === "object") ? value[0] as Record<string, unknown> : null;
   return value && typeof value === "object" ? value as Record<string, unknown> : null;
 }
+async function readBoundedJson(response: Response, maxBytes = 32_768): Promise<unknown | null> {
+  const declared = response.headers.get("content-length");
+  if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > maxBytes)) return null;
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks: Uint8Array[] = []; let total = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch { /* oversized response remains rejected */ }
+        return null;
+      }
+      chunks.push(part.value);
+    }
+  } catch { return null; }
+  finally { try { reader.releaseLock(); } catch { /* already released */ } }
+  try {
+    const bytes = new Uint8Array(total); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch { return null; }
+}
 async function rpc(name: string, body: Record<string, unknown>): Promise<{ ok: boolean; row: Record<string, unknown> | null }> {
   const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
     method: "POST",
@@ -29,7 +54,7 @@ async function rpc(name: string, body: Record<string, unknown>): Promise<{ ok: b
     console.error("Webhook RPC failed", name, response.status);
     return { ok: false, row: null };
   }
-  return { ok: true, row: firstRow(await response.json().catch(() => null)) };
+  const payload = await readBoundedJson(response);\n  if (payload === null) {\n    console.error("Webhook RPC response rejected", name);\n    return { ok: false, row: null };\n  }\n  return { ok: true, row: firstRow(payload) };
 }
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return json(405,{error:"method_not_allowed"});
