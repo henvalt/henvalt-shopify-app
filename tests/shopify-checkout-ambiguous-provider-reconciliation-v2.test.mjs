@@ -39,6 +39,8 @@ test("checkout provider reconciliation is service-role-only and does not retry o
   assert.match(outcome,/GRANT EXECUTE ON FUNCTION henvalt\.reconcile_unmatched_shopify_checkout_provider_events_v2\(integer\)[\s\S]*?TO service_role/);
   assert.match(outcome,/automatic_resend_performed',false/);
   assert.match(outcome,/ambiguous_cost_reservation_released',false/);
+  assert.match(outcome,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
+  assert.match(outcome,/automatic_retry_performed',false/);
   assert.match(sql,/has_function_privilege\('anon'/);
   assert.match(workflow,/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2\.sql/);
 });
