@@ -140,6 +140,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
+      - name: Exercise seeded V2 dashboard read model and store isolation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-dashboard-read-model.test.sql
       - name: Exercise exact-store privacy processing queue and lease safety
         env:
           PGPASSWORD: postgres
