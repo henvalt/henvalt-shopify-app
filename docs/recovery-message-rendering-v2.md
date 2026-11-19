@@ -58,11 +58,7 @@ and all three settings:
 
 It then calls `GET https://api.mailersend.com/v1/webhooks?domain_id={domain_id}&limit=100` and requires an enabled version-2 webhook whose URL exactly matches `SUPABASE_URL/functions/v1/henvalt-mailersend-webhook-v2/{provider_account_key}` and whose event list includes `activity.sent`, `activity.delivered`, `activity.soft_bounced`, `activity.hard_bounced`, `activity.unsubscribed`, `activity.spam_complaint`, `activity.opened` and `activity.clicked`. Any HTTP failure, timeout, malformed response, missing domain/webhook, wrong URL/version, missing event or disabled setting blocks delivery with `mailer_send_v2_delivery_preflight_failed`. The template placeholder is not knowingly sent without expansion, and a delivery cannot proceed without the exact signed V2 event route registered.
 
-The checkout path has consumed its one-use permit before it can access the
-verified sender address; if unsubscribe verification fails, it records the
-attempt FAILED and does not call the provider. The pixel path checks the
-sender-domain setting before permit issue, so no attempt or reservation is
-created when the setting is missing.
+Both checkout and pixel paths resolve the exact-store verified sender profile and perform the MailerSend domain/webhook preflight before any one-use permit is issued or consumed. If the sender, unsubscribe settings or exact V2 webhook registration is missing, neither path creates a send attempt or cost reservation.
 
 ## Provider ambiguity
 
