@@ -1,3 +1,14 @@
+const ALLOWED_RPC = new Set([
+  "refresh_shopify_checkout_recovery_candidates_v2",
+  "promote_shopify_checkout_recovery_candidates_v2",
+  "refresh_shopify_pixel_recovery_candidates_v2",
+  "promote_shopify_pixel_recovery_candidates_v2",
+  "materialize_shopify_checkout_interventions_v2",
+  "claim_shopify_recovery_work_v2",
+  "finish_shopify_recovery_work_claim_v2",
+]);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export function createSupabaseServiceRpc({ supabaseUrl, serviceRoleKey, fetchImpl = fetch }) {
   if (typeof supabaseUrl !== "string" || !/^https:\/\//i.test(supabaseUrl) ||
       typeof serviceRoleKey !== "string" || serviceRoleKey.length < 32 ||
@@ -6,7 +17,7 @@ export function createSupabaseServiceRpc({ supabaseUrl, serviceRoleKey, fetchImp
   }
   const base = supabaseUrl.replace(/\/+$/, "");
   return async function rpc(functionName, args) {
-    if (typeof functionName !== "string" || !/^[a-z][a-z0-9_]{2,100}$/.test(functionName) ||
+    if (typeof functionName !== "string" || !ALLOWED_RPC.has(functionName) ||
         !args || typeof args !== "object" || Array.isArray(args)) {
       throw new TypeError("invalid_rpc_call");
     }
@@ -35,7 +46,9 @@ export function createSupabaseLeaseFinisher({ rpc }) {
   if (typeof rpc !== "function") throw new TypeError("invalid_rpc_client");
   return async function finishClaim({ lease_id, worker_id, outcome, retry_after_seconds }) {
     const seconds = Number(retry_after_seconds);
-    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {
+    if (!UUID.test(lease_id ?? "") || typeof worker_id !== "string" || !/^[A-Za-z0-9._:-]{3,80}$/.test(worker_id) ||
+        !["HANDOFF_ACCEPTED", "TERMINAL", "DEFERRED"].includes(outcome) ||
+        !Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {
       throw new TypeError("invalid_retry_interval");
     }
     return await rpc("finish_shopify_recovery_work_claim_v2", {
