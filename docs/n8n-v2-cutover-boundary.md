@@ -315,5 +315,5 @@ The Edge Functions also query the MailerSend Domains and Webhooks APIs on each a
 - The MailerSend signed event webhook points directly to
   `henvalt-mailersend-webhook-v2`; it is not a fourth n8n workflow.
 
-The active graph remains unchanged. These findings are a cutover specification,
+The V2 ingress also supports MailerSend's fixed-secret `webhook.test` URL-validation ping through migration 046, without persisting a fake provider event. Normal provider events still use the account-specific signing secret. The active graph remains unchanged. These findings are a cutover specification,
 not authorization to update or publish the three active workflows.
