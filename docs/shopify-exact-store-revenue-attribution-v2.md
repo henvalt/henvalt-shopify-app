@@ -30,7 +30,9 @@ An order is eligible only when its verified projection matches a checkout in the
 The attribution row is unique per exact-store order. Refund adjustments are aggregated only for the same order, tenant, connection and currency. Partial refunds reduce net recovered revenue; full refunds reverse the attribution. The fee-measurement row is recalculated from the net amount:
 - pending fees are reduced when a partial refund changes the amount;
 - a full refund voids a pending fee;
-- a refund after an invoiced/paid fee marks CREDIT_REQUIRED for manual financial reconciliation.
+- after invoicing or payment, the original recovered amount and fee amount remain immutable;
+- adjusted recovered amount, adjusted fee amount and calculated credit delta are stored separately;
+- collection state (INVOICED or PAID) is preserved while a separate reconciliation status signals CREDIT_REQUIRED or REVIEW_REQUIRED.
 
 The current projection covers successful refunds/create transactions. Chargebacks and disputes are not yet projected, and no FX conversion is attempted.
 
@@ -41,7 +43,7 @@ shopify_recovery_fee_measurements_v2 records a measurement snapshot only when:
 - the tenant billing account is ACTIVE, not test mode, and has an explicit positive percentage;
 - billing currency matches the recovered order currency.
 
-The percentage is read from the merchant billing record; the migration does not choose 3%, 5%, 10% or any other rate. The ledger stores the percentage snapshot, recovered amount, fee amount, currency and optional Paddle transaction reference. No Paddle transaction or Shopify charge is created by these functions. The live billing account remains PENDING/test-mode with a zero performance percentage, so it remains non-billable.
+The percentage is read from the merchant billing record; the migration does not choose 3%, 5%, 10% or any other rate. The ledger stores the percentage snapshot, original measured recovered amount and fee amount, adjusted post-refund amounts, explicit credit delta, currency and optional Paddle transaction reference. For an invoiced or paid measurement, refund reconciliation never overwrites the original billed fee; it records the credit required separately and preserves the INVOICED/PAID collection state. A separate reconciliation status communicates CREDIT_REQUIRED or REVIEW_REQUIRED. The missing-measurement trigger runs for both initial billing-account insertion and later activation/percentage changes. No Paddle transaction or Shopify charge is created by these functions. The live billing account remains PENDING/test-mode with a zero performance percentage, so it remains non-billable.
 
 Merchant email-provider cost reservations are a separate ledger from HENVALT's performance fee.
 
