@@ -6,7 +6,7 @@ function validShop(value) { return typeof value === "string" && /^[a-z0-9][a-z0-
 function validIngressUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && /^[a-z0-9-]+\.supabase\.co$/i.test(url.hostname) &&
+    return url.protocol === "https:" && url.hostname === "ocyplckdojdubyrsxcxa.supabase.co" && !url.port &&
       url.pathname === "/functions/v1/henvalt-shopify-webhook-ingress" &&
       !url.username && !url.password && !url.search && !url.hash;
   } catch { return false; }
