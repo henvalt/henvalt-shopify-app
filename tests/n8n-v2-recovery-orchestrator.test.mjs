@@ -266,3 +266,32 @@ test("Delivery subworkflow failure is redacted, deferred and the Recovery lease 
   assert.equal(result.summary.outcomes[0].reason_code, "delivery_subworkflow_failed");
   assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
 });
+
+
+test("unknown Delivery outcomes fail closed to a bounded deferred lease result", async () => {
+  const finishes = [];
+  const item = {
+    work_type: "PIXEL_OPPORTUNITY",
+    work_id: "33333333-3333-4333-8333-333333333333",
+    lease_id: "44444444-4444-4444-8444-444444444444",
+  };
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 1, items: [item] }
+      : { accepted: true },
+    handoff: async () => ({
+      outcome: "UNEXPECTED",
+      reason: "raw customer@example.com",
+      http_status: 999,
+      retry_after_seconds: 999999,
+    }),
+    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+  });
+  assert.equal(result.summary.deferred, 1);
+  assert.equal(finishes[0].outcome, "DEFERRED");
+  assert.equal(finishes[0].retry_after_seconds, 3600);
+  assert.equal(result.summary.outcomes[0].reason_code, "delivery_subworkflow_failed");
+  assert.equal(result.summary.outcomes[0].http_status, null);
+  assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
+});
