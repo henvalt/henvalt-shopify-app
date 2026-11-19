@@ -12,7 +12,7 @@ use_legacy_install_flow = true
 
 [auth]
 redirect_urls = [
-  "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth/callback"
+  "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth-v2/callback"
 ]
 
 [webhooks]
