@@ -61,6 +61,8 @@ test("order projection stores no direct customer contact data or raw payload", (
 test("refund projection stores exact-store idempotent financial adjustments", () => {
   assert.match(refundMigration, /shopify_order_refund_adjustments_v2/);
   assert.match(refundMigration, /UNIQUE \(shopify_connection_id,shopify_refund_id\)/);
+  assert.match(refundMigration, /REFUND_ID_PAYLOAD_CONFLICT/);
+  assert.match(refundMigration, /ON CONFLICT.*DO NOTHING/);
   assert.match(refundMigration, /REFUND_AMOUNT_OR_CURRENCY_UNVERIFIED/);
   assert.match(refundMigration, /project_verified_shopify_refund_v2/);
   assert.match(edge, /topic==="refunds\/create"/);
