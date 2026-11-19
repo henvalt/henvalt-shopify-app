@@ -32,6 +32,13 @@ test("order projection verifies exact receipt digest and server-derived install"
   assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.project_verified_shopify_order_v2\(text,text,text\)\s+TO service_role/);
 });
 
+test("order lifecycle updates are monotonic by Shopify source updated_at", () => {
+  assert.match(lifecycleMigration, /ADD COLUMN IF NOT EXISTS source_updated_at timestamptz/);
+  assert.match(lifecycleMigration, /EXCLUDED\.source_updated_at >= henvalt\.shopify_order_identity_v2\.source_updated_at/);
+  assert.match(lifecycleMigration, /STALE_EVENT_IGNORED/);
+  assert.match(lifecycleMigration, /v_payload->>'updated_at'/);
+});
+
 test("order lifecycle topics project before acknowledgement", () => {
   assert.match(lifecycleMigration, /v_route\.topic NOT IN/);
   assert.match(lifecycleMigration, /orders\/create/);
