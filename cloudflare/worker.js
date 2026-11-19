@@ -3,6 +3,41 @@ import { buildVerifiedWebhookHeaders } from "./webhook-forwarding.mjs";
 
 const json = (status, body) => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 function validShop(value) { return typeof value === "string" && /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(value); }
+function validIngressUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(url.hostname) &&
+      url.pathname === "/functions/v1/henvalt-shopify-webhook-ingress" &&
+      !url.username && !url.password && !url.search && !url.hash;
+  } catch { return false; }
+}
+async function readBoundedBody(request, maxBytes) {
+  const declared = request.headers.get("content-length");
+  if (declared !== null) {
+    if (!/^\\d+$/.test(declared)) return { error: "invalid_content_length" };
+    if (Number(declared) > maxBytes) return { error: "body_too_large" };
+  }
+  const reader = request.body?.getReader();
+  if (!reader) return { error: "empty_body" };
+  const chunks = []; let total = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch { /* bounded read remains authoritative */ }
+        return { error: "body_too_large" };
+      }
+      chunks.push(part.value);
+    }
+  } catch { return { error: "body_read_failed" }; }
+  finally { try { reader.releaseLock(); } catch { /* already released */ } }
+  if (!total) return { error: "empty_body" };
+  const bytes = new Uint8Array(total); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return { bytes };
+}
 function decodeRoute(pathname) {
   const prefix = "/shopify/webhooks/";
   if (!pathname.startsWith(prefix)) return null;
@@ -10,15 +45,15 @@ function decodeRoute(pathname) {
   return /^[A-Za-z0-9_-]{40,128}$/.test(token) ? token : null;
 }
 async function handleV2(request, env, routeToken) {
-  if (!env.SUPABASE_WEBHOOK_INGRESS_URL || !env.HENVALT_INGRESS_AUTH_TOKEN) return json(503, { error: "v2_ingress_not_configured" });
+  if (!validIngressUrl(env.SUPABASE_WEBHOOK_INGRESS_URL) || !env.HENVALT_INGRESS_AUTH_TOKEN) return json(503, { error: "v2_ingress_not_configured" });
   const shop = request.headers.get("x-shopify-shop-domain") || "";
   const topic = request.headers.get("x-shopify-topic") || "";
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
   const deliveryId = request.headers.get("x-shopify-webhook-id") || "";
   const eventId = request.headers.get("x-shopify-event-id") || "";
-  if (!validShop(shop) || !topic || !hmac || !deliveryId) return json(400, { error: "invalid_webhook_headers" });
-  const raw = new Uint8Array(await request.arrayBuffer());
-  if (raw.byteLength === 0 || raw.byteLength > 1_000_000) return json(raw.byteLength > 1_000_000 ? 413 : 400, { error: "invalid_body_size" });
+  if (!validShop(shop) || !/^[a-z0-9_./-]{1,128}$/.test(topic) || !/^[A-Za-z0-9+/]{43}=$/.test(hmac) || !deliveryId || deliveryId.length > 255 || eventId.length > 255) return json(400, { error: "invalid_webhook_headers" });
+  const body = await readBoundedBody(request, 1_000_000);
+  if (body.error) return json(body.error === "body_too_large" ? 413 : 400, { error: body.error });
 
   // App-specific HMAC verification happens inside the protected Supabase
   // Edge Function and Vault-backed RPC. No Shopify or service-role secret
@@ -35,7 +70,7 @@ async function handleV2(request, env, routeToken) {
   if (eventId) headers.set("x-shopify-event-id", eventId);
   let upstream;
   try {
-    upstream = await fetch(env.SUPABASE_WEBHOOK_INGRESS_URL, { method: "POST", headers, body: raw });
+    upstream = await fetch(env.SUPABASE_WEBHOOK_INGRESS_URL, { method: "POST", headers, body: body.bytes });
   } catch {
     return json(503, { error: "verified_inbox_unavailable" });
   }
@@ -52,7 +87,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-      return json(200, { service: "henvalt-clean-ingress-v1", legacy_configured: Boolean(env.SHOPIFY_API_SECRET && env.N8N_INGEST_URL), v2_configured: Boolean(env.SUPABASE_WEBHOOK_INGRESS_URL && env.HENVALT_INGRESS_AUTH_TOKEN) });
+      return json(200, { service: "henvalt-clean-ingress-v1", legacy_configured: Boolean(env.SHOPIFY_API_SECRET && env.N8N_INGEST_URL), v2_configured: Boolean(validIngressUrl(env.SUPABASE_WEBHOOK_INGRESS_URL) && env.HENVALT_INGRESS_AUTH_TOKEN) });
     }
     if (request.method !== "POST") return json(404, { error: "not_found" });
     const routeToken = decodeRoute(url.pathname);
