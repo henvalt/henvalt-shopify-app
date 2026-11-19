@@ -34,5 +34,6 @@ test("OAuth registers only webhook topics with a durable V2 processing path", ()
 
 test("unprojected cart and transaction topics are not subscribed or silently acknowledged", () => {
   assert.doesNotMatch(oauth, /topic:"(?:carts\/(?:create|update)|order_transactions\/create)"/);
-  assert.match(ingress, /return json\(422,\{error:"unsupported_topic"\}\)/);\n  assert.doesNotMatch(ingress, /return json\(200,\{accepted:true,duplicate:receipt\.duplicate===true,status:receipt\.receipt_status\}\)/);
+  assert.match(ingress, /return json\(422,\{error:"unsupported_topic"\}\)/);
+  assert.doesNotMatch(ingress, /return json\(200,\{accepted:true,duplicate:receipt\.duplicate===true,status:receipt\.receipt_status\}\)/);
 });
