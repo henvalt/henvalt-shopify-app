@@ -64,6 +64,21 @@ test("Recovery claim snippet enforces exact three-field database items and emits
     },
     pairedItem: { item: 0 },
   }]);
+  const second = {
+    lease_id: "55555555-5555-4555-8555-555555555555",
+    work_id: "66666666-6666-4666-8666-666666666666",
+    work_type: "PIXEL_OPPORTUNITY",
+  };
+  const batch = run(code, {
+    input: { statusCode: 200, body: { accepted: true, claimed: 2, items: [item, second] } },
+    nodes: { "Init V2 Worker": { first: () => ({ json: { worker_id: workerId } }) } },
+  });
+  assert.equal(batch.length, 2);
+  assert.equal(batch[0].json.work_id, item.work_id);
+  assert.equal(batch[1].json.work_id, second.work_id);
+  assert.deepEqual(batch[0].pairedItem, { item: 0 });
+  assert.deepEqual(batch[1].pairedItem, { item: 0 });
+
   assert.throws(() => run(code, {
     input: { statusCode: 200, body: { accepted: true, claimed: 1, items: [{ ...item, recipient_email: "pii@example.com" }] } },
     nodes: { "Init V2 Worker": { first: () => ({ json: { worker_id: workerId } }) } },
