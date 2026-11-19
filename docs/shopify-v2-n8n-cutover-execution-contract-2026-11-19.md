@@ -144,3 +144,15 @@ The test harness must intercept outbound network calls and fail the test if any 
 - The V2 MailerSend endpoint and signed events have not been verified end-to-end.
 - Shopify app ownership/public app identity, webhook subscriptions, store activation and valid test order remain separate launch gates.
 - No production send, billing, PR merge or deployment is authorized by this preparation work.
+
+
+## 19 November — offline Recovery→Delivery acceptance matrix
+
+Added `tests/n8n-v2-offline-acceptance.test.mjs`, which composes the candidate Recovery runtime, Delivery adapter and injected fake network in one test process. The matrix exercises:
+- 401/403 auth failures, 409 policy/preflight rejection, 429 throttling and 503 Edge unavailability → deferred lease outcome.
+- 400/404/410/422 permanent request/resource failures → terminal lease outcome.
+- Explicit recorded provider rejection (502) → terminal; accepted-but-ambiguous 202 → handoff accepted so the Edge reconciler owns the result.
+- Malformed Edge JSON and transport exceptions → bounded deferral with sanitized result.
+- Lease-finisher invocation and no MailerSend host escape for each composed scenario.
+
+This is an **offline adapter/orchestration acceptance suite**, not a substitute for the database-backed no-send cases in the 15-point plan above. It does not prove production consent, store isolation, sender verification, cost reservation or provider webhook behavior. Provider transport is structurally absent from the test doubles; production Edge Functions are not called.
