@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { renderRecoveryMessageV2, mailerSendUnsubscribeReady } from "../supabase/functions/_shared/recovery-message-v2.mjs";
 
 test("server renderer supports only the three explicitly approved recovery opportunity types", () => {
@@ -10,11 +11,11 @@ test("server renderer supports only the three explicitly approved recovery oppor
       brandName: "Merchant & Co",
     });
     assert.ok(message.subject.length > 0);
-    assert.match(message.html, /href="https://merchant-test.myshopify.com/"/);
+    assert.match(message.html, /href="https:\/\/merchant-test\.myshopify\.com\//);
     assert.match(message.html, /Merchant &amp; Co/);
     assert.match(message.html, /href="{{unsubscribe}}">Unsubscribe/);
     assert.match(message.text, /Unsubscribe: {{unsubscribe}}/);
-    assert.match(message.text, /https://merchant-test.myshopify.com//);
+    assert.match(message.text, /https:\/\/merchant-test\.myshopify\.com\//);
     assert.equal(message.templateVersion, "recovery-v2-2026-11-19");
   }
 });
@@ -90,7 +91,6 @@ test("MailerSend unsubscribe gate fails closed for missing, unverified or incomp
 });
 
 test("checkout and pixel Edge Functions accept only opaque work identifiers and render messages server-side", async () => {
-  const { readFileSync } = await import("node:fs");
   const checkout = readFileSync(new URL("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts", import.meta.url), "utf8");
   const pixel = readFileSync(new URL("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts", import.meta.url), "utf8");
   for (const edge of [checkout, pixel]) {
@@ -113,7 +113,6 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
 });
 
 test("message context migration is service-only, exact-store and PII-free", () => {
-  const { readFileSync } = require("node:fs");
   const sql = readFileSync(new URL("../supabase/migrations/202611190001_shopify_recovery_message_context_v2.sql", import.meta.url), "utf8");
   assert.match(sql, /request.jwt.claim.role[sS]*?service_role_required/);
   assert.match(sql, /p_work_type='CHECKOUT_INTERVENTION'/);
