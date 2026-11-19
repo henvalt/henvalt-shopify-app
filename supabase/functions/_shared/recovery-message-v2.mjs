@@ -14,7 +14,7 @@ function safeBrand(value) {
 
 function safeStoreUrl(shopDomain) {
   if (typeof shopDomain !== "string" ||
-      !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shopDomain)) {
+      !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.myshopify\.com$/.test(shopDomain)) {
     throw new TypeError("A verified Shopify store domain is required");
   }
   const url = new URL("https://" + shopDomain + "/");
