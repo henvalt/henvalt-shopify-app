@@ -131,6 +131,7 @@ AS $function$
 DECLARE
   v_event record;
   v_attempt record;
+  v_locked_event record;
   v_count integer:=0;
   v_suppression_type text;
 BEGIN
@@ -151,7 +152,6 @@ BEGIN
         'activity.hard_bounced','activity.unsubscribed','activity.spam_complaint'
       )
     ORDER BY e.created_at,e.id
-    FOR UPDATE SKIP LOCKED
     LIMIT p_limit
   LOOP
     SELECT a.id,a.tenant_id,a.shopify_connection_id,a.customer_identity_id,
@@ -160,6 +160,13 @@ BEGIN
     FROM henvalt.shopify_recovery_send_attempt_v2 a
     WHERE a.provider_account_key=v_event.provider_account_key
       AND a.provider_message_id=v_event.provider_message_id
+    FOR UPDATE;
+    IF NOT FOUND THEN CONTINUE; END IF;
+
+    -- Match ingest's attempt-first, event-second lock order to avoid deadlocks.
+    SELECT e.id INTO v_locked_event
+    FROM henvalt.shopify_mailer_provider_events_v2 e
+    WHERE e.id=v_event.id AND e.processing_status='UNMATCHED'
     FOR UPDATE;
     IF NOT FOUND THEN CONTINUE; END IF;
 
