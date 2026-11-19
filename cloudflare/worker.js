@@ -38,6 +38,32 @@ async function readBoundedBody(request, maxBytes) {
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
   return { bytes };
 }
+async function readBoundedJson(response, maxBytes = 16_384) {
+  const declared = response.headers.get("content-length");
+  if (declared !== null && (!/^\\d+$/.test(declared) || Number(declared) > maxBytes)) return null;
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks = []; let total = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      total += part.value.byteLength;
+      if (total > maxBytes) {
+        try { await reader.cancel(); } catch { /* response remains rejected */ }
+        return null;
+      }
+      chunks.push(part.value);
+    }
+  } catch { return null; }
+  finally { try { reader.releaseLock(); } catch { /* already released */ } }
+  try {
+    const bytes = new Uint8Array(total); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const value = JSON.parse(new TextDecoder().decode(bytes));
+    return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+  } catch { return null; }
+}
 function decodeRoute(pathname) {
   const prefix = "/shopify/webhooks/";
   if (!pathname.startsWith(prefix)) return null;
@@ -70,11 +96,11 @@ async function handleV2(request, env, routeToken) {
   if (eventId) headers.set("x-shopify-event-id", eventId);
   let upstream;
   try {
-    upstream = await fetch(env.SUPABASE_WEBHOOK_INGRESS_URL, { method: "POST", headers, body: body.bytes });
+    upstream = await fetch(env.SUPABASE_WEBHOOK_INGRESS_URL, { method: "POST", headers, body: body.bytes, signal: AbortSignal.timeout(8_000) });
   } catch {
     return json(503, { error: "verified_inbox_unavailable" });
   }
-  const result = await upstream.json().catch(() => ({}));
+  const result = await readBoundedJson(upstream);
   if (!upstream.ok) {
     const status = upstream.status === 401 ? 401 : upstream.status === 400 ? 400 : 503;
     return json(status, { error: typeof result.error === "string" ? result.error : "verified_inbox_rejected" });
