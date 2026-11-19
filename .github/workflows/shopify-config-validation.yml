@@ -59,7 +59,7 @@ jobs:
           subscriptions = app["webhooks"].get("subscriptions", [])
           compliance_subscriptions = [item for item in subscriptions if set(item.get("compliance_topics", [])) == required_compliance_topics]
           assert len(compliance_subscriptions) == 1, "Missing or duplicate mandatory Shopify privacy subscription"
-          assert compliance_subscriptions[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy", "Unexpected legacy privacy webhook endpoint"
+          assert compliance_subscriptions[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy-v2", "Privacy webhook must use the app-registry-bound V2 endpoint"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
