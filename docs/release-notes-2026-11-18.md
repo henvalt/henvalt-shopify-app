@@ -51,7 +51,7 @@
 
 The latest successful candidate validation reported:
 
-- 330/330 repository Node tests passed.
+- 332/332 repository Node tests passed.
 - 209/209 focused V2 contract tests passed.
 - Configured Deno Edge Function checks passed.
 - Candidate migrations 001–046 applied successfully to disposable PostgreSQL.
