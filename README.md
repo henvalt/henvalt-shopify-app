@@ -259,6 +259,10 @@ configuration.
 11. **Operational readiness:** monitoring, retry/reconciliation queues,
     incident response, rollback, privacy deadlines, app review and support
     processes must be approved before launch.
+12. **Legacy n8n data retention:** verify execution access, retention and
+    redaction for the currently active recipient-bearing legacy workflows.
+    V2 removes recipient and message-body data from n8n; no live retention
+    settings were changed during this preparation work.
 
 ## Release documentation
 
