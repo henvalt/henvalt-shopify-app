@@ -6,7 +6,8 @@ import { createV2RecoveryRuntime } from "../n8n/v2-recovery-runtime.mjs";
 function compose(fakeFetch) {
   const delivery = createV2DeliveryRuntime({
     supabaseUrl: "https://project.supabase.co",
-    deliveryAuthToken: "d".repeat(32),
+    checkoutDeliveryAuthToken: "c".repeat(32),
+    pixelDeliveryAuthToken: "p".repeat(32),
     fetchImpl: fakeFetch,
   });
   const recovery = createV2RecoveryRuntime({
@@ -38,7 +39,7 @@ test("three-workflow runtime composes Recovery → Delivery and finishes checkou
     }
     if (url.includes("/functions/v1/henvalt-shopify-contact-delivery-v2")) {
       assert.deepEqual(body, { intervention_id: "11111111-1111-4111-8111-111111111111" });
-      assert.equal(init.headers.authorization, "Bearer " + "d".repeat(32));
+      assert.equal(init.headers.authorization, "Bearer " + "c".repeat(32));
       return new Response(JSON.stringify({ accepted: true, status: "submitted" }), { status: 202 });
     }
     if (url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")) {
@@ -78,6 +79,7 @@ test("ambiguous 202 is returned by Delivery, then Recovery completes the lease e
       }), { status: 200 });
     }
     if (url.includes("/functions/v1/henvalt-shopify-pixel-delivery-v2")) {
+      assert.equal(init.headers.authorization, "Bearer " + "p".repeat(32));
       return new Response(JSON.stringify({
         accepted: true,
         status: "ambiguous_provider_submission",
