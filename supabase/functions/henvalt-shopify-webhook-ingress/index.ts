@@ -45,12 +45,18 @@ async function readBoundedJson(response: Response, maxBytes = 32_768): Promise<u
   } catch { return null; }
 }
 async function rpc(name: string, body: Record<string, unknown>): Promise<{ ok: boolean; row: Record<string, unknown> | null }> {
-  const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
-    method: "POST",
-    headers: { apikey: SERVICE_ROLE_KEY, authorization: "Bearer " + SERVICE_ROLE_KEY, "content-type": "application/json", accept: "application/json", "accept-profile": "henvalt", "content-profile": "henvalt" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(8_000),
-  });
+  let response: Response;
+  try {
+    response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
+      method: "POST",
+      headers: { apikey: SERVICE_ROLE_KEY, authorization: "Bearer " + SERVICE_ROLE_KEY, "content-type": "application/json", accept: "application/json", "accept-profile": "henvalt", "content-profile": "henvalt" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(8_000),
+    });
+  } catch {
+    console.error("Webhook RPC transport failed", name);
+    return { ok: false, row: null };
+  }
   if (!response.ok) {
     console.error("Webhook RPC failed", name, response.status);
     return { ok: false, row: null };
