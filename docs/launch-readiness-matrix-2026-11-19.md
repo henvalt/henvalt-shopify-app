@@ -159,3 +159,12 @@ A source review found the candidate Supabase config did not explicitly disable g
 - Added regression coverage for the dashboard OAuth route, exact-store V2 eligibility, stale-data clearing, and server-aggregated daily revenue series.
 - Exact PR head `feee38f47422f88421ce43de3f89d242db81feb6`: full repository Node suite **412/412 passed**, focused identity/cost/privacy suite **213/213 passed**, Shopify static/configuration checks passed, disposable PostgreSQL migration validation passed, and app deployment was skipped. This is candidate CI evidence only; no live dashboard Edge Function or migration was deployed.
 - Important compatibility gate: the live `henvalt-merchant-dashboard` Edge Function is still V1 and does not return the V2 store-selection/revenue-series contract. The dashboard UI and V2 API are not a production-compatible pair until migration 041 and the candidate Edge Function are deployed together under approved cutover.
+
+
+## 19 November — dashboard request authentication and n8n batch acknowledgement verified
+
+- Direct browser fetch calls to the dashboard, OAuth install and MailerSend setup Edge Functions now send the publishable project key on the apikey header and the signed-in user's session JWT on Authorization. OAuth and MailerSend setup CORS allow the apikey header. This follows Supabase's current documented distinction between API-key identification and user authentication.
+- n8n's per-item finish-acknowledgement snippet now reads the current response through $input.item.json; it no longer reads the first response for every item in a multi-claim batch. Regression tests cover distinct acknowledgements and two independent claimed work items.
+- Dashboard stale-store recovery now clears a removed selection and reloads the eligible store list. A regression test covers the 404 store_not_available path.
+- Exact candidate head 38b86861bed1bc986be6b815aa42fa2f3f4f4b4b: full repository Node suite **414/414 passed**; focused identity/cost/privacy contracts **214/214 passed**; Gitleaks passed; Deno Edge Function type checks passed; all 58 candidate migrations applied to disposable PostgreSQL and the exact-store, privacy, cost-reservation and concurrency SQL suites passed. Shopify static/configuration and disposable migration validation passed; Shopify deployment was skipped.
+- This is CI evidence for candidate code only. PR #6 remains open, draft and unmerged; no production database, Edge Function, Worker, Shopify release, active n8n workflow, MailerSend configuration or customer send was changed.
