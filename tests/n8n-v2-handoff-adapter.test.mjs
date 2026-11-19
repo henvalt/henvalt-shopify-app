@@ -41,9 +41,8 @@ test("only explicit accepted handoff is completed; ambiguous and security respon
   assert.equal(classifyHandoffResponse(200, {}).outcome, "DEFERRED");
 });
 
-test("checkout and pixel dispatch use distinct opaque-only bodies and finish exactly once", async () => {
+test("checkout and pixel dispatch use distinct opaque-only bodies", async () => {
   const requests = [];
-  const finishes = [];
   const adapter = createV2HandoffAdapter({
     supabaseUrl: "https://project.supabase.co/",
     bearerToken: "x".repeat(32),
@@ -51,7 +50,6 @@ test("checkout and pixel dispatch use distinct opaque-only bodies and finish exa
       requests.push({ url, init, body: JSON.parse(init.body) });
       return new Response(JSON.stringify({ accepted: true, status: "submitted" }), { status: 202 });
     },
-    finishClaim: async (value) => { finishes.push(value); return { finished: true }; },
   });
   const a = await adapter(checkout);
   const b = await adapter(pixel);
@@ -63,27 +61,22 @@ test("checkout and pixel dispatch use distinct opaque-only bodies and finish exa
     assert.deepEqual(Object.keys(request.body).sort(), [request.url.includes("contact") ? "intervention_id" : "opportunity_id"]);
     assert.equal(request.init.headers.authorization, "Bearer " + "x".repeat(32));
   }
-  assert.equal(finishes.length, 2);
-  assert.equal(finishes[0].outcome, "HANDOFF_ACCEPTED");
-  assert.equal(a.lease_finished, true);
-  assert.equal(b.lease_finished, true);
+  assert.equal(a.outcome, "HANDOFF_ACCEPTED");
+  assert.equal(b.outcome, "HANDOFF_ACCEPTED");
   assert.equal(JSON.stringify([a, b]).includes("Bearer"), false);
 });
 
 test("transport errors and malformed provider responses defer without exposing exception data", async () => {
-  const finishes = [];
   const adapter = createV2HandoffAdapter({
     supabaseUrl: "https://project.supabase.co",
     bearerToken: "x".repeat(32),
     fetchImpl: async () => { throw new Error("secret recipient@example.com"); },
-    finishClaim: async (value) => { finishes.push(value); return { finished: true }; },
   });
   const result = await adapter(checkout);
   assert.equal(result.outcome, "DEFERRED");
   assert.equal(result.reason, "handoff_transport_ambiguous");
   assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
-  assert.equal(finishes[0].outcome, "DEFERRED");
-  assert.equal(finishes[0].retry_after_seconds, 3600);
+  assert.equal(result.retry_after_seconds, 3600);
 });
 
 test("adapter refuses non-HTTPS endpoints or missing service credentials", () => {
