@@ -8,7 +8,7 @@ test("V2 Worker forwards untouched bytes through protected Edge ingress without 
  const original=globalThis.fetch;let captured;
  globalThis.fetch=async(url,init)=>{captured={url,init};return Response.json({accepted:true,duplicate:false,status:"RECEIVED"});};
  try{
-  const res=await worker.fetch(req("/shopify/webhooks/"+"a".repeat(64),body),{SUPABASE_WEBHOOK_INGRESS_URL:"https://example.supabase.co/functions/v1/henvalt-shopify-webhook-ingress",HENVALT_INGRESS_AUTH_TOKEN:"internal-token"});
+  const res=await worker.fetch(req("/shopify/webhooks/"+"a".repeat(64),body),{SUPABASE_WEBHOOK_INGRESS_URL:"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-webhook-ingress",HENVALT_INGRESS_AUTH_TOKEN:"internal-token"});
   assert.equal(res.status,200);assert.equal(captured.init.headers.get("authorization"),"Bearer internal-token");
   assert.equal(captured.init.headers.get("x-henvalt-route-token"),"a".repeat(64));assert.deepEqual(new Uint8Array(captured.init.body),body);
   assert.equal(captured.init.headers.get("apikey"),null);
@@ -16,7 +16,7 @@ test("V2 Worker forwards untouched bytes through protected Edge ingress without 
 });
 test("V2 Worker fails closed if Edge ingress does not confirm durable acceptance",async()=>{
  const original=globalThis.fetch;globalThis.fetch=async()=>Response.json({error:"hmac_invalid"},{status:401});
- try{const res=await worker.fetch(req("/shopify/webhooks/"+"b".repeat(64),enc.encode("{}")),{SUPABASE_WEBHOOK_INGRESS_URL:"https://example.supabase.co/functions/v1/henvalt-shopify-webhook-ingress",HENVALT_INGRESS_AUTH_TOKEN:"internal-token"});assert.equal(res.status,401);}
+ try{const res=await worker.fetch(req("/shopify/webhooks/"+"b".repeat(64),enc.encode("{}")),{SUPABASE_WEBHOOK_INGRESS_URL:"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-webhook-ingress",HENVALT_INGRESS_AUTH_TOKEN:"internal-token"});assert.equal(res.status,401);}
  finally{globalThis.fetch=original;}
 });
 test("legacy webhook route remains separately wired to the existing verifier and n8n",async()=>{
@@ -39,7 +39,7 @@ test("V2 Worker enforces the 1 MB limit while streaming before forwarding",async
  const original=globalThis.fetch;let called=false;globalThis.fetch=async()=>{called=true;return Response.json({accepted:true});};
  try{
   const huge=new Uint8Array(1_000_001);
-  const res=await worker.fetch(req("/shopify/webhooks/"+"d".repeat(64),huge),{SUPABASE_WEBHOOK_INGRESS_URL:"https://example.supabase.co/functions/v1/henvalt-shopify-webhook-ingress",HENVALT_INGRESS_AUTH_TOKEN:"internal-token"});
+  const res=await worker.fetch(req("/shopify/webhooks/"+"d".repeat(64),huge),{SUPABASE_WEBHOOK_INGRESS_URL:"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-webhook-ingress",HENVALT_INGRESS_AUTH_TOKEN:"internal-token"});
   assert.equal(res.status,413);assert.equal(called,false);
  }finally{globalThis.fetch=original;}
 });
