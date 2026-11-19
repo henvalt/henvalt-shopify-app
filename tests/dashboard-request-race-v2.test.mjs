@@ -39,6 +39,10 @@ test("account changes clear previous store names and IDs as well as metrics", ()
   assert.match(load, /owner_controlled_shop_connection_required"\)\{\s*clearDashboardData\(\);\s*clearStoreSelection\(\)/);
 });
 
+test("removed selected store clears stale selection and reloads the remaining eligible stores", () => {
+  assert.match(load, /res\.status===404&&data\.error==="store_not_available"\)\{\s*clearDashboardData\(\);\s*clearStoreSelection\(\);\s*await load\(\);\s*return;/);
+});
+
 test("dashboard loading and store-selection feedback are announced accessibly", () => {
   assert.match(dashboard, /id="notice" role="status" aria-live="polite"/);
   assert.match(dashboard, /id="status" aria-live="polite"/);
