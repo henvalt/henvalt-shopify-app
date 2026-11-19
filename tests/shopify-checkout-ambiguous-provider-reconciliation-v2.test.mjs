@@ -1,0 +1,44 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const read=(path)=>readFileSync(new URL(path,import.meta.url),"utf8");
+const outcome=read("../supabase/migrations/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql");
+const edge=read("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts");
+const webhook=read("../supabase/migrations/202611170005_shopify_mailer_provider_events_suppression_v2.sql");
+const workflow=read("../.github/workflows/shopify-identity-v2-validation.yml");
+const sql=read("./sql/shopify-checkout-ambiguous-provider-reconciliation-v2.test.sql");
+
+test("checkout ambiguous result retains the provider message ID without releasing reserved cost",()=>{
+  assert.match(outcome,/WHEN p_outcome='AMBIGUOUS' THEN coalesce\(v_attempt\.provider_message_id,p_provider_message_id\)/);
+  assert.match(outcome,/WHEN p_outcome='SUBMITTED' THEN 'SETTLED'[\s\S]*?WHEN p_outcome='FAILED' THEN 'RELEASED'[\s\S]*?ELSE 'RESERVED'/);
+  assert.match(edge,/record\(attempt,"AMBIGUOUS",messageId\)/);
+  assert.match(edge,/record\(attempt,"AMBIGUOUS",providerMessageId\|\|undefined\)/);
+});
+
+test("AMBIGUOUS can reconcile to SUBMITTED but can never be downgraded to FAILED or change provider identity",()=>{
+  assert.match(outcome,/IF v_attempt\.status='AMBIGUOUS' THEN[\s\S]*?p_outcome NOT IN \('SUBMITTED','AMBIGUOUS'\)/);
+  assert.match(outcome,/v_attempt\.provider_message_id IS DISTINCT FROM p_provider_message_id/);
+  assert.match(outcome,/p_outcome='FAILED' AND p_provider_message_id IS NOT NULL/);
+});
+
+test("signed activity.sent event settles ambiguous checkout attempts whether matched immediately or by reconciliation",()=>{
+  assert.match(outcome,/NEW\.event_type='activity\.sent'[\s\S]*?status='SUBMITTED'[\s\S]*?status='AMBIGUOUS'/);
+  assert.match(outcome,/reconcile_unmatched_shopify_checkout_provider_events_v2/);
+  assert.match(outcome,/e\.processing_status='UNMATCHED'[\s\S]*?e\.provider_message_id IS NOT NULL/);
+  assert.match(outcome,/FOR UPDATE SKIP LOCKED/);
+});
+
+test("late provider suppression events reconcile from the original attempt fingerprint",()=>{
+  for(const type of ["activity.hard_bounced","activity.unsubscribed","activity.spam_complaint"]) assert.ok(outcome.includes(type));
+  assert.match(outcome,/permit_row\.recipient_fingerprint/);
+  assert.match(outcome,/ON CONFLICT\(shopify_connection_id,customer_identity_id,suppression_type,source_provider_event_id\)/);
+});
+
+test("checkout provider reconciliation is service-role-only and does not retry or resend",()=>{
+  assert.match(outcome,/GRANT EXECUTE ON FUNCTION henvalt\.reconcile_unmatched_shopify_checkout_provider_events_v2\(integer\)[\s\S]*?TO service_role/);
+  assert.match(outcome,/automatic_resend_performed',false/);
+  assert.match(outcome,/ambiguous_cost_reservation_released',false/);
+  assert.match(sql,/has_function_privilege\('anon'/);
+  assert.match(workflow,/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2\.sql/);
+});
