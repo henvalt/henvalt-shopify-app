@@ -333,6 +333,16 @@ return {
 
 This sweep is idempotent: it claims the matching attempt before locking the event, maps only the exact provider account + message ID, applies late bounce/unsubscribe/complaint suppression from the original permit fingerprint, and never submits another provider request. If the RPC response is lost, the next scheduled tick is safe; never route this branch to a send node.
 
+After the event sweep, call the second bounded RPC in the same scheduled branch:
+
+- URL: `https://<project>.supabase.co/rest/v1/rpc/mark_stale_shopify_checkout_send_attempts_ambiguous_v2`
+- Same Delivery-held Supabase service-role credential and profile headers.
+- Body: `{ "p_limit": 100 }`
+- The database's default cutoff is two minutes old; do not supply a caller-controlled future cutoff.
+- Validate `accepted === true`, `marked_ambiguous` is an integer from 0 to 100, `automatic_retry_performed === false`, and `provider_cost_reservation_released === false`.
+
+This converts stale checkout attempts left `AUTHORIZED` by a process crash into `AMBIGUOUS`, updates the intervention state, and keeps the provider-cost reservation held. It does not retry. If a delayed response or signed provider event later proves acceptance, the exact message-ID reconciliation can settle it. A definitive result cannot downgrade an already ambiguous attempt to `FAILED`.
+
 ## Mandatory node-level safeguards
 
 - Use only the three existing workflow IDs. This document is not a fourth workflow.
