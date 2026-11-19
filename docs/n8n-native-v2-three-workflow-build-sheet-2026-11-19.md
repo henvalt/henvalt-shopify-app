@@ -1,6 +1,6 @@
 # HENVALT three-workflow V2 native n8n build sheet
 
-Status: implementation specification only. It is not an imported workflow, does not change active workflow versions, and does not authorize activation. Preserve exactly three production workflows. Copy-paste Code-node implementations and per-item pairing rules are maintained in [`n8n/v2-n8n-code-node-snippets.md`](../n8n/v2-n8n-code-node-snippets.md) and exercised by `tests/n8n-v2-code-node-snippets.test.mjs`.
+Status: implementation specification only. It is not an imported workflow, does not change active workflow versions, and does not authorize activation. Preserve exactly three production workflows. Copy-paste Code-node implementations and per-item pairing rules are maintained in [`n8n/v2-n8n-code-node-snippets.md`](../n8n/v2-n8n-code-node-snippets.md) and exercised by `tests/n8n-v2-code-node-snippets.test.mjs`. The finish-acknowledgement node must read `$input.item.json` in per-item mode (not `$input.first().json`), so a multi-claim batch cannot reuse the first HTTP response for later leases.
 
 ## Topology and ownership
 
