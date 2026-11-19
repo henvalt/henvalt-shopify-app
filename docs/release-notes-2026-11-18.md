@@ -80,3 +80,31 @@ Shopify protected customer data approval, provider/sender/billing setup,
 real consent-eligible end-to-end recovery and attribution, privacy export/
 redaction completion, dashboard deployment and operational rollback remain
 open. This branch is not launch-ready.
+
+## 19 November — trusted recovery message and provider-safety batch
+
+- Added migration 044 with service-role-only
+  `resolve_shopify_recovery_message_context_v2(work_type,work_id)`. It
+  returns only a canonical exact-store domain and an allowlisted recovery
+  opportunity type; it returns no customer PII, secrets or delivery authority.
+- Added the shared server-side `recovery-message-v2.mjs` renderer for checkout,
+  cart and browse copy. The only merchant-specific display value is the
+  verified sender name, escaped before HTML insertion.
+- Changed checkout and pixel delivery endpoints to accept only their opaque
+  work identifier. Caller-provided subject, HTML, text and other extra fields
+  are rejected. n8n no longer owns message rendering.
+- Added an exact verified MailerSend sender-domain preflight. Both HTML and
+  plain-text unsubscribe insertion must be enabled; missing/unavailable
+  settings block the send. All three templates include MailerSend's
+  `{{unsubscribe}}` placeholder.
+- Hardened checkout provider ambiguity to match the pixel path: network errors,
+  408/5xx, missing message IDs and post-request ledger errors are AMBIGUOUS,
+  preserve cost reservation and cannot be blindly retried.
+- Added a disposable PostgreSQL exact-store pixel message-context assertion
+  to the concurrent work-claim fixture and expanded Node regression coverage
+  for escaping, safe domains, opaque-only inputs and unsubscribe settings.
+
+The renderer intentionally links to the canonical Shopify store root rather
+than fabricating a checkout permalink. Product-level personalization and
+checkout deep links remain future work requiring a trusted exact-store source.
+The n8n production workflows remain unchanged; no provider send occurred.
