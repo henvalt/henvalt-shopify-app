@@ -89,35 +89,83 @@ export function renderRecoveryMessageV2({ shopDomain, opportunityType, brandName
 }
 
 /**
- * MailerSend only expands {{unsubscribe}} when tracking is enabled for the
- * verified sending domain. Fail closed if the account/domain cannot prove
- * both HTML and plain-text unsubscribe insertion are enabled.
+ * Verify the exact sender domain's unsubscribe settings AND the active V2
+ * signed webhook registration before any recovery submission. The operator
+ * readiness flag is checked separately by each Edge Function; this API
+ * preflight verifies that the account currently points this domain to the
+ * expected V2 endpoint with every event needed for reconciliation/suppression.
  */
-export async function mailerSendUnsubscribeReady(apiToken, senderEmail, fetcher = fetch) {
+export async function mailerSendV2DeliveryReady(apiToken, senderEmail, providerAccountKey, supabaseUrl, fetcher = fetch) {
   if (typeof apiToken !== "string" || apiToken.length < 20 ||
-      typeof senderEmail !== "string" || !/^[^\s@<>]+@[^\s@<>]+$/.test(senderEmail)) return false;
+      typeof senderEmail !== "string" || !/^[^\s@<>]+@[^\s@<>]+$/.test(senderEmail) ||
+      typeof providerAccountKey !== "string" || !/^[A-Za-z0-9_-]{24,96}$/.test(providerAccountKey) ||
+      typeof supabaseUrl !== "string") return false;
+
   const senderDomain = senderEmail.slice(senderEmail.lastIndexOf("@") + 1).toLowerCase();
   if (!/^[a-z0-9.-]+$/.test(senderDomain) || senderDomain.startsWith(".") || senderDomain.endsWith(".")) return false;
-  let response;
+
+  let expectedWebhookUrl;
   try {
-    response = await fetcher("https://api.mailersend.com/v1/domains?limit=100", {
-      method: "GET",
-      headers: { authorization: "Bearer " + apiToken, accept: "application/json" },
-      signal: AbortSignal.timeout(8000),
+    const base = new URL(supabaseUrl);
+    if (base.protocol !== "https:" || base.username || base.password ||
+        base.pathname !== "/" || base.search || base.hash) return false;
+    expectedWebhookUrl = base.origin + "/functions/v1/henvalt-mailersend-webhook-v2/" +
+      encodeURIComponent(providerAccountKey);
+  } catch {
+    return false;
+  }
+
+  const headers = { authorization: "Bearer " + apiToken, accept: "application/json" };
+  let domainsResponse;
+  try {
+    domainsResponse = await fetcher("https://api.mailersend.com/v1/domains?limit=100", {
+      method: "GET", headers, signal: AbortSignal.timeout(8000),
     });
   } catch {
     return false;
   }
-  if (!response?.ok) return false;
-  let payload;
-  try { payload = await response.json(); } catch { return false; }
-  if (!Array.isArray(payload?.data)) return false;
-  const domain = payload.data.find((entry) =>
+  if (!domainsResponse?.ok) return false;
+  let domainsPayload;
+  try { domainsPayload = await domainsResponse.json(); } catch { return false; }
+  if (!Array.isArray(domainsPayload?.data)) return false;
+  const domain = domainsPayload.data.find((entry) =>
     typeof entry?.name === "string" && entry.name.toLowerCase() === senderDomain
   );
   const settings = domain?.domain_settings;
-  return domain?.is_verified === true &&
-    settings?.track_unsubscribe === true &&
-    settings?.track_unsubscribe_html_enabled === true &&
-    settings?.track_unsubscribe_plain_enabled === true;
+  if (typeof domain?.id !== "string" || domain.is_verified !== true ||
+      settings?.track_unsubscribe !== true ||
+      settings?.track_unsubscribe_html_enabled !== true ||
+      settings?.track_unsubscribe_plain_enabled !== true) return false;
+
+  let webhooksResponse;
+  try {
+    const query = new URLSearchParams({ domain_id: domain.id, limit: "100" });
+    webhooksResponse = await fetcher("https://api.mailersend.com/v1/webhooks?" + query.toString(), {
+      method: "GET", headers, signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    return false;
+  }
+  if (!webhooksResponse?.ok) return false;
+  let webhooksPayload;
+  try { webhooksPayload = await webhooksResponse.json(); } catch { return false; }
+  if (!Array.isArray(webhooksPayload?.data)) return false;
+
+  const requiredEvents = [
+    "activity.sent",
+    "activity.delivered",
+    "activity.soft_bounced",
+    "activity.hard_bounced",
+    "activity.unsubscribed",
+    "activity.spam_complaint",
+    "activity.opened",
+    "activity.clicked",
+  ];
+  return webhooksPayload.data.some((webhook) =>
+    webhook?.enabled === true &&
+    webhook?.version === 2 &&
+    webhook?.url === expectedWebhookUrl &&
+    Array.isArray(webhook?.events) &&
+    requiredEvents.every((event) => webhook.events.includes(event))
+  );
 }
