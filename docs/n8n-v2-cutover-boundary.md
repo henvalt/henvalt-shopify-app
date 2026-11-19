@@ -219,8 +219,34 @@ graphs or the live MailerSend webhook route.
 
 ## 10. Read-only inspection of the active workflow graphs — 19 November 2026
 
-The connected n8n service was inspected again in read-only mode. The active
-versions and graph paths confirm that the current runtime is still legacy:
+The connected n8n service was inspected again in read-only mode. Exact active
+workflow versions at inspection time:
+
+| Workflow | Workflow ID | Active version | Updated |
+|---|---|---|---|
+| HENVALT_INGEST | `VTpfGKNtu1CSQ4Rv` | `6368d539-708f-494a-8be8-b9601d0e8607` | 13 Nov 2026 |
+| HENVALT_RECOVERY | `3GEDoeCA4paXTaDF` | `32e50bf7-4cbd-4070-bbba-f259ed17b369` | 14 Nov 2026 |
+| HENVALT_DELIVERY | `CvVyybGJZSnklxiZ` | `621ae6ce-a006-4fed-a70e-acf774c360fb` | 14 Nov 2026 |
+
+All three are active. The active graphs confirm that the current runtime is
+still legacy:
+
+### Active HENVALT_INGEST
+
+The current graph has a public-facing webhook path `henvalt/ingest`, performs
+Shopify HMAC verification, resolves the legacy tenant, writes canonical
+events and checkout projections, and also handles order projection,
+attribution, stopping recovery after an order, uninstall deactivation,
+payment-order reconciliation and refund/revenue adjustments.
+
+This overlaps responsibilities now implemented by the V2 Shopify Worker /
+Edge Function receipt and projection path. The cutover must assign each
+Shopify topic/store to exactly one authoritative ingress and projection
+path. Do not globally disable HENVALT_INGEST: legacy stores and payment/
+refund/uninstall responsibilities may still depend on it. Conversely, do not
+send the same V2 event to both paths without an idempotent, explicitly tested
+handoff.
+
 
 ### Active HENVALT_RECOVERY
 
