@@ -179,6 +179,17 @@ BEGIN
       WHEN 'activity.hard_bounced' THEN 'HARD_BOUNCE'
       ELSE NULL END;
 
+    IF v_suppression_type IS NOT NULL AND NOT EXISTS (
+      SELECT 1 FROM henvalt.shopify_delivery_permits_v2 permit_row
+      WHERE permit_row.send_attempt_id=v_attempt.id
+        AND permit_row.tenant_id=v_attempt.tenant_id
+        AND permit_row.shopify_connection_id=v_attempt.shopify_connection_id
+        AND pg_catalog.octet_length(permit_row.recipient_fingerprint)=32
+    ) THEN
+      -- Do not mark a suppression event processed without the original recipient fingerprint.
+      CONTINUE;
+    END IF;
+
     IF v_event.event_type='activity.sent' THEN
       UPDATE henvalt.shopify_recovery_send_attempt_v2
       SET status='SUBMITTED',submitted_at=coalesce(submitted_at,pg_catalog.now()),updated_at=pg_catalog.now()
