@@ -193,6 +193,30 @@ BEGIN
     WHERE id=v_order_id AND financial_status='partially_refunded'
   ) THEN RAISE EXCEPTION 'Partial refund did not update order financial status'; END IF;
 
+  -- A distinct verified receipt with the same refund ID but altered
+  -- financial facts must be rejected, never overwrite the original ledger row.
+  v_body:='{"id":333,"order_id":987654,"created_at":"2026-11-17T11:00:00Z","transactions":[{"id":1,"kind":"refund","status":"success","amount":"35.00","currency":"GBP"}]}';
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
+    v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-b.myshopify.com','refunds/create','refund-delivery-b-conflict','refund-event-b-conflict'
+  );
+  IF v_result.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Conflicting refund receipt was not durably received'; END IF;
+  v_projection:=henvalt.project_verified_shopify_refund_v2(v_token,'refund-delivery-b-conflict',encode(convert_to(v_body,'UTF8'),'base64'));
+  IF v_projection->>'accepted'<>'true' OR v_projection->>'status'<>'REJECTED'
+     OR v_projection->>'code'<>'REFUND_ID_PAYLOAD_CONFLICT' THEN
+    RAISE EXCEPTION 'Conflicting refund ID was not rejected: %',v_projection;
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_order_refund_adjustments_v2
+    WHERE shopify_connection_id=(SELECT id FROM henvalt.shopify_connections WHERE shop_domain='store-b.myshopify.com')
+      AND shopify_refund_id='333' AND refund_amount=25.00
+  ) THEN RAISE EXCEPTION 'Conflicting refund replay overwrote the original adjustment'; END IF;
+
+  -- Restore the original payload for the exact duplicate-delivery assertion.
+  v_body:='{"id":333,"order_id":987654,"created_at":"2026-11-17T11:00:00Z","transactions":[{"id":1,"kind":"refund","status":"success","amount":"25.00","currency":"GBP"}]}';
+  v_hmac:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+
   -- Duplicate delivery of the same refund cannot double-count the adjustment.
   SELECT * INTO v_result FROM henvalt.accept_shopify_webhook_v2(
     v_token,v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
