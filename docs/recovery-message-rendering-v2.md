@@ -97,3 +97,23 @@ Both V2 delivery functions also require `HENVALT_V2_MAILERSEND_EVENTS_READY=true
 These tests validate candidate code only. They do not establish live
 MailerSend domain settings, production schema parity, a real recovery message,
 or active n8n integration.
+
+## MailerSend webhook URL-validation ping
+
+Migration 046 corrects a fixed-secret mismatch in the earlier candidate
+provider-event ingress. MailerSend sends a `webhook.test` ping when a webhook
+URL is registered/updated and signs that ping with the documented fixed test
+secret. The earlier candidate migration had a mistyped value, which would
+reject the provider's URL-validation request.
+
+The new wrapper intercepts only `webhook.test`, verifies the exact documented
+test signature in constant time, confirms the provider account is ACTIVE or
+PENDING, returns `WEBHOOK_TEST_VERIFIED`, and does not persist a provider
+event. Every non-test event is delegated unchanged to the prior V2 signed
+ingress function, which still verifies the account-specific Vault signing
+secret and performs the normal inbox/reconciliation flow.
+
+The disposable PostgreSQL fixture computes the documented test signature,
+asserts the URL-validation response, and verifies that no provider-event row
+was inserted. It also verifies the wrapper rejects malformed/invalid
+signatures through the same service-only RPC boundary.
