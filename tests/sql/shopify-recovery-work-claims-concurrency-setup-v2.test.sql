@@ -14,7 +14,7 @@ DECLARE
  v_connection uuid; v_customer uuid; v_app_key text;
  v_inbox uuid; v_session uuid; v_candidate uuid; v_opportunity uuid; v_message_context jsonb;
  v_receipt uuid; v_checkout uuid; v_checkout_candidate uuid; v_checkout_opportunity uuid;
- v_intervention uuid; v_materialized jsonb;
+ v_intervention uuid; v_materialized jsonb; v_checkout_token text;
 BEGIN
  SELECT id,app_key INTO v_connection,v_app_key
  FROM henvalt.shopify_connections
@@ -86,14 +86,14 @@ BEGIN
   RAISE EXCEPTION 'Checkout message-context fixture requires an existing verified Store B receipt';
  END IF;
 
+ v_checkout_token:='message-context-token-'||gen_random_uuid()::text;
  INSERT INTO henvalt.shopify_checkout_identity_v2(
   tenant_id,shopify_connection_id,shopify_checkout_id,checkout_token,
   shopify_checkout_token,customer_identity_id,source_delivery_id,
   checkout_status,created_at,updated_at
  ) VALUES(
   v_tenant,v_connection,'message-context-checkout-'||gen_random_uuid()::text,
-  'message-context-token-'||gen_random_uuid()::text,
-  'message-context-token-'||gen_random_uuid()::text,
+  v_checkout_token,v_checkout_token,
   v_customer,v_receipt,'OPEN',now()-interval '2 hours',now()-interval '2 hours'
  ) RETURNING id INTO v_checkout;
 
