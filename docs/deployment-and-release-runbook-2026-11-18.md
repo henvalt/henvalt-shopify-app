@@ -150,3 +150,8 @@ The current decision is **HOLD / NOT LAUNCH-READY**. This runbook does not
 grant deployment authority.
 
 The OAuth V2 callback runtime secret is now validated against the exact callback route and Supabase project origin; a merely non-empty or mismatched redirect secret is not accepted. This is source-level fail-closed validation, not proof of the deployed secret value.
+
+
+## Supabase Edge gateway JWT settings for Shopify callbacks
+
+The candidate `supabase/config.toml` explicitly sets `verify_jwt = false` for `henvalt-shopify-oauth-v2`, `henvalt-shopify-privacy-v2`, and `henvalt-shopify-webhook-ingress`. These routes cannot use Supabase's gateway JWT because Shopify OAuth redirects/compliance callbacks and the Worker ingress carry their own protocol credentials. This is safe only because the handlers enforce merchant bearer validation for install initiation, OAuth state + Shopify HMAC on callback, app-specific raw-body HMAC for privacy, and the dedicated Worker bearer plus SQL-verified Shopify HMAC for ingress. A regression test now checks the configuration. Do not disable gateway JWT on other functions without a separately reviewed in-handler authentication contract.
