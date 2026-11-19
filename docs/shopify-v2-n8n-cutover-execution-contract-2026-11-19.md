@@ -43,7 +43,7 @@ Migrations 042–043 establish the shared claims and checkout materializer. Migr
 
 - Claim output is opaque work identity and lease metadata only; it must not contain recipient email or message body.
 - Work types are exactly `CHECKOUT_INTERVENTION` and `PIXEL_OPPORTUNITY`.
-- A claim's tenant/store/work type/lease identity must be retained as correlation metadata, not treated as authorization.
+- The private database lease row retains tenant/store/work/lease lineage. n8n receives only the three opaque claim fields and must never treat them as delivery authorization.
 - Checkout delivery receives `intervention_id`; pixel delivery receives `opportunity_id`.
 - Never derive a pixel intervention or checkout identity from the other work type.
 - Every claimed item must reach exactly one finish outcome: `HANDOFF_ACCEPTED`, `TERMINAL`, or `DEFERRED`.
