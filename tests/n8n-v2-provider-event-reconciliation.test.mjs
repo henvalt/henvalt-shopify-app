@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createV2ProviderEventReconciliationRuntime } from "../n8n/v2-provider-event-reconciliation-runtime.mjs";
+import { readFileSync } from "node:fs";
+const n8nSpec=readFileSync(new URL("../n8n/v2-n8n-code-node-snippets.md",import.meta.url),"utf8");
 
 test("Delivery provider-event reconciliation calls only the bounded service RPC",async()=>{
   const calls=[];
@@ -53,4 +55,11 @@ test("Delivery reconciliation fails closed when the RPC acknowledgement is lost"
     fetchImpl:async()=>new Response("not-json",{status:200}),
   });
   await assert.rejects(()=>runtime.reconcile(),/supabase_rpc_failed/);
+});
+
+test("reconciliation is a scheduled branch inside existing Delivery, not a fourth workflow",()=>{
+  assert.match(n8nSpec,/Periodic checkout provider-event reconciliation \(same Delivery workflow\)/);
+  assert.match(n8nSpec,/do not create another workflow/);
+  assert.match(n8nSpec,/reconcile_unmatched_shopify_checkout_provider_events_v2/);
+  assert.match(n8nSpec,/automatic_resend_performed !== false/);
 });
