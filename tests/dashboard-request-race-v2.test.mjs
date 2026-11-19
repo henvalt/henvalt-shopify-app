@@ -33,7 +33,7 @@ test("store changes and failed dashboard requests clear previously rendered merc
 
 test("account changes clear previous store names and IDs as well as metrics", () => {
   assert.match(dashboard, /function clearStoreSelection\(\)/);
-  assert.match(dashboard, /ownerUserId!==nextUserId\)\{cancelDashboardLoad\(\);clearDashboardData\(\);clearStoreSelection\(\)\}/);
+  assert.match(dashboard, /nextUserId!==ownerUserId\)\{cancelDashboardLoad\(\);clearDashboardData\(\);clearStoreSelection\(\)\}/);
   assert.match(ownerState, /clearDashboardData\(\);clearStoreSelection\(\)/);
   assert.match(load, /owner_controlled_shop_connection_required"\)\{\s*clearDashboardData\(\);\s*clearStoreSelection\(\)/);
 });
