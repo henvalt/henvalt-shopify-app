@@ -50,9 +50,9 @@ BEGIN
     RAISE EXCEPTION 'Dashboard revenue series has incorrect UTC date buckets: %',v_series;
   END IF;
   IF EXISTS (
-    SELECT 1 FROM jsonb_array_elements(v_series) day
-    WHERE (day->>'amount')::numeric<>0
-       OR day->>'currencyMixed' IS DISTINCT FROM 'false'
+    SELECT 1 FROM jsonb_array_elements(v_series) AS days(value)
+    WHERE (value->>'amount')::numeric<>0
+       OR value->>'currencyMixed' IS DISTINCT FROM 'false'
   ) THEN
     RAISE EXCEPTION 'Empty daily revenue buckets must be zero and single-currency: %',v_series;
   END IF;
