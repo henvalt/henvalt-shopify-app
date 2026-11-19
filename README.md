@@ -158,14 +158,18 @@ Known function environment names in this repository include:
 | Function / boundary | Required environment names |
 |---|---|
 | Legacy Shopify OAuth | `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_REDIRECT_URI`; optional `SHOPIFY_SCOPES` |
-| Checkout delivery V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HENVALT_DELIVERY_AUTH_TOKEN` |
-| Pixel delivery V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HENVALT_PIXEL_DELIVERY_AUTH_TOKEN` |
+| Checkout delivery V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HENVALT_DELIVERY_AUTH_TOKEN`, `HENVALT_V2_MAILERSEND_EVENTS_READY=true` after verified signed-event cutover |
+| Pixel delivery V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `HENVALT_PIXEL_DELIVERY_AUTH_TOKEN`, `HENVALT_V2_MAILERSEND_EVENTS_READY=true` after verified signed-event cutover |
 | MailerSend webhook V2 | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` |
 | Merchant dashboard | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_ANON_KEY` |
 | Shopify-session dashboard | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` |
 
 The V2 delivery bearer tokens must be high-entropy, independently generated
 secrets. Do not reuse one token across the checkout and pixel endpoints.
+Both delivery functions fail closed unless `HENVALT_V2_MAILERSEND_EVENTS_READY`
+is explicitly set to `true` after MailerSend's signed event URL has been
+verified to route through the V2 webhook reconciler. Do not set this flag while
+the active legacy n8n event route is still processing the same events.
 Do not place secret values in this README, app TOML, Worker vars, browser code,
 n8n item payloads or GitHub source.
 
@@ -234,6 +238,7 @@ configuration.
    for the three existing n8n workflows. Prevent duplicate V1/V2 ingestion or
    sends.
 4. **Message rendering and unsubscribe configuration:** the candidate now has a server-side allowlisted renderer and opaque-ID-only delivery contracts. Its CTA points to the verified Shopify store root, not a checkout deep link. Configure and verify MailerSend unsubscribe tracking for the exact sender domain before any controlled send.
+5. **Signed provider-event cutover:** the V2 delivery functions now require `HENVALT_V2_MAILERSEND_EVENTS_READY=true`. The active legacy n8n MailerSend event route must be replaced with the V2 signed webhook route, with no duplicate event processing, before this flag may be set.
 5. **Provider and billing readiness:** configure an owner-controlled
    MailerSend account, verified sender, Vault references, provider cost and
    merchant-funded caps. Confirm the performance percentage and billing
