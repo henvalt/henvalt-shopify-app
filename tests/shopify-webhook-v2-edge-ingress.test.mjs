@@ -21,3 +21,9 @@ test("Order lifecycle topics require exact-store projection before acknowledgeme
  assert.match(src,/project_verified_shopify_order_v2/);
  assert.match(src,/order_projection_unavailable/);
 });
+
+test("Edge ingress uses the shared streaming byte-bounded reader",()=>{
+ assert.match(src,/readBoundedBody\(req,1_000_000\)/);
+ assert.match(src,/RequestBodyError/);
+ assert.doesNotMatch(src,/await req\\.arrayBuffer\\(\\)/);
+});
