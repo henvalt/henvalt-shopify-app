@@ -27,7 +27,12 @@ test("renderer escapes sender-controlled branding and rejects untrusted domains 
     brandName: '<img src=x onerror="alert(1)">',
   });
   assert.doesNotMatch(message.html, /<img src=x/);
-  assert.match(message.html, /&lt;img src=x onerror=&quot;alert(1)&quot;&gt;/);
+  assert.equal(message.html.includes('&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'), true);
+  assert.throws(() => renderRecoveryMessageV2({
+    shopDomain: "merchant-.myshopify.com",
+    opportunityType: "ABANDONED_CART",
+    brandName: "Store",
+  }), /verified Shopify store domain/);
   assert.throws(() => renderRecoveryMessageV2({
     shopDomain: "attacker.example",
     opportunityType: "ABANDONED_CART",
