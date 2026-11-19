@@ -97,6 +97,7 @@ test("service RPC client uses isolated service-role headers and rejects malforme
   assert.equal(requests[0].init.headers["content-profile"], "henvalt");
   assert.equal(requests[0].init.headers.authorization, "Bearer " + "s".repeat(40));
   await assert.rejects(rpc("bad-name;drop", {}), /invalid_rpc_call/);
+  await assert.rejects(rpc("delete_all_records", {}), /invalid_rpc_call/);
 });
 
 test("lease finisher converts bounded seconds to PostgreSQL interval and checks RPC result", async () => {
