@@ -262,6 +262,7 @@ configuration.
 
 - [Integrated launch execution and verified live baseline](docs/launch-readiness-execution-2026-11-18.md)
 - [Three-workflow V2 cutover boundary](docs/n8n-v2-cutover-boundary.md)
+- [Trusted recovery message rendering and unsubscribe contract](docs/recovery-message-rendering-v2.md)
 - [Checkout recovery eligibility](docs/shopify-checkout-recovery-eligibility-v2.md)
 - [Contact resolution and delivery boundary](docs/shopify-contact-resolution-delivery-v2.md)
 - [Exact-store revenue attribution](docs/shopify-exact-store-revenue-attribution-v2.md)
