@@ -115,3 +115,38 @@ test("lease finisher converts bounded seconds to PostgreSQL interval and checks 
   assert.equal(calls[0].args.p_retry_after, "3600 seconds");
   await assert.rejects(finish({ lease_id: "x", worker_id: "w", outcome: "DEFERRED", retry_after_seconds: 86401 }), /invalid_retry_interval/);
 });
+
+
+test("duplicate work items in a claimed batch are rejected before a second handoff", async () => {
+  const item = {
+    work_type: "CHECKOUT_INTERVENTION",
+    work_id: "11111111-1111-4111-8111-111111111111",
+    lease_id: "22222222-2222-4222-8222-222222222222",
+  };
+  let handoffs = 0;
+  let finishes = 0;
+  await assert.rejects(runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, items: [item, item] }
+      : { accepted: true },
+    handoff: async claim => { handoffs++; return { ...claim, outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 }; },
+    finishClaim: async () => { finishes++; return { finished: true }; },
+  }), /v2_duplicate_claim_item/);
+  assert.equal(handoffs, 1);
+  assert.equal(finishes, 1);
+});
+
+test("claim RPC cannot return more items than the configured bound", async () => {
+  let handoffs = 0;
+  await assert.rejects(runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    limits: { claimLimit: 1 },
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, items: [{}, {}] }
+      : { accepted: true },
+    handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
+    finishClaim: async () => ({ finished: true }),
+  }), /v2_claim_items_invalid/);
+  assert.equal(handoffs, 0);
+});
