@@ -87,3 +87,7 @@ The manual one-off send branch was not executed. It is a production safety block
 The new composed tests are deliberately offline: fake fetch handles every RPC and Edge Function response, and the tests fail on any unexpected network target. They do not prove live Supabase/n8n/MailerSend integration.
 
 No live n8n workflow, active version, Supabase project, Edge Function, Shopify app or MailerSend configuration was modified during this work.
+
+### Execution-data privacy review
+
+The read-only workflow details expose only the basic workflow settings (execution order, binary mode, time-saved mode and caller policy); they do not expose a verified execution-retention/redaction policy. No explicit redaction/sanitization nodes were found in the three active graphs. Because Ingest and Recovery process customer/event payloads and legacy Delivery can carry recipient/message fields, execution-data retention and redaction remain **unverified launch blockers**. Do not assume that workflow settings alone prove PII is not retained. Before launch, inspect the instance-level execution retention and redaction configuration, minimize saved successful/failed execution data, and verify logs/errors contain no customer payloads, credentials, message bodies or recipient values.
