@@ -99,11 +99,21 @@ BEGIN
   RAISE EXCEPTION 'Concurrent worker received an already leased opportunity: %',v_claim;
  END IF;
  v_finish:=henvalt.finish_shopify_recovery_work_claim_v2(
-  v_lease_id,'test-worker-a','DEFERRED',interval '0 seconds'
+  v_lease_id,'test-worker-a','DEFERRED',interval '1 hour'
  );
  IF v_finish->>'finished'<>'true' OR v_finish->>'outcome'<>'DEFERRED' THEN
   RAISE EXCEPTION 'Pixel work lease could not be safely deferred: %',v_finish;
  END IF;
+ v_claim:=henvalt.claim_shopify_recovery_work_v2('test-worker-b',10,120);
+ IF EXISTS(
+  SELECT 1 FROM jsonb_array_elements(v_claim->'items') AS x(item)
+  WHERE x.item->>'work_id'=v_opportunity::text
+ ) THEN
+  RAISE EXCEPTION 'Deferred work was reclaimed before its retry deadline: %',v_claim;
+ END IF;
+ UPDATE henvalt.shopify_recovery_work_claims_v2
+ SET next_attempt_at=now()-interval '1 second'
+ WHERE id=v_lease_id AND last_result='DEFERRED' AND completed_at IS NULL;
  v_claim:=henvalt.claim_shopify_recovery_work_v2('test-worker-b',10,120);
  SELECT (x.item->>'lease_id')::uuid INTO v_retry_lease_id
  FROM jsonb_array_elements(v_claim->'items') AS x(item)
