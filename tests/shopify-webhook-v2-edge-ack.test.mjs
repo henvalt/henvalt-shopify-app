@@ -34,3 +34,10 @@ test("Edge ingress bounds RPC responses and applies a finite RPC deadline",()=>{
  assert.match(src,/maxBytes = 32_768/);
  assert.match(src,/Webhook RPC response rejected/);
 });
+
+
+test("Edge ingress converts RPC transport exceptions into a bounded fail-closed result",()=>{
+ assert.match(src,/catch\s*\{\s*console\.error\("Webhook RPC transport failed", name\)/);
+ assert.match(src,/return \{ ok: false, row: null \};/);
+ assert.doesNotMatch(src,/console\.error\([^\n]*(error\.message|error\.stack|SERVICE_ROLE_KEY)/i);
+});
