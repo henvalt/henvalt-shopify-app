@@ -226,6 +226,11 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql
 
+      - name: Exercise exact-store app uninstall stop boundary
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-exact-store-uninstall-processor-v2.test.sql
+
       - name: Exercise exact-store shop/redact stop boundary
         env:
           PGPASSWORD: postgres
