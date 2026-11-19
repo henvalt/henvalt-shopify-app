@@ -62,11 +62,17 @@ export function createSupabaseLeaseFinisher({ rpc }) {
         !Number.isInteger(seconds) || seconds < 0 || seconds > 86400) {
       throw new TypeError("invalid_retry_interval");
     }
-    return await rpc("finish_shopify_recovery_work_claim_v2", {
+    const result = await rpc("finish_shopify_recovery_work_claim_v2", {
       p_lease_id: lease_id,
       p_worker_id: worker_id,
       p_outcome: outcome,
       p_retry_after: `${seconds} seconds`,
     });
+    // A boolean success alone is not enough: the database must echo the exact
+    // terminal/deferred outcome that Recovery asked it to commit.
+    if (result?.finished !== true || result?.outcome !== outcome) {
+      return { finished: false, code: "FINISH_ACK_MISMATCH" };
+    }
+    return result;
   };
 }
