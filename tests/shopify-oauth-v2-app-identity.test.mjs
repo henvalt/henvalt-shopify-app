@@ -17,6 +17,8 @@ test("OAuth health reports ready only when an active Vault-backed app identity r
   const health = source.slice(healthStart, healthEnd);
   assert.match(health, /resolveAppIdentity\(\)/);
   assert.match(health, /app_identity_ready: ready/);
+  assert.match(health, /const ready = identity !== null/);
+  assert.match(health, /return json\(ready \? 200 : 503/);
   assert.match(health, /configured: false, app_identity_ready: false/);
   assert.doesNotMatch(health, /shopify_api_secret|appKey|clientId/);
 });
