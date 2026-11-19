@@ -2,18 +2,18 @@
 
 **Disposition: REVIEW REQUIRED — NOT APPROVED FOR PRODUCTION.**
 
-This register is a source-level inventory of the 59 candidate migration files listed by the identity V2 CI workflow. It records the principal object/operation surface and identifies migrations requiring heightened production-parity review. It is not a substitute for a complete SQL semantic review, production schema comparison, historical-row disposition, or replay against a restorable production-like clone. The current live database baseline recorded in the 19 November readiness review is 178 migrations ending at `20261114174204`; none of this candidate chain is recorded as production-applied.
+This register is a source-level inventory of the 60 candidate migration files listed by the identity V2 CI workflow. It records the principal object/operation surface and identifies migrations requiring heightened production-parity review. It is not a substitute for a complete SQL semantic review, production schema comparison, historical-row disposition, or replay against a restorable production-like clone. The current live database baseline recorded in the 19 November readiness review is 178 migrations ending at `20261114174204`; none of this candidate chain is recorded as production-applied.
 
 ## Review rules
 
-- Treat all 59 migrations as unapplied candidate SQL. CI applies them only to a disposable baseline.
+- Treat all 60 migrations as unapplied candidate SQL. CI applies them only to a disposable baseline.
 - `CREATE TABLE IF NOT EXISTS` does not prove an existing production table has the expected columns, constraints, indexes, owner, RLS or grants.
 - Every `CREATE OR REPLACE FUNCTION` requires signature, owner, SECURITY DEFINER, search_path, dependency and EXECUTE-grant comparison against production.
 - Every ALTER/DROP/trigger replacement requires an object-existence check and a before/after data and behavior comparison.
 - Do not run this chain against production as a diagnostic. Use a restorable clone first.
 - The CI workflow's filename list is the source of truth for ordering; do not infer order from filesystem sorting.
 
-## Ordered 59-file inventory
+## Ordered 60-file inventory
 
 | # | Migration | Primary surface / operation class | Production-parity focus |
 |---:|---|---|---|
@@ -77,16 +77,17 @@ This register is a source-level inventory of the 59 candidate migration files li
 | 57 | `202611190003_mailersend_webhook_test_signature_v2.sql` | Alters MailerSend webhook function and replaces signature verification behavior | **High risk:** raw-body signature compatibility, secret source, constant-time comparison and legacy receiver coexistence |
 | 58 | `202611190004_shopify_checkout_candidate_terminal_state_v2.sql` | Replaces checkout candidate refresh RPC to preserve converted/closed/inactive terminal states | Terminal-state monotonicity, same-store order conversion, closed checkout handling and service-role-only execution |
 | 59 | `202611190005_shopify_checkout_provider_submission_gate_v2.sql` | Adds final checkout provider-submission authorization RPC after single-use permit consumption | **High risk:** exact connection lock ordering with uninstall processor, attempt/permit/reservation lineage, current app/tenant/checkout/consent/suppression/privacy/sender/billing state and service-role-only execution |
+| 60 | `202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql` | Preserves checkout provider message identity on ambiguous outcomes; reconciles late signed MailerSend events and suppression signals | **High risk:** AUTHORIZED/AMBIGUOUS/SUBMITTED monotonicity, exact provider/message/attempt mapping, suppression fingerprint lineage, reservation settlement, duplicate event idempotency and service-role-only execution |
 
 ## Count and verification
 
-The workflow's explicit ordered shell list contains **59 distinct migration paths**. The step label was stale and has been corrected to “Apply candidate migrations 001 through 059”. The final files are `202611190004_shopify_checkout_candidate_terminal_state_v2.sql` and `202611190005_shopify_checkout_provider_submission_gate_v2.sql`; filename suffixes are date-bucket sequences, not the total chain count.
+The workflow's explicit ordered shell list contains **60 distinct migration paths**. The step label was stale and has been corrected to “Apply candidate migrations 001 through 060”. The final files are `202611190004_shopify_checkout_candidate_terminal_state_v2.sql`, `202611190005_shopify_checkout_provider_submission_gate_v2.sql` and `202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql`; filename suffixes are date-bucket sequences, not the total chain count.
 
 This is still a source-level operation inventory, not a production approval. The complete chain must be reviewed against a production-like restored clone, including all historical data, grants, RLS, trigger dependencies, locks and post-migration verification.
 
 ## Connected production parity observations — read-only, 19 November 2026
 
-The connected production project was queried read-only after the 59-file manifest correction:
+The connected production project was queried read-only after the 60-file manifest correction:
 
 - Migration history: **178 applied migrations**, latest `20261114174204`.
 - Candidate V2 objects: **0 of 18 sampled candidate tables** and **0 of 6 sampled candidate RPCs** exist in the live `henvalt` schema.
@@ -104,4 +105,4 @@ The connected production project was queried read-only after the 59-file manifes
 2. For each legacy customer/session/alias/checkout/event, produce a disposition: exact connection mapped from trusted source evidence, retained as legacy-only, quarantined, or manually reconciled. Do not auto-backfill unresolved records.
 3. Inspect the four existing Shopify connections and app ownership before assigning any `app_key`; require an owner-controlled Shopify app identity.
 4. Expire or otherwise explicitly disposition stale OAuth state rows before enabling the V2 app-aware OAuth finalizer.
-5. Replay all 59 migrations on a restorable clone of this exact schema and data snapshot; capture constraints, indexes, function ACLs, RLS, triggers, execution time and row diffs.
+5. Replay all 60 migrations on a restorable clone of this exact schema and data snapshot; capture constraints, indexes, function ACLs, RLS, triggers, execution time and row diffs.
