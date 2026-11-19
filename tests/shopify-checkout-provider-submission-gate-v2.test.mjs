@@ -11,6 +11,7 @@ test("checkout final gate rebinds attempt, permit, reservation and exact store l
   assert.match(migration,/JOIN henvalt\.shopify_delivery_permits_v2[\s\S]*?permit_row\.send_attempt_id=a\.id[\s\S]*?JOIN henvalt\.shopify_delivery_cost_reservations_v2[\s\S]*?reservation_row\.send_attempt_id=a\.id/);
   assert.match(migration,/sc\.id=a\.shopify_connection_id AND sc\.tenant_id=a\.tenant_id/);
   assert.match(migration,/sc\.active IS DISTINCT FROM true/);
+  assert.match(migration,/PERFORM 1[\s\S]*?FROM henvalt\.shopify_connections[\s\S]*?FOR UPDATE/);
   assert.match(migration,/sc\.app_key IS DISTINCT FROM v_attempt\.app_key/);
   assert.match(migration,/v_attempt\.tenant_status<>'ACTIVE'/);
 });
@@ -18,8 +19,8 @@ test("checkout final gate rebinds attempt, permit, reservation and exact store l
 test("checkout final gate rechecks checkout, consent, order, suppression, privacy, sender and cost",()=>{
   for(const pattern of [
     /v_attempt\.intervention_status<>'AUTHORIZED'/,
-    /v_attempt\.checkout_status<>'OPEN'/,
-    /v_attempt\.marketing_state<>'SUBSCRIBED'/,
+    /v_attempt\.checkout_status IS DISTINCT FROM 'OPEN'/,
+    /v_attempt\.marketing_state IS DISTINCT FROM 'SUBSCRIBED'/,
     /shopify_order_identity_v2/,
     /shopify_delivery_suppressions_v2/,
     /shopify_customer_redaction_guards_v2/,
