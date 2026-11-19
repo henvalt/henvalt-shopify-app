@@ -358,7 +358,7 @@ BEGIN
     AND tenant_id=v_order.tenant_id AND enabled IS TRUE;
   IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','ATTRIBUTION_POLICY_NOT_CONFIGURED'); END IF;
 
-  IF v_order.checkout_match_status<>'MATCHED'
+  IF v_order.checkout_match_status IS DISTINCT FROM 'MATCHED'
      OR v_order.checkout_token IS NULL
      OR v_order.ordered_at IS NULL
      OR v_order.total_value IS NULL OR v_order.total_value<=0
