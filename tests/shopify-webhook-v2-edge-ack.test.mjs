@@ -29,7 +29,7 @@ test("Edge ingress uses the shared streaming byte-bounded reader",()=>{
 });
 
 test("Edge ingress bounds RPC responses and applies a finite RPC deadline",()=>{
- assert.match(src,/AbortSignal\\.timeout\\(8_000\\)/);
+ assert.ok(src.includes("AbortSignal.timeout(8_000)"));
  assert.match(src,/readBoundedJson\(response/);
  assert.match(src,/maxBytes = 32_768/);
  assert.match(src,/Webhook RPC response rejected/);
