@@ -63,3 +63,11 @@ test("unmatched signed pixel provider events request a retry until message-refer
  assert.match(edge,/reconciliationRow\.status==="UNMATCHED"/);
  assert.match(edge,/return json\(503,\{error:"pixel_provider_event_waiting_for_attempt_correlation"\}\)/);
 });
+
+
+test("unmatched signed checkout provider events with a message ID request retry instead of being acknowledged as processed",()=>{
+ const edge=readFileSync("supabase/functions/henvalt-mailersend-webhook-v2/index.ts","utf8");
+ assert.match(edge,/const eventHasMessageId=/);
+ assert.match(edge,/row\.status==="UNMATCHED"&&eventHasMessageId&&reconciliationRow\.status==="NOT_PIXEL_RECONCILABLE"/);
+ assert.match(edge,/return json\(503,\{error:"provider_event_waiting_for_attempt_correlation"\}\)/);
+});
