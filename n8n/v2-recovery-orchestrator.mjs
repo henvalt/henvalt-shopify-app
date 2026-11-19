@@ -126,7 +126,7 @@ export async function runV2RecoveryTick({
     stages: Object.freeze(Object.fromEntries(
       Object.entries(stageResults).map(([key, value]) => [key, {
         accepted: value.accepted === true,
-        count: Number(value.upserted ?? value.promoted ?? value.created ?? value.interventions_created ?? 0) || 0,
+        count: Number(value.eligible_upserted ?? value.candidates_upserted ?? value.opportunities_created ?? value.interventions_created ?? value.upserted ?? value.promoted ?? value.created ?? 0) || 0,
       }])
     )),
     summary: Object.freeze(summary),
