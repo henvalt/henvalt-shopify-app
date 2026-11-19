@@ -88,9 +88,11 @@ BEGIN
 
  INSERT INTO henvalt.shopify_checkout_identity_v2(
   tenant_id,shopify_connection_id,shopify_checkout_id,checkout_token,
-  customer_identity_id,source_delivery_id,checkout_status,created_at,updated_at
+  shopify_checkout_token,customer_identity_id,source_delivery_id,
+  checkout_status,created_at,updated_at
  ) VALUES(
   v_tenant,v_connection,'message-context-checkout-'||gen_random_uuid()::text,
+  'message-context-token-'||gen_random_uuid()::text,
   'message-context-token-'||gen_random_uuid()::text,
   v_customer,v_receipt,'OPEN',now()-interval '2 hours',now()-interval '2 hours'
  ) RETURNING id INTO v_checkout;
