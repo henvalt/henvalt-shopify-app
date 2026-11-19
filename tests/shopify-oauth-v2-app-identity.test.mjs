@@ -12,7 +12,9 @@ test("OAuth V2 resolves app identity and secret server-side from the configured 
 });
 
 test("OAuth health reports ready only when an active Vault-backed app identity resolves", () => {
-  const health = source.slice(source.indexOf('if (route === "health"'), source.indexOf('if (!configOk())', source.indexOf('if (route === "health"')));
+  const healthStart = source.indexOf('if (route === "health"');
+  const healthEnd = source.indexOf('\n  if (!configOk()) return json(503, { error: "oauth_configuration_missing" });', healthStart);
+  const health = source.slice(healthStart, healthEnd);
   assert.match(health, /resolveAppIdentity\(\)/);
   assert.match(health, /app_identity_ready: ready/);
   assert.match(health, /configured: false, app_identity_ready: false/);
