@@ -8,6 +8,7 @@ const edge=read("../supabase/functions/henvalt-shopify-contact-delivery-v2/index
 const webhook=read("../supabase/migrations/202611170005_shopify_mailer_provider_events_suppression_v2.sql");
 const workflow=read("../.github/workflows/shopify-identity-v2-validation.yml");
 const sql=read("./sql/shopify-checkout-ambiguous-provider-reconciliation-v2.test.sql");
+const mailerIntegration=read("./sql/shopify-mailer-provider-events-suppression-v2.test.sql");
 
 test("checkout ambiguous result retains the provider message ID without releasing reserved cost",()=>{
   assert.match(outcome,/WHEN p_outcome='AMBIGUOUS' THEN coalesce\(v_attempt\.provider_message_id,p_provider_message_id\)/);
@@ -42,5 +43,9 @@ test("checkout provider reconciliation is service-role-only and does not retry o
   assert.match(outcome,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
   assert.match(outcome,/automatic_retry_performed',false/);
   assert.match(sql,/has_function_privilege\('anon'/);
+  assert.match(mailerIntegration,/record_shopify_delivery_submission_v2[\s\S]*?'AMBIGUOUS','provider-message-late-002'/);
+  assert.match(mailerIntegration,/reconcile_unmatched_shopify_checkout_provider_events_v2\(10\)/);
+  assert.match(mailerIntegration,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
+  assert.match(mailerIntegration,/provider_cost_reservation_released.*false/);
   assert.match(workflow,/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2\.sql/);
 });
