@@ -13,6 +13,8 @@ SET search_path = ''
 AS $function$
 DECLARE
   v_attempt record;
+  v_tenant_id uuid;
+  v_connection_id uuid;
 BEGIN
   IF current_setting('request.jwt.claim.role',true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'service_role_required' USING ERRCODE='42501';
@@ -20,6 +22,22 @@ BEGIN
   IF p_send_attempt_id IS NULL OR p_recipient_fingerprint_hex IS NULL
     OR p_recipient_fingerprint_hex !~ '^[0-9a-fA-F]{64}$' THEN
     RETURN jsonb_build_object('authorized',false,'code','INVALID_REQUEST');
+  END IF;
+
+  -- Match uninstall's lock order: exact connection first, then permit/attempt rows.
+  SELECT tenant_id,shopify_connection_id
+    INTO v_tenant_id,v_connection_id
+  FROM henvalt.shopify_recovery_send_attempt_v2
+  WHERE id=p_send_attempt_id;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('authorized',false,'code','CHECKOUT_ATTEMPT_NOT_FOUND');
+  END IF;
+  PERFORM 1
+  FROM henvalt.shopify_connections
+  WHERE id=v_connection_id AND tenant_id=v_tenant_id
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('authorized',false,'code','SHOPIFY_CONNECTION_NOT_FOUND');
   END IF;
 
   SELECT
@@ -78,7 +96,7 @@ BEGIN
    AND sp.provider_account_key=a.provider_account_key
   JOIN henvalt.billing_accounts ba ON ba.tenant_id=a.tenant_id
   WHERE a.id=p_send_attempt_id
-  FOR UPDATE OF a,permit_row,reservation_row,i,opp,c,ch,consent,sc,ar,t,pr,sp,ba;
+  FOR UPDATE OF a,permit_row,reservation_row,i,opp,c,ch,consent,ar,t,pr,sp,ba;
 
   IF NOT FOUND THEN
     RETURN jsonb_build_object('authorized',false,'code','CHECKOUT_ATTEMPT_OR_PERMIT_NOT_FOUND');
@@ -97,18 +115,19 @@ BEGIN
     OR v_attempt.app_status<>'active'
     OR v_attempt.connection_app_key IS DISTINCT FROM v_attempt.app_key
     OR v_attempt.tenant_status<>'ACTIVE'
-    OR v_attempt.candidate_state<>'READY_FOR_CONTACT_RESOLUTION' THEN
+    OR v_attempt.candidate_state IS DISTINCT FROM 'READY_FOR_CONTACT_RESOLUTION' THEN
     RETURN jsonb_build_object('authorized',false,'code','APP_STORE_OR_TENANT_INACTIVE');
   END IF;
   IF v_attempt.opportunity_status<>'CONTACT_RESOLUTION_PENDING'
     OR v_attempt.opportunity_customer_id IS DISTINCT FROM v_attempt.customer_identity_id
     OR v_attempt.checkout_customer_id IS DISTINCT FROM v_attempt.customer_identity_id
-    OR v_attempt.checkout_status<>'OPEN'
+    OR v_attempt.checkout_status IS DISTINCT FROM 'OPEN'
     OR v_attempt.shopify_checkout_token IS DISTINCT FROM v_attempt.checkout_token
+    OR v_attempt.jurisdiction_country_code IS NULL
     OR v_attempt.jurisdiction_country_code NOT IN ('GB','US','CA','AU') THEN
     RETURN jsonb_build_object('authorized',false,'code','CHECKOUT_OR_JURISDICTION_INELIGIBLE');
   END IF;
-  IF v_attempt.marketing_state<>'SUBSCRIBED'
+  IF v_attempt.marketing_state IS DISTINCT FROM 'SUBSCRIBED'
     OR v_attempt.consent_updated_at IS NULL THEN
     RETURN jsonb_build_object('authorized',false,'code','CURRENT_EMAIL_CONSENT_REQUIRED');
   END IF;
