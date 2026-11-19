@@ -70,7 +70,7 @@ export async function runV2RecoveryTick({
     p_limit: claimLimit,
     p_lease_seconds: leaseSeconds,
   }));
-  if (!Array.isArray(claim.items)) throw new Error("v2_claim_items_invalid");
+  if (!Array.isArray(claim.items) || claim.items.length > claimLimit) throw new Error("v2_claim_items_invalid");
 
   const summary = {
     worker_id: workerId,
@@ -82,7 +82,11 @@ export async function runV2RecoveryTick({
     outcomes: [],
   };
 
+  const seenWork = new Set();
   for (const item of claim.items) {
+    const workKey = `${String(item?.work_type ?? "")}:${String(item?.work_id ?? "")}`;
+    if (seenWork.has(workKey)) throw new Error("v2_duplicate_claim_item");
+    seenWork.add(workKey);
     // Project an explicit allowlist even though the SQL claim RPC now returns only
     // three opaque fields. This prevents future claim metadata from reaching the handoff.
     const safeClaim = {
@@ -113,8 +117,8 @@ export async function runV2RecoveryTick({
     const leaseFinished = finished?.finished === true;
     if (!leaseFinished) summary.lease_finish_unconfirmed += 1;
     summary.outcomes.push({
-      work_type: result.work_type,
-      work_id: result.work_id,
+      work_type: safeClaim.work_type,
+      work_id: safeClaim.work_id,
       outcome,
       lease_finished: leaseFinished,
     });
