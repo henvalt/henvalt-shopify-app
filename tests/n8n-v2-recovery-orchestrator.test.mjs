@@ -141,7 +141,7 @@ test("service RPC client uses isolated service-role headers and rejects malforme
 test("lease finisher converts bounded seconds to PostgreSQL interval and checks RPC result", async () => {
   const calls = [];
   const finish = createSupabaseLeaseFinisher({
-    rpc: async (name, args) => { calls.push({ name, args }); return { finished: true }; },
+    rpc: async (name, args) => { calls.push({ name, args }); return { finished: true, outcome: args.p_outcome }; },
   });
   const result = await finish({
     lease_id: "22222222-2222-4222-8222-222222222222",
@@ -153,6 +153,21 @@ test("lease finisher converts bounded seconds to PostgreSQL interval and checks 
   assert.equal(calls[0].name, "finish_shopify_recovery_work_claim_v2");
   assert.equal(calls[0].args.p_retry_after, "3600 seconds");
   await assert.rejects(finish({ lease_id: "x", worker_id: "w", outcome: "DEFERRED", retry_after_seconds: 86401 }), /invalid_retry_interval/);
+});
+
+test("lease finisher rejects a success acknowledgement with a missing or mismatched outcome", async () => {
+  for (const response of [{ finished: true }, { finished: true, outcome: "TERMINAL" }]) {
+    const finish = createSupabaseLeaseFinisher({
+      rpc: async () => response,
+    });
+    const result = await finish({
+      lease_id: "22222222-2222-4222-8222-222222222222",
+      worker_id: "worker-v2-01",
+      outcome: "HANDOFF_ACCEPTED",
+      retry_after_seconds: 0,
+    });
+    assert.deepEqual(result, { finished: false, code: "FINISH_ACK_MISMATCH" });
+  }
 });
 
 
