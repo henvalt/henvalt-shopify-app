@@ -55,7 +55,7 @@ test("release documentation tracks the exact candidate migration chain", () => {
 test("three-workflow V2 build contract preserves active V1 runtime and prevents a fourth workflow", () => {
   assert.match(n8nBuildSheet, /Preserve exactly three production workflows/);
   assert.match(n8nBuildSheet, /Do not import this build sheet as a fourth workflow/);
-  assert.match(n8nBuildSheet, /Recovery, not Delivery, owns the lease/);
+  assert.match(n8nBuildSheet, /Recovery workflow owns the lease because it owns the claim/);
   assert.match(n8nBuildSheet, /must not call the legacy `henvalt-mailersend-delivery`/);
   assert.match(cutover, /HENVALT_INGEST.*VTpfGKNtu1CSQ4Rv.*Active V1/);
   assert.match(cutover, /HENVALT_RECOVERY.*3GEDoeCA4paXTaDF.*Active V1/);
