@@ -295,3 +295,29 @@ test("unknown Delivery outcomes fail closed to a bounded deferred lease result",
   assert.equal(result.summary.outcomes[0].http_status, null);
   assert.equal(JSON.stringify(result).includes("customer@example.com"), false);
 });
+
+
+test("a tick with an unconfirmed lease finish is not reported as completed", async () => {
+  const item = {
+    work_type: "CHECKOUT_INTERVENTION",
+    work_id: "11111111-1111-4111-8111-111111111111",
+    lease_id: "22222222-2222-4222-8222-222222222222",
+  };
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-01",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 1, items: [item] }
+      : { accepted: true },
+    handoff: async claim => ({
+      ...claim,
+      outcome: "HANDOFF_ACCEPTED",
+      reason: "explicit_handoff_accepted",
+      retry_after_seconds: 0,
+    }),
+    finishClaim: async () => ({ finished: false }),
+  });
+  assert.equal(result.accepted, false);
+  assert.equal(result.status, "LEASE_FINISH_UNCONFIRMED");
+  assert.equal(result.summary.lease_finish_unconfirmed, 1);
+  assert.equal(result.summary.handoff_accepted, 1);
+});
