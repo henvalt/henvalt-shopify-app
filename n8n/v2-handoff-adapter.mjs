@@ -56,8 +56,14 @@ export function classifyHandoffResponse(status, body) {
   if (status === 502 && payload.accepted === false && state === "" && payload.error === "provider_submission_rejected") {
     return Object.freeze({ outcome: "TERMINAL", reason: "provider_rejection_recorded", retryAfterSeconds: 0 });
   }
-  if (status === 400 || status === 404 || status === 410 || status === 422) {
+  if (status === 400 || status === 422) {
     return Object.freeze({ outcome: "TERMINAL", reason: "permanent_request_rejection", retryAfterSeconds: 0 });
+  }
+  // A gateway-level 404/410 can mean the V2 Edge Function route is missing
+  // or has been retired. Do not permanently close every claimed opportunity
+  // when deployment/routing is the real fault.
+  if (status === 404 || status === 410) {
+    return Object.freeze({ outcome: "DEFERRED", reason: "edge_or_provider_unavailable", retryAfterSeconds: 3600 });
   }
   if (status === 401 || status === 403) {
     return Object.freeze({ outcome: "DEFERRED", reason: "delivery_auth_incident", retryAfterSeconds: 3600 });
