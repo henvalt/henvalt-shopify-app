@@ -103,6 +103,11 @@ test("service RPC client uses isolated service-role headers and rejects malforme
     serviceRoleKey: "s".repeat(40),
     fetchImpl: async () => new Response("{}", { status: 200 }),
   }), /invalid_supabase_rpc_configuration/);
+  assert.throws(() => createSupabaseServiceRpc({
+    supabaseUrl: "https://project.supabase.co:8443",
+    serviceRoleKey: "s".repeat(40),
+    fetchImpl: async () => new Response("{}", { status: 200 }),
+  }), /invalid_supabase_rpc_configuration/);
 });
 
 test("lease finisher converts bounded seconds to PostgreSQL interval and checks RPC result", async () => {
