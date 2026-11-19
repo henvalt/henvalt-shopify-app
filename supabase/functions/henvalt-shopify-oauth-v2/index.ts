@@ -249,7 +249,20 @@ Deno.serve(async (req: Request) => {
   }
   if (req.method !== "GET" && req.method !== "POST") return json(405, { error: "method_not_allowed" });
   const route = url.pathname.replace(/\/+$/, "").split("/").pop() ?? "";
-  if (route === "health" && req.method === "GET") return json(200, { service: "henvalt-shopify-oauth", configured: configOk() });
+  if (route === "health" && req.method === "GET") {
+    if (!configOk()) return json(503, { service: "henvalt-shopify-oauth", configured: false, app_identity_ready: false });
+    try {
+      const identity = await resolveAppIdentity();
+      const ready = identity !== null;
+      return json(ready ? 200 : 503, {
+        service: "henvalt-shopify-oauth",
+        configured: ready,
+        app_identity_ready: ready,
+      });
+    } catch {
+      return json(503, { service: "henvalt-shopify-oauth", configured: false, app_identity_ready: false });
+    }
+  }
   if (!configOk()) return json(503, { error: "oauth_configuration_missing" });
 
   if (route === "auth" || route === "install") {
