@@ -1,3 +1,16 @@
+const SAFE_REASONS = new Set([
+  "explicit_handoff_accepted",
+  "accepted_provider_reconciliation_pending",
+  "provider_rejection_recorded",
+  "permanent_request_rejection",
+  "delivery_auth_incident",
+  "delivery_preflight_or_eligibility_review",
+  "handoff_rate_limited",
+  "edge_or_provider_unavailable",
+  "handoff_not_confirmed",
+  "handoff_transport_ambiguous",
+]);
+
 const DEFAULTS = Object.freeze({
   checkoutInactivity: "30 minutes",
   pixelInactivity: "60 minutes",
@@ -120,8 +133,8 @@ export async function runV2RecoveryTick({
       work_type: safeClaim.work_type,
       work_id: safeClaim.work_id,
       outcome,
-      reason_code: typeof result.reason === "string" ? result.reason : "unspecified",
-      http_status: Number.isInteger(result.http_status) ? result.http_status : null,
+      reason_code: SAFE_REASONS.has(result.reason) ? result.reason : "unspecified",
+      http_status: Number.isInteger(result.http_status) && result.http_status >= 100 && result.http_status <= 599 ? result.http_status : null,
       lease_finished: leaseFinished,
     });
   }
