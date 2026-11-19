@@ -1,6 +1,6 @@
 # HENVALT V2 runtime cutover boundary — n8n
 
-**Status:** read-only architecture checkpoint, 18 November 2026. The three production workflows were inspected but not executed, edited, unpublished or republished. No production Supabase or Shopify changes were made.
+**Status:** read-only architecture checkpoint, refreshed 19 November 2026. The three production workflows were inspected but not executed, edited, unpublished or republished. No production Supabase or Shopify changes were made.
 
 ## 1. Current active workflow inventory
 
