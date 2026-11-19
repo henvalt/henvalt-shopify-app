@@ -704,3 +704,20 @@ the same V2 event.
 The active Recovery and Delivery graph details are captured in
 `docs/n8n-v2-cutover-boundary.md`. No active workflow was edited, executed,
 unpublished or republished during this inspection.
+
+## 19 November — pre-permit verified sender resolution
+
+- Added migration 045, `202611190002_shopify_sender_profile_preflight_v2.sql`,
+  with a service-role-only sender resolver bound to the exact Shopify
+  connection, active app, active tenant, active provider and verified sender.
+- Checkout delivery now resolves the sender profile and verifies MailerSend
+  domain unsubscribe settings plus the exact V2 webhook URL/event set before
+  Shopify recipient lookup and before issuing/consuming the one-use permit.
+- Checkout rechecks the consumed permit's sender email/name against the
+  preflight snapshot before rendering/submission.
+- Pixel delivery performs the same MailerSend readiness check before permit
+  issue. Missing configuration therefore creates no attempt or cost
+  reservation in either flow.
+- Disposable PostgreSQL coverage now tests positive checkout and pixel message
+  contexts and exact-store sender-profile resolution, including a cross-store
+  rejection case.
