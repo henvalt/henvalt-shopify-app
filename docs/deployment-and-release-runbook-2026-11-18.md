@@ -182,7 +182,7 @@ ambiguous reservations or reactivate unsafe tenant-scoped cart/browse paths.
 
 ## 6. Current deployment state
 
-- Candidate migrations 001–060: CI fixture only; not production-applied. The latest candidates add the final checkout provider-submission authorization gate and durable ambiguous provider-event reconciliation; the full ordered chain must pass disposable PostgreSQL CI before any release review.
+- Candidate migrations 001–060: CI fixture only; not production-applied. The final checkout provider-submission authorization gate and durable ambiguous provider-event reconciliation passed disposable PostgreSQL CI on candidate head `0d397e1e038803e048792913080328e8fd70682f` (run `44587404883`). This is candidate validation only; production migration/deployment remains a separate approved cutover.
 - Candidate V2 Edge Functions: branch only; not production-deployed.
 - Candidate Worker changes: not deployed.
 - Active n8n workflows: three legacy workflows, unchanged.
