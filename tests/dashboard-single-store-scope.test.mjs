@@ -46,7 +46,7 @@ test("merchant dashboard requires an explicit store selection when multiple acti
   assert.ok(merchantDashboard.includes("&active=eq.true"));
   assert.ok(merchantDashboard.includes("requestedConnectionId"));
   assert.ok(merchantDashboard.includes("shopify_app_registry?select=app_key&lifecycle_status=eq.active"));
-  assert.ok(merchantDashboard.includes("&app_key=" + " + appKeyFilter"));
+  assert.ok(merchantDashboard.includes('"&app_key=" + appKeyFilter +'));
   assert.ok(merchantDashboard.includes("shopify_shop_id=not.is.null"));
   assert.ok(merchantDashboard.includes("access_token_secret_ref=not.is.null"));
   assert.ok(merchantDashboard.includes("refresh_token_secret_ref=not.is.null"));
