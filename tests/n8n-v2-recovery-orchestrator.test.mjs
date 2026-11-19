@@ -18,13 +18,15 @@ test("recovery tick runs all candidate stages in order before claiming opaque wo
     return { accepted: true, upserted: 1 };
   };
   const handoffs = [];
+  const finishes = [];
   const result = await runV2RecoveryTick({
     rpc,
     workerId: "worker-v2-01",
     handoff: async claim => {
       handoffs.push(claim);
-      return { ...claim, outcome: "HANDOFF_ACCEPTED", lease_finished: true };
+      return { ...claim, outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 };
     },
+    finishClaim: async value => { finishes.push(value); return { finished: true }; },
   });
   assert.deepEqual(calls.map(x => x.name), [
     "refresh_shopify_checkout_recovery_candidates_v2",
@@ -40,6 +42,8 @@ test("recovery tick runs all candidate stages in order before claiming opaque wo
   assert.deepEqual(Object.keys(handoffs[0]).sort(), ["correlation_id", "lease_id", "work_id", "work_type", "worker_id"]);
   assert.equal(JSON.stringify(handoffs).includes("private-tenant"), false);
   assert.equal(JSON.stringify(handoffs).includes("private-store"), false);
+  assert.equal(finishes.length, 2);
+  assert.equal(finishes[0].outcome, "HANDOFF_ACCEPTED");
   assert.equal(result.summary.handoff_accepted, 2);
   assert.equal(result.provider_called_by_orchestrator, false);
 });
@@ -50,7 +54,8 @@ test("a failed or rejected discovery stage stops before claim and handoff", asyn
   await assert.rejects(runV2RecoveryTick({
     workerId: "worker-v2-01",
     rpc: async name => { calls.push(name); return name === "promote_shopify_checkout_recovery_candidates_v2" ? { accepted: false, code: "NOT_READY" } : { accepted: true }; },
-    handoff: async () => { handoffs++; return { outcome: "DEFERRED", lease_finished: true }; },
+    handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
+    finishClaim: async () => ({ finished: true }),
   }), /v2_stage_rejected:promote_checkout/);
   assert.equal(calls.includes("claim_shopify_recovery_work_v2"), false);
   assert.equal(handoffs, 0);
@@ -62,7 +67,8 @@ test("tick bounds limits and lease policy before any RPC call", async () => {
     workerId: "worker-v2-01",
     limits: { claimLimit: 101 },
     rpc: async () => { calls++; return { accepted: true, items: [] }; },
-    handoff: async () => ({ outcome: "DEFERRED", lease_finished: true }),
+    handoff: async () => ({ outcome: "DEFERRED", retry_after_seconds: 3600 }),
+    finishClaim: async () => ({ finished: true }),
   }), /invalid_tick_policy/);
   assert.equal(calls, 0);
 });
