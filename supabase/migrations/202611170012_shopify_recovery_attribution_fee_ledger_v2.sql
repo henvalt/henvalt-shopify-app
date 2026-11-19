@@ -126,6 +126,9 @@ CREATE TABLE IF NOT EXISTS henvalt.shopify_recovery_fee_measurements_v2 (
   paddle_transaction_reference text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
+  adjusted_recovered_amount numeric(18,4) CHECK(adjusted_recovered_amount IS NULL OR adjusted_recovered_amount>=0),
+  adjusted_fee_amount numeric(18,4) CHECK(adjusted_fee_amount IS NULL OR adjusted_fee_amount>=0),
+  credit_amount numeric(18,4) NOT NULL DEFAULT 0 CHECK(credit_amount>=0),
   CONSTRAINT shopify_recovery_fee_measurements_v2_connection_fkey
     FOREIGN KEY(shopify_connection_id,tenant_id)
     REFERENCES henvalt.shopify_connections(id,tenant_id)
@@ -267,15 +270,36 @@ BEGIN
    WHERE id=v_attr.id;
 
   UPDATE henvalt.shopify_recovery_fee_measurements_v2 f
-     SET recovered_amount=v_net,
-         fee_amount=CASE WHEN v_status='CONFIRMED'
+     SET
+         -- Once invoiced or paid, the original measured charge is immutable.
+         -- Refund-driven reductions are represented as an explicit credit delta.
+         recovered_amount=CASE
+           WHEN f.status IN ('INVOICED','PAID','CREDIT_REQUIRED') THEN f.recovered_amount
+           ELSE v_net
+         END,
+         fee_amount=CASE
+           WHEN f.status IN ('INVOICED','PAID','CREDIT_REQUIRED') THEN f.fee_amount
+           WHEN v_status='CONFIRMED' THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4)
+           ELSE 0
+         END,
+         adjusted_recovered_amount=CASE WHEN v_status='CONFIRMED' THEN v_net ELSE 0 END,
+         adjusted_fee_amount=CASE WHEN v_status='CONFIRMED'
            THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4) ELSE 0 END,
+         credit_amount=CASE
+           WHEN f.status IN ('INVOICED','PAID','CREDIT_REQUIRED')
+             THEN GREATEST(f.fee_amount-CASE WHEN v_status='CONFIRMED'
+               THEN pg_catalog.round(v_net*f.henvalt_percentage/100,4) ELSE 0 END,0)
+           ELSE 0
+         END,
          status=CASE
            WHEN v_status='REVIEW_REQUIRED' THEN 'REVIEW_REQUIRED'
            WHEN v_status='REVERSED' AND f.status IN ('INVOICED','PAID','CREDIT_REQUIRED') THEN 'CREDIT_REQUIRED'
            WHEN v_status='REVERSED' THEN 'VOIDED'
-           WHEN f.status='CREDIT_REQUIRED' THEN 'CREDIT_REQUIRED'
-           WHEN f.status IN ('INVOICED','PAID') AND f.fee_amount<>pg_catalog.round(v_net*f.henvalt_percentage/100,4) THEN 'CREDIT_REQUIRED'
+           WHEN f.status='CREDIT_REQUIRED' THEN
+             CASE WHEN f.fee_amount>pg_catalog.round(v_net*f.henvalt_percentage/100,4)
+               THEN 'CREDIT_REQUIRED' ELSE 'CREDIT_REQUIRED' END
+           WHEN f.status IN ('INVOICED','PAID')
+             AND f.fee_amount<>pg_catalog.round(v_net*f.henvalt_percentage/100,4) THEN 'CREDIT_REQUIRED'
            WHEN f.status IN ('INVOICED','PAID') THEN f.status
            ELSE 'PENDING'
          END,
@@ -607,7 +631,7 @@ FOR EACH ROW EXECUTE FUNCTION henvalt.capture_shopify_mailer_delivered_at_v2();
 
 DROP TRIGGER IF EXISTS shopify_recovery_fee_measurement_billing_v2 ON henvalt.billing_accounts;
 CREATE TRIGGER shopify_recovery_fee_measurement_billing_v2
-AFTER UPDATE OF status,test_mode,henvalt_percentage,currency ON henvalt.billing_accounts
+AFTER INSERT OR UPDATE OF status,test_mode,henvalt_percentage,currency ON henvalt.billing_accounts
 FOR EACH ROW EXECUTE FUNCTION henvalt.create_missing_shopify_recovery_fee_measurements_v2();
 
 REVOKE ALL ON FUNCTION henvalt.set_shopify_recovery_attribution_policy_v2(uuid,boolean,integer,text,text,boolean)
