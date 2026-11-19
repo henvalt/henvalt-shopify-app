@@ -645,7 +645,7 @@ Neither path tells n8n to blindly retry an ambiguous item.
 The current CTA deliberately links to the canonical verified Shopify store
 root. It does not pretend to resume an abandoned checkout; a checkout deep link
 or item-level personalization requires a future trusted exact-store context
-source. The production n8n workflows remain unchanged and no provider send
+source. Both V2 delivery Edge Functions also fail closed unless the operator has explicitly set `HENVALT_V2_MAILERSEND_EVENTS_READY=true` after verifying the signed V2 provider-event route and disabling duplicate legacy processing. The production n8n workflows remain unchanged and no provider send
 was performed.
 
 The disposable concurrency setup now also checks that the pixel message
