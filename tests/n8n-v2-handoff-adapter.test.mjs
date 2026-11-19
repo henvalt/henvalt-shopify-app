@@ -99,6 +99,11 @@ test("adapter refuses non-HTTPS endpoints or missing delivery credentials", () =
     pixelBearerToken: "p".repeat(32),
   }), /invalid_adapter_configuration/);
   assert.throws(() => createV2HandoffAdapter({
+    supabaseUrl: "https://project.supabase.co:8443",
+    checkoutBearerToken: "c".repeat(32),
+    pixelBearerToken: "p".repeat(32),
+  }), /invalid_adapter_configuration/);
+  assert.throws(() => createV2HandoffAdapter({
     supabaseUrl: "https://project.supabase.co",
     checkoutBearerToken: "c".repeat(32),
   }), /invalid_adapter_configuration/);
