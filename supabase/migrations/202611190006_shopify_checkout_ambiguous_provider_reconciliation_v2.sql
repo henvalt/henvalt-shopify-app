@@ -145,6 +145,9 @@ BEGIN
   FOR v_event IN
     SELECT e.id,e.provider_account_key,e.provider_message_id,e.event_type
     FROM henvalt.shopify_mailer_provider_events_v2 e
+    JOIN henvalt.shopify_recovery_send_attempt_v2 matched_attempt
+      ON matched_attempt.provider_account_key=e.provider_account_key
+     AND matched_attempt.provider_message_id=e.provider_message_id
     WHERE e.processing_status='UNMATCHED'
       AND e.provider_message_id IS NOT NULL
       AND e.event_type IN (
