@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 
 const release = readFileSync(".github/workflows/release-henvalt-8.yml", "utf8");
 const config = readFileSync(".github/workflows/shopify-config-validation.yml", "utf8");
+const identity = readFileSync(".github/workflows/shopify-identity-v2-validation.yml", "utf8");
+const runbook = readFileSync("docs/deployment-and-release-runbook-2026-11-18.md", "utf8");
+const launchMatrix = readFileSync("docs/launch-readiness-matrix-2026-11-19.md", "utf8");
 
 test("production Shopify release cannot run automatically on push", () => {
   assert.match(release, /workflow_dispatch:/);
@@ -25,4 +28,14 @@ test("Shopify preparation job has one unambiguous job-level condition", () => {
   const end = config.indexOf("    steps:", start);
   const header = config.slice(start, end);
   assert.equal((header.match(/^    if:/gm) || []).length, 1);
+});
+
+test("release documentation tracks the exact candidate migration chain", () => {
+  assert.match(identity, /Apply candidate migrations 001 through 047/);
+  assert.match(identity, /202611190004_shopify_checkout_candidate_terminal_state_v2\.sql/);
+  assert.match(runbook, /candidate migrations 001–047/i);
+  assert.match(runbook, /Candidate migrations 001–047: CI fixture only; not production-applied\./);
+  assert.match(launchMatrix, /Candidate migrations 001–047 apply in disposable PostgreSQL CI/);
+  assert.doesNotMatch(runbook, /migrations 001–046/);
+  assert.doesNotMatch(launchMatrix, /migrations 001–046/);
 });
