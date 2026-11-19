@@ -175,5 +175,5 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  return json(200,{accepted:true,duplicate:receipt.duplicate===true,status:receipt.receipt_status});
+  return json(422,{error:"unsupported_topic"});
 });
