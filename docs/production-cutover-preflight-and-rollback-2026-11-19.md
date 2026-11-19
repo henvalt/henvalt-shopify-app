@@ -4,7 +4,7 @@
 
 ## 1. Scope and invariants
 
-The candidate V2 system is not production-parity verified. Candidate migrations 001–047 have passed disposable PostgreSQL CI; this proves migration-chain behavior against the CI baseline, not compatibility with the live database's 178-migration history or its existing rows.
+The candidate V2 system is not production-parity verified. Candidate migrations 001–058 have passed disposable PostgreSQL CI; this proves migration-chain behavior against the CI baseline, not compatibility with the live database's 178-migration history or its existing rows.
 
 The following invariants apply throughout the cutover:
 
@@ -120,7 +120,7 @@ Until every applicable item is evidenced, the status remains **HOLD / NOT LAUNCH
 
 ## 8. Current known baseline (19 November 2026)
 
-- Candidate migrations 001–047: disposable PostgreSQL CI only.
+- Candidate migrations 001–058: disposable PostgreSQL CI only.
 - Production Supabase: 178 migrations at last read-only inspection; no candidate V2 migration set deployed.
 - V2 OAuth, privacy, webhook ingress, checkout/pixel delivery and MailerSend webhook Edge Functions: candidate branch only.
 - V2 Worker: candidate source only; no production route deployment.
