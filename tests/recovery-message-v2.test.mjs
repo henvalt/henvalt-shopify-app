@@ -104,7 +104,12 @@ test("checkout and pixel Edge Functions accept only opaque work identifiers and 
     assert.doesNotMatch(edge, /input.subject|input.html|input.text/);
   }
   assert.match(checkout, /key!=="intervention_id"/);
+  assert.match(checkout, /providerSubmissionStarted=true/);
+  assert.match(checkout, /providerSubmissionStarted?"AMBIGUOUS":"FAILED"/);
+  assert.match(checkout, /sent.status>=500\|\|sent.status===408/);
   assert.match(pixel, /key!=="opportunity_id"/);
+  assert.match(pixel, /providerSubmissionStarted=true/);
+  assert.match(pixel, /providerSubmissionStarted?"AMBIGUOUS":"FAILED"/);
 });
 
 test("message context migration is service-only, exact-store and PII-free", () => {
@@ -113,6 +118,7 @@ test("message context migration is service-only, exact-store and PII-free", () =
   assert.match(sql, /request.jwt.claim.role[sS]*?service_role_required/);
   assert.match(sql, /p_work_type='CHECKOUT_INTERVENTION'/);
   assert.match(sql, /p_work_type='PIXEL_OPPORTUNITY'/);
+  assert.match(sql, /p_work_type IS NULL/);
   assert.match(sql, /JOIN henvalt.shopify_connections sc[sS]*?sc.tenant_id/);
   assert.match(sql, /JOIN henvalt.shopify_app_registry ar/);
   assert.match(sql, /JOIN henvalt.tenants t/);
