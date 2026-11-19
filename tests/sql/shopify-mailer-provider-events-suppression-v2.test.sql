@@ -299,6 +299,76 @@ END;
 $reservation_v2$;
 
 
+-- Stale checkout attempts after a process crash become AMBIGUOUS, never retry or release cost.
+DO $checkout_stale_v2$
+DECLARE
+  v_tenant uuid:='00000000-0000-4000-8000-000000000001';
+  v_store uuid;
+  v_customer uuid;
+  v_opportunity uuid;
+  v_provider_key text;
+  v_intervention uuid;
+  v_attempt uuid;
+  v_result jsonb;
+BEGIN
+  PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+  SELECT id INTO v_store FROM henvalt.shopify_connections
+    WHERE tenant_id=v_tenant AND shop_domain='store-b.myshopify.com';
+  SELECT id INTO v_customer FROM henvalt.shopify_customer_identity_v2
+    WHERE tenant_id=v_tenant AND shopify_connection_id=v_store AND external_customer_reference='12345';
+  SELECT id INTO v_opportunity FROM henvalt.shopify_recovery_opportunity_v2
+    WHERE tenant_id=v_tenant AND shopify_connection_id=v_store
+    ORDER BY created_at DESC LIMIT 1;
+  SELECT provider_account_key INTO v_provider_key FROM henvalt.shopify_mailer_provider_registry_v2
+    WHERE tenant_id=v_tenant AND status='ACTIVE' ORDER BY created_at LIMIT 1;
+  IF v_store IS NULL OR v_customer IS NULL OR v_opportunity IS NULL OR v_provider_key IS NULL THEN
+    RAISE EXCEPTION 'Stale checkout attempt fixture prerequisites missing';
+  END IF;
+
+  INSERT INTO henvalt.shopify_recovery_intervention_v2(
+    tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
+  ) VALUES(v_tenant,v_store,v_opportunity,v_customer,91,'AUTHORIZED',now())
+  RETURNING id INTO v_intervention;
+  INSERT INTO henvalt.shopify_recovery_send_attempt_v2(
+    tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
+    provider_account_key,idempotency_key,status
+  ) VALUES(v_tenant,v_store,v_customer,v_intervention,v_provider_key,
+    'checkout-stale-'||gen_random_uuid()::text,'AUTHORIZED')
+  RETURNING id INTO v_attempt;
+  UPDATE henvalt.shopify_recovery_send_attempt_v2
+  SET created_at=now()-interval '5 minutes'
+  WHERE id=v_attempt;
+
+  v_result:=henvalt.mark_stale_shopify_checkout_send_attempts_ambiguous_v2(
+    now()-interval '2 minutes',10
+  );
+  IF v_result->>'accepted'<>'true' OR (v_result->>'marked_ambiguous')::integer<>1
+    OR v_result->>'provider_cost_reservation_released'<>'false'
+    OR v_result->>'automatic_retry_performed'<>'false' THEN
+    RAISE EXCEPTION 'Stale checkout attempt did not become ambiguous safely: %',v_result;
+  END IF;
+  IF NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
+    WHERE id=v_attempt AND status='AMBIGUOUS'
+  ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_recovery_intervention_v2
+    WHERE id=v_intervention AND status='AMBIGUOUS'
+  ) OR NOT EXISTS(
+    SELECT 1 FROM henvalt.shopify_delivery_cost_reservations_v2
+    WHERE send_attempt_id=v_attempt AND status='RESERVED'
+  ) THEN
+    RAISE EXCEPTION 'Stale checkout reconciliation lost attempt, intervention or reserved-cost state';
+  END IF;
+
+  v_result:=henvalt.mark_stale_shopify_checkout_send_attempts_ambiguous_v2(
+    now()-interval '2 minutes',10
+  );
+  IF v_result->>'accepted'<>'true' OR (v_result->>'marked_ambiguous')::integer<>0 THEN
+    RAISE EXCEPTION 'Stale checkout reconciliation did not become idempotent: %',v_result;
+  END IF;
+END;
+$checkout_stale_v2$;
+
 -- Explicit-policy exact-store recovered revenue and fee measurement (migration 023).
 DO $attribution_v2$
 DECLARE
