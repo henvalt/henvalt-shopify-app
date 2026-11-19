@@ -126,7 +126,7 @@ Deno.serve(async(req:Request)=>{
     !providerKey||providerToken.length<20||fpSecret.length<32||!validEmail(senderEmail)||
     !senderName.trim()||!uuid(senderId))return json(503,{error:"pixel_delivery_context_incomplete"});
   if(!(await mailerSendV2DeliveryReady(providerToken,senderEmail,providerKey,SUPABASE_URL)))
-    return json(409,{error:"mailer_send_unsubscribe_tracking_not_enabled"});
+    return json(409,{error:"mailer_send_v2_delivery_preflight_failed"});
   let message;
   try{message=renderRecoveryMessageV2({shopDomain:String(messageContext.shop_domain??""),opportunityType:String(messageContext.opportunity_type??""),brandName:senderName});}
   catch{return json(409,{error:"recovery_message_context_invalid"});}
