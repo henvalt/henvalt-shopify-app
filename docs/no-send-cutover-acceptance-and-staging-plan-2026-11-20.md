@@ -404,3 +404,30 @@ The only known candidate provider-submit entry points are the V1 sender and the 
 **Staging: BLOCKED.** No owner-controlled isolated zero-cost staging Supabase/n8n/Worker/Shopify/provider boundary has been identified. Continue with disposable CI only; do not create paid infrastructure or reuse production.
 
 **Production: HOLD.** No production deployment, flag change, workflow edit/deactivation, provider configuration change, customer send, billing action, PR merge or Shopify release was performed by this work.
+
+
+## 18. Live n8n sender-route inventory and execution metadata — 20 November 2026
+
+Read-only inspection of the currently published HENVALT_DELIVERY graph confirms **two distinct HTTP nodes submit to the same legacy V1 Edge Function**:
+
+1. Normal delivery route: Internal Delivery Webhook → Validate & Normalize → Authorize & Context → Cleared to Send? → MailerSend Send → Classify Result / Record Delivery Result.
+2. Manual one-off route: One-Off Test Email Trigger (manual trigger) → Prepare One-Off Test Delivery → One-Off Test Authorized? → MailerSend One-Off Test Email → Classify One-Off Provider Result → Record One-Off Test Result.
+
+Both HTTP nodes POST to the same Supabase Edge Function endpoint: /functions/v1/henvalt-mailersend-delivery. The manual branch's preparation node contains a hard-coded historical delivery-request UUID and recipient address. Those values are intentionally not reproduced in this document. Treat the branch as a high-risk live send path; preserve the existing authorization check and do not execute the manual trigger. Remove or neutralize the hard-coded historical test path only as part of an explicitly approved production change.
+
+HENVALT_RECOVERY has an active scheduled trigger every minute and calls HENVALT_DELIVERY through an Execute Workflow node. It does not expose another direct provider-send HTTP node. HENVALT_INGEST creates and queues interventions but does not directly submit email. The three live workflow graphs are published versions identical to their current drafts at the time of inspection.
+
+This confirms the two provider-submit nodes currently visible in the live n8n inventory. Both converge on the V1 Edge Function, so a correctly deployed default-off interlock in that function would be the shared enforcement boundary for these two n8n routes. This does not by itself stop any other caller of the Edge Function; the Edge Function itself must enforce the interlock before parsing request bodies, reading provider credentials, or making outbound provider requests.
+
+### Execution metadata observation (not payload inspection)
+
+Metadata-only execution searches returned:
+- HENVALT_DELIVERY: count 10; latest listed execution 31277, success, webhook mode, 14 November 2026.
+- HENVALT_RECOVERY: count 10,026; latest listed execution 39790, success, trigger mode, 20 November 2026.
+- HENVALT_INGEST: count 15; latest listed execution 31135, success, webhook mode, 14 November 2026.
+
+The search interface exposes metadata (IDs, statuses, modes, timestamps), not execution-save/pruning/retention policy. No execution payload was opened. These counts must not be interpreted as a retention period or proof of redaction. The active workflow settings returned by the interface contain executionOrder, binaryMode, timeSavedMode and callerPolicy, but no save-data, pruning, retention or field-redaction settings.
+
+**Revised delivery-route acceptance:** both known live n8n HTTP provider-submit nodes are mapped and converge on the legacy V1 Edge Function. A third candidate route exists only as the two V2 Edge Function entry points in source; they were not present in the inspected production function inventory. A complete global caller inventory still requires confirming no external callers invoke the V1 Edge Function directly.
+
+**No production changes were made during this inspection.** No workflow was executed, edited, unpublished or deactivated. No execution payload or recipient data was retrieved.
