@@ -1,0 +1,182 @@
+# No-send cutover acceptance and controlled staging plan
+
+**Checkpoint:** 20 November 2026  
+**Scope:** candidate branch / PR #6 only  
+**Decision:** NO-SEND ACCEPTANCE PARTIAL; STAGING PLAN PREPARED; PRODUCTION HOLD
+
+This document records the evidence required to move HENVALT from candidate CI into a controlled, non-production rehearsal. It is not deployment authorization.
+
+## 1. Non-negotiable boundary
+
+Until a separate written approval names the exact environment and action:
+
+- Do not merge PR #6.
+- Do not apply candidate migrations to production.
+- Do not deploy or replace production Edge Functions or Cloudflare Workers.
+- Do not edit, execute, activate, deactivate, import over, or publish the three live n8n workflows.
+- Do not change Shopify app settings, webhook subscriptions, OAuth credentials, or release an app version.
+- Do not change MailerSend event destinations, sender configuration, credentials, or readiness flags.
+- Do not send customer email, create a billing transaction, or enable fee collection.
+- Do not create paid infrastructure or a Supabase branch/project without an explicit cost review and approval.
+
+The live workflow identities remain exactly `HENVALT_INGEST`, `HENVALT_RECOVERY`, and `HENVALT_DELIVERY`. No fourth production workflow is permitted.
+
+## 2. Evidence baseline
+
+The current PR #6 candidate includes:
+
+- A composed offline Recovery → Delivery runtime with injected fetch transport.
+- Strict work-type/UUID validation, complete-batch validation before handoff, opaque-only checkout/pixel dispatch, separate delivery credentials, conservative response classification, and lease-finish acknowledgement.
+- Offline acceptance cases for 401/403/409/429/503, permanent 400/422, deferred 404/410, recorded provider rejection, accepted ambiguous 202, malformed JSON, transport exceptions, and secret/recipient redaction.
+- Disposable PostgreSQL contracts for exact-store identity, consent and suppression, provider authorization gates, cost reservations, concurrent claims, uninstall stop behavior, privacy boundaries, and attribution/fee-ledger integrity.
+- Candidate migration validation through migration 060, Gitleaks, Node regression tests, Deno checks, and Shopify static/configuration checks.
+
+Latest PR head at this checkpoint: `615864053434522ab9b2bc03678fa82f6bd860a1` (documentation-only release-runbook refresh). Its associated identity V2 and Shopify configuration validation workflows completed successfully; the Shopify app deployment job was skipped. The runbook records the latest full 450/450 Node suite and 224/224 identity/cost/privacy contract suite on candidate commit `0ded8a47a78a20fa78b58205f50c09a870f8fac9`.
+
+These results are candidate CI evidence only. They do not prove the production schema, deployed Edge Functions, live n8n graph, Shopify ownership, sender configuration, or provider behavior.
+
+## 3. No-send acceptance matrix
+
+A case passes only when the provider boundary is structurally intercepted or disabled and the test fails on any unexpected provider request. A test title containing “dry run” is not evidence by itself.
+
+| ID | Scenario | Required assertion | Current evidence / disposition |
+|---|---|---|---|
+| NS-01 | Empty candidate set | No claim, no delivery handoff, zero provider calls | Runtime sequence exists; add/retain explicit empty-set composed assertion before staging sign-off |
+| NS-02 | Checkout candidate | Only checkout intervention is materialized/claimed; checkout endpoint receives only intervention ID | Candidate scheduler + opaque adapter contracts; verify in composed staging fixture |
+| NS-03 | Pixel candidate | Pixel opportunity remains pixel work; no checkout intervention fabricated | Candidate SQL lifecycle contracts; verify composed staging fixture |
+| NS-04 | Concurrent workers | Exactly one active lease for the same work item | Disposable PostgreSQL concurrent claim contract passed |
+| NS-05 | Deferred/reclaimed lease | Reclaim gets a fresh lease ID; stale lease cannot finish | Disposable lease lifecycle contracts; include in end-to-end staging run |
+| NS-06 | Invalid work / malformed UUID / wrong-store ID / missing auth | Zero provider calls; fail closed | Adapter validation and DB exact-store/auth gates covered; wrong-store + missing-auth must be asserted in a single composed no-send run |
+| NS-07 | Inactive tenant/app/connection; missing or unverified sender; absent consent/contact/jurisdiction; suppression; recovered order; no cost entitlement | Zero provider calls | Candidate SQL and Edge-function authorization contracts; no live provider call is permitted |
+| NS-08 | MailerSend readiness false or unsubscribe insertion unverified | Zero provider calls | Candidate delivery gate contract; verify in staging using synthetic provider config |
+| NS-09 | Accepted handoff | Lease completes only after explicit allowlisted accepted response and confirmed finish acknowledgement | Offline composed runtime tests, including lease-finisher acknowledgement regression |
+| NS-10 | Permanent ineligibility | Terminal only for documented allowlisted permanent reasons | Offline status matrix covers 400/422 and definite recorded provider rejection |
+| NS-11 | Timeout / 429 / 5xx / malformed response | Defer or reconcile; never issue a fresh duplicate send | Offline composed tests; ambiguous attempt lifecycle covered in disposable DB tests |
+| NS-12 | Signed provider test event | Raw-body signature verified; URL validation/test event is not persisted as a customer event | Candidate MailerSend signature and non-persistence contracts |
+| NS-13 | Unmatched then matched provider event | Unmatched event remains retryable; later exact attempt correlation reconciles once | Candidate provider-event reconciliation SQL contracts; stage with synthetic signed fixture |
+| NS-14 | Duplicate signed provider event | Idempotent no-op; suppression and attempt state do not duplicate | Candidate event uniqueness/suppression contracts |
+| NS-15 | Execution data inspection | No recipient, message body, Shopify token, provider token, fingerprint secret, or delivery authorization token in n8n inputs/outputs/errors | Adapter/runtime redaction tests; live n8n retention and redaction remain unverified |
+
+### Acceptance exit criteria
+
+No-send acceptance is **not complete** until all of the following are attached to one immutable test run:
+
+1. Every NS-01 through NS-15 case has a named test, result, and evidence reference.
+2. The complete composed Recovery → Delivery harness intercepts all outbound requests and fails on any MailerSend hostname or unapproved destination.
+3. Both checkout and pixel branches are exercised, including empty batches and mixed/invalid claim batches.
+4. Disposable database fixtures prove exact-store isolation, concurrent lease behavior, stale-lease rejection, consent/suppression, sender, provider readiness, cost cap, uninstall stop, and ambiguous-attempt reconciliation.
+5. The test run inspects serialized inputs, outputs, logs, and thrown-error surfaces for sensitive-field leakage.
+6. All tests run against the exact PR head being reviewed; no result from an earlier commit is carried forward as if it validates a later head.
+
+A green adapter suite alone is insufficient. A green SQL suite alone is insufficient. Both must be linked to the same candidate SHA.
+
+## 4. Controlled staging plan
+
+Staging is a separate, isolated environment. Do not use production as a staging target and do not copy live customer PII into synthetic fixtures.
+
+### Stage 0 — identify and freeze the staging boundary
+
+Required before any deployment action:
+
+- Name the owner-controlled staging Supabase project, Cloudflare account/Worker route, Shopify development store/app, n8n staging workspace/instance, and MailerSend test account or stub.
+- Verify each target is separate from production by project ID, hostname, app/client ID, workflow IDs, credential namespace, and provider account.
+- Use synthetic stores, customers, checkouts, consent evidence, orders, provider events, and tokens.
+- If no separate n8n staging instance/workspace exists, keep the work at offline tests; do not import drafts into the three live workflows.
+- If no zero-cost staging project exists, use disposable PostgreSQL in CI and stop. Do not create a paid project, branch, or subscription under this plan.
+- Capture names and presence of staging secrets only; never place secret values in Git, documents, or test output.
+
+**Exit:** all staging targets are owner-controlled and demonstrably distinct from production, or the staging exercise remains CI-only.
+
+### Stage 1 — database rehearsal
+
+- Start from a synthetic PostgreSQL 17 baseline, not a production database dump.
+- Apply candidate migrations 001–060 in order.
+- Run the complete SQL lifecycle, exact-store isolation, concurrency, privacy, cost-reservation, attribution, and recovery-claim fixtures.
+- Record migration timings, lock observations, object counts, grants, RLS policies, triggers, indexes, constraints, and RPC signatures.
+- Confirm the test runner destroys the disposable database after evidence capture.
+- Do not apply migrations to production or merge the candidate chain.
+
+**Exit:** all migrations and database contracts pass on the exact candidate SHA; no unexplained schema drift or cross-store row access.
+
+### Stage 2 — Edge Function staging
+
+Only after Stage 0 and Stage 1 pass:
+
+- Deploy candidate Edge Functions to a dedicated staging Supabase project, never to the production project.
+- Use staging-only app identity, Vault references, service credentials, checkout/pixel delivery bearer tokens, and synthetic provider configuration.
+- Keep delivery readiness false and provider transport stubbed/blocked.
+- Verify unauthenticated requests, wrong-store IDs, missing credentials, inactive app/connection, consent denial, suppression, exhausted cap, and malformed requests all fail closed.
+- Verify logs and responses contain no PII, message body, or secret values.
+
+**Exit:** health/configuration checks and negative authorization cases pass; provider transport remains impossible.
+
+### Stage 3 — Worker and Shopify ingress staging
+
+- Use a separate Worker test route and staging-only route tokens.
+- Verify raw-body Shopify HMAC, wrong-shop signature, duplicate delivery, replay, invalid route token, and exact-store receipt behavior.
+- Use a staging-owned Shopify development app/store only.
+- Do not alter the production app, production callback, or production webhook subscriptions.
+- If a paid-plan payment capability is unavailable, mark paid-order/refund acceptance blocked; do not purchase or fabricate a paid order.
+
+**Exit:** one authoritative staging ingress, idempotent exact-store receipts, and no production route overlap.
+
+### Stage 4 — n8n staging rehearsal
+
+- Preserve exactly the three logical responsibilities: Ingest, Recovery, Delivery.
+- Import reviewed changes only into a separate staging n8n instance/workspace as inactive drafts.
+- Do not create a fourth workflow and do not import into or edit the live production workflows.
+- Recovery owns claim finishing; Delivery only validates/routes/classifies opaque work.
+- Confirm execution retention/redaction settings and inspect complete execution data.
+- Disable legacy/V2 overlap in the staging graph so one event and one opportunity have exactly one processing path.
+- Use the stubbed provider transport. A workflow run must be incapable of reaching MailerSend.
+
+**Exit:** all NS cases pass in the composed staging runtime; execution data is demonstrably free of protected fields.
+
+### Stage 5 — provider event rehearsal without customer delivery
+
+- Use synthetic signed MailerSend test events and a stubbed provider boundary.
+- Preserve original raw bytes and signature header.
+- Test URL validation, unmatched event retry, matched event reconciliation, duplicate event idempotency, unsubscribe, complaint, and hard-bounce suppression.
+- Do not change the production MailerSend event destination or readiness flag.
+- Do not submit customer email or real provider messages.
+
+**Exit:** signature, idempotency, reconciliation, and suppression contracts pass with zero real provider submissions.
+
+### Stage 6 — staging acceptance report
+
+The report must contain:
+
+- Exact candidate SHA and CI run IDs.
+- Staging target identifiers (non-secret IDs only).
+- NS-01–NS-15 results and links.
+- Migration and database contract results.
+- Shopify ingress and exact-store isolation evidence.
+- n8n workflow export hashes, inactive status, execution-retention/redaction evidence.
+- Provider stub call count = 0 real MailerSend requests.
+- Defects, unresolved blockers, owner, and remediation.
+- Explicit statement that no production system, customer, or billing state was changed.
+
+**Exit:** engineering review signs the staging report. This does not authorize production.
+
+## 5. Production gates remain separate
+
+Even after staging passes, production remains HOLD until separately approved evidence exists for:
+
+- Owner-controlled Shopify Partner app and public app identity, callback, scopes, protected customer data, and Pixel UID.
+- Production Supabase schema/migration parity, historical exact-store lineage dispositions, verified backup restore, and production-like clone rehearsal.
+- Owner-controlled Cloudflare Worker and Edge Function secrets/routes.
+- The three production n8n workflow exports, duplicate-ingress prevention, manual one-off sender branch removal, and execution retention/redaction.
+- MailerSend sender/domain, API permissions, signed V2 event destination, event-set verification, and merchant-funded cost cap.
+- Privacy export/redaction completion evidence and incident/rollback procedures.
+- A controlled, consent-eligible test-store lifecycle proving provider event, paid-order attribution, refunds, and non-charging fee measurement.
+- Separate written approvals for production migration, Edge/Worker deployment, workflow cutover, provider event routing, customer sends, billing, Shopify release, and rollout.
+
+No stage approval implies approval of the next stage.
+
+## 6. Current decision
+
+**NO-SEND ACCEPTANCE: PARTIAL — candidate CI evidence exists; full 15-case composed acceptance and staging execution remain open.**
+
+**STAGING PLAN: PREPARED — execution is blocked until an owner-controlled, isolated, zero-cost staging boundary is identified.**
+
+**PRODUCTION: HOLD — no production operation is authorized by this document.**
