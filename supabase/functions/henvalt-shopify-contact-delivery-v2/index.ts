@@ -6,7 +6,7 @@ const SERVICE_ROLE_KEY=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const DELIVERY_AUTH_TOKEN=Deno.env.get("HENVALT_DELIVERY_AUTH_TOKEN")??"";
 const MAILERSEND_V2_EVENTS_READY=Deno.env.get("HENVALT_V2_MAILERSEND_EVENTS_READY")==="true";
 const API_VERSION="2026-10";
-const json=(status:number,body:Record<string,unknown>)=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});const validShopDomain=(v:string)=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.myshopify\\.com$/.test(v);
+const json=(status:number,body:Record<string,unknown>)=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});const validShopDomain=(v:string)=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.myshopify\.com$/.test(v);
 function eq(a:string,b:string){const x=new TextEncoder().encode(a),y=new TextEncoder().encode(b);if(x.length!==y.length)return false;let d=0;for(let i=0;i<x.length;i++)d|=x[i]^y[i];return d===0;}
 function row(v:unknown):Record<string,unknown>|null{return Array.isArray(v)?(v[0]&&typeof v[0]==="object"?v[0] as Record<string,unknown>:null):(v&&typeof v==="object"?v as Record<string,unknown>:null);}
 async function rpc(name:string,body:Record<string,unknown>){const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/"+name,{method:"POST",redirect:"error",headers:{apikey:SERVICE_ROLE_KEY,authorization:"Bearer "+SERVICE_ROLE_KEY,"content-type":"application/json","accept-profile":"henvalt","content-profile":"henvalt"},body:JSON.stringify(body),signal:AbortSignal.timeout(12000)});if(!r.ok){console.error("Delivery RPC failed",name,r.status);throw new Error("RPC_FAILED");}return row(await r.json().catch(()=>null));}
