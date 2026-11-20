@@ -15,6 +15,10 @@ const dashboardHtml = readFileSync(
   new URL("../dashboard/index.html", import.meta.url),
   "utf8",
 );
+const dashboardReadModel = readFileSync(
+  new URL("../supabase/migrations/202611180041_shopify_v2_dashboard_read_model.sql", import.meta.url),
+  "utf8",
+);
 
 test("dashboard scope accepts only one active connection and the selected connection", () => {
   assert.equal(isSingleActiveStoreScope([{ id: "store-a", active: true }]), true);
@@ -69,5 +73,13 @@ test("dashboard UI selects one store and never combines unlike currencies", () =
   assert.ok(dashboardHtml.includes("Array.isArray(data.revenueSeries)"));
   assert.ok(dashboardHtml.includes("revenueSeries.map(x=>Number(x.amount)||0)"));
   assert.ok(dashboardHtml.includes("DAILY CONFIRMED REVENUE"));
+  const pixelActivityStart = dashboardReadModel.indexOf("SELECT pa.status");
+  const pixelActivityEnd = dashboardReadModel.indexOf(") pixel_attempt ON true", pixelActivityStart);
+  const pixelActivityQuery = dashboardReadModel.slice(pixelActivityStart, pixelActivityEnd);
+  assert.ok(pixelActivityStart >= 0 && pixelActivityEnd > pixelActivityStart);
+  assert.ok(pixelActivityQuery.includes("JOIN henvalt.shopify_mailer_provider_events_v2 pe"));
+  assert.ok(pixelActivityQuery.includes("pe.processing_status='PROCESSED'"));
+  assert.ok(pixelActivityQuery.includes("pe.event_type IN ('activity.sent','activity.delivered')"));
+
   assert.ok(!dashboardHtml.includes('a.filter(x=>x.outcome==="recovered"&&x.amount!=null)'));
 });
