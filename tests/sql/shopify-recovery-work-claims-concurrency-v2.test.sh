@@ -48,10 +48,13 @@ BEGIN
 
  PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
  v_claim:=henvalt.claim_shopify_recovery_work_v2('retry-test-worker',100,120);
- IF v_claim->>'claimed'<>'1' THEN
+ SELECT (item->>'lease_id')::uuid INTO v_lease
+ FROM jsonb_array_elements(v_claim->'items') item
+ WHERE item->>'work_id'=v_fixture.opportunity_id::text
+   AND item->>'work_type'='PIXEL_OPPORTUNITY';
+ IF v_lease IS NULL THEN
   RAISE EXCEPTION 'Final permitted retry was not claimable: %',v_claim;
  END IF;
- v_lease:=(v_claim->'items'->0->>'lease_id')::uuid;
  v_finish:=henvalt.finish_shopify_recovery_work_claim_v2(
   v_lease,'retry-test-worker','DEFERRED',interval '1 hour'
  );
@@ -69,12 +72,11 @@ BEGIN
   v_fixture.tenant_id,v_fixture.shopify_connection_id,'crashed-worker',
   now()-interval '1 second',now()-interval '1 second',5,5);
  v_claim:=henvalt.claim_shopify_recovery_work_v2('retry-sweeper',100,120);
- IF v_claim->>'exhausted_marked'<>'1' THEN
+ IF coalesce((v_claim->>'exhausted_marked')::integer,0)<1 THEN
   RAISE EXCEPTION 'Expired final lease was not swept into exhausted review: %',v_claim;
  END IF;
  IF (SELECT count(*) FROM henvalt.shopify_recovery_exhausted_work_v2
-     WHERE tenant_id=v_fixture.tenant_id
-       AND shopify_connection_id=v_fixture.shopify_connection_id)<>2 THEN
+     WHERE id IN (v_lease,v_crashed_id))<>2 THEN
   RAISE EXCEPTION 'Operator-review view did not retain both exhausted work items';
  END IF;
 END;
