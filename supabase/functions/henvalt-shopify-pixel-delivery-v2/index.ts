@@ -34,7 +34,7 @@ async function parseJsonLimited(request:Request,maxBytes:number):Promise<unknown
 }
 const uuid=(v:unknown)=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
 async function rpc(name:string,body:Record<string,unknown>){
- const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/"+name,{method:"POST",
+ const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/"+name,{method:"POST",redirect:"error",
   headers:{apikey:SERVICE_ROLE_KEY,authorization:"Bearer "+SERVICE_ROLE_KEY,
    "content-type":"application/json","accept-profile":"henvalt","content-profile":"henvalt"},
   body:JSON.stringify(body),signal:AbortSignal.timeout(12000)});
@@ -53,7 +53,7 @@ async function fingerprint(email:string,secret:string){
 }
 async function lookupCustomer(shop:string,token:string,gid:string){
  const response=await fetch("https://"+shop+"/admin/api/"+API_VERSION+"/graphql.json",{
-  method:"POST",headers:{"x-shopify-access-token":token,"content-type":"application/json",accept:"application/json"},
+  method:"POST",redirect:"error",headers:{"x-shopify-access-token":token,"content-type":"application/json",accept:"application/json"},
   body:JSON.stringify({query:"query HENVALTPixelDeliveryCustomer($id: ID!) { customer(id: $id) { id email emailMarketingConsent { marketingState consentUpdatedAt } defaultAddress { countryCodeV2 provinceCode } } }",variables:{id:gid}}),
   signal:AbortSignal.timeout(15000)
  });
@@ -181,7 +181,7 @@ Deno.serve(async(req:Request)=>{
    // response or ledger operation fails. Preserve the cost reservation.
    providerSubmissionStarted=true;
    providerResponse=await fetch("https://api.mailersend.com/v1/email",{
-    method:"POST",headers:{authorization:"Bearer "+providerToken,"content-type":"application/json","x-requested-with":"XMLHttpRequest"},
+    method:"POST",redirect:"error",headers:{authorization:"Bearer "+providerToken,"content-type":"application/json","x-requested-with":"XMLHttpRequest"},
     body:JSON.stringify({from:{email:senderEmail,name:senderName},to:[{email:finalCustomer.email}],
      subject:message.subject,html:message.html,text:message.text}),
     signal:AbortSignal.timeout(20000)
