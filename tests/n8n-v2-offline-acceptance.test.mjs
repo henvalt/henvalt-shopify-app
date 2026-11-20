@@ -127,3 +127,29 @@ test("offline Recovery→Delivery acceptance: transport timeout does not expose 
   assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
   assert.equal(JSON.stringify(result).includes("provider-secret"), false);
 });
+
+
+test("offline Recovery→Delivery acceptance: empty candidate set makes no claim handoff, lease finish, or provider request", async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const body = init.body ? JSON.parse(init.body) : null;
+    calls.push({ url, body });
+    if (url.includes("/rest/v1/rpc/claim_shopify_recovery_work_v2")) {
+      return new Response(JSON.stringify({ accepted: true, claimed: 0, items: [] }), { status: 200 });
+    }
+    if (url.includes("/rest/v1/rpc/")) return rpcSuccess({ accepted: true });
+    throw new Error("unexpected_network_target");
+  };
+
+  const result = await makeRuntime(fetchImpl).runTick({ workerId: "worker-empty-01" });
+
+  assert.equal(result.accepted, true);
+  assert.equal(result.status, "COMPLETED");
+  assert.equal(result.summary.claimed, 0);
+  assert.deepEqual(result.summary.outcomes, []);
+  assert.equal(calls.filter(call => call.url.includes("/rest/v1/rpc/claim_shopify_recovery_work_v2")).length, 1);
+  assert.equal(calls.some(call => call.url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")), false);
+  assert.equal(calls.some(call => call.url.includes("/functions/v1/")), false);
+  assert.equal(calls.some(call => call.url.includes("api.mailersend.com")), false);
+  assert.equal(calls.length, 6);
+});
