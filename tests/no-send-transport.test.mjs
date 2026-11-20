@@ -29,7 +29,7 @@ test("no-send transport rejects unapproved hosts and non-HTTPS destinations", as
     () => guard.fetchImpl("http://edge.invalid/path"),
     /no_send_transport_destination_blocked/,
   );
-  assert.equal(guard.blockedUnapprovedAttempts, 2);
+  assert.equal(guard.blockedUnapprovedAttempts, 1); // only the unapproved hostname; HTTP is separately rejected by protocol policy
   assert.deepEqual(guard.attempts, [
     { destination: "unapproved.example.invalid", method: "GET" },
     { destination: "edge.invalid", method: "GET" },
