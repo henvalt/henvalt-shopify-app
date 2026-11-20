@@ -162,3 +162,14 @@ test("same paid order replay reuses the original attribution and fee measurement
  assert.match(sql,/v_fee_count<>1/);
  assert.match(sql,/WHERE order_identity_id=v_order_a AND shopify_connection_id=v_store_a\)<>1/);
 });
+test("attribution evaluator serializes same-order replays and resolves competing opportunity claims",()=>{
+ const start=attributionMigration.indexOf("CREATE OR REPLACE FUNCTION henvalt.evaluate_shopify_recovery_attribution_v2");
+ const end=attributionMigration.indexOf("$function$;",start);
+ const fn=attributionMigration.slice(start,end);
+ assert.match(fn,/WHERE id=p_order_identity_id FOR UPDATE/);
+ assert.match(fn,/ON CONFLICT DO NOTHING\s+RETURNING id INTO v_attribution_id/);
+ assert.match(fn,/OPPORTUNITY_ALREADY_ATTRIBUTED/);
+ assert.match(fn,/WHERE shopify_connection_id=v_order\.shopify_connection_id AND order_identity_id=v_order\.id/);
+ assert.match(attributionMigration,/UNIQUE\(shopify_connection_id,order_identity_id\)/);
+ assert.match(attributionMigration,/UNIQUE\(shopify_connection_id,opportunity_id\)/);
+});
