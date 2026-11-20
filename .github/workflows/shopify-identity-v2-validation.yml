@@ -59,6 +59,8 @@ jobs:
         run: deno test --allow-env --allow-net --allow-read=. tests/edge-delivery-store-lineage-runtime-v2.test.ts
       - name: Prove legacy V1 MailerSend sender fails closed by default
         run: deno test --no-check --allow-env --allow-net --allow-read=. tests/edge-legacy-mailersend-no-send-runtime.test.ts
+      - name: Type-check legacy V1 MailerSend Edge Function
+        run: deno check --no-config supabase/functions/henvalt-mailersend-delivery/index.ts
       - name: Type-check pixel delivery Edge Function
         run: deno check --no-config supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts
       - name: Type-check checkout delivery Edge Function and shared request reader
