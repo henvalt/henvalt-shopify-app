@@ -193,8 +193,27 @@ Acceptance remains **PARTIAL**: NS-06 wrong-store and missing-auth composed case
 
 ## 6. Current decision
 
-**NO-SEND ACCEPTANCE: PARTIAL — exact-SHA CI on candidate `5180c9f` passes 459 repository Node tests, 13 focused provider/uninstall tests, and 228 identity/cost/privacy tests, plus the new endpoint-auth ordering regressions; full 15-case composed acceptance (including wrong-store/missing-auth and live n8n redaction evidence) and staging execution remain open.**
+**NO-SEND ACCEPTANCE: PARTIAL — latest exact-SHA CI on candidate `85053cd` passes 460 repository Node tests, 13 focused provider/uninstall tests, and 229 identity/cost/privacy tests, with both checkout and pixel provider-submission SQL gates passing; full 15-case composed acceptance (including wrong-store/missing-auth and live n8n redaction evidence) and staging execution remain open.**
 
 **STAGING PLAN: PREPARED — execution is blocked until an owner-controlled, isolated, zero-cost staging boundary is identified.**
 
 **PRODUCTION: HOLD — no production operation is authorized by this document.**
+
+
+## 8. Latest no-send evidence — 20 November 2026, 17:54 PKT
+
+Candidate code commit: `85053cd866f4adbc1b11f403b5c2d21bbc12a7e8`.
+
+Exact-SHA GitHub Actions:
+- Identity V2 validation: run [44736568217](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44736568217) — **success**.
+- Shopify app configuration checks and deployment workflow: run [44736568036](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44736568036) — **success**; no production deployment was performed or authorized.
+- Identity V2 job totals: repository Node regression **460/460**, focused provider/uninstall **13/13**, identity/cost/privacy **229/229**. These are separately reported suite totals, not additive unique test counts.
+- Disposable PostgreSQL checkout provider-submission gate printed `shopify_checkout_provider_submission_gate_passed`.
+- Disposable PostgreSQL pixel provider-submission gate printed `shopify_pixel_provider_submission_gate_passed`.
+- The prior run on `8fecfd0` failed because the newly registered pixel SQL step did not receive the disposable database password. Commit `85053cd` explicitly supplies `PGPASSWORD`; the exact-SHA rerun above completed successfully and both provider gate SQL tests passed.
+
+This evidence is limited to candidate CI and disposable PostgreSQL. It does not validate production schema parity, deployed Edge Functions, real provider behavior, or a staging environment.
+
+PR #6 remains **OPEN, DRAFT, UNMERGED**. No merge, deployment, workflow activation, customer send, or billing action occurred.
+
+Acceptance remains **PARTIAL**: composed wrong-store and missing-auth runtime cases remain open; full NS-01–NS-15 composed acceptance, live n8n execution-data redaction evidence, and isolated staging execution remain open. Production remains **HOLD**.
