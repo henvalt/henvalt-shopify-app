@@ -99,6 +99,7 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
     try {
       const response = await fetchImpl(`${base}/functions/v1/${valid.endpoint}`, {
         method: "POST",
+        redirect: "error",
         headers: {
           authorization: `Bearer ${bearerToken}`,
           "content-type": "application/json",
