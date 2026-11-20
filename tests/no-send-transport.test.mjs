@@ -30,6 +30,7 @@ test("no-send transport blocks MailerSend apex and subdomains, including termina
     "mailersend.com.",
     "api.mailersend.com.",
     "events.mailersend.com.",
+    "events.mailersend.com..",
   ];
   for (const host of hosts) {
     await assert.rejects(
@@ -43,7 +44,7 @@ test("no-send transport blocks MailerSend apex and subdomains, including termina
   }
   assert.equal(guard.blockedProviderAttempts, hosts.length);
   assert.deepEqual(guard.attempts, hosts.map((host) => ({
-    destination: host.replace(/\.$/, ""),
+    destination: host.replace(/\.+$/, ""),
     method: "POST",
   })));
   assert.equal(JSON.stringify(guard.attempts).includes("synthetic-secret"), false);
@@ -65,6 +66,24 @@ test("no-send transport rejects unapproved hosts and non-HTTPS destinations", as
     { destination: "unapproved.example.invalid", method: "GET" },
     { destination: "edge.invalid", method: "GET" },
   ]);
+});
+
+
+test("no-send transport blocks uppercase MailerSend Request URLs and repeated terminal dots", async () => {
+  const guard = createNoSendTransport();
+  const request = new Request("https://API.MAILERSEND.COM../v1/email?token=synthetic-secret", {
+    method: "POST",
+    headers: { authorization: "Bearer synthetic-secret" },
+    body: "private@example.invalid",
+  });
+  await assert.rejects(
+    () => guard.fetchImpl(request),
+    /no_send_transport_provider_blocked/,
+  );
+  assert.deepEqual(guard.attempts, [{ destination: "api.mailersend.com", method: "POST" }]);
+  assert.equal(guard.blockedProviderAttempts, 1);
+  assert.equal(JSON.stringify(guard.attempts).includes("synthetic-secret"), false);
+  assert.equal(JSON.stringify(guard.attempts).includes("private@example.invalid"), false);
 });
 
 test("no-send transport never performs network I/O even for allowlisted synthetic hosts", async () => {
