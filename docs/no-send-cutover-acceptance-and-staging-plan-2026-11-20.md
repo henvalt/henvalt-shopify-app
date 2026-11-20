@@ -82,6 +82,7 @@ Required before any deployment action:
 - Verify each target is separate from production by project ID, hostname, app/client ID, workflow IDs, credential namespace, and provider account.
 - Use synthetic stores, customers, checkouts, consent evidence, orders, provider events, and tokens.
 - If no separate n8n staging instance/workspace exists, keep the work at offline tests; do not import drafts into the three live workflows.
+- Read-only Supabase inventory on 20 November found the active `henvalt` project (`ocyplckdojdubyrsxcxa`) and the older `henvalt_v23` project (`wrsediuhepdyajnihjoz`) in `INACTIVE` status. Prior project history says preserve the active project and do not start a new project or rebuild the database. Therefore `henvalt_v23` is **not** treated as a staging target and must not be restored/reactivated as part of this plan.
 - If no zero-cost staging project exists, use disposable PostgreSQL in CI and stop. Do not create a paid project, branch, or subscription under this plan.
 - Capture names and presence of staging secrets only; never place secret values in Git, documents, or test output.
 
