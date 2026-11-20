@@ -76,3 +76,15 @@ test("ambiguous provider outcomes cannot be downgraded to failed or release rese
  assert.match(outcomeSql,/v_attempt\.status='AMBIGUOUS' AND p_status<>'SUBMITTED'/);
  assert.match(outcomeSql,/AMBIGUOUS is never converted to FAILED/);
 });
+
+test("no-send interlock rejects missing MailerSend event readiness before any delivery lookup or provider request",()=>{
+ const handler=edge.slice(edge.indexOf("Deno.serve("));
+ const auth=handler.indexOf('if(!equal(bearer,DELIVERY_AUTH_TOKEN))');
+ const readiness=handler.indexOf('if(!MAILERSEND_V2_EVENTS_READY)');
+ const parse=handler.indexOf('parseJsonLimited(req,160000)');
+ const context=handler.indexOf('resolve_shopify_recovery_message_context_v2');
+ const provider=handler.indexOf('https://api.mailersend.com/v1/email');
+ assert.match(edge,/HENVALT_V2_MAILERSEND_EVENTS_READY/);
+ assert.ok(auth>=0&&readiness>auth&&parse>readiness&&context>parse&&provider>context);
+ assert.match(handler,/if\(!MAILERSEND_V2_EVENTS_READY\)return json\(503/);
+});
