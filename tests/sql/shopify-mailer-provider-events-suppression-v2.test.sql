@@ -500,6 +500,7 @@ DECLARE
   v_ordered_at timestamptz; v_body text; v_hmac text; v_refund_body text;
   v_result record; v_projection jsonb; v_policy_result jsonb;
   v_signature text; v_delivery_at timestamptz;
+  v_secret text:='synthetic-mailersend-webhook-secret';
   v_net numeric(18,4); v_fee numeric(18,4); v_status text; v_fee_status text;
 BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
