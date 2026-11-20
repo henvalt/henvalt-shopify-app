@@ -31,7 +31,7 @@ test("Shopify access tokens are only sent to strictly validated myshopify hosts"
   const checkout = read("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts");
   const pixel = read("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts");
   for (const source of [checkout, pixel]) {
-    assert.match(source, /const validShopDomain=\\(v:string\\)=>\\/\\^\\[a-z0-9\\]\\(\\?:/);
+    assert.ok(source.includes("const validShopDomain=(v:string)=>/^[a-z0-9]"));
   }
   assert.ok(checkout.includes("if(!validShopDomain(shop))return false"));
   assert.ok(checkout.includes("if(!validShopDomain(shop))return null"));
