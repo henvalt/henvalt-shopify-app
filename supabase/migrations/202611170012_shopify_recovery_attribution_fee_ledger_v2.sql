@@ -577,9 +577,13 @@ AS $function$
 BEGIN
   IF NEW.processing_status='PROCESSED'
      AND NEW.event_type='activity.delivered'
-     AND NEW.send_attempt_id IS NOT NULL THEN
+     AND NEW.send_attempt_id IS NOT NULL
+     AND NEW.occurred_at IS NOT NULL THEN
     UPDATE henvalt.shopify_recovery_send_attempt_v2
-       SET delivered_at=COALESCE(delivered_at,NEW.occurred_at,pg_catalog.now()),
+       SET delivered_at=CASE
+             WHEN delivered_at IS NULL THEN NEW.occurred_at
+             ELSE LEAST(delivered_at,NEW.occurred_at)
+           END,
            updated_at=pg_catalog.now()
      WHERE id=NEW.send_attempt_id
        AND tenant_id=NEW.tenant_id
