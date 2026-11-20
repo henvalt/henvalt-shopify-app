@@ -10,8 +10,9 @@ const AMBIGUOUS_STATUSES = new Set([
   "provider_outcome_requires_reconciliation",
 ]);
 
-function safeCorrelationId(value) {
-  if (typeof value !== "string" || value.length > 80 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
+function safeCorrelationId(value, workId) {
+  if (typeof value !== "string" || value !== `v2:${workId}` ||
+      value.length > 80 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
     throw new TypeError("invalid_correlation_id");
   }
   return value;
@@ -28,7 +29,7 @@ export function validateClaim(claim) {
   if (typeof claim.worker_id !== "string" || !/^[A-Za-z0-9._:-]{3,80}$/.test(claim.worker_id)) {
     throw new TypeError("invalid_claim");
   }
-  const correlationId = safeCorrelationId(claim.correlation_id);
+  const correlationId = safeCorrelationId(claim.correlation_id, claim.work_id);
   return Object.freeze({
     endpoint,
     workType: claim.work_type,
@@ -45,23 +46,15 @@ export function classifyHandoffResponse(status, body) {
   if (status >= 200 && status < 300 && payload.accepted === true && ACCEPTED_STATUSES.has(state)) {
     return Object.freeze({ outcome: "HANDOFF_ACCEPTED", reason: "explicit_handoff_accepted", retryAfterSeconds: 0 });
   }
-  // A 202 ambiguous/pending response means the Edge Function already crossed
-  // the provider boundary and owns reconciliation. Complete the work lease;
-  // never release it for another handoff attempt.
   if (status >= 200 && status < 300 && payload.accepted === true && AMBIGUOUS_STATUSES.has(state)) {
     return Object.freeze({ outcome: "HANDOFF_ACCEPTED", reason: "accepted_provider_reconciliation_pending", retryAfterSeconds: 0 });
   }
-  // The Edge Function records a definite provider rejection as FAILED before
-  // returning this explicit response. It must not be re-submitted.
   if (status === 502 && payload.accepted === false && state === "" && payload.error === "provider_submission_rejected") {
     return Object.freeze({ outcome: "TERMINAL", reason: "provider_rejection_recorded", retryAfterSeconds: 0 });
   }
   if (status === 400 || status === 422) {
     return Object.freeze({ outcome: "TERMINAL", reason: "permanent_request_rejection", retryAfterSeconds: 0 });
   }
-  // A gateway-level 404/410 can mean the V2 Edge Function route is missing
-  // or has been retired. Do not permanently close every claimed opportunity
-  // when deployment/routing is the real fault.
   if (status === 404 || status === 410) {
     return Object.freeze({ outcome: "DEFERRED", reason: "edge_or_provider_unavailable", retryAfterSeconds: 3600 });
   }
@@ -77,8 +70,6 @@ export function classifyHandoffResponse(status, body) {
   if (status === 408 || status >= 500) {
     return Object.freeze({ outcome: "DEFERRED", reason: "edge_or_provider_unavailable", retryAfterSeconds: 3600 });
   }
-  // Malformed JSON, unknown statuses and unconfirmed 2xx are conservative
-  // deferrals. They never trigger a second provider submission.
   return Object.freeze({ outcome: "DEFERRED", reason: "handoff_not_confirmed", retryAfterSeconds: 3600 });
 }
 
@@ -86,7 +77,7 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
   let trustedUrl = false;
   try {
     const parsed = new URL(supabaseUrl);
-    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\.supabase\.co$/i.test(parsed.hostname) &&
+    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(parsed.hostname) &&
       (parsed.pathname === "" || parsed.pathname === "/") && !parsed.port && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
   } catch { trustedUrl = false; }
   if (!trustedUrl ||
@@ -95,7 +86,7 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
       typeof fetchImpl !== "function") {
     throw new TypeError("invalid_adapter_configuration");
   }
-  const base = supabaseUrl.replace(/\/+$/, "");
+  const base = supabaseUrl.replace(/\\/+$/, "");
   return async function handoff(claim) {
     const valid = validateClaim(claim);
     const isCheckout = valid.workType === "CHECKOUT_INTERVENTION";
@@ -127,8 +118,6 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
         retryAfterSeconds: 3600,
       });
     }
-    // Delivery returns only a classified handoff result. Recovery owns lease
-    // completion after its Execute Workflow subworkflow returns.
     return Object.freeze({
       work_type: valid.workType,
       work_id: valid.workId,
