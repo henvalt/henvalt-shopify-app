@@ -119,7 +119,7 @@ export async function mailerSendV2DeliveryReady(apiToken, senderEmail, providerA
   let domainsResponse;
   try {
     domainsResponse = await fetcher("https://api.mailersend.com/v1/domains?limit=100", {
-      method: "GET", headers, signal: AbortSignal.timeout(8000),
+      method: "GET", redirect: "error", headers, signal: AbortSignal.timeout(8000),
     });
   } catch {
     return false;
@@ -141,7 +141,7 @@ export async function mailerSendV2DeliveryReady(apiToken, senderEmail, providerA
   try {
     const query = new URLSearchParams({ domain_id: domain.id, limit: "100" });
     webhooksResponse = await fetcher("https://api.mailersend.com/v1/webhooks?" + query.toString(), {
-      method: "GET", headers, signal: AbortSignal.timeout(8000),
+      method: "GET", redirect: "error", headers, signal: AbortSignal.timeout(8000),
     });
   } catch {
     return false;
