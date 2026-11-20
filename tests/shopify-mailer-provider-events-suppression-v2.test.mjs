@@ -73,3 +73,14 @@ test("unmatched signed checkout provider events with a message ID request retry 
  assert.match(edge,/row\.status==="UNMATCHED"&&eventHasMessageId&&reconciliationRow\.status==="NOT_PIXEL_RECONCILABLE"/);
  assert.match(edge,/return json\(503,\{error:"provider_event_waiting_for_attempt_correlation"\}\)/);
 });
+
+test("revenue attribution can require a signed provider delivery timestamp",()=>{
+ const sql=readFileSync("tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql","utf8");
+ assert.match(sql,/set_shopify_recovery_attribution_policy_v2\([\s\S]*?'SHOPIFY_TOTAL_PRICE',true\)/);
+ assert.match(sql,/attribution-delivered-event-store-a-001/);
+ assert.match(sql,/created_at',v_delivery_at/);
+ assert.match(sql,/ingest_mailersend_webhook_v2\([\s\S]*?v_provider_key,v_signature/);
+ assert.match(sql,/status='DELIVERED' AND delivered_at=v_delivery_at/);
+ assert.match(sql,/WHERE o\.shopify_order_id='987655'/);
+ assert.ok(sql.indexOf("attribution-delivered-event-store-a-001")<sql.indexOf("v_ordered_at:=now()+interval '1 minute'"));
+});
