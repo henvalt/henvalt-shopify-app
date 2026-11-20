@@ -196,6 +196,21 @@ BEGIN
     RAISE EXCEPTION 'Signed activity.sent event did not settle ambiguous checkout attempt: %',v_result;
   END IF;
 
+  -- A signed delivery event without the provider's actual timestamp must not
+  -- manufacture delivery evidence from database processing time.
+  v_body:='{"type":"activity.delivered","data":{"id":"provider-event-missing-time-005","domain_id":"domain-123","message_id":"provider-message-sent-003","email_id":"provider-email-missing-time-005","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
+  v_signature:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED'
+    OR NOT EXISTS(
+      SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
+      WHERE id=v_attempt_sent AND status='DELIVERED' AND delivered_at IS NULL
+    ) THEN
+    RAISE EXCEPTION 'Missing provider timestamp incorrectly created delivery confirmation: %',v_result;
+  END IF;
+
   -- Late unsubscribe uses the original permit fingerprint, not the webhook's recipient string.
   INSERT INTO henvalt.shopify_sender_profiles_v2(
     tenant_id,shopify_connection_id,provider_account_key,from_email,from_name,status,verified_at
