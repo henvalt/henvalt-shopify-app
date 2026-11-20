@@ -80,6 +80,7 @@ test("dashboard UI selects one store and never combines unlike currencies", () =
   assert.ok(pixelActivityQuery.includes("JOIN henvalt.shopify_mailer_provider_events_v2 pe"));
   assert.ok(pixelActivityQuery.includes("pe.processing_status='PROCESSED'"));
   assert.ok(pixelActivityQuery.includes("pe.event_type IN ('activity.sent','activity.delivered')"));
+  assert.ok(pixelActivityQuery.includes("pe.occurred_at IS NOT NULL"));
 
   assert.ok(!dashboardHtml.includes('a.filter(x=>x.outcome==="recovered"&&x.amount!=null)'));
 });
