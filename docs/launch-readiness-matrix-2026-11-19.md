@@ -6,6 +6,26 @@ Status: evidence-based preparation checkpoint. This matrix distinguishes committ
 
 **Not launch-ready yet.** The V2 recovery lifecycle is now represented by executable, offline-tested candidate code and a three-workflow native n8n build sheet. The live n8n workflows remain on the legacy implementation; V2 migrations, Edge Functions, Worker route and MailerSend event cutover have not been deployed/verified. There is no proven live Shopify event → eligible recovery → authorized email → provider event → recovered order → fee ledger end-to-end run.
 
+## 20 November — finite Recovery retry ceiling and remaining cutover gates
+
+Candidate migration 061 (`202611200001_shopify_recovery_work_retry_ceiling_v2.sql`) now enforces a five-attempt default ceiling for Recovery work. A final deferred attempt is retained as `EXHAUSTED`; a worker crash on the fifth attempt is swept into the same state after lease expiry. The service-role-only read view preserves tenant/store scope, attempt counts and the final worker identity for operator review. Exhaustion is never treated as successful delivery and does not trigger an automatic resend.
+
+Exact candidate head `281a5ad8fa3fae8d382df2f9010bdde439097628` passed Identity V2 CI run [44799015266](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44799015266): complete Node regression suite, secret scan, Deno checks, all 61 candidate migrations on disposable PostgreSQL, and the concurrent claim/final-attempt/crashed-lease test. Shopify configuration run [44799015042](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44799015042) passed static and configuration validation; the deployment job was skipped. PR #6 remains draft and unmerged. This is candidate validation only.
+
+### Remaining production no-send cutover work
+
+The live operational gates are still **0 of 5 independently verified**:
+
+1. Establish an approved production stop mechanism under an account the HENVALT owner controls.
+2. Only after explicit approval, deploy the V1 sender interlock and independently verify its active state.
+3. Verify every live delivery entry point is blocked, including ordinary and one-off/manual sender paths.
+4. Capture actual account-level execution-retention and sensitive-data redaction evidence.
+5. Re-run the complete no-send acceptance matrix and capture the evidence.
+
+Only after all five gates pass can isolated staging begin. The former partner's n8n workspace is inaccessible to the current operator, and no separate owner-controlled n8n workspace exists. The former account must not be inspected, exported, or used. The current Hostinger Premium shared plan does not provide the persistent n8n runtime required for isolated staging, and no VPS or replacement workspace is available. Repository CI is not a substitute for that runtime.
+
+**Remaining estimate:** the candidate retry-hardening task is implemented and exact-head CI passed; the overall production cutover is still blocked by the missing owner-controlled automation runtime. It is not honest to give a calendar estimate until that access/runtime blocker is resolved. Production remains untouched; no sender interlock has been deployed and retention/redaction remains unverified.
+
 ## 19 November — checkout candidate terminal-state and lease retry hardening
 
 The candidate chain now includes migration 058 (`202611190004_shopify_checkout_candidate_terminal_state_v2.sql`). Checkout candidate refresh preserves `CONVERTED` and `CHECKOUT_CLOSED` states rather than re-queueing closed work. SQL regression coverage proves a closed candidate is not resurrected by a contradictory later open projection, while a matching same-store order can still convert it. The lease lifecycle test also verifies deferred work cannot be reclaimed before its retry deadline and receives a fresh lease identity after becoming due.
