@@ -54,15 +54,13 @@ fi
 "${psql_cmd[@]}" <<'SQL'
 DROP TRIGGER test_attribution_race_barrier_v2 ON henvalt.shopify_recovery_attributions_v2;
 DROP FUNCTION henvalt.test_attribution_race_barrier_v2();
+DELETE FROM henvalt.shopify_recovery_fee_measurements_v2 fee
+USING henvalt.shopify_recovery_attributions_v2 a,
+      henvalt.test_attribution_race_fixture_v2 f
+WHERE fee.attribution_id=a.id AND a.opportunity_id=f.opportunity_id;
 DELETE FROM henvalt.shopify_recovery_attributions_v2 a
 USING henvalt.test_attribution_race_fixture_v2 f
 WHERE a.opportunity_id=f.opportunity_id;
-DELETE FROM henvalt.shopify_recovery_fee_measurements_v2 fee
-USING henvalt.test_attribution_race_fixture_v2 f
-WHERE fee.attribution_id IN (
-  SELECT a.id FROM henvalt.shopify_recovery_attributions_v2 a
-  WHERE a.opportunity_id=f.opportunity_id
-);
 DELETE FROM henvalt.shopify_recovery_send_attempt_v2
 WHERE idempotency_key='attribution-race-send';
 DELETE FROM henvalt.shopify_recovery_intervention_v2
