@@ -92,8 +92,7 @@ BEGIN
     (v_tenant,v_store_a,v_opp_a,v_customer_a,1,'SUBMITTED','2026-11-17T00:00:00Z'),
     (v_tenant,v_store_a,v_opp_a,v_customer_a,2,'SUBMITTED','2026-11-17T00:01:00Z'),
     (v_tenant,v_store_b,v_opp_b,v_customer_b,1,'SUBMITTED','2026-11-17T00:00:00Z'),
-    (v_tenant,v_store_b,v_opp_b,v_customer_b,2,'SUBMITTED','2026-11-17T00:01:00Z')
-  RETURNING id,opportunity_id,step_number INTO v_intervention_a1, v_intervention_a2, v_intervention_b1, v_intervention_b2;
+    (v_tenant,v_store_b,v_opp_b,v_customer_b,2,'SUBMITTED','2026-11-17T00:01:00Z');
 
   -- Resolve the four intervention IDs explicitly; INSERT RETURNING row order is not a contract.
   SELECT id INTO v_intervention_a1 FROM henvalt.shopify_recovery_intervention_v2 WHERE opportunity_id=v_opp_a AND step_number=1;
