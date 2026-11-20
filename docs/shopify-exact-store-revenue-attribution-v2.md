@@ -8,7 +8,7 @@ The candidate V2 chain now includes:
 - verified Shopify order receipt and immutable connection identity;
 - exact-store checkout-token matching and order lifecycle projection;
 - exact-store recovery opportunity, intervention and send-attempt lineage;
-- provider acceptance and delivery timestamps from MailerSend event correlation;
+- provider acceptance and delivery timestamps from MailerSend event correlation; delivery confirmation requires the signed provider event's actual timestamp, and out-of-order duplicates retain the earliest valid delivery time;
 - successful refund transaction adjustments tied to the exact matched order.
 
 Migrations 021–022 project exact-store order create/update/paid/cancelled topics and successful refunds/create transactions. Migration 023 creates the attribution and fee-measurement ledgers. The SQL integration test verified a paid order attributed to its eligible recovery send, followed by partial and full refund reconciliation.
