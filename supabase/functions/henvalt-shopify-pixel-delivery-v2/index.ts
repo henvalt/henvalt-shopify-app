@@ -33,6 +33,7 @@ async function parseJsonLimited(request:Request,maxBytes:number):Promise<unknown
  return JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes));
 }
 const uuid=(v:unknown)=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(v);
+const validShopDomain=(v:string)=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.myshopify\.com$/.test(v);
 async function rpc(name:string,body:Record<string,unknown>){
  const r=await fetch(SUPABASE_URL+"/rest/v1/rpc/"+name,{method:"POST",redirect:"error",
   headers:{apikey:SERVICE_ROLE_KEY,authorization:"Bearer "+SERVICE_ROLE_KEY,
@@ -52,6 +53,7 @@ async function fingerprint(email:string,secret:string){
  return [...bytes].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 async function lookupCustomer(shop:string,token:string,gid:string){
+ if(!validShopDomain(shop))throw new Error("SHOPIFY_LOOKUP_FAILED");
  const response=await fetch("https://"+shop+"/admin/api/"+API_VERSION+"/graphql.json",{
   method:"POST",redirect:"error",headers:{"x-shopify-access-token":token,"content-type":"application/json",accept:"application/json"},
   body:JSON.stringify({query:"query HENVALTPixelDeliveryCustomer($id: ID!) { customer(id: $id) { id email emailMarketingConsent { marketingState consentUpdatedAt } defaultAddress { countryCodeV2 provinceCode } } }",variables:{id:gid}}),
@@ -122,7 +124,7 @@ Deno.serve(async(req:Request)=>{
   const providerToken=String(ctx.mailer_send_api_token??""),fpSecret=String(ctx.recipient_fingerprint_secret??"");
   const senderEmail=String(ctx.from_email??""),senderName=String(ctx.from_name??"");
   const senderId=String(ctx.sender_profile_id??"");
-  if(!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)||shopToken.length<20||
+  if(!validShopDomain(shop)||shopToken.length<20||
     !gid.startsWith("gid://shopify/Customer/")||!uuid(connectionId)||!uuid(customerIdentityId)||
     !providerKey||providerToken.length<20||fpSecret.length<32||!validEmail(senderEmail)||
     !senderName.trim()||!uuid(senderId))return json(503,{error:"pixel_delivery_context_incomplete"});
