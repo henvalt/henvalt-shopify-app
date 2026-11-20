@@ -200,10 +200,10 @@ BEGIN
   -- manufacture delivery evidence from database processing time.
   v_body:='{"type":"activity.delivered","data":{"id":"provider-event-missing-time-005","domain_id":"domain-123","message_id":"provider-message-sent-003","email_id":"provider-email-missing-time-005","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
   v_signature:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
-  v_result:=henvalt.ingest_mailersend_webhook_v2(
+  v_provider_result:=henvalt.ingest_mailersend_webhook_v2(
     v_provider_key,v_signature,encode(convert_to(v_body,'UTF8'),'base64')
   );
-  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED'
+  IF v_provider_result->>'accepted'<>'true' OR v_provider_result->>'status'<>'PROCESSED'
     OR NOT EXISTS(
       SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
       WHERE id=v_attempt_sent AND status='DELIVERED' AND delivered_at IS NULL
@@ -498,7 +498,7 @@ DECLARE
   v_store_a uuid; v_customer_a uuid; v_opportunity_a uuid; v_provider_key text;
   v_intervention uuid; v_attempt uuid; v_order_id uuid; v_attribution_id uuid;
   v_ordered_at timestamptz; v_body text; v_hmac text; v_refund_body text;
-  v_result record; v_projection jsonb; v_policy_result jsonb;
+  v_result record; v_projection jsonb; v_policy_result jsonb; v_provider_result jsonb;
   v_signature text; v_delivery_at timestamptz;
   v_secret text:='synthetic-mailersend-webhook-secret';
   v_net numeric(18,4); v_fee numeric(18,4); v_status text; v_fee_status text;
@@ -597,7 +597,7 @@ BEGIN
        SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
        WHERE id=v_attempt AND status='DELIVERED' AND delivered_at=v_delivery_at
      ) THEN
-    RAISE EXCEPTION 'Signed provider delivery timestamp did not reconcile the attribution send: %',v_result;
+    RAISE EXCEPTION 'Signed provider delivery timestamp did not reconcile the attribution send: %',v_provider_result;
   END IF;
 
   v_ordered_at:=now()+interval '1 minute';
