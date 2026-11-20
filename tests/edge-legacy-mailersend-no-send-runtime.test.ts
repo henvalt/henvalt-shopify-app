@@ -4,7 +4,7 @@ type Handler = (request: Request) => Response | Promise<Response>;
 
 Deno.env.set("SUPABASE_URL", "https://supabase.invalid");
 Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "legacy-v1-runtime-test-service-key");
-Deno.env.set("HENVALT_V1_MAILERSEND_SEND_READY", "false");
+Deno.env.delete("HENVALT_V1_MAILERSEND_SEND_READY");
 
 let captured: Handler | undefined;
 const originalServe = Deno.serve;
@@ -37,7 +37,7 @@ Deno.test("legacy V1 MailerSend sender fails closed before parsing or outbound r
     assertEquals(unauthorized.status, 401);
     assertEquals(await unauthorized.json(), { error: "service_role_required" });
 
-    const disabled = await handler(new Request("https://edge.invalid", {
+    const request = () => new Request("https://edge.invalid", {
       method: "POST",
       headers: {
         authorization: "Bearer legacy-v1-runtime-test-service-key",
@@ -45,9 +45,23 @@ Deno.test("legacy V1 MailerSend sender fails closed before parsing or outbound r
       },
       // Deliberately malformed: the disabled interlock must run before body parsing.
       body: "{",
-    }));
-    assertEquals(disabled.status, 503);
-    assertEquals(await disabled.json(), { error: "delivery_send_disabled" });
+    });
+
+    // Missing flag is the default no-send state.
+    const missingFlag = await handler(request());
+    assertEquals(missingFlag.status, 503);
+    assertEquals(await missingFlag.json(), { error: "delivery_send_disabled" });
+
+    Deno.env.set("HENVALT_V1_MAILERSEND_SEND_READY", "false");
+    const explicitFalse = await handler(request());
+    assertEquals(explicitFalse.status, 503);
+    assertEquals(await explicitFalse.json(), { error: "delivery_send_disabled" });
+
+    // Explicit enable passes the interlock but malformed identity still fails closed.
+    Deno.env.set("HENVALT_V1_MAILERSEND_SEND_READY", "true");
+    const enabledButInvalid = await handler(request());
+    assertEquals(enabledButInvalid.status, 400);
+    assertEquals(await enabledButInvalid.json(), { error: "invalid_delivery_identity" });
     assertEquals(outboundCalls, 0);
   } finally {
     globalThis.fetch = originalFetch;
