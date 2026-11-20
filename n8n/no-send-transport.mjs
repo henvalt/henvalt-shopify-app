@@ -3,6 +3,9 @@
  * No network is performed: every attempted request is rejected after recording
  * only non-sensitive destination metadata. Never wire this into production.
  */
+const isMailerSendHost = (host) =>
+  host === "mailersend.com" || host.endsWith(".mailersend.com");
+
 export function createNoSendTransport({ allowedHosts = ["supabase.invalid", "edge.invalid"] } = {}) {
   const allow = new Set(allowedHosts.map((host) => String(host).toLowerCase()));
   const attempts = [];
@@ -22,7 +25,7 @@ export function createNoSendTransport({ allowedHosts = ["supabase.invalid", "edg
     // Do not record query strings, headers, request bodies, or credentials.
     attempts.push({ destination: host, method });
 
-    if (host === "api.mailersend.com" || host.endsWith(".mailersend.com")) {
+    if (isMailerSendHost(host)) {
       throw new Error("no_send_transport_provider_blocked");
     }
     if (url.protocol !== "https:" || !allow.has(host)) {
@@ -35,7 +38,7 @@ export function createNoSendTransport({ allowedHosts = ["supabase.invalid", "edg
     fetchImpl,
     get attempts() { return attempts.map((item) => ({ ...item })); },
     get blockedProviderAttempts() {
-      return attempts.filter((item) => item.destination === "api.mailersend.com" || item.destination.endsWith(".mailersend.com")).length;
+      return attempts.filter((item) => isMailerSendHost(item.destination)).length;
     },
     get blockedUnapprovedAttempts() {
       return attempts.filter((item) => !allow.has(item.destination)).length;
