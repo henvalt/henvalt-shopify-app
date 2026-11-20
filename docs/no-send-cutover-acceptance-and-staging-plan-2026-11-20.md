@@ -31,7 +31,7 @@ The current PR #6 candidate includes:
 - Disposable PostgreSQL contracts for exact-store identity, consent and suppression, provider authorization gates, cost reservations, concurrent claims, uninstall stop behavior, privacy boundaries, and attribution/fee-ledger integrity.
 - Candidate migration validation through migration 060, Gitleaks, Node regression tests, Deno checks, and Shopify static/configuration checks.
 
-Latest PR head at this checkpoint: `615864053434522ab9b2bc03678fa82f6bd860a1` (documentation-only release-runbook refresh). Its associated identity V2 and Shopify configuration validation workflows completed successfully; the Shopify app deployment job was skipped. The runbook records the latest full 450/450 Node suite and 224/224 identity/cost/privacy contract suite on candidate commit `0ded8a47a78a20fa78b58205f50c09a870f8fac9`.
+After the initial plan commit, the empty-queue regression was added in code commit `d19c18671dea00ac3165bf6c9b2ca77b766d39a1`. Exact-code CI passed: identity V2 run [44719461697](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44719461697) reports Node **453/453**, focused provider/uninstall **13/13**, identity/cost/privacy **224/224**, Gitleaks, Deno checks, candidate migrations 001–060, and the two-session attribution race. Shopify configuration run [44719461758](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44719461758) passed static and disposable migration validation; the app deployment job was skipped. Later commits `ced8769` and `b390fb1` changed documentation only.
 
 These results are candidate CI evidence only. They do not prove the production schema, deployed Edge Functions, live n8n graph, Shopify ownership, sender configuration, or provider behavior.
 
@@ -41,7 +41,7 @@ A case passes only when the provider boundary is structurally intercepted or dis
 
 | ID | Scenario | Required assertion | Current evidence / disposition |
 |---|---|---|---|
-| NS-01 | Empty candidate set | No claim, no delivery handoff, zero provider calls | Added composed offline regression: zero claimed items, no lease finish, no Edge Function call, and no provider request; exact-head CI pending |
+| NS-01 | Empty candidate set | No claim, no delivery handoff, zero provider calls | PASS on `d19c186`: regression observed in CI; 453/453 Node tests passed, with zero lease finish, Edge Function call, or provider request |
 | NS-02 | Checkout candidate | Only checkout intervention is materialized/claimed; checkout endpoint receives only intervention ID | Candidate scheduler + opaque adapter contracts; verify in composed staging fixture |
 | NS-03 | Pixel candidate | Pixel opportunity remains pixel work; no checkout intervention fabricated | Candidate SQL lifecycle contracts; verify composed staging fixture |
 | NS-04 | Concurrent workers | Exactly one active lease for the same work item | Disposable PostgreSQL concurrent claim contract passed |
