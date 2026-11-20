@@ -58,3 +58,48 @@ Staging is not approved until:
 ## Production approval remains separate
 
 A passing isolated matrix does not authorize production changes. Production deployment requires a separate explicit approval identifying the exact production target and approved change window.
+
+
+## 20 November — live sender graph and latest exact-head CI update
+
+### Live graph evidence added
+
+The read-only inspection recorded in [live Delivery graph verification](./live-delivery-sender-graph-verification-2026-11-20.md) independently confirms two distinct send-capable paths in the active Delivery workflow:
+
+1. Normal internal webhook / Execute Workflow ingress reaches the HTTP Request node `MailerSend Send`.
+2. Manual `One-Off Test Email Trigger` reaches a separate HTTP Request node `MailerSend One-Off Test Email`.
+
+The same inspection enumerated all seven Delivery webhooks. Only the internal delivery POST is sender ingress. Tracking-link GET, unsubscribe GET/POST, MailerSend events POST, MailerSend inbound POST, and tracking-click confirmation POST are non-sender handlers and should remain available during a narrow sender stop.
+
+This establishes the live graph inventory, not live blocking. The two provider nodes remain present in the active graph. No live execution was run.
+
+### Candidate contract coverage versus live runtime proof
+
+- The repository candidate sender-entrypoint contract test covers both provider sender paths and classifies the six non-sender webhook handlers separately.
+- The candidate no-send transport refuses MailerSend hosts, refuses unapproved/non-HTTPS destinations, performs no network I/O, and avoids logging request bodies, headers, query strings, recipient values, or credentials.
+- The offline Recovery→Delivery rehearsal verifies a synthetic 503 `delivery_send_disabled` outcome, deferred lease handling, and zero provider requests.
+- These are candidate code/test results. They do not insert an interlock into the active n8n workflow or block the live Supabase V1 Edge Function.
+
+### Latest exact-head CI
+
+Candidate source/documentation head inspected before this update: `05173c3c4d2d088cb87f6ee5d320154ab8e07a72`.
+
+- Identity V2 validation run `44780556928`: completed successfully.
+- Shopify app configuration run `44780556997`: completed successfully; app deployment step was skipped.
+- The identity V2 run includes repository secret scanning, the complete Node regression suite, Edge Function type checks, the candidate V1 fail-closed runtime test, disposable PostgreSQL migrations 001–060, and the database/privacy/attribution/cost/recovery contract tests.
+- These runs validate the exact inspected head only. The documentation update itself will create a new head and requires its own CI result before being described as validated.
+
+### Current disposition
+
+| Gate | Status |
+|---|---|
+| Candidate V1 Edge Function interlock implementation and offline runtime tests | Candidate CI passed |
+| Candidate transport and sender-entrypoint contract tests | Candidate CI passed |
+| Live Delivery sender graph inventory | Read-only inventory complete |
+| Live production sender interlock | NOT DEPLOYED; production V1 remains send-capable |
+| Live n8n sender branches blocked | NOT VERIFIED |
+| Effective n8n retention and redaction | NOT VERIFIED; owner-visible Cloud console evidence required |
+| Full isolated staging acceptance | NOT RUN; isolated owner-controlled environment not established |
+| Production approval | NOT GRANTED |
+
+Do not interpret a green candidate CI run as permission to deploy, enable a readiness flag, edit or unpublish a live workflow, or send a message. Production remains on HOLD.
