@@ -12,7 +12,7 @@ ALTER TABLE henvalt.shopify_recovery_work_claims_v2
   ADD CONSTRAINT shopify_recovery_work_claims_v2_last_result_check
     CHECK(last_result IS NULL OR last_result IN ('HANDOFF_ACCEPTED','TERMINAL','DEFERRED','EXHAUSTED')),
   ADD CONSTRAINT shopify_recovery_work_claims_v2_exhaustion_check
-    CHECK ((exhausted_at IS NULL AND last_result<>'EXHAUSTED')
+    CHECK ((exhausted_at IS NULL AND last_result IS DISTINCT FROM 'EXHAUSTED')
         OR (exhausted_at IS NOT NULL AND last_result='EXHAUSTED' AND completed_at IS NULL));
 
 CREATE INDEX shopify_recovery_work_claims_v2_exhausted_idx
