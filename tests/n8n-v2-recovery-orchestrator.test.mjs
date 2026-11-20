@@ -424,7 +424,7 @@ test("lease finish transport failure is contained and later claimed work is stil
     finishClaim: async claim => {
       finished.push(claim.lease_id);
       if (claim.lease_id === items[0].lease_id) throw new Error("secret recipient@example.com");
-      return { finished: true };
+      return { finished: true, outcome: claim.outcome };
     },
   });
   assert.equal(handedOff.length, 2);
