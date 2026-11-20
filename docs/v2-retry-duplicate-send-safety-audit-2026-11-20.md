@@ -37,7 +37,7 @@ A separate retry-policy gap remains: repeated failures before a send-attempt row
 
 - Earlier source revision `380a6526...` passed the repository Identity V2 CI suite and the Shopify static/disposable-migration validation suite.
 - Earlier documentation-only head CI reruns passed Identity V2 validation and Shopify static/disposable-migration validation; the Shopify deployment job was skipped.
-- The retry-ceiling migration and new regression tests have not yet passed their exact-head CI run at the time this document was updated.
+- The exact latest candidate head `281a5ad8fa3fae8d382df2f9010bdde439097628` passed Identity V2 workflow run [44799015266](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44799015266): full Node regression suite, secret scan, Deno checks, all 61 candidate migrations on disposable PostgreSQL, and the concurrent recovery-claim/retry-exhaustion test. The matching Shopify configuration workflow [44799015042](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44799015042) passed static and configuration migration validation; its deployment job was skipped.
 - The disposable database CI job exercises candidate migrations and a range of identity, privacy, attribution, cost, and recovery contracts. This review did not independently execute a new production or staging test.
 - This is a static candidate-code audit, not evidence that a live worker is running, that the former n8n workspace is accessible, that retention/redaction has been verified, or that production sending is stopped.
-- No production or staging resource was changed. No deployment, workflow execution, provider request, or email send occurred. PR #6 remains unmerged.
+- No production or staging resource was changed. No deployment, workflow execution, provider request, or email send occurred. PR #6 remains open, draft and unmerged.
