@@ -200,10 +200,10 @@ BEGIN
   -- manufacture delivery evidence from database processing time.
   v_body:='{"type":"activity.delivered","data":{"id":"provider-event-missing-time-005","domain_id":"domain-123","message_id":"provider-message-sent-003","email_id":"provider-email-missing-time-005","type":"delivered","recipient":"shared@example.invalid","meta":[]}}';
   v_signature:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
-  v_provider_result:=henvalt.ingest_mailersend_webhook_v2(
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
     v_provider_key,v_signature,encode(convert_to(v_body,'UTF8'),'base64')
   );
-  IF v_provider_result->>'accepted'<>'true' OR v_provider_result->>'status'<>'PROCESSED'
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED'
     OR NOT EXISTS(
       SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
       WHERE id=v_attempt_sent AND status='DELIVERED' AND delivered_at IS NULL
@@ -589,10 +589,10 @@ BEGIN
     )
   )::text;
   v_signature:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
-  v_result:=henvalt.ingest_mailersend_webhook_v2(
+  v_provider_result:=henvalt.ingest_mailersend_webhook_v2(
     v_provider_key,v_signature,encode(convert_to(v_body,'UTF8'),'base64')
   );
-  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED'
+  IF v_provider_result->>'accepted'<>'true' OR v_provider_result->>'status'<>'PROCESSED'
      OR NOT EXISTS(
        SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
        WHERE id=v_attempt AND status='DELIVERED' AND delivered_at=v_delivery_at
