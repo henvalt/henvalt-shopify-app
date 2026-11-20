@@ -137,7 +137,8 @@ jobs:
             supabase/migrations/202611190003_mailersend_webhook_test_signature_v2.sql \
             supabase/migrations/202611190004_shopify_checkout_candidate_terminal_state_v2.sql \
             supabase/migrations/202611190005_shopify_checkout_provider_submission_gate_v2.sql \
-            supabase/migrations/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql \\\n            supabase/migrations/202611200001_shopify_recovery_work_retry_ceiling_v2.sql; do
+            supabase/migrations/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql \
+            supabase/migrations/202611200001_shopify_recovery_work_retry_ceiling_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise two-store pixel cart/browse candidates and opportunity promotion
