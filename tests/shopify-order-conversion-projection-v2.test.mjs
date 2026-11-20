@@ -97,3 +97,14 @@ test("recovered revenue requires explicit exact-store policy and creates no exte
   assert.ok(attributionMigration.includes("v_order.checkout_match_status IS DISTINCT FROM 'MATCHED'"));
   assert.ok(attributionMigration.includes("billing_currency IS NULL OR v_billing.billing_currency<>NEW.currency"));
 });
+
+
+test("delivery confirmation requires a real provider timestamp and keeps the earliest event", () => {
+  const start = attributionMigration.indexOf("CREATE OR REPLACE FUNCTION henvalt.capture_shopify_mailer_delivered_at_v2()");
+  const end = attributionMigration.indexOf("$function$;", start);
+  assert.ok(start >= 0 && end > start, "delivery timestamp trigger function must exist");
+  const fn = attributionMigration.slice(start, end);
+  assert.match(fn, /NEW\\.occurred_at IS NOT NULL/);
+  assert.match(fn, /LEAST\\(delivered_at,NEW\\.occurred_at\\)/);
+  assert.doesNotMatch(fn, /COALESCE\\(delivered_at,NEW\\.occurred_at,pg_catalog\\.now\\(\\)\\)/);
+});
