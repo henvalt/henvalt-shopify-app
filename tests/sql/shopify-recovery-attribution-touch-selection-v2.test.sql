@@ -29,6 +29,8 @@ DECLARE
   v_receipt record;
   v_projection jsonb;
   v_eval jsonb;
+  v_first_attribution_id uuid;
+  v_fee_count integer;
   v_provider_key text := 'henvalt-test-provider-account-0001';
 BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
@@ -158,6 +160,22 @@ BEGIN
 
   v_eval := henvalt.evaluate_shopify_recovery_attribution_v2(v_order_a);
   IF v_eval->>'accepted'<>'true' THEN RAISE EXCEPTION 'Store A first-touch attribution failed: %',v_eval; END IF;
+  v_first_attribution_id:=(v_eval->>'attribution_id')::uuid;
+
+  -- Replay the exact same paid order evaluation. It must reconcile the existing
+  -- attribution, never create a second attribution or a second fee measurement.
+  v_eval := henvalt.evaluate_shopify_recovery_attribution_v2(v_order_a);
+  SELECT count(*) INTO v_fee_count
+  FROM henvalt.shopify_recovery_fee_measurements_v2
+  WHERE attribution_id=v_first_attribution_id AND shopify_connection_id=v_store_a;
+  IF v_eval->>'accepted'<>'true' OR v_eval->>'status'<>'RECONCILED'
+     OR (v_eval->>'attribution_id')::uuid IS DISTINCT FROM v_first_attribution_id
+     OR (SELECT count(*) FROM henvalt.shopify_recovery_attributions_v2
+         WHERE order_identity_id=v_order_a AND shopify_connection_id=v_store_a)<>1
+     OR v_fee_count<>1 THEN
+    RAISE EXCEPTION 'Repeated same-order evaluation was not idempotent: %, fee rows %',v_eval,v_fee_count;
+  END IF;
+
   v_eval := henvalt.evaluate_shopify_recovery_attribution_v2(v_order_b);
   IF v_eval->>'accepted'<>'true' THEN RAISE EXCEPTION 'Store B last-touch attribution failed: %',v_eval; END IF;
 
