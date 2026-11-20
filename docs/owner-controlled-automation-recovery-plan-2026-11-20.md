@@ -15,6 +15,10 @@ This is an ownership boundary, not a technical configuration task. The account o
 - The existing production Supabase V1 MailerSend Edge Function remains send-capable until an authorized, independently verified stop is implemented.
 - Retention and redaction on the inaccessible n8n account are NOT VERIFIED. Do not infer settings from n8n defaults, plan documentation, or the connector's partial workflow metadata.
 
+## Operator confirmation — 2026-11-20
+
+The operator confirmed that no separate n8n workspace under their own account is available; the former partner's workspace was the only one. Treat the replacement workspace as unavailable, not merely unconfirmed. Do not ask the operator to inspect, export, or recover the former partner's account. Continue repository-only candidate work until a genuinely owner-controlled, no-cost runtime becomes available.
+
 ## Replacement principle
 
 Create a new automation runtime only in an account/workspace controlled by the HENVALT owner. Do not attempt to recover or clone the former partner's workspace. Do not copy production secrets, customer payloads, access tokens, webhook URLs, or execution data into the replacement.
@@ -62,7 +66,7 @@ If a no-cost owner-controlled runtime cannot meet these prerequisites on the exi
 |---|---|
 | Former n8n account ownership/control | Unavailable to HENVALT operator |
 | Former account retention/redaction | NOT VERIFIED; do not access or rely on it |
-| HENVALT-owned replacement workspace | Not established |
+| HENVALT-owned replacement workspace | CONFIRMED ABSENT by operator; no separate owner-controlled n8n workspace is available |
 | Three-workflow replacement specification | Defined in this document |
 | Isolated staging import and runtime proof | NOT STARTED |
 | Sender interlock in live production | NOT DEPLOYED |
