@@ -26,3 +26,16 @@ test("provider submission endpoints remain fixed while redirect following is dis
   assert.ok(checkout.includes('fetch("https://api.mailersend.com/v1/email",{method:"POST",redirect:"error"'));
   assert.match(pixel, /fetch\("https:\/\/api\.mailersend\.com\/v1\/email",\{\s*method:"POST",redirect:"error"/);
 });
+
+test("Shopify access tokens are only sent to strictly validated myshopify hosts", () => {
+  const checkout = read("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts");
+  const pixel = read("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts");
+  for (const source of [checkout, pixel]) {
+    assert.match(source, /const validShopDomain=\\(v:string\\)=>\\/\\^\\[a-z0-9\\]\\(\\?:/);
+  }
+  assert.ok(checkout.includes("if(!validShopDomain(shop))return false"));
+  assert.ok(checkout.includes("if(!validShopDomain(shop))return null"));
+  assert.ok(checkout.includes("if(!validShopDomain(shop)||!access"));
+  assert.ok(pixel.includes('if(!validShopDomain(shop))throw new Error("SHOPIFY_LOOKUP_FAILED")'));
+  assert.ok(pixel.includes("if(!validShopDomain(shop)||shopToken.length"));
+});
