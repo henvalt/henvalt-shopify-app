@@ -65,6 +65,6 @@ test("checkout missing or incorrect dedicated bearer and disabled send interlock
  const lookup=handler.indexOf('resolve_shopify_recovery_message_context_v2');
  const provider=handler.indexOf('https://api.mailersend.com/v1/email');
  assert.ok(configured>=0&&auth>configured&&readiness>auth&&parse>readiness&&lookup>parse&&provider>lookup);
- assert.match(handler,/return json\(503,\{error:"delivery_not_configured"\}\)/);
+ assert.match(handler,/return json\(503,\{error:"delivery_configuration_missing"\}\)/);
  assert.match(handler,/return json\(401,\{error:"unauthorized"\}\)/);
 });
