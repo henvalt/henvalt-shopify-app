@@ -91,3 +91,19 @@ Exact-head CI for `bdba8362ca0ff04452967bd31a42c73a171fa041`:
 - Shopify app configuration checks: [run 44794720768](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44794720768) — success; static validation and disposable database migration validation succeeded; deployment job was skipped.
 
 This is repository-candidate CI evidence only. It does not establish that production workflows are stopped, that live n8n nodes enforce the candidate contract, or that staging exists. The former partner-controlled n8n account remains inaccessible and its retention/redaction settings remain unverified. No production resource was changed or executed; no email was sent.
+
+
+## 20 November — V2 outbound redirect and Shopify host validation
+
+Exact tested candidate source SHA: `380a6526d38525321b34fc5711fe3a5db661d2f3`.
+
+Candidate-only changes:
+- All outbound fetches in checkout V2 delivery, pixel V2 delivery, and the shared MailerSend preflight helper now set `redirect: "error"`. This includes authenticated Supabase RPC, Shopify token/GraphQL requests, MailerSend preflight requests, and MailerSend submission requests.
+- Both V2 delivery boundaries now strictly validate Shopify store hostnames against the `*.myshopify.com` domain shape before authenticated Shopify requests. Checkout validates before token refresh and customer lookup; pixel validates before customer lookup and in its resolved delivery context.
+- Added `tests/shopify-v2-outbound-redirect-policy.test.mjs` to assert every fetch call in those three modules rejects redirects, provider endpoints remain fixed, and Shopify host guards are present.
+
+Exact-head CI for `380a6526d38525321b34fc5711fe3a5db661d2f3`:
+- Identity V2 validation: [run 44795728030](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44795728030) — success; 58 successful steps, no failed steps.
+- Shopify app configuration checks: [run 44795727854](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44795727854) — success; static validation and disposable migration validation succeeded; Shopify deployment job was skipped.
+
+These checks validate candidate repository code only. They do not prove a production stop, live n8n sender blocking, or isolated staging acceptance. No live Supabase function, n8n workflow, Shopify app release, Worker, MailerSend setting, or customer data was changed. No email was sent.
