@@ -135,3 +135,14 @@ test("checkout attribution and fee measurements have database-enforced one-to-on
   const opportunityLineage = attributionMigration.indexOf("existing.opportunity_id=o.id", storeLineage);
   assert.ok(tenantLineage >= 0 && storeLineage > tenantLineage && opportunityLineage > storeLineage, "consumed-opportunity exclusion must preserve tenant, store, and opportunity lineage");
 });
+
+
+test("checkout attribution SQL fixture exercises first/last touches and prevents opportunity reuse", () => {
+  const fixture = readFileSync(new URL("./sql/shopify-recovery-attribution-touch-selection-v2.test.sql", import.meta.url), "utf8");
+  assert.match(fixture, /FIRST_ELIGIBLE_TOUCH/);
+  assert.match(fixture, /LAST_ELIGIBLE_TOUCH/);
+  assert.match(fixture, /send_attempt_id=v_attempt_a1/);
+  assert.match(fixture, /send_attempt_id=v_attempt_b2/);
+  assert.match(fixture, /NO_ELIGIBLE_RECOVERY_TOUCH/);
+  assert.match(fixture, /889003/);
+});
