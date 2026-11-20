@@ -168,6 +168,28 @@ BEGIN
       AND send_attempt_id=v_attempt_b2 AND touch_model='LAST_ELIGIBLE_TOUCH'
   ) THEN RAISE EXCEPTION 'LAST_ELIGIBLE_TOUCH did not choose the latest valid send'; END IF;
 
+  -- The active synthetic billing account creates one non-charging fee measurement
+  -- for the USD attribution; the GBP order remains unmeasured due currency mismatch.
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_fee_measurements_v2 f
+    JOIN henvalt.shopify_recovery_attributions_v2 a
+      ON a.id=f.attribution_id AND a.tenant_id=f.tenant_id
+     AND a.shopify_connection_id=f.shopify_connection_id
+    WHERE a.order_identity_id=(SELECT id FROM henvalt.shopify_order_identity_v2
+      WHERE shopify_connection_id=v_store_a AND shopify_order_id='889001')
+      AND f.recovered_amount=125.50 AND f.henvalt_percentage=5
+      AND f.fee_amount=6.2750 AND f.status='PENDING'
+      AND f.paddle_transaction_reference IS NULL
+  ) THEN RAISE EXCEPTION 'Confirmed Store A attribution did not create exactly the expected pending fee measurement'; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_fee_measurements_v2 f
+    JOIN henvalt.shopify_recovery_attributions_v2 a
+      ON a.id=f.attribution_id AND a.tenant_id=f.tenant_id
+     AND a.shopify_connection_id=f.shopify_connection_id
+    WHERE a.order_identity_id=v_order_b
+  ) THEN RAISE EXCEPTION 'Currency-mismatched Store B attribution incorrectly created a fee measurement'; END IF;
+
   -- A second paid order with the same exact-store checkout token must not consume
   -- the same recovery opportunity or create a second fee-bearing attribution.
   v_body := '{"shop_id":"1001","id":889003,"checkout_token":"opportunity-shared-token","customer":{"id":12345},"total_price":"125.50","currency":"USD","financial_status":"paid","created_at":"2026-11-17T00:03:00Z"}';
