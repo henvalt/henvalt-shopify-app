@@ -335,6 +335,7 @@ DECLARE
   v_policy henvalt.shopify_recovery_attribution_policies_v2%rowtype;
   v_checkout henvalt.shopify_checkout_identity_v2%rowtype;
   v_opportunity henvalt.shopify_recovery_opportunity_v2%rowtype;
+  v_opportunity_id uuid;
   v_attempt_id uuid;
   v_touch_at timestamptz;
   v_refunded numeric(18,4):=0;
@@ -385,28 +386,26 @@ BEGIN
   LIMIT 1;
   IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','MATCHED_CHECKOUT_NOT_FOUND'); END IF;
 
-  SELECT * INTO v_opportunity
+  -- Select the eligible touch across every matching recovery opportunity.
+  -- Choosing the newest opportunity first can incorrectly hide an older,
+  -- genuinely eligible recovery touch when the newest opportunity has no send.
+  SELECT o.id,a.id,
+    CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END
+  INTO v_opportunity_id,v_attempt_id,v_touch_at
   FROM henvalt.shopify_recovery_opportunity_v2 o
+  JOIN henvalt.shopify_recovery_intervention_v2 i
+    ON i.opportunity_id=o.id AND i.tenant_id=o.tenant_id
+   AND i.shopify_connection_id=o.shopify_connection_id
+  JOIN henvalt.shopify_recovery_send_attempt_v2 a
+    ON a.intervention_id=i.id AND a.tenant_id=i.tenant_id
+   AND a.shopify_connection_id=i.shopify_connection_id
+   AND a.customer_identity_id=i.customer_identity_id
   WHERE o.tenant_id=v_order.tenant_id
     AND o.shopify_connection_id=v_order.shopify_connection_id
     AND o.checkout_identity_id=v_checkout.id
     AND o.status IN ('CONTACT_RESOLUTION_PENDING','CONVERTED')
     AND (o.customer_identity_id IS NULL OR o.customer_identity_id=v_checkout.customer_identity_id)
     AND (v_order.customer_identity_id IS NULL OR v_order.customer_identity_id=v_checkout.customer_identity_id)
-  ORDER BY o.created_at DESC LIMIT 1;
-  IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','RECOVERY_OPPORTUNITY_NOT_FOUND'); END IF;
-
-  SELECT a.id,
-    CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END
-  INTO v_attempt_id,v_touch_at
-  FROM henvalt.shopify_recovery_intervention_v2 i
-  JOIN henvalt.shopify_recovery_send_attempt_v2 a
-    ON a.intervention_id=i.id AND a.tenant_id=i.tenant_id
-   AND a.shopify_connection_id=i.shopify_connection_id
-   AND a.customer_identity_id=i.customer_identity_id
-  WHERE i.tenant_id=v_order.tenant_id
-    AND i.shopify_connection_id=v_order.shopify_connection_id
-    AND i.opportunity_id=v_opportunity.id
     AND a.status IN ('SUBMITTED','DELIVERED')
     AND (
       (v_policy.require_delivery_confirmation IS TRUE AND a.status='DELIVERED' AND a.delivered_at IS NOT NULL AND a.submitted_at IS NOT NULL AND a.delivered_at>=a.submitted_at)
@@ -416,14 +415,27 @@ BEGIN
     AND (CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END)<=v_order.ordered_at
     AND (CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END)>=
       v_order.ordered_at-make_interval(hours=>v_policy.attribution_window_hours)
+    AND NOT EXISTS (
+      SELECT 1 FROM henvalt.shopify_recovery_attributions_v2 existing
+      WHERE existing.tenant_id=o.tenant_id
+        AND existing.shopify_connection_id=o.shopify_connection_id
+        AND existing.opportunity_id=o.id
+    )
   ORDER BY
-    CASE WHEN v_policy.touch_model='LAST_ELIGIBLE_TOUCH'
-      THEN CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END END DESC,
-    CASE WHEN v_policy.touch_model='FIRST_ELIGIBLE_TOUCH'
-      THEN CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END END ASC,
+    CASE WHEN v_policy.touch_model='LAST_ELIGIBLE_TOUCH' THEN
+      CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END END DESC,
+    CASE WHEN v_policy.touch_model='FIRST_ELIGIBLE_TOUCH' THEN
+      CASE WHEN v_policy.require_delivery_confirmation IS TRUE THEN a.delivered_at ELSE a.submitted_at END END ASC,
     a.id
   LIMIT 1;
   IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','NO_ELIGIBLE_RECOVERY_TOUCH'); END IF;
+
+  SELECT * INTO v_opportunity
+  FROM henvalt.shopify_recovery_opportunity_v2
+  WHERE id=v_opportunity_id
+    AND tenant_id=v_order.tenant_id
+    AND shopify_connection_id=v_order.shopify_connection_id;
+  IF NOT FOUND THEN RETURN jsonb_build_object('accepted',false,'code','RECOVERY_OPPORTUNITY_NOT_FOUND'); END IF;
 
   SELECT COALESCE(sum(r.refund_amount),0) INTO v_refunded
   FROM henvalt.shopify_order_refund_adjustments_v2 r
