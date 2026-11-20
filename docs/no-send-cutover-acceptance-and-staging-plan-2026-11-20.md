@@ -31,7 +31,7 @@ The current PR #6 candidate includes:
 - Disposable PostgreSQL contracts for exact-store identity, consent and suppression, provider authorization gates, cost reservations, concurrent claims, uninstall stop behavior, privacy boundaries, and attribution/fee-ledger integrity.
 - Candidate migration validation through migration 060, Gitleaks, Node regression tests, Deno checks, and Shopify static/configuration checks.
 
-After the initial plan commit, the empty-queue regression was added in code commit `d19c18671dea00ac3165bf6c9b2ca77b766d39a1`. Exact-code CI passed: identity V2 run [44719461697](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44719461697) reports Node **453/453**, focused provider/uninstall **13/13**, identity/cost/privacy **224/224**, Gitleaks, Deno checks, candidate migrations 001–060, and the two-session attribution race. Shopify configuration run [44719461758](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44719461758) passed static and disposable migration validation; the app deployment job was skipped. Later commits `ced8769` and `b390fb1` changed documentation only.
+After the initial plan commit, the empty-queue regression was added in code commit `d19c18671dea00ac3165bf6c9b2ca77b766d39a1`. The latest no-send regression batch is code commit `26a8c362003431a31dc14f7bcb28bb9f28a0952d`. Exact-code CI for that SHA passed: identity V2 run [44721075413](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44721075413) reports Node **455/455**, focused provider/uninstall **13/13**, identity/cost/privacy **224/224**, Gitleaks, Deno checks, candidate migrations 001–060, and the two-session attribution race. Shopify configuration run [44721075269](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44721075269) passed static and disposable migration validation; the app deployment job was skipped. The 455-test run includes the empty-queue, mixed checkout/pixel opaque-routing, and invalid-later-item whole-batch rejection regressions. Earlier CI on `d19c186` remains historical evidence only; each later code SHA must be validated independently.
 
 These results are candidate CI evidence only. They do not prove the production schema, deployed Edge Functions, live n8n graph, Shopify ownership, sender configuration, or provider behavior.
 
@@ -42,11 +42,11 @@ A case passes only when the provider boundary is structurally intercepted or dis
 | ID | Scenario | Required assertion | Current evidence / disposition |
 |---|---|---|---|
 | NS-01 | Empty candidate set | No claim, no delivery handoff, zero provider calls | PASS on `d19c186`: regression observed in CI; 453/453 Node tests passed, with zero lease finish, Edge Function call, or provider request |
-| NS-02 | Checkout candidate | Only checkout intervention is materialized/claimed; checkout endpoint receives only intervention ID | Candidate scheduler + opaque adapter contracts; verify in composed staging fixture |
-| NS-03 | Pixel candidate | Pixel opportunity remains pixel work; no checkout intervention fabricated | Candidate SQL lifecycle contracts; verify composed staging fixture |
+| NS-02 | Checkout candidate | Only checkout intervention is materialized/claimed; checkout endpoint receives only intervention ID | PASS in offline composed fixture on `26a8c36`: mixed batch routes checkout work only to contact-delivery endpoint with `{ intervention_id }` and checkout-only bearer credential |
+| NS-03 | Pixel candidate | Pixel opportunity remains pixel work; no checkout intervention fabricated | PASS in offline composed fixture on `26a8c36`: same mixed batch routes pixel work only to pixel-delivery endpoint with `{ opportunity_id }` and pixel-only bearer credential |
 | NS-04 | Concurrent workers | Exactly one active lease for the same work item | Disposable PostgreSQL concurrent claim contract passed |
 | NS-05 | Deferred/reclaimed lease | Reclaim gets a fresh lease ID; stale lease cannot finish | Disposable lease lifecycle contracts; include in end-to-end staging run |
-| NS-06 | Invalid work / malformed UUID / wrong-store ID / missing auth | Zero provider calls; fail closed | Adapter validation and DB exact-store/auth gates covered; wrong-store + missing-auth must be asserted in a single composed no-send run |
+| NS-06 | Invalid work / malformed UUID / wrong-store ID / missing auth | Zero provider calls; fail closed | PARTIAL on `26a8c36`: malformed UUID in a later batch item rejects the entire batch before any Edge handoff or lease mutation; wrong-store ID and missing-auth end-to-end cases remain open |
 | NS-07 | Inactive tenant/app/connection; missing or unverified sender; absent consent/contact/jurisdiction; suppression; recovered order; no cost entitlement | Zero provider calls | Candidate SQL and Edge-function authorization contracts; no live provider call is permitted |
 | NS-08 | MailerSend readiness false or unsubscribe insertion unverified | Zero provider calls | Candidate delivery gate contract; verify in staging using synthetic provider config |
 | NS-09 | Accepted handoff | Lease completes only after explicit allowlisted accepted response and confirmed finish acknowledgement | Offline composed runtime tests, including lease-finisher acknowledgement regression |
@@ -176,7 +176,7 @@ No stage approval implies approval of the next stage.
 
 ## 6. Current decision
 
-**NO-SEND ACCEPTANCE: PARTIAL — candidate CI evidence exists; full 15-case composed acceptance and staging execution remain open.**
+**NO-SEND ACCEPTANCE: PARTIAL — exact-SHA CI now passes 455 Node tests and the mixed/invalid batch regressions; full 15-case composed acceptance (including wrong-store/missing-auth and live n8n redaction evidence) and staging execution remain open.**
 
 **STAGING PLAN: PREPARED — execution is blocked until an owner-controlled, isolated, zero-cost staging boundary is identified.**
 
