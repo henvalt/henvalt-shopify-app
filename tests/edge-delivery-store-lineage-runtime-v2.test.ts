@@ -8,6 +8,8 @@ async function loadHandler(modulePath: string, tokenName: string): Promise<Handl
   Deno.env.set("SUPABASE_SERVICE_ROLE_KEY", "runtime-lineage-test-service-key");
   // The handler must reach the database lineage resolver, but no provider send is permitted.
   Deno.env.set("HENVALT_V2_MAILERSEND_EVENTS_READY", "true");
+  // Explicitly pass the independent send interlock to exercise deeper store-lineage rejection.
+  Deno.env.set("HENVALT_V2_MAILERSEND_SEND_READY", "true");
 
   let captured: Handler | undefined;
   const originalServe = Deno.serve;
