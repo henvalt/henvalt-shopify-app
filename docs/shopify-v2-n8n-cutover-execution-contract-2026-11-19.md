@@ -62,11 +62,11 @@ Input to the V2 adapter is restricted to:
   "work_id": "<uuid>",
   "lease_id": "<uuid>",
   "worker_id": "<opaque worker id>",
-  "correlation_id": "<uuid>"
+  "correlation_id": "v2:<work_id>"
 }
 ```
 
-Before the Edge Function call, validate the enum and UUID shapes. Do not include tenant ID, recipient, subject, HTML, text, product details, tokens, or provider secrets in the payload.
+Before the Edge Function call, validate the enum and UUID shapes for `work_id` and `lease_id`, validate the bounded `worker_id`, and require `correlation_id` to equal exactly `v2:<work_id>` (maximum 80 safe ASCII characters). This correlation ID is a deterministic opaque work reference, not a UUID. Do not include tenant ID, recipient, subject, HTML, text, product details, tokens, or provider secrets in the payload.
 
 Routing is deterministic:
 - `CHECKOUT_INTERVENTION` → `POST /functions/v1/henvalt-shopify-contact-delivery-v2`, JSON body `{"intervention_id":"<work_id>"}`.
