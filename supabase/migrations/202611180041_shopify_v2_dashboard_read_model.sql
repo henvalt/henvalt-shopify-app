@@ -162,11 +162,21 @@ BEGIN
       ORDER BY sa.created_at DESC LIMIT 1
     ) checkout_attempt ON true
     LEFT JOIN LATERAL (
+      -- Pixel activity is visible as sent only after the signed provider event
+      -- has been durably correlated and processed. Match the headline metric's
+      -- evidence rule so an accepted attempt alone cannot imply delivery.
       SELECT pa.status
       FROM henvalt.shopify_pixel_send_attempts_v2 pa
+      JOIN henvalt.shopify_mailer_provider_events_v2 pe
+        ON pe.pixel_send_attempt_id=pa.id
+       AND pe.tenant_id=pa.tenant_id
+       AND pe.shopify_connection_id=pa.shopify_connection_id
       WHERE pa.opportunity_id=o.id AND pa.tenant_id=o.tenant_id
         AND pa.shopify_connection_id=o.shopify_connection_id
-      ORDER BY pa.created_at DESC LIMIT 1
+        AND pa.status='SUBMITTED'
+        AND pe.processing_status='PROCESSED'
+        AND pe.event_type IN ('activity.sent','activity.delivered')
+      ORDER BY pe.occurred_at DESC NULLS LAST,pa.created_at DESC LIMIT 1
     ) pixel_attempt ON true
     WHERE o.tenant_id=v_tenant_id
       AND o.shopify_connection_id=p_shopify_connection_id
