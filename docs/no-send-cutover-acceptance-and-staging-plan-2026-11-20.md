@@ -289,3 +289,21 @@ These are metadata-only observations. No execution payloads, customer records, p
 **Release impact:** this finding blocks any assertion that the currently active live n8n configuration satisfies a no-send cutover. Before any release or controlled staging decision, the owner must explicitly authorize and supervise a separate operational change to establish the intended no-send state (or prove an existing upstream hard interlock), followed by fresh acceptance evidence. Do not disable or edit live workflows, alter the production Supabase send gate, or invoke any test-send path without explicit authorization.
 
 No n8n workflow was edited, published, unpublished, executed, or otherwise changed during this inspection. Production remains **HOLD**. No customer send was initiated by this inspection.
+
+
+## 13. Candidate V1 sender interlock added — 20 November 2026 (CI pending)
+
+Following the live-path finding in section 12, the candidate branch now adds an explicit fail-closed interlock to `supabase/functions/henvalt-mailersend-delivery/index.ts`:
+- `HENVALT_V1_MAILERSEND_SEND_READY` must equal the exact string `true` before the legacy V1 sender parses a request body, retrieves a tenant MailerSend credential, or calls the provider.
+- Missing or false setting returns HTTP 503 with `delivery_send_disabled`.
+- Dedicated Deno runtime test verifies a missing bearer still returns 401, a valid service-role bearer with the flag false returns 503 even for malformed JSON, and outbound `fetch` remains at zero.
+- The test is wired into `.github/workflows/shopify-identity-v2-validation.yml`.
+
+Candidate code commits:
+- Sender interlock: `1b0381ca7e521f88cf8ec7d10c674ae1fa2cbe26`.
+- Runtime test: `300ae7f8ac57663573c143253d1e9a24f39cb700`.
+- CI wiring / current branch head: `66e015767b880a9a0875cf72050660d62b2b8e06`.
+
+CI for the current head is **pending** at the time of this entry. This is candidate source only: no Edge Function was deployed, no environment variable was changed, and no live n8n workflow or production Supabase setting was modified. Therefore this candidate interlock does not yet protect the currently deployed live sender. Do not represent it as an active production kill switch.
+
+Acceptance remains **PARTIAL**; production remains **HOLD**.
