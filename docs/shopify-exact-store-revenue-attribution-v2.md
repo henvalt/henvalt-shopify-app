@@ -115,3 +115,10 @@ No production attribution policy was enabled. No production Supabase migration/f
 ## 10. Checkout attribution touch selection hardening
 
 The checkout attribution evaluator now ranks eligible send attempts across every recovery opportunity attached to the exact matched checkout, rather than selecting the newest opportunity first and potentially hiding an older eligible touch. Opportunities already consumed by another attributed order are excluded before ranking. FIRST_ELIGIBLE_TOUCH and LAST_ELIGIBLE_TOUCH therefore operate over the full eligible checkout touch set. A full multi-opportunity SQL fixture remains a launch acceptance requirement.
+
+
+## 11. Database-enforced attribution and fee idempotency
+
+The checkout attribution ledger has validated unique constraints for one attribution per exact-store order and one attribution per exact-store recovery opportunity. Fee measurements have a separate unique constraint per exact-store attribution. The evaluator also excludes consumed opportunities before touch ranking and uses conflict-safe insertion; a competing order that loses the opportunity race cannot create a second attribution. Fee creation is conflict-safe as well, so replayed attribution or billing-account activation cannot duplicate a fee measurement.
+
+A new disposable-PostgreSQL metadata acceptance test verifies these unique constraints, exact tenant/store foreign-key lineage, enabled attribution/refund/billing triggers, and the explicit refund-credit columns. This test verifies schema enforcement, not a concurrent two-order attribution simulation; that behavioral race fixture remains outstanding. No production database was changed.
