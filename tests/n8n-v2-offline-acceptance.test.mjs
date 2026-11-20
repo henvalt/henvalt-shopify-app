@@ -232,3 +232,42 @@ test("offline Recovery→Delivery acceptance: invalid later claim rejects whole 
   assert.equal(calls.some(call => call.url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")), false);
   assert.equal(calls.some(call => call.url.includes("api.mailersend.com")), false);
 });
+
+
+// Candidate-only end-to-end rehearsal: Recovery hands off to Delivery while
+// every attempted external request passes through a transport that cannot send.
+test("no-send transport wraps synthetic Recovery→Delivery and blocks provider egress", async () => {
+  const { createNoSendTransport } = await import("../n8n/no-send-transport.mjs");
+  const guard = createNoSendTransport();
+  const fixtureCalls = [];
+  const safeFetch = async (url, init = {}) => {
+    const target = new URL(String(url));
+    if (target.hostname === "api.mailersend.com" || target.hostname.endsWith(".mailersend.com")) {
+      return guard.fetchImpl(url, init);
+    }
+    if (target.hostname !== "project.supabase.co") {
+      return guard.fetchImpl(url, init);
+    }
+    fixtureCalls.push({ path: target.pathname, method: String(init.method || "GET").toUpperCase() });
+    if (target.pathname.includes("claim_shopify_recovery_work_v2")) {
+      return claimResponse("CHECKOUT_INTERVENTION", checkoutId, checkoutLease);
+    }
+    if (target.pathname.includes("henvalt-shopify-contact-delivery-v2")) {
+      return new Response(JSON.stringify({ error: "delivery_send_disabled" }), { status: 503 });
+    }
+    if (target.pathname.includes("finish_shopify_recovery_work_claim_v2")) {
+      const body = JSON.parse(init.body);
+      return rpcSuccess({ finished: true, outcome: body.p_outcome });
+    }
+    if (target.pathname.startsWith("/rest/v1/rpc/")) return rpcSuccess();
+    throw new Error("unexpected_synthetic_fixture_path");
+  };
+  const runtime = makeRuntime(safeFetch);
+  const result = await runtime.runTick({ workerId: "synthetic-no-send-worker" });
+  assert.equal(result.summary.outcomes[0].outcome, "DEFERRED");
+  assert.equal(result.summary.lease_finish_unconfirmed, 0);
+  assert.equal(fixtureCalls.some((call) => call.path.includes("claim_shopify_recovery_work_v2")), true);
+  assert.equal(fixtureCalls.some((call) => call.path.includes("finish_shopify_recovery_work_claim_v2")), true);
+  assert.equal(guard.attempts.length, 0);
+  assert.equal(guard.blockedProviderAttempts, 0);
+});
