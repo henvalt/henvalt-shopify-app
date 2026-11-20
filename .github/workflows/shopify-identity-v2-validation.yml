@@ -192,6 +192,16 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-touch-selection-v2.test.sql
+
+      - name: Prepare deterministic competing-order attribution race
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-concurrency-setup-v2.test.sql
+
+      - name: Exercise two-session exact-store attribution race
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/sql/shopify-recovery-attribution-concurrency-v2.test.sh
       - name: Exercise exact-store email consent evidence and replay safety
         env:
           PGPASSWORD: postgres
