@@ -23,3 +23,14 @@ test("no-send interlock rejects missing MailerSend event readiness before any de
  assert.ok(auth>=0&&readiness>auth&&parse>readiness&&context>parse&&provider>context);
  assert.match(handler,/if\(!MAILERSEND_V2_EVENTS_READY\)return json\(503/);
 });
+
+test("checkout delivery authenticates its dedicated bearer before parsing or any tenant/store lookup",()=>{
+ const handler=edge.slice(edge.indexOf("Deno.serve("));
+ const auth=handler.indexOf('if(!bearer||!eq(bearer,DELIVERY_AUTH_TOKEN))');
+ const readiness=handler.indexOf('if(!MAILERSEND_V2_EVENTS_READY)');
+ const parse=handler.indexOf('readJsonObject(req');
+ const firstLookup=handler.indexOf('rpc("resolve_shopify_recovery_message_context_v2"');
+ assert.match(edge,/HENVALT_DELIVERY_AUTH_TOKEN/);
+ assert.ok(auth>=0&&readiness>auth&&parse>readiness&&firstLookup>parse);
+ assert.match(handler,/if\(!bearer\|\|!eq\(bearer,DELIVERY_AUTH_TOKEN\)\)return json\(401/);
+});
