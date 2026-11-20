@@ -87,7 +87,7 @@ SQL
 DELETE FROM henvalt.shopify_recovery_work_claims_v2 c
 WHERE c.tenant_id=(SELECT tenant_id FROM henvalt.test_recovery_work_claim_fixture_v2 LIMIT 1)
   AND c.shopify_connection_id=(SELECT shopify_connection_id FROM henvalt.test_recovery_work_claim_fixture_v2 LIMIT 1)
-  AND c.worker_id IN ('exhausted','retry-test-worker','crashed-worker');
+  AND c.worker_id IN ('retry-test-worker','crashed-worker');
 DELETE FROM henvalt.shopify_recovery_opportunity_v2 o
 USING henvalt.test_recovery_work_claim_fixture_v2 f
 WHERE o.id=f.opportunity_id;
