@@ -188,6 +188,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-opportunity-v2.test.sql
+      - name: Exercise checkout attribution first/last touch and consumed-opportunity exclusion
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-touch-selection-v2.test.sql
       - name: Exercise exact-store email consent evidence and replay safety
         env:
           PGPASSWORD: postgres
