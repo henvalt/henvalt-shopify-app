@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 
 const sql=readFileSync(new URL("../supabase/migrations/202611180042_shopify_recovery_work_claims_v2.sql",import.meta.url),"utf8");
+const retryCeiling=readFileSync(new URL("../supabase/migrations/202611200001_shopify_recovery_work_retry_ceiling_v2.sql",import.meta.url),"utf8");
 const materializer=readFileSync(new URL("../supabase/migrations/202611180043_shopify_checkout_intervention_materializer_v2.sql",import.meta.url),"utf8");
 const integration=readFileSync(new URL("./sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql",import.meta.url),"utf8");
 const concurrency=readFileSync(new URL("./sql/shopify-recovery-work-claims-concurrency-v2.test.sh",import.meta.url),"utf8");
@@ -71,4 +72,20 @@ test("checkout interventions are materialized from exact-store eligible opportun
  assert.match(materializer,/'provider_called',false/);
  assert.match(materializer,/GRANT EXECUTE ON FUNCTION henvalt\.materialize_shopify_checkout_interventions_v2\(integer\)[\s\S]*?TO service_role/);
  assert.match(integration,/Checkout intervention materializer did not create the exact-store row/);
+});
+
+
+test("V2 Recovery retries have a finite ceiling and retain exhausted work for operator review",()=>{
+ assert.match(retryCeiling,/max_attempt_count integer NOT NULL DEFAULT 5/);
+ assert.match(retryCeiling,/attempt_count BETWEEN 1 AND 10/);
+ assert.match(retryCeiling,/exhausted_at timestamptz/);
+ assert.match(retryCeiling,/old\.attempt_count>=old\.max_attempt_count/);
+ assert.match(retryCeiling,/attempt_count\s*<\s*henvalt\.shopify_recovery_work_claims_v2\.max_attempt_count/);
+ assert.match(retryCeiling,/attempt_count>=max_attempt_count[\s\S]*?lease_expires_at<=now\(\)/);
+ assert.match(retryCeiling,/last_result='EXHAUSTED'/);
+ assert.match(retryCeiling,/CREATE OR REPLACE VIEW henvalt\.shopify_recovery_exhausted_work_v2/);
+ assert.match(retryCeiling,/GRANT SELECT ON henvalt\.shopify_recovery_exhausted_work_v2 TO service_role/);
+ assert.match(retryCeiling,/v_claim\.attempt_count>=v_claim\.max_attempt_count/);
+ assert.match(retryCeiling,/'exhausted',true/);
+ assert.match(retryCeiling,/'reason_code','retry_limit_reached'/);
 });
