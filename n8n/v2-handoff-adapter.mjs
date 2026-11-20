@@ -11,7 +11,7 @@ const AMBIGUOUS_STATUSES = new Set([
 ]);
 
 function safeCorrelationId(value, workId) {
-  if (typeof value !== "string" || value !== `v2:${workId}` ||
+  if (typeof value !== "string" || value !== \`v2:\${workId}\` ||
       value.length > 80 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
     throw new TypeError("invalid_correlation_id");
   }
@@ -77,7 +77,7 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
   let trustedUrl = false;
   try {
     const parsed = new URL(supabaseUrl);
-    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\\.supabase\\.co$/i.test(parsed.hostname) &&
+    trustedUrl = parsed.protocol === "https:" && /^[a-z0-9-]+\.supabase\.co$/i.test(parsed.hostname) &&
       (parsed.pathname === "" || parsed.pathname === "/") && !parsed.port && !parsed.search && !parsed.hash && !parsed.username && !parsed.password;
   } catch { trustedUrl = false; }
   if (!trustedUrl ||
@@ -86,7 +86,7 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
       typeof fetchImpl !== "function") {
     throw new TypeError("invalid_adapter_configuration");
   }
-  const base = supabaseUrl.replace(/\\/+$/, "");
+  const base = supabaseUrl.replace(/\/+$/, "");
   return async function handoff(claim) {
     const valid = validateClaim(claim);
     const isCheckout = valid.workType === "CHECKOUT_INTERVENTION";
@@ -97,10 +97,10 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
     let classification;
     let httpStatus = null;
     try {
-      const response = await fetchImpl(`${base}/functions/v1/${valid.endpoint}`, {
+      const response = await fetchImpl(\`\${base}/functions/v1/\${valid.endpoint}\`, {
         method: "POST",
         headers: {
-          authorization: `Bearer ${bearerToken}`,
+          authorization: \`Bearer \${bearerToken}\`,
           "content-type": "application/json",
           "x-henvalt-correlation-id": valid.correlationId,
         },
