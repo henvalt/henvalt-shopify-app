@@ -88,7 +88,7 @@ This is still a source-level operation inventory, not a production approval. The
 
 ## Connected production parity observations — read-only, 19 November 2026
 
-The connected production project was queried read-only after the 60-file manifest correction:
+The connected production project was queried read-only after the 61-file manifest correction:
 
 - Migration history: **178 applied migrations**, latest `20261114174204`.
 - Candidate V2 objects: **0 of 18 sampled candidate tables** and **0 of 6 sampled candidate RPCs** exist in the live `henvalt` schema.
