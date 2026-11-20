@@ -88,3 +88,15 @@ test("no-send interlock rejects missing MailerSend event readiness before any de
  assert.ok(auth>=0&&readiness>auth&&parse>readiness&&context>parse&&provider>context);
  assert.match(handler,/if\(!MAILERSEND_V2_EVENTS_READY\)return json\(503/);
 });
+
+test("pixel final provider gate has a disposable-PostgreSQL contract test wired into identity CI",()=>{
+ const contract=readFileSync(new URL("../tests/sql/shopify-pixel-provider-submission-gate-v2.test.sql",import.meta.url),"utf8");
+ const workflow=readFileSync(new URL("../.github/workflows/shopify-identity-v2-validation.yml",import.meta.url),"utf8");
+ assert.match(contract,/pg_get_functiondef/);
+ assert.match(contract,/permit_row\.shopify_connection_id=attempt_row\.shopify_connection_id/);
+ assert.match(contract,/reservation_row\.shopify_connection_id=attempt_row\.shopify_connection_id/);
+ assert.match(contract,/has_function_privilege\('anon'/);
+ assert.match(contract,/has_function_privilege\('authenticated'/);
+ assert.match(contract,/authorize_shopify_pixel_provider_submission_v2\(NULL,NULL\)/);
+ assert.match(workflow,/tests\/sql\/shopify-pixel-provider-submission-gate-v2\.test\.sql/);
+});
