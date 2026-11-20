@@ -87,11 +87,16 @@ BEGIN
 
   -- Satisfy the real cost-reservation boundary in this disposable transaction.
   -- All values are synthetic and rolled back at the end of this fixture.
-  UPDATE henvalt.billing_accounts
-     SET status='ACTIVE',test_mode=false,henvalt_percentage=5,
-         usage_cap_amount=100,currency='USD',monthly_email_limit=100,
-         activated_at=pg_catalog.now(),updated_at=pg_catalog.now()
-   WHERE tenant_id=v_tenant;
+  INSERT INTO henvalt.billing_accounts(
+    tenant_id,status,test_mode,henvalt_percentage,usage_cap_amount,
+    currency,monthly_email_limit,activated_at,updated_at
+  ) VALUES(
+    v_tenant,'ACTIVE',false,5,100,'USD',100,pg_catalog.now(),pg_catalog.now()
+  )
+  ON CONFLICT(tenant_id) DO UPDATE SET
+    status='ACTIVE',test_mode=false,henvalt_percentage=5,
+    usage_cap_amount=100,currency='USD',monthly_email_limit=100,
+    activated_at=pg_catalog.now(),updated_at=pg_catalog.now();
   UPDATE henvalt.shopify_mailer_provider_registry_v2
      SET email_unit_cost_amount=0.001,email_unit_cost_currency='USD',status='ACTIVE'
    WHERE tenant_id=v_tenant AND provider_account_key=v_provider_key;
