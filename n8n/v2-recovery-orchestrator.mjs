@@ -13,6 +13,7 @@ const SAFE_REASONS = new Set([
   "handoff_transport_ambiguous",
   "delivery_subworkflow_failed",
   "lease_finish_unconfirmed",
+  "retry_limit_reached",
 ]);
 
 const DEFAULTS = Object.freeze({
@@ -117,6 +118,7 @@ export async function runV2RecoveryTick({
     terminal: 0,
     deferred: 0,
     lease_finish_unconfirmed: 0,
+    exhausted: 0,
     outcomes: [],
   };
 
@@ -177,6 +179,7 @@ export async function runV2RecoveryTick({
     // Recovery, not Delivery, owns the lease. Finish only after the synchronous
     // Delivery subworkflow has returned its sanitized outcome.
     let leaseFinished = false;
+    let leaseExhausted = false;
     try {
       const finished = await finishClaim({
         lease_id: item.lease_id,
@@ -185,26 +188,29 @@ export async function runV2RecoveryTick({
         retry_after_seconds: retryAfterSeconds,
       });
       leaseFinished = finished?.finished === true && finished?.outcome === outcome;
+      leaseExhausted = leaseFinished && finished?.exhausted === true && outcome === "DEFERRED";
     } catch {
       // The RPC may have committed before its response was lost. Do not blindly
       // retry the finisher; continue the batch and report an unconfirmed lease.
       leaseFinished = false;
     }
     if (!leaseFinished) summary.lease_finish_unconfirmed += 1;
+    if (leaseExhausted) summary.exhausted += 1;
     summary.outcomes.push({
       work_type: safeClaim.work_type,
       work_id: safeClaim.work_id,
       outcome,
-      reason_code: !leaseFinished ? "lease_finish_unconfirmed" : SAFE_REASONS.has(result.reason) ? result.reason : "unspecified",
+      reason_code: !leaseFinished ? "lease_finish_unconfirmed" : leaseExhausted ? "retry_limit_reached" : SAFE_REASONS.has(result.reason) ? result.reason : "unspecified",
       http_status: Number.isInteger(result.http_status) && result.http_status >= 100 && result.http_status <= 599 ? result.http_status : null,
       lease_finished: leaseFinished,
+      exhausted: leaseExhausted,
     });
   }
 
   const leaseFinishesConfirmed = summary.lease_finish_unconfirmed === 0;
   return Object.freeze({
     accepted: leaseFinishesConfirmed,
-    status: leaseFinishesConfirmed ? "COMPLETED" : "LEASE_FINISH_UNCONFIRMED",
+    status: !leaseFinishesConfirmed ? "LEASE_FINISH_UNCONFIRMED" : summary.exhausted > 0 ? "COMPLETED_WITH_EXHAUSTED_WORK" : "COMPLETED",
     worker_id: workerId,
     stages: Object.freeze(Object.fromEntries(
       Object.entries(stageResults).map(([key, value]) => [key, {
