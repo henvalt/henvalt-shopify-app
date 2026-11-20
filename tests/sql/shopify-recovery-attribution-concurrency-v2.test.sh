@@ -71,6 +71,11 @@ WHERE fee.attribution_id=a.id AND a.opportunity_id=f.opportunity_id;
 DELETE FROM henvalt.shopify_recovery_attributions_v2 a
 USING henvalt.test_attribution_race_fixture_v2 f
 WHERE a.opportunity_id=f.opportunity_id;
+DELETE FROM henvalt.shopify_delivery_cost_reservations_v2
+WHERE send_attempt_id IN (
+  SELECT id FROM henvalt.shopify_recovery_send_attempt_v2
+  WHERE idempotency_key='attribution-race-send'
+);
 DELETE FROM henvalt.shopify_recovery_send_attempt_v2
 WHERE idempotency_key='attribution-race-send';
 DELETE FROM henvalt.shopify_recovery_intervention_v2
