@@ -56,9 +56,7 @@ Verified in CI run #335 (migrations 001–023):
 4. a full refund reversing the attribution and voiding the pending fee.
 
 Still required before launch:
-- test first-touch and last-touch selection with multiple eligible sends;
-- test delivery-confirmation-required policy and out-of-window/pre-send rejection;
-- test same checkout token across stores and duplicate order/refund replay specifically against the attribution ledger;
+- run a true two-session concurrent competing-order attribution simulation (the unique-key and conflict-safe evaluator path is covered by schema and contract tests, but this exact behavioral race is not yet simulated);
 - add chargeback/dispute projection and its fee-credit behavior;
 - obtain the merchant's explicit approved performance percentage and fee basis;
 - implement and reconcile actual billing collection only after legal/merchant approval.
@@ -129,3 +127,10 @@ A new disposable-PostgreSQL metadata acceptance test verifies these unique const
 A new disposable-PostgreSQL fixture creates two exact-store checkout opportunities sharing the same token/customer values across Store A and Store B. Each opportunity receives two sequence-step interventions and two submitted send attempts. The fixture enables FIRST_ELIGIBLE_TOUCH for Store A and LAST_ELIGIBLE_TOUCH for Store B only after both attempts exist, then verifies that the earliest and latest eligible attempts are respectively selected. A second paid order in Store A reuses the checkout token after the opportunity has already been attributed; the evaluator must return NO_ELIGIBLE_RECOVERY_TOUCH and create no second attribution.
 
 The fixture reflects the actual current schema cardinality: one checkout candidate per exact-store token and one opportunity per candidate. It does not manufacture an impossible second opportunity for the same candidate. Supporting repeated independent checkout opportunities for the same checkout token would require an explicit recovery-cycle identity and corresponding uniqueness/attribution semantics. No live data or billing was changed. The same transaction also follows the real AUTHORIZED-to-SUBMITTED send lifecycle and merchant/provider cost-reservation checks using synthetic billing/provider configuration, verifies that direct duplicate inserts for a consumed opportunity and an existing fee measurement are rejected by database unique constraints, then rolls everything back. It verifies that a pending 5% fee measurement is reduced after a partial refund and that a later refund after marking the measurement PAID preserves the original billed snapshot while calculating an explicit credit delta. The fixture confirms no Paddle transaction reference is created.
+
+
+## 13. Same-order replay and concurrency arbitration review
+
+The checkout attribution integration fixture now evaluates the same paid Shopify order twice. The second evaluation must return the existing attribution as `RECONCILED`, retain the original attribution ID, and leave exactly one attribution row and one fee measurement. The SQL fixture is transaction-scoped and rolls back all synthetic data.
+
+The evaluator locks the exact order row with `FOR UPDATE`, serializing concurrent evaluations for the same order. For two distinct orders competing for one opportunity, the database's unique `(shopify_connection_id, opportunity_id)` constraint is the final arbiter. The evaluator uses `ON CONFLICT DO NOTHING`; after a losing insert it looks up an attribution for its own order and returns `OPPORTUNITY_ALREADY_ATTRIBUTED` when the opportunity was consumed by another order. The separate `(shopify_connection_id, order_identity_id)` key prevents duplicate order attribution, and the fee-ledger unique key plus conflict-safe trigger prevents duplicate fee rows. Contract tests assert these code paths, while a real two-session concurrent competing-order simulation remains outstanding. No production data, database, billing, or delivery behavior was changed.
