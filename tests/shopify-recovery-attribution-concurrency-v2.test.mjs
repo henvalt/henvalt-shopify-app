@@ -13,6 +13,7 @@ test("attribution concurrency fixture forces two evaluators to race at the uniqu
   assert.match(setup,/pg_catalog\.pg_sleep\(1\.5\)/);
   assert.match(setup,/889001/);
   assert.match(setup,/889004/);
+  assert.match(setup,/v_customer,3,'AUTHORIZED'/);
   assert.match(setup,/set_shopify_recovery_attribution_policy_v2\([\s\S]*?false/);
   assert.match(setup,/set_shopify_recovery_attribution_policy_v2\([\s\S]*?true/);
 });
@@ -27,6 +28,7 @@ test("two independent PostgreSQL sessions require one winner and explicit confli
   assert.match(runner,/rejected_count/);
   assert.match(runner,/"1:1:1:1"/);
   assert.match(runner,/shopify_recovery_fee_measurements_v2/);
+  assert.ok(runner.indexOf('DELETE FROM henvalt.shopify_delivery_cost_reservations_v2') < runner.indexOf('DELETE FROM henvalt.shopify_recovery_send_attempt_v2'));
 });
 
 test("the exact-store identity CI workflow executes setup and concurrent race runner",()=>{
