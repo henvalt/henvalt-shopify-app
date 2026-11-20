@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const migration=readFileSync(new URL("../supabase/migrations/202611180032_shopify_pixel_delivery_eligibility_v2.sql",import.meta.url),"utf8");
 const policyDoc=readFileSync(new URL("../docs/shopify-pixel-delivery-eligibility-v2.md",import.meta.url),"utf8");
+const context=readFileSync(new URL("../supabase/migrations/202611180035_shopify_pixel_delivery_context_v2.sql",import.meta.url),"utf8");
+const finalGate=readFileSync(new URL("../supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql",import.meta.url),"utf8");
+const edge=readFileSync(new URL("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts",import.meta.url),"utf8");
 test("pixel jurisdiction policy is explicit, versioned, unseeded, and legal-review referenced",()=>{
  assert.match(migration,/CREATE TABLE IF NOT EXISTS henvalt\.shopify_pixel_delivery_jurisdiction_policy_v2/);
  assert.match(migration,/legal_review_reference text NOT NULL/);
@@ -50,4 +53,32 @@ test("pixel delivery authenticates its dedicated bearer before parsing or any te
  assert.match(edge,/HENVALT_PIXEL_DELIVERY_AUTH_TOKEN/);
  assert.ok(auth>=0&&readiness>auth&&parse>readiness&&firstLookup>parse);
  assert.match(handler,/if\(!bearer\|\|!equal\(bearer,DELIVERY_AUTH_TOKEN\)\)return json\(401/);
+});
+
+test("pixel context and final gate bind opportunity, customer, tenant and exact Shopify store lineage",()=>{
+ for(const pattern of [
+  /ci\.id=o\.customer_identity_id AND ci\.tenant_id=o\.tenant_id[\s\S]*?ci\.shopify_connection_id=o\.shopify_connection_id/,
+  /sc\.id=o\.shopify_connection_id AND sc\.tenant_id=o\.tenant_id/,
+  /sp\.tenant_id=o\.tenant_id AND sp\.shopify_connection_id=o\.shopify_connection_id/
+ ]) assert.match(context,pattern);
+ for(const pattern of [
+  /permit_row\.tenant_id=attempt_row\.tenant_id/,
+  /permit_row\.shopify_connection_id=attempt_row\.shopify_connection_id/,
+  /reservation_row\.tenant_id=attempt_row\.tenant_id/,
+  /reservation_row\.shopify_connection_id=attempt_row\.shopify_connection_id/,
+  /assessment:=henvalt\.assess_shopify_pixel_delivery_eligibility_v2\(v_attempt\.opportunity_id\)/
+ ]) assert.match(finalGate,pattern);
+ assert.ok(edge.indexOf('resolve_shopify_pixel_delivery_context_v2')<edge.indexOf('authorize_shopify_pixel_provider_submission_v2'));
+});
+test("pixel missing or incorrect dedicated bearer and disabled send interlock stop before request parsing or lookups",()=>{
+ const handler=edge.slice(edge.indexOf("Deno.serve("));
+ const configured=handler.indexOf('if(!SUPABASE_URL||!SERVICE_ROLE_KEY||!DELIVERY_AUTH_TOKEN)');
+ const auth=handler.indexOf('if(!bearer||!equal(bearer,DELIVERY_AUTH_TOKEN))');
+ const readiness=handler.indexOf('if(!MAILERSEND_V2_EVENTS_READY)');
+ const parse=handler.indexOf('parseJsonLimited(req');
+ const lookup=handler.indexOf('resolve_shopify_recovery_message_context_v2');
+ const provider=handler.indexOf('https://api.mailersend.com/v1/email');
+ assert.ok(configured>=0&&auth>configured&&readiness>auth&&parse>readiness&&lookup>parse&&provider>lookup);
+ assert.match(handler,/return json\(503,\{error:"pixel_delivery_not_configured"\}\)/);
+ assert.match(handler,/return json\(401,\{error:"unauthorized"\}\)/);
 });
