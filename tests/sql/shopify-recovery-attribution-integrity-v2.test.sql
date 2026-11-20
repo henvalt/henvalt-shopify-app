@@ -46,9 +46,9 @@ BEGIN
     'henvalt.evaluate_shopify_recovery_attribution_v2(uuid)'::pg_catalog.regprocedure
   ) INTO v_attribution_function;
 
-  IF pg_catalog.position('ON CONFLICT DO NOTHING' IN v_attribution_function)=0
-     OR pg_catalog.position('OPPORTUNITY_ALREADY_ATTRIBUTED' IN v_attribution_function)=0
-     OR pg_catalog.position('RETURN jsonb_build_object(''accepted'',false,''code'',''OPPORTUNITY_ALREADY_ATTRIBUTED'')' IN v_attribution_function)=0 THEN
+  IF pg_catalog.strpos(v_attribution_function,'ON CONFLICT DO NOTHING')=0
+     OR pg_catalog.strpos(v_attribution_function,'OPPORTUNITY_ALREADY_ATTRIBUTED')=0
+     OR pg_catalog.strpos(v_attribution_function,'RETURN jsonb_build_object(''accepted'',false,''code'',''OPPORTUNITY_ALREADY_ATTRIBUTED'')')=0 THEN
     RAISE EXCEPTION 'Attribution evaluator no longer explicitly rejects a competing order after the unique opportunity conflict';
   END IF;
 
