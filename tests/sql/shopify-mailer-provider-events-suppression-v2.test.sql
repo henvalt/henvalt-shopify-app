@@ -32,6 +32,7 @@ DECLARE
   v_changed_body text:='{"type":"activity.unsubscribed","created_at":"2026-11-17T04:30:00Z","data":{"id":"provider-event-001","domain_id":"domain-123","message_id":"provider-message-001","email_id":"provider-email-001","type":"unsubscribed","recipient":"changed@example.invalid","meta":{"unsubscribe_reason":"NO_LONGER_WANT"}}}';
   v_signature text;
   v_result jsonb;
+  v_delivery_at timestamptz;
 BEGIN
   PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
@@ -542,8 +543,9 @@ BEGIN
   ORDER BY o.created_at DESC LIMIT 1;
   IF v_opportunity_a IS NULL THEN RAISE EXCEPTION 'Could not create Store A attribution opportunity'; END IF;
 
+  -- This store requires provider-confirmed delivery, not merely submission.
   v_policy_result:=henvalt.set_shopify_recovery_attribution_policy_v2(
-    v_store_a,true,24,'LAST_ELIGIBLE_TOUCH','SHOPIFY_TOTAL_PRICE',false
+    v_store_a,true,24,'LAST_ELIGIBLE_TOUCH','SHOPIFY_TOTAL_PRICE',true
   );
   IF v_policy_result->>'accepted'<>'true' THEN RAISE EXCEPTION 'Explicit attribution policy rejected: %',v_policy_result; END IF;
 
@@ -568,6 +570,34 @@ BEGIN
   UPDATE henvalt.shopify_recovery_send_attempt_v2
      SET status='SUBMITTED',provider_message_id='attribution-message-store-a-001',submitted_at=now()
    WHERE id=v_attempt;
+
+  -- Only a signed MailerSend event's provider timestamp may satisfy the
+  -- delivery-confirmation attribution policy.
+  v_delivery_at:=now()+interval '30 seconds';
+  v_body:=jsonb_build_object(
+    'type','activity.delivered',
+    'created_at',v_delivery_at,
+    'data',jsonb_build_object(
+      'id','attribution-delivered-event-store-a-001',
+      'domain_id','domain-123',
+      'message_id','attribution-message-store-a-001',
+      'email_id','attribution-email-store-a-001',
+      'type','delivered',
+      'recipient','shared@example.invalid',
+      'meta',jsonb_build_array()
+    )
+  )::text;
+  v_signature:=encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to(v_secret,'UTF8'),'sha256'),'hex');
+  v_result:=henvalt.ingest_mailersend_webhook_v2(
+    v_provider_key,v_signature,encode(convert_to(v_body,'UTF8'),'base64')
+  );
+  IF v_result->>'accepted'<>'true' OR v_result->>'status'<>'PROCESSED'
+     OR NOT EXISTS(
+       SELECT 1 FROM henvalt.shopify_recovery_send_attempt_v2
+       WHERE id=v_attempt AND status='DELIVERED' AND delivered_at=v_delivery_at
+     ) THEN
+    RAISE EXCEPTION 'Signed provider delivery timestamp did not reconcile the attribution send: %',v_result;
+  END IF;
 
   v_ordered_at:=now()+interval '1 minute';
   v_body:=jsonb_build_object(
