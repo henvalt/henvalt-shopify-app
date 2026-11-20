@@ -79,7 +79,7 @@ test("ambiguous provider outcomes cannot be downgraded to failed or release rese
 
 test("no-send interlock rejects missing MailerSend event readiness before any delivery lookup or provider request",()=>{
  const handler=edge.slice(edge.indexOf("Deno.serve("));
- const auth=handler.indexOf('if(!equal(bearer,DELIVERY_AUTH_TOKEN))');
+ const auth=handler.indexOf('if(!bearer||!equal(bearer,DELIVERY_AUTH_TOKEN))');
  const readiness=handler.indexOf('if(!MAILERSEND_V2_EVENTS_READY)');
  const parse=handler.indexOf('parseJsonLimited(req,160000)');
  const context=handler.indexOf('resolve_shopify_recovery_message_context_v2');
