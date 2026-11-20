@@ -41,7 +41,7 @@ BEGIN
   -- The unique opportunity index is the final concurrency barrier. The evaluator
   -- must also handle a losing INSERT explicitly instead of treating a conflict
   -- as a successful attribution. This is a function-definition contract; a
-  -- separate two-session race test is still required to prove runtime behavior.
+  -- The identity workflow separately executes a two-session race against this exact evaluator.
   SELECT pg_catalog.pg_get_functiondef(
     'henvalt.evaluate_shopify_recovery_attribution_v2(uuid)'::pg_catalog.regprocedure
   ) INTO v_attribution_function;
