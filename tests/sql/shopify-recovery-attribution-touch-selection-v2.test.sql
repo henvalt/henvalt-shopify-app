@@ -278,6 +278,44 @@ BEGIN
     SELECT 1 FROM henvalt.shopify_recovery_attributions_v2
     WHERE order_identity_id=v_order_a
   ) THEN RAISE EXCEPTION 'Second order incorrectly created another attribution'; END IF;
+
+  -- Prove the database unique key rejects a competing order attempting to
+  -- attach the already-consumed opportunity, even if it bypasses the evaluator.
+  BEGIN
+    INSERT INTO henvalt.shopify_recovery_attributions_v2(
+      tenant_id,shopify_connection_id,order_identity_id,checkout_identity_id,
+      opportunity_id,send_attempt_id,policy_version,touch_model,
+      attribution_window_hours,revenue_basis,gross_recovered_amount,
+      refunded_amount,net_recovered_amount,currency,status,attributed_at
+    )
+    SELECT a.tenant_id,a.shopify_connection_id,v_order_a,a.checkout_identity_id,
+      a.opportunity_id,a.send_attempt_id,a.policy_version,a.touch_model,
+      a.attribution_window_hours,a.revenue_basis,a.gross_recovered_amount,
+      0,a.net_recovered_amount,a.currency,'CONFIRMED',pg_catalog.now()
+    FROM henvalt.shopify_recovery_attributions_v2 a
+    WHERE a.order_identity_id=(SELECT id FROM henvalt.shopify_order_identity_v2
+      WHERE shopify_connection_id=v_store_a AND shopify_order_id='889001');
+    RAISE EXCEPTION 'Database accepted a second order for an already-attributed opportunity';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+
+  -- Fee-measurement uniqueness is independently enforced per attribution.
+  BEGIN
+    INSERT INTO henvalt.shopify_recovery_fee_measurements_v2(
+      tenant_id,shopify_connection_id,attribution_id,recovered_amount,
+      henvalt_percentage,fee_amount,currency,status
+    )
+    SELECT f.tenant_id,f.shopify_connection_id,f.attribution_id,
+      f.recovered_amount,f.henvalt_percentage,f.fee_amount,f.currency,'PENDING'
+    FROM henvalt.shopify_recovery_fee_measurements_v2 f
+    JOIN henvalt.shopify_recovery_attributions_v2 a ON a.id=f.attribution_id
+    WHERE a.order_identity_id=(SELECT id FROM henvalt.shopify_order_identity_v2
+      WHERE shopify_connection_id=v_store_a AND shopify_order_id='889001');
+    RAISE EXCEPTION 'Database accepted a duplicate fee measurement for one attribution';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
 END;
 $checkout_attribution_touch_v2$;
 
