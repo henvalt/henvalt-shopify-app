@@ -174,9 +174,26 @@ Even after staging passes, production remains HOLD until separately approved evi
 
 No stage approval implies approval of the next stage.
 
+## 7. Latest no-send evidence — 20 November 2026
+
+Candidate commit: `5180c9fa36ff9811081a4659faa190ce24f439f9`.
+
+Exact-SHA GitHub Actions:
+- Identity V2 validation: run `44735254457` — **success**.
+- Shopify app configuration checks and deployment workflow: run `44735254265` — **success**. This workflow's successful status is CI evidence only; no production release or deployment is authorized by this plan.
+- Identity V2 log records repository Node regression suite **459/459**, focused provider/uninstall suite **13/13**, and identity/cost/privacy suite **228/228**. These are separately reported suite totals, not additive unique test counts.
+- Disposable PostgreSQL candidate migration and SQL lifecycle steps completed in the Identity V2 run. This is CI-only evidence and does not establish production schema parity or a staging deployment.
+
+Additional tests on this candidate:
+- Checkout delivery endpoint-specific bearer authentication is asserted to precede readiness checks, request parsing, and the first tenant/store lookup.
+- Pixel delivery endpoint-specific bearer authentication is asserted to precede readiness checks, request parsing, and the first tenant/store lookup.
+- These are source-order regression tests. They do **not** constitute runtime composed wrong-store or missing-auth acceptance tests, nor do they prove actual staging Edge Function behavior.
+
+Acceptance remains **PARTIAL**: NS-06 wrong-store and missing-auth composed cases remain open; full NS-01–NS-15 composed runtime acceptance and isolated staging execution remain open. Production remains **HOLD**.
+
 ## 6. Current decision
 
-**NO-SEND ACCEPTANCE: PARTIAL — exact-SHA CI now passes 455 Node tests and the mixed/invalid batch regressions; full 15-case composed acceptance (including wrong-store/missing-auth and live n8n redaction evidence) and staging execution remain open.**
+**NO-SEND ACCEPTANCE: PARTIAL — exact-SHA CI on candidate `5180c9f` passes 459 repository Node tests, 13 focused provider/uninstall tests, and 228 identity/cost/privacy tests, plus the new endpoint-auth ordering regressions; full 15-case composed acceptance (including wrong-store/missing-auth and live n8n redaction evidence) and staging execution remain open.**
 
 **STAGING PLAN: PREPARED — execution is blocked until an owner-controlled, isolated, zero-cost staging boundary is identified.**
 
