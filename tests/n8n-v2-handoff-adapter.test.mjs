@@ -72,6 +72,23 @@ test("checkout and pixel dispatch use distinct opaque-only bodies", async () => 
   assert.equal(JSON.stringify([a, b]).includes("Bearer"), false);
 });
 
+test("handoff requests reject HTTP redirects instead of following them", async () => {
+  let requestInit;
+  const adapter = createV2HandoffAdapter({
+    supabaseUrl: "https://project.supabase.co",
+    checkoutBearerToken: "c".repeat(32),
+    pixelBearerToken: "p".repeat(32),
+    fetchImpl: async (_url, init) => {
+      requestInit = init;
+      return new Response(null, { status: 302, headers: { location: "https://attacker.example/collect" } });
+    },
+  });
+  const result = await adapter(checkout);
+  assert.equal(requestInit.redirect, "error");
+  assert.equal(result.outcome, "DEFERRED");
+  assert.equal(result.reason, "handoff_not_confirmed");
+});
+
 test("transport errors and malformed provider responses defer without exposing exception data", async () => {
   const adapter = createV2HandoffAdapter({
     supabaseUrl: "https://project.supabase.co",
