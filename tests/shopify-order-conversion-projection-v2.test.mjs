@@ -130,5 +130,8 @@ test("checkout attribution and fee measurements have database-enforced one-to-on
   assert.match(attributionMigration, /CONSTRAINT shopify_recovery_fee_measurements_v2_attribution_uidx\s+UNIQUE\(shopify_connection_id,attribution_id\)/);
   assert.match(attributionMigration, /ON CONFLICT\(shopify_connection_id,attribution_id\) DO NOTHING/);
   assert.match(attributionMigration, /ON CONFLICT DO NOTHING\s+RETURNING id INTO v_attribution_id/);
-  assert.match(attributionMigration, /existing\.tenant_id=o\.tenant_id[\s\S]*existing\.shopify_connection_id=o\.shopify_connection_id[\s\\S]*existing\.opportunity_id=o\.id/);
+  const tenantLineage = attributionMigration.indexOf("existing.tenant_id=o.tenant_id");
+  const storeLineage = attributionMigration.indexOf("existing.shopify_connection_id=o.shopify_connection_id", tenantLineage);
+  const opportunityLineage = attributionMigration.indexOf("existing.opportunity_id=o.id", storeLineage);
+  assert.ok(tenantLineage >= 0 && storeLineage > tenantLineage && opportunityLineage > storeLineage, "consumed-opportunity exclusion must preserve tenant, store, and opportunity lineage");
 });
