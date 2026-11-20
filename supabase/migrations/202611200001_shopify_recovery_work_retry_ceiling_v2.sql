@@ -25,7 +25,7 @@ COMMENT ON COLUMN henvalt.shopify_recovery_work_claims_v2.exhausted_at IS
   'Set when the final permitted attempt is deferred or its lease expires; exhausted work is retained for operator review and is never automatically reclaimed.';
 
 CREATE OR REPLACE VIEW henvalt.shopify_recovery_exhausted_work_v2 AS
-SELECT id,work_type,work_id,tenant_id,shopify_connection_id,
+SELECT id,work_type,work_id,tenant_id,shopify_connection_id,worker_id,
        attempt_count,max_attempt_count,exhausted_at,last_result,updated_at
 FROM henvalt.shopify_recovery_work_claims_v2
 WHERE exhausted_at IS NOT NULL;
@@ -63,7 +63,7 @@ BEGIN
  -- A worker crash on the fifth claim cannot make the item retry forever.
  -- Once that final lease expires, preserve the row in the operator-review view.
  UPDATE henvalt.shopify_recovery_work_claims_v2
- SET exhausted_at=now(),last_result='EXHAUSTED',worker_id='exhausted',updated_at=now()
+ SET exhausted_at=now(),last_result='EXHAUSTED',updated_at=now()
  WHERE completed_at IS NULL AND exhausted_at IS NULL
    AND attempt_count>=max_attempt_count
    AND lease_expires_at<=now() AND next_attempt_at<=now();
@@ -237,7 +237,7 @@ BEGIN
   UPDATE henvalt.shopify_recovery_work_claims_v2
    SET exhausted_at=now(),last_result='EXHAUSTED',
        lease_expires_at=now(),next_attempt_at=now(),
-       worker_id='exhausted',updated_at=now()
+       updated_at=now()
    WHERE id=p_lease_id;
   RETURN jsonb_build_object('finished',true,'outcome','DEFERRED',
    'exhausted',true,'reason_code','retry_limit_reached',
