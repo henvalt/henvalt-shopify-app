@@ -129,6 +129,33 @@ test("offline Recovery→Delivery acceptance: transport timeout does not expose 
 });
 
 
+test("offline Recovery→Delivery acceptance: mismatched lease finish outcome is not acknowledged", async () => {
+  const fetchImpl = async (url, init) => {
+    if (url.includes("/rest/v1/rpc/claim_shopify_recovery_work_v2")) {
+      return claimResponse("CHECKOUT_INTERVENTION", checkoutId, checkoutLease);
+    }
+    if (url.includes("/functions/v1/henvalt-shopify-contact-delivery-v2")) {
+      return new Response(JSON.stringify({ accepted: true, status: "submitted" }), { status: 202 });
+    }
+    if (url.includes("/rest/v1/rpc/finish_shopify_recovery_work_claim_v2")) {
+      const requested = JSON.parse(init.body);
+      assert.equal(requested.p_outcome, "HANDOFF_ACCEPTED");
+      return rpcSuccess({ finished: true, outcome: "DEFERRED" });
+    }
+    if (url.includes("/rest/v1/rpc/")) return rpcSuccess({ accepted: true });
+    throw new Error("unexpected_network_target");
+  };
+
+  const result = await makeRuntime(fetchImpl).runTick({ workerId: "worker-mismatch-ack-01" });
+  assert.equal(result.accepted, false);
+  assert.equal(result.status, "LEASE_FINISH_UNCONFIRMED");
+  assert.equal(result.summary.lease_finish_unconfirmed, 1);
+  assert.equal(result.summary.outcomes[0].reason_code, "lease_finish_unconfirmed");
+  assert.equal(result.summary.outcomes[0].lease_finished, false);
+  assert.equal(result.summary.handoff_accepted, 1);
+  assert.equal(JSON.stringify(result).includes("Bearer "), false);
+});
+
 test("offline Recovery→Delivery acceptance: empty candidate set makes no claim handoff, lease finish, or provider request", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
