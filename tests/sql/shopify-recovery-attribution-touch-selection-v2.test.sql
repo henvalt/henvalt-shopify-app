@@ -190,6 +190,61 @@ BEGIN
     WHERE a.order_identity_id=v_order_b
   ) THEN RAISE EXCEPTION 'Currency-mismatched Store B attribution incorrectly created a fee measurement'; END IF;
 
+  -- First partial refund reduces a pending fee measurement. Once marked paid,
+  -- a later refund must preserve the original billed snapshot and create credit.
+  v_body := '{"id":335,"order_id":889001,"created_at":"2026-11-17T00:04:00Z","transactions":[{"id":3,"kind":"refund","status":"success","amount":"25.00","currency":"USD"}]}';
+  v_hmac := encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_receipt FROM henvalt.accept_shopify_webhook_v2(
+    repeat('b',64),v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-a.myshopify.com','refunds/create','attribution-refund-a-1','attribution-refund-a-1-event'
+  );
+  IF v_receipt.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'First attribution refund receipt rejected'; END IF;
+  v_projection := henvalt.project_verified_shopify_refund_v2(
+    repeat('b',64),'attribution-refund-a-1',encode(convert_to(v_body,'UTF8'),'base64')
+  );
+  IF v_projection->>'status'<>'PROCESSED' THEN RAISE EXCEPTION 'First attribution refund did not project: %',v_projection; END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_fee_measurements_v2 f
+    JOIN henvalt.shopify_recovery_attributions_v2 a ON a.id=f.attribution_id
+    WHERE a.order_identity_id=(SELECT id FROM henvalt.shopify_order_identity_v2
+      WHERE shopify_connection_id=v_store_a AND shopify_order_id='889001')
+      AND f.status='PENDING' AND f.recovered_amount=100.50 AND f.fee_amount=5.0250
+      AND f.adjusted_recovered_amount=100.50 AND f.adjusted_fee_amount=5.0250
+      AND f.credit_amount=0 AND f.reconciliation_status='CURRENT'
+  ) THEN RAISE EXCEPTION 'Pending fee measurement did not reconcile the first partial refund'; END IF;
+
+  UPDATE henvalt.shopify_recovery_fee_measurements_v2 f
+     SET status='PAID',paddle_transaction_reference='synthetic-paid-reference'
+   WHERE f.attribution_id IN (
+     SELECT id FROM henvalt.shopify_recovery_attributions_v2
+     WHERE order_identity_id=(SELECT id FROM henvalt.shopify_order_identity_v2
+       WHERE shopify_connection_id=v_store_a AND shopify_order_id='889001')
+   );
+
+  v_body := '{"id":336,"order_id":889001,"created_at":"2026-11-17T00:05:00Z","transactions":[{"id":4,"kind":"refund","status":"success","amount":"25.00","currency":"USD"}]}';
+  v_hmac := encode(extensions.hmac(convert_to(v_body,'UTF8'),convert_to('synthetic-test-secret-never-used-in-production','UTF8'),'sha256'),'base64');
+  SELECT * INTO v_receipt FROM henvalt.accept_shopify_webhook_v2(
+    repeat('b',64),v_hmac,encode(convert_to(v_body,'UTF8'),'base64'),
+    'store-a.myshopify.com','refunds/create','attribution-refund-a-2','attribution-refund-a-2-event'
+  );
+  IF v_receipt.accepted IS DISTINCT FROM true THEN RAISE EXCEPTION 'Second attribution refund receipt rejected'; END IF;
+  v_projection := henvalt.project_verified_shopify_refund_v2(
+    repeat('b',64),'attribution-refund-a-2',encode(convert_to(v_body,'UTF8'),'base64')
+  );
+  IF v_projection->>'status'<>'PROCESSED' THEN RAISE EXCEPTION 'Second attribution refund did not project: %',v_projection; END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.shopify_recovery_fee_measurements_v2 f
+    JOIN henvalt.shopify_recovery_attributions_v2 a ON a.id=f.attribution_id
+    WHERE a.order_identity_id=(SELECT id FROM henvalt.shopify_order_identity_v2
+      WHERE shopify_connection_id=v_store_a AND shopify_order_id='889001')
+      AND f.status='PAID' AND f.recovered_amount=100.50 AND f.fee_amount=5.0250
+      AND f.adjusted_recovered_amount=75.50 AND f.adjusted_fee_amount=3.7750
+      AND f.credit_amount=1.2500 AND f.reconciliation_status='CREDIT_REQUIRED'
+      AND f.paddle_transaction_reference='synthetic-paid-reference'
+  ) THEN RAISE EXCEPTION 'Paid fee snapshot was overwritten or refund credit was not calculated'; END IF;
+
   -- A second paid order with the same exact-store checkout token must not consume
   -- the same recovery opportunity or create a second fee-bearing attribution.
   v_body := '{"shop_id":"1001","id":889003,"checkout_token":"opportunity-shared-token","customer":{"id":12345},"total_price":"125.50","currency":"USD","financial_status":"paid","created_at":"2026-11-17T00:03:00Z"}';
