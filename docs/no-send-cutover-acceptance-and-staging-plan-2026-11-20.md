@@ -304,6 +304,15 @@ Candidate code commits:
 - Runtime test: `300ae7f8ac57663573c143253d1e9a24f39cb700`.
 - CI wiring / current branch head: `66e015767b880a9a0875cf72050660d62b2b8e06`.
 
-CI for the current head is **pending** at the time of this entry. This is candidate source only: no Edge Function was deployed, no environment variable was changed, and no live n8n workflow or production Supabase setting was modified. Therefore this candidate interlock does not yet protect the currently deployed live sender. Do not represent it as an active production kill switch.
+CI for the candidate head `d08a0871b7f25568ca516991effaa0d6281b3a4c` is **green**:
+- Identity V2 validation: [run 44758082987](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44758082987) — success.
+- Latest exact-SHA Identity V2 run: [44758093694](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44758093694) — success.
+- Shopify app configuration checks: [run 44758093653](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44758093653) — success.
+- Node regression suite: 464/464; identity/cost/privacy contracts: 231/231; focused provider/uninstall contracts: 15/15.
+- Deno runtime acceptance: 7/7 across checkout/pixel auth-readiness (4), checkout/pixel store-context rejection (2), and legacy V1 sender fail-closed (1).
+- Dedicated `deno check --no-config` for the legacy V1 MailerSend Edge Function passed.
+- Disposable PostgreSQL checkout/pixel provider submission gates and the recovery, attribution, privacy, suppression, and uninstall lifecycle checks passed.
+
+This is candidate source only: no Edge Function was deployed, no environment variable was changed, and no live n8n workflow or production Supabase setting was modified. Therefore this candidate interlock does not yet protect the currently deployed live sender. Do not represent it as an active production kill switch.
 
 Acceptance remains **PARTIAL**; production remains **HOLD**.
