@@ -19,6 +19,16 @@ if [[ "$status_a" -ne 0 || "$status_b" -ne 0 ]]; then
   exit 1
 fi
 
+combined_output="$(cat /tmp/henvalt-attribution-race-a.log /tmp/henvalt-attribution-race-b.log)"
+accepted_count="$(grep -c '"accepted": true' <<<"$combined_output" || true)"
+rejected_count="$(grep -c '"accepted": false' <<<"$combined_output" || true)"
+if [[ "$accepted_count" != "1" || "$rejected_count" != "1" ]] ||
+   ! grep -q 'OPPORTUNITY_ALREADY_ATTRIBUTED' <<<"$combined_output"; then
+  printf '%s\\n' "$combined_output"
+  echo "Expected one accepted winner and one explicit OPPORTUNITY_ALREADY_ATTRIBUTED loser." >&2
+  exit 1
+fi
+
 result=$("${psql_cmd[@]}" -Atc "
   SELECT
     count(*) FILTER (WHERE a.opportunity_id=f.opportunity_id)::text || ':' ||
