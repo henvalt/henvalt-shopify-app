@@ -56,6 +56,20 @@ Deno.test("legacy V1 MailerSend sender fails closed before parsing or outbound r
     assertEquals(unauthorized.status, 401);
     assertEquals(await unauthorized.json(), { error: "service_role_required" });
 
+    // Unsupported methods cannot reach parsing, credentials, or the provider.
+    const unsupportedMethod = await handler(new Request("https://edge.invalid", {
+      method: "GET",
+    }));
+    assertEquals(unsupportedMethod.status, 405);
+    assertEquals(await unsupportedMethod.json(), { error: "method_not_allowed" });
+
+    // CORS preflight is handled without invoking the sender transport.
+    const preflight = await handler(new Request("https://edge.invalid", {
+      method: "OPTIONS",
+    }));
+    assertEquals(preflight.status, 204);
+    assertEquals(preflight.headers.get("access-control-allow-methods"), "POST, OPTIONS");
+
     // Missing readiness flag is the default no-send state, even for a valid request.
     const missingFlag = await handler(request(JSON.stringify(validPayload)));
     assertEquals(missingFlag.status, 503);
