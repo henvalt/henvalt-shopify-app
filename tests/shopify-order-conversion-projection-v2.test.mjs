@@ -122,3 +122,13 @@ test("first/last touch selection spans all eligible checkout opportunities and s
   assert.ok(fn.includes("v_policy.touch_model='LAST_ELIGIBLE_TOUCH'"));
   assert.ok(!fn.includes("ORDER BY o.created_at DESC LIMIT 1"));
 });
+
+
+test("checkout attribution and fee measurements have database-enforced one-to-one race boundaries", () => {
+  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_attributions_v2_order_uidx\\s+UNIQUE\\(shopify_connection_id,order_identity_id\\)/);
+  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_attributions_v2_opportunity_uidx\\s+UNIQUE\\(shopify_connection_id,opportunity_id\\)/);
+  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_fee_measurements_v2_attribution_uidx\\s+UNIQUE\\(shopify_connection_id,attribution_id\\)/);
+  assert.match(attributionMigration, /ON CONFLICT\\(shopify_connection_id,attribution_id\\) DO NOTHING/);
+  assert.match(attributionMigration, /ON CONFLICT DO NOTHING\\s+RETURNING id INTO v_attribution_id/);
+  assert.match(attributionMigration, /existing\\.tenant_id=o\\.tenant_id[\\s\\S]*existing\\.shopify_connection_id=o\\.shopify_connection_id[\\s\\S]*existing\\.opportunity_id=o\\.id/);
+});
