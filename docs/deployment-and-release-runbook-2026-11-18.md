@@ -182,11 +182,11 @@ ambiguous reservations or reactivate unsafe tenant-scoped cart/browse paths.
 
 ## 6. Current deployment state
 
-- Candidate migrations 001–060: CI fixture only; not production-applied. The final checkout provider-submission authorization gate and durable ambiguous provider-event reconciliation passed disposable PostgreSQL CI on candidate head `0d397e1e038803e048792913080328e8fd70682f` (run `44587404883`). This is candidate validation only; production migration/deployment remains a separate approved cutover.
+- Candidate migrations 001–060: CI fixture only; not production-applied. Exact PR head `0ded8a47a78a20fa78b58205f50c09a870f8fac9` passed identity V2 run [44691389468](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44691389468): Node **450/450**, focused provider/uninstall **13/13**, identity/cost/privacy **224/224**, Gitleaks, Deno checks, all 60 migrations, and the two-session attribution race. The same head passed Shopify static/configuration validation and its separate OAuth/webhook/privacy foundation migration validation (001–008) in [44691389477](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44691389477); the app-preparation job was skipped. This is candidate validation only.
 - Candidate V2 Edge Functions: branch only; not production-deployed.
 - Candidate Worker changes: not deployed.
 - Active n8n workflows: three legacy workflows, unchanged.
-- Shopify app: checked-in TOML still contains legacy settings; no app release.
+- Shopify app configuration: candidate TOML now points OAuth and compliance callbacks at V2 routes, but the application URL is still the Lovable preview origin; embedded/legacy install settings, protected customer-data approval, app ownership and saved Dev Dashboard subscriptions remain unverified. No Shopify app version has been prepared or released.
 - Dashboard: branch preview only; no Pages production deployment.
 - MailerSend: no V2 customer send or billing activation.
 
