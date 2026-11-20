@@ -354,3 +354,6 @@ Production remains **HOLD**. PR #6 remains draft and unmerged.
 
 
 The same production Edge Function inventory did **not** include deployed slugs `henvalt-shopify-contact-delivery-v2`, `henvalt-shopify-pixel-delivery-v2`, or `henvalt-mailersend-webhook-v2`. Those V2 functions are present in the candidate repository and CI, but were not present in the production function inventory at inspection time. This is deployment-state evidence only; no attempt was made to deploy them.
+
+
+The n8n graph inspection also confirmed that both the normal `MailerSend Send` node and the manual one-off test-send node call the same `henvalt-mailersend-delivery` Edge Function. The candidate Edge Function interlock therefore covers both entry paths when that candidate function is deployed; it does not independently disable either n8n node, and it has no effect on the currently deployed version until an approved deployment occurs.
