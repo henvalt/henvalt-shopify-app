@@ -280,7 +280,7 @@ Read-only inspection of the n8n instance establishes that the existing three wor
 The published Recovery graph has a sendable branch that creates a delivery request, builds a payload containing recipient and message content, and invokes `HENVALT_DELIVERY` as a synchronous sub-workflow. The published Delivery graph has an authorization/precheck gate followed by a MailerSend provider call through the Supabase `henvalt-mailersend-delivery` Edge Function. Therefore, the existing live workflow configuration is **capable of sending customer email**; it is not a verified no-send configuration.
 
 Read-only execution metadata:
-- Recovery reported 9,975 total executions; the 20 most recent returned entries were successful trigger-mode runs, spaced approximately one minute apart, with the newest at `2026-11-20T14:47:28Z`.
+- A refreshed read-only check reported 9,986 total Recovery executions; the five most recent returned entries were successful trigger-mode runs, spaced approximately one minute apart, with the newest at `2026-11-20T14:58:28Z`. Delivery still reported 10 executions total, with no newer execution than `2026-11-14T17:52:32Z` in the available listing.
 - Delivery reported 10 executions total in the available listing; its newest returned execution was `2026-11-14T17:52:32Z`.
 - Ingest reported 15 executions total in the available listing; its newest returned execution was `2026-11-14T15:44:39Z`.
 
