@@ -56,7 +56,7 @@ test("order lifecycle topics project before acknowledgement", () => {
 });
 
 test("order projection stores no direct customer contact data or raw payload", () => {
-  assert.doesNotMatch(migration, /\\bemail\\s+text|\\bphone\\s+text|\\baddress\\s+text|line_items\\s+jsonb/i);
+  assert.doesNotMatch(migration, /\\bemail\s+text|\\bphone\s+text|\\baddress\s+text|line_items\s+jsonb/i);
   assert.match(docs, /No email, phone, address, line items or raw body are stored/);
 });
 
@@ -125,10 +125,10 @@ test("first/last touch selection spans all eligible checkout opportunities and s
 
 
 test("checkout attribution and fee measurements have database-enforced one-to-one race boundaries", () => {
-  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_attributions_v2_order_uidx\\s+UNIQUE\\(shopify_connection_id,order_identity_id\\)/);
-  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_attributions_v2_opportunity_uidx\\s+UNIQUE\\(shopify_connection_id,opportunity_id\\)/);
-  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_fee_measurements_v2_attribution_uidx\\s+UNIQUE\\(shopify_connection_id,attribution_id\\)/);
-  assert.match(attributionMigration, /ON CONFLICT\\(shopify_connection_id,attribution_id\\) DO NOTHING/);
-  assert.match(attributionMigration, /ON CONFLICT DO NOTHING\\s+RETURNING id INTO v_attribution_id/);
-  assert.match(attributionMigration, /existing\\.tenant_id=o\\.tenant_id[\\s\\S]*existing\\.shopify_connection_id=o\\.shopify_connection_id[\\s\\S]*existing\\.opportunity_id=o\\.id/);
+  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_attributions_v2_order_uidx\s+UNIQUE\(shopify_connection_id,order_identity_id\)/);
+  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_attributions_v2_opportunity_uidx\s+UNIQUE\(shopify_connection_id,opportunity_id\)/);
+  assert.match(attributionMigration, /CONSTRAINT shopify_recovery_fee_measurements_v2_attribution_uidx\s+UNIQUE\(shopify_connection_id,attribution_id\)/);
+  assert.match(attributionMigration, /ON CONFLICT\(shopify_connection_id,attribution_id\) DO NOTHING/);
+  assert.match(attributionMigration, /ON CONFLICT DO NOTHING\s+RETURNING id INTO v_attribution_id/);
+  assert.match(attributionMigration, /existing\.tenant_id=o\.tenant_id[\s\\S]*existing\.shopify_connection_id=o\.shopify_connection_id[\s\\S]*existing\.opportunity_id=o\.id/);
 });
