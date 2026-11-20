@@ -431,3 +431,45 @@ The search interface exposes metadata (IDs, statuses, modes, timestamps), not ex
 **Revised delivery-route acceptance:** both known live n8n HTTP provider-submit nodes are mapped and converge on the legacy V1 Edge Function. A third candidate route exists only as the two V2 Edge Function entry points in source; they were not present in the inspected production function inventory. A complete global caller inventory still requires confirming no external callers invoke the V1 Edge Function directly.
 
 **No production changes were made during this inspection.** No workflow was executed, edited, unpublished or deactivated. No execution payload or recipient data was retrieved.
+
+
+## 19. Production V1 function source comparison and controlled stop procedure — 20 November 2026
+
+Read-only Supabase inspection resolved the production project and sender:
+
+- Production project: henvalt (project ref ocyplckdojdubyrsxcxa), ACTIVE_HEALTHY, region ap-southeast-2.
+- Live function: henvalt-mailersend-delivery, ACTIVE, deployed version 1, verify_jwt=true.
+- Live deployed source digest: af754befda94057ea429c684d84bb8d9eeed99539b08b95fd3ff666d2f949c4a.
+- Candidate source path: supabase/functions/henvalt-mailersend-delivery/index.ts, candidate blob 117828c025e65d61bb44c2e0cc707714fd6a84a1.
+
+Direct source comparison confirms the deployed V1 source has no HENVALT_V1_MAILERSEND_SEND_READY guard. It authenticates the service-role bearer, parses the JSON body, validates delivery fields, calls get_mailersend_token_for_delivery, then posts to api.mailersend.com/v1/email. The candidate adds a strict equality check for the flag value "true" immediately after service-role authentication and before JSON parsing, token retrieval or provider fetch. Any absent or non-"true" value returns HTTP 503 with delivery_send_disabled.
+
+The candidate runtime test covers:
+- Missing flag: authenticated malformed JSON returns 503 delivery_send_disabled before JSON parsing.
+- Explicit false: same 503 response.
+- Explicit true with malformed delivery identity: 400 invalid_delivery_identity, with outbound fetch count still zero.
+- Missing/invalid service-role bearer: 401 service_role_required.
+
+### Controlled production stop sequence (prepared, NOT executed)
+
+1. Owner approves exact function-only production change and a maintenance window. Approval must explicitly cover the live sender function deployment and its immediate stop of all V1 normal and manual one-off sends. Approval does not implicitly authorize n8n edits, secret rotations, provider configuration changes, customer emails, migrations, PR merge or Shopify release.
+2. Before the change, archive the exact deployed V1 source and deployment metadata, including the source digest above, as the rollback reference. Do not use the unguarded source as an operational rollback because restoring it would re-open sends.
+3. Deploy only the reviewed candidate V1 function to the production project, with HENVALT_V1_MAILERSEND_SEND_READY absent or explicitly false. No other function is part of this operation.
+4. Immediately perform one owner-approved authenticated negative request using deliberately malformed JSON. Expected result: HTTP 503 delivery_send_disabled. The malformed body is intentional: it proves the gate executes before request parsing. Confirm no MailerSend provider submission or token retrieval occurred through approved, redacted evidence.
+5. Independently inspect the deployed function source/version/digest and repeat the negative check from a separate operator/session. Record timestamp, response status/body, deployed version, source digest, and redacted provider/log evidence.
+6. Verify both live n8n provider-submit nodes remain blocked by the same shared V1 function boundary. Do not execute the manual test branch. Verify V2 checkout and pixel remain absent from production function inventory unless a separate approved deployment is later considered.
+7. If the deployed candidate fails validation, do not restore the unguarded legacy source. Keep the sender stopped through a separately approved fail-closed contingency or repair forward with a corrected default-off build. The contingency mechanism and operator must be confirmed before the maintenance window; no provider credential revocation or workflow deactivation is implied by this runbook.
+8. After stop evidence is complete, proceed to retention/redaction inspection and the complete acceptance matrix. Production remains stopped throughout staging preparation.
+
+### Approval boundary
+
+**Status: PREPARED / NOT APPROVED / NOT EXECUTED.** The current user instruction to continue engineering is not explicit approval for this production function deployment. No Supabase function was deployed, no production environment variable was changed, no production request was sent, no n8n workflow was run or modified, and no MailerSend configuration was changed during this investigation.
+
+### Outstanding pre-window prerequisites
+
+- Owner explicitly approves the exact function-only deployment and one negative verification request.
+- Confirm the operator and independent verifier.
+- Confirm the maintenance window and a safe fail-closed contingency that does not restore the unguarded sender.
+- Establish a redacted evidence-capture method for provider/token-fetch absence.
+- Confirm no external direct callers beyond the two inventoried n8n submit nodes, or record them as an explicit residual risk.
+- Obtain n8n instance-level execution retention/pruning and data-redaction settings from an authorized instance administrator. The current workflow tool does not expose these settings.
