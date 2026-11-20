@@ -3,6 +3,8 @@
 -- No production data, provider calls, customer messages, or billing actions.
 \set ON_ERROR_STOP on
 
+BEGIN;
+
 DO $checkout_attribution_touch_v2$
 DECLARE
   v_tenant uuid := '00000000-0000-4000-8000-000000000001';
@@ -83,16 +85,27 @@ BEGIN
     'vault://synthetic-fingerprint-secret','ACTIVE'
   ) ON CONFLICT(provider_account_key) DO NOTHING;
 
+  -- Satisfy the real cost-reservation boundary in this disposable transaction.
+  -- All values are synthetic and rolled back at the end of this fixture.
+  UPDATE henvalt.billing_accounts
+     SET status='ACTIVE',test_mode=false,henvalt_percentage=5,
+         usage_cap_amount=100,currency='USD',monthly_email_limit=100,
+         activated_at=pg_catalog.now(),updated_at=pg_catalog.now()
+   WHERE tenant_id=v_tenant;
+  UPDATE henvalt.shopify_mailer_provider_registry_v2
+     SET email_unit_cost_amount=0.001,email_unit_cost_currency='USD',status='ACTIVE'
+   WHERE tenant_id=v_tenant AND provider_account_key=v_provider_key;
+
   -- Two eligible sends for the same checkout opportunity in each store.
   -- This is the representable multi-touch case: a checkout candidate is unique
   -- per store/token, while one opportunity can contain multiple sequence steps.
   INSERT INTO henvalt.shopify_recovery_intervention_v2(
     tenant_id,shopify_connection_id,opportunity_id,customer_identity_id,step_number,status,scheduled_at
   ) VALUES
-    (v_tenant,v_store_a,v_opp_a,v_customer_a,1,'SUBMITTED','2026-11-17T00:00:00Z'),
-    (v_tenant,v_store_a,v_opp_a,v_customer_a,2,'SUBMITTED','2026-11-17T00:01:00Z'),
-    (v_tenant,v_store_b,v_opp_b,v_customer_b,1,'SUBMITTED','2026-11-17T00:00:00Z'),
-    (v_tenant,v_store_b,v_opp_b,v_customer_b,2,'SUBMITTED','2026-11-17T00:01:00Z');
+    (v_tenant,v_store_a,v_opp_a,v_customer_a,1,'AUTHORIZED','2026-11-17T00:00:00Z'),
+    (v_tenant,v_store_a,v_opp_a,v_customer_a,2,'AUTHORIZED','2026-11-17T00:01:00Z'),
+    (v_tenant,v_store_b,v_opp_b,v_customer_b,1,'AUTHORIZED','2026-11-17T00:00:00Z'),
+    (v_tenant,v_store_b,v_opp_b,v_customer_b,2,'AUTHORIZED','2026-11-17T00:01:00Z');
 
   -- Resolve the four intervention IDs explicitly; INSERT RETURNING row order is not a contract.
   SELECT id INTO v_intervention_a1 FROM henvalt.shopify_recovery_intervention_v2 WHERE opportunity_id=v_opp_a AND step_number=1;
@@ -104,15 +117,28 @@ BEGIN
     tenant_id,shopify_connection_id,customer_identity_id,intervention_id,
     provider_account_key,idempotency_key,status,submitted_at
   ) VALUES
-    (v_tenant,v_store_a,v_customer_a,v_intervention_a1,v_provider_key,'attrib-a-step-1','SUBMITTED','2026-11-17T00:00:00Z'),
-    (v_tenant,v_store_a,v_customer_a,v_intervention_a2,v_provider_key,'attrib-a-step-2','SUBMITTED','2026-11-17T00:01:00Z'),
-    (v_tenant,v_store_b,v_customer_b,v_intervention_b1,v_provider_key,'attrib-b-step-1','SUBMITTED','2026-11-17T00:00:00Z'),
-    (v_tenant,v_store_b,v_customer_b,v_intervention_b2,v_provider_key,'attrib-b-step-2','SUBMITTED','2026-11-17T00:01:00Z');
+    (v_tenant,v_store_a,v_customer_a,v_intervention_a1,v_provider_key,'attrib-a-step-1','AUTHORIZED','2026-11-17T00:00:00Z'),
+    (v_tenant,v_store_a,v_customer_a,v_intervention_a2,v_provider_key,'attrib-a-step-2','AUTHORIZED','2026-11-17T00:01:00Z'),
+    (v_tenant,v_store_b,v_customer_b,v_intervention_b1,v_provider_key,'attrib-b-step-1','AUTHORIZED','2026-11-17T00:00:00Z'),
+    (v_tenant,v_store_b,v_customer_b,v_intervention_b2,v_provider_key,'attrib-b-step-2','AUTHORIZED','2026-11-17T00:01:00Z');
 
   SELECT id INTO v_attempt_a1 FROM henvalt.shopify_recovery_send_attempt_v2 WHERE shopify_connection_id=v_store_a AND idempotency_key='attrib-a-step-1';
   SELECT id INTO v_attempt_a2 FROM henvalt.shopify_recovery_send_attempt_v2 WHERE shopify_connection_id=v_store_a AND idempotency_key='attrib-a-step-2';
   SELECT id INTO v_attempt_b1 FROM henvalt.shopify_recovery_send_attempt_v2 WHERE shopify_connection_id=v_store_b AND idempotency_key='attrib-b-step-1';
   SELECT id INTO v_attempt_b2 FROM henvalt.shopify_recovery_send_attempt_v2 WHERE shopify_connection_id=v_store_b AND idempotency_key='attrib-b-step-2';
+
+  -- Transition through the real AUTHORIZED -> SUBMITTED lifecycle. Keep policy
+  -- disabled during these updates so neither row can prematurely win attribution.
+  UPDATE henvalt.shopify_recovery_send_attempt_v2
+     SET status='SUBMITTED',updated_at=pg_catalog.now()
+   WHERE idempotency_key IN ('attrib-a-step-1','attrib-a-step-2','attrib-b-step-1','attrib-b-step-2')
+     AND tenant_id=v_tenant;
+
+  IF (SELECT count(*) FROM henvalt.shopify_delivery_cost_reservations_v2
+      WHERE send_attempt_id IN (v_attempt_a1,v_attempt_a2,v_attempt_b1,v_attempt_b2)
+        AND status='SETTLED')<>4 THEN
+    RAISE EXCEPTION 'Authorized-to-submitted lifecycle did not settle all four synthetic cost reservations';
+  END IF;
 
   -- Policy is enabled only after both eligible touches exist, so a trigger cannot
   -- prematurely attribute the first inserted attempt before the second is visible.
@@ -172,3 +198,5 @@ BEGIN
   ) THEN RAISE EXCEPTION 'Second order incorrectly created another attribution'; END IF;
 END;
 $checkout_attribution_touch_v2$;
+
+ROLLBACK;
