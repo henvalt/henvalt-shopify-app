@@ -81,6 +81,6 @@ test("revenue attribution can require a signed provider delivery timestamp",()=>
  assert.match(sql,/created_at',v_delivery_at/);
  assert.match(sql,/ingest_mailersend_webhook_v2\([\s\S]*?v_provider_key,v_signature/);
  assert.match(sql,/status='DELIVERED' AND delivered_at=v_delivery_at/);
- assert.match(sql,/WHERE o\.shopify_order_id='987655'/);
+ assert.ok(sql.includes("o.shopify_order_id='987655'"));
  assert.ok(sql.indexOf("attribution-delivered-event-store-a-001")<sql.indexOf("v_ordered_at:=now()+interval '1 minute'"));
 });
