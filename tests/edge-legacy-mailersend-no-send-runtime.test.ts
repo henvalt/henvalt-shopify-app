@@ -81,6 +81,14 @@ Deno.test("legacy V1 MailerSend sender fails closed before parsing or outbound r
     assertEquals(explicitFalse.status, 503);
     assertEquals(await explicitFalse.json(), { error: "delivery_send_disabled" });
 
+    // Only the exact lowercase string "true" is accepted; truthy lookalikes remain disabled.
+    for (const nonExactValue of ["", "TRUE", "1", " true", "true "]) {
+      Deno.env.set("HENVALT_V1_MAILERSEND_SEND_READY", nonExactValue);
+      const nonExact = await handler(request(JSON.stringify(validPayload)));
+      assertEquals(nonExact.status, 503, `non-exact readiness value must remain disabled: ${JSON.stringify(nonExactValue)}`);
+      assertEquals(await nonExact.json(), { error: "delivery_send_disabled" });
+    }
+
     // The disabled gate also precedes parsing: malformed JSON cannot reach parsing while disabled.
     const malformedWhileDisabled = await handler(request("{"));
     assertEquals(malformedWhileDisabled.status, 503);
