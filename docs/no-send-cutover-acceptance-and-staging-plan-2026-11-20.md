@@ -335,3 +335,19 @@ Exact candidate head: `4fad5b1b59bcf04ec4e60c2a8f2480b58c9463cd`.
 - Disposable PostgreSQL provider submission, recovery, attribution, privacy, suppression, cost reservation, and uninstall lifecycle checks passed.
 
 This remains a candidate-only interlock. The live deployed V1 Edge Function has not been updated, and the live n8n workflows remain active. The new environment flag is not configured in production because no production changes are authorized. No claim of live no-send protection is made. Production remains **HOLD**.
+
+
+## 15. Production Edge Function source verification — 20 November 2026
+
+A read-only Supabase Edge Function inventory and source retrieval confirmed the deployed production function:
+- Slug: `henvalt-mailersend-delivery`
+- Status: `ACTIVE`
+- Deployed version: `1`
+- JWT verification: enabled
+- Deployed source SHA-256: `af754befda94057ea429c684d84bb8d9eeed99539b08b95fd3ff666d2f949c4a`
+
+The retrieved deployed source has **no** `HENVALT_V1_MAILERSEND_SEND_READY` check. After service-role bearer validation, it parses the delivery request, calls `get_mailersend_token_for_delivery`, and, when that database call returns a usable tenant token, posts the message to `https://api.mailersend.com/v1/email`. This confirms the candidate fail-closed interlock is not present in the currently deployed production function. The database authorization is a per-delivery gate, not a global no-send interlock.
+
+No secret values or execution payloads were retrieved. No function was deployed, no secret changed, and no production setting or workflow was modified. This production source evidence makes the release blocker definitive: the live V1 delivery path remains capable of provider submission when an eligible delivery request is authorized. The no-send cutover cannot be accepted until an owner-approved production control change is completed and independently verified, or an equivalent already-deployed hard stop is proven.
+
+Production remains **HOLD**. PR #6 remains draft and unmerged.
