@@ -31,7 +31,7 @@ Pixel migrations `202611180037`, `202611180038`, and `202611180039` implement th
 
 Because the claim query excludes every existing attempt state, a FAILED attempt is also not automatically retried. This is conservative and prevents a second send after an uncertain provider boundary, but it means a definite pre-provider failure may require explicit, audited operator recovery rather than automatic retry. That is safer than blind resend, but should be made visible in future operational tooling.
 
-A separate retry-policy gap remains: repeated failures before a send-attempt row exists can loop indefinitely. The current code bounds the wait between attempts, not the cumulative retry count. Before any staging acceptance, add a finite attempt ceiling with an explicit exhausted/dead-letter state, preserve tenant/store scope, expose an operator-review path, and test both the final permitted retry and the no-further-claim condition. Do not silently convert exhaustion into HANDOFF_ACCEPTED or TERMINAL.
+A separate retry-policy gap remains: repeated failures before a send-attempt row exists can loop indefinitely. The current code bounds the wait between attempts, not the cumulative retry count. The current `tests/shopify-recovery-work-claims-v2.test.mjs` asserts the counter increments and the delay is at most 24 hours, but does not assert a maximum attempt count or an exhausted state. Before any staging acceptance, add a finite attempt ceiling with an explicit exhausted/dead-letter state, preserve tenant/store scope, expose an operator-review path, and test both the final permitted retry and the no-further-claim condition. Do not silently convert exhaustion into HANDOFF_ACCEPTED or TERMINAL.
 
 ## Validation and limitations
 
