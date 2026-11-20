@@ -176,7 +176,8 @@ BEGIN
         AND pa.status='SUBMITTED'
         AND pe.processing_status='PROCESSED'
         AND pe.event_type IN ('activity.sent','activity.delivered')
-      ORDER BY pe.occurred_at DESC NULLS LAST,pa.created_at DESC LIMIT 1
+        AND pe.occurred_at IS NOT NULL
+      ORDER BY pe.occurred_at DESC,pa.created_at DESC LIMIT 1
     ) pixel_attempt ON true
     WHERE o.tenant_id=v_tenant_id
       AND o.shopify_connection_id=p_shopify_connection_id
