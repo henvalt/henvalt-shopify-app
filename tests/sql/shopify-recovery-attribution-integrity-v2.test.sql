@@ -8,6 +8,7 @@ DECLARE
   v_constraint record;
   v_missing text[] := ARRAY[]::text[];
   v_trigger_count integer;
+  v_attribution_function text;
 BEGIN
   FOR v_constraint IN
     SELECT * FROM (VALUES
@@ -35,6 +36,20 @@ BEGIN
 
   IF pg_catalog.cardinality(v_missing)>0 THEN
     RAISE EXCEPTION 'Missing validated unique attribution/fee constraints: %',v_missing;
+  END IF;
+
+  -- The unique opportunity index is the final concurrency barrier. The evaluator
+  -- must also handle a losing INSERT explicitly instead of treating a conflict
+  -- as a successful attribution. This is a function-definition contract; a
+  -- separate two-session race test is still required to prove runtime behavior.
+  SELECT pg_catalog.pg_get_functiondef(
+    'henvalt.evaluate_shopify_recovery_attribution_v2(uuid)'::pg_catalog.regprocedure
+  ) INTO v_attribution_function;
+
+  IF pg_catalog.position('ON CONFLICT DO NOTHING' IN v_attribution_function)=0
+     OR pg_catalog.position('OPPORTUNITY_ALREADY_ATTRIBUTED' IN v_attribution_function)=0
+     OR pg_catalog.position('RETURN jsonb_build_object(''accepted'',false,''code'',''OPPORTUNITY_ALREADY_ATTRIBUTED'')' IN v_attribution_function)=0 THEN
+    RAISE EXCEPTION 'Attribution evaluator no longer explicitly rejects a competing order after the unique opportunity conflict';
   END IF;
 
   IF NOT EXISTS (
