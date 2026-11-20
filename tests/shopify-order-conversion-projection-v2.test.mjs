@@ -115,7 +115,7 @@ test("first/last touch selection spans all eligible checkout opportunities and s
   const end = attributionMigration.indexOf("$function$;", start);
   assert.ok(start >= 0 && end > start, "attribution evaluator must exist");
   const fn = attributionMigration.slice(start, end);
-  assert.ok(fn.includes("FROM henvalt.shopify_recovery_opportunity_v2 o\\n  JOIN henvalt.shopify_recovery_intervention_v2 i"));
+  assert.ok(fn.includes(`FROM henvalt.shopify_recovery_opportunity_v2 o\n  JOIN henvalt.shopify_recovery_intervention_v2 i`));
   assert.ok(fn.includes("JOIN henvalt.shopify_recovery_send_attempt_v2 a"));
   assert.ok(fn.includes("existing.opportunity_id=o.id"));
   assert.ok(fn.includes("v_policy.touch_model='FIRST_ELIGIBLE_TOUCH'"));
