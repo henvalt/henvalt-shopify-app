@@ -19,9 +19,19 @@ test("no-send transport blocks MailerSend without exposing request payload", asy
   assert.equal(JSON.stringify(guard.attempts).includes("private body"), false);
 });
 
-test("no-send transport blocks the MailerSend apex and every subdomain even if allowlisted", async () => {
-  const guard = createNoSendTransport({ allowedHosts: ["mailersend.com", "api.mailersend.com", "events.mailersend.com"] });
-  for (const host of ["mailersend.com", "api.mailersend.com", "events.mailersend.com"]) {
+test("no-send transport blocks MailerSend apex and subdomains, including terminal-dot DNS names", async () => {
+  const guard = createNoSendTransport({
+    allowedHosts: ["mailersend.com", "api.mailersend.com", "events.mailersend.com", "mailersend.com.", "api.mailersend.com."],
+  });
+  const hosts = [
+    "mailersend.com",
+    "api.mailersend.com",
+    "events.mailersend.com",
+    "mailersend.com.",
+    "api.mailersend.com.",
+    "events.mailersend.com.",
+  ];
+  for (const host of hosts) {
     await assert.rejects(
       () => guard.fetchImpl(`https://${host}/path?token=synthetic-secret`, {
         method: "POST",
@@ -31,12 +41,11 @@ test("no-send transport blocks the MailerSend apex and every subdomain even if a
       /no_send_transport_provider_blocked/,
     );
   }
-  assert.equal(guard.blockedProviderAttempts, 3);
-  assert.deepEqual(guard.attempts, [
-    { destination: "mailersend.com", method: "POST" },
-    { destination: "api.mailersend.com", method: "POST" },
-    { destination: "events.mailersend.com", method: "POST" },
-  ]);
+  assert.equal(guard.blockedProviderAttempts, hosts.length);
+  assert.deepEqual(guard.attempts, hosts.map((host) => ({
+    destination: host.replace(/\.$/, ""),
+    method: "POST",
+  })));
   assert.equal(JSON.stringify(guard.attempts).includes("synthetic-secret"), false);
   assert.equal(JSON.stringify(guard.attempts).includes("private@example.invalid"), false);
 });
