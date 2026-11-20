@@ -3,11 +3,12 @@
  * No network is performed: every attempted request is rejected after recording
  * only non-sensitive destination metadata. Never wire this into production.
  */
+const normalizeHost = (host) => String(host).toLowerCase().replace(/\.$/, "");
 const isMailerSendHost = (host) =>
   host === "mailersend.com" || host.endsWith(".mailersend.com");
 
 export function createNoSendTransport({ allowedHosts = ["supabase.invalid", "edge.invalid"] } = {}) {
-  const allow = new Set(allowedHosts.map((host) => String(host).toLowerCase()));
+  const allow = new Set(allowedHosts.map(normalizeHost));
   const attempts = [];
 
   const fetchImpl = async (input, init = {}) => {
@@ -20,7 +21,8 @@ export function createNoSendTransport({ allowedHosts = ["supabase.invalid", "edg
       throw new Error("no_send_transport_invalid_destination");
     }
 
-    const host = url.hostname.toLowerCase();
+    // DNS treats a terminal dot as the absolute form of the same hostname.
+    const host = normalizeHost(url.hostname);
     const method = String(init.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
     // Do not record query strings, headers, request bodies, or credentials.
     attempts.push({ destination: host, method });
