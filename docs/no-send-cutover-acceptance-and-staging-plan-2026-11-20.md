@@ -316,3 +316,22 @@ CI for the candidate head `d08a0871b7f25568ca516991effaa0d6281b3a4c` is **green*
 This is candidate source only: no Edge Function was deployed, no environment variable was changed, and no live n8n workflow or production Supabase setting was modified. Therefore this candidate interlock does not yet protect the currently deployed live sender. Do not represent it as an active production kill switch.
 
 Acceptance remains **PARTIAL**; production remains **HOLD**.
+
+
+## 14. Default-off proof strengthened — 20 November 2026
+
+The legacy V1 sender runtime test was expanded to verify all three flag states:
+- Flag absent: authenticated request receives 503 `delivery_send_disabled`.
+- Flag explicitly `false`: authenticated request receives 503 `delivery_send_disabled`.
+- Flag explicitly `true`: request passes the interlock but invalid delivery identity still receives 400; no provider call is attempted.
+
+The test also verifies a missing service-role bearer returns 401. A fetch blocker asserts zero outbound network calls throughout. The dedicated Edge Function type check passes.
+
+Exact candidate head: `4fad5b1b59bcf04ec4e60c2a8f2480b58c9463cd`.
+- Identity V2 validation: [run 44758350797](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44758350797) — success.
+- Shopify app configuration checks: [run 44758360051](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44758360051) — success.
+- Node regression suite: 464/464; focused provider/uninstall contracts: 15/15; identity/cost/privacy contracts: 231/231.
+- Deno runtime suites: 4 + 2 + 1 tests passed; legacy sender Edge Function type check passed.
+- Disposable PostgreSQL provider submission, recovery, attribution, privacy, suppression, cost reservation, and uninstall lifecycle checks passed.
+
+This remains a candidate-only interlock. The live deployed V1 Edge Function has not been updated, and the live n8n workflows remain active. The new environment flag is not configured in production because no production changes are authorized. No claim of live no-send protection is made. Production remains **HOLD**.
