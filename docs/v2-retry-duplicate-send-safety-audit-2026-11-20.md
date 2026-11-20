@@ -35,8 +35,9 @@ A separate retry-policy gap remains: repeated failures before a send-attempt row
 
 ## Validation and limitations
 
-- The exact source revision above passed the repository Identity V2 CI suite and the Shopify static/disposable-migration validation suite.
-- The documentation-only head's CI reruns also completed successfully: Identity V2 validation passed; Shopify static and disposable-migration validation passed; Shopify deployment was skipped.
+- Earlier source revision `380a6526...` passed the repository Identity V2 CI suite and the Shopify static/disposable-migration validation suite.
+- Earlier documentation-only head CI reruns passed Identity V2 validation and Shopify static/disposable-migration validation; the Shopify deployment job was skipped.
+- The retry-ceiling migration and new regression tests have not yet passed their exact-head CI run at the time this document was updated.
 - The disposable database CI job exercises candidate migrations and a range of identity, privacy, attribution, cost, and recovery contracts. This review did not independently execute a new production or staging test.
 - This is a static candidate-code audit, not evidence that a live worker is running, that the former n8n workspace is accessible, that retention/redaction has been verified, or that production sending is stopped.
 - No production or staging resource was changed. No deployment, workflow execution, provider request, or email send occurred. PR #6 remains unmerged.
