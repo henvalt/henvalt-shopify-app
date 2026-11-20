@@ -104,7 +104,7 @@ test("delivery confirmation requires a real provider timestamp and keeps the ear
   const end = attributionMigration.indexOf("$function$;", start);
   assert.ok(start >= 0 && end > start, "delivery timestamp trigger function must exist");
   const fn = attributionMigration.slice(start, end);
-  assert.match(fn, /NEW\\.occurred_at IS NOT NULL/);
-  assert.match(fn, /LEAST\\(delivered_at,NEW\\.occurred_at\\)/);
-  assert.doesNotMatch(fn, /COALESCE\\(delivered_at,NEW\\.occurred_at,pg_catalog\\.now\\(\\)\\)/);
+  assert.ok(fn.includes("NEW.occurred_at IS NOT NULL"));
+  assert.ok(fn.includes("LEAST(delivered_at,NEW.occurred_at)"));
+  assert.ok(!fn.includes("COALESCE(delivered_at,NEW.occurred_at,pg_catalog.now())"));
 });
