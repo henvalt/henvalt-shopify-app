@@ -76,7 +76,7 @@ test("unmatched signed checkout provider events with a message ID request retry 
 
 test("revenue attribution can require a signed provider delivery timestamp",()=>{
  const sql=readFileSync("tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql","utf8");
- assert.match(sql,/set_shopify_recovery_attribution_policy_v2\([\s\S]*?'SHOPIFY_TOTAL_PRICE',true\)/);
+ assert.ok(sql.includes("v_store_a,true,24,'LAST_ELIGIBLE_TOUCH','SHOPIFY_TOTAL_PRICE',true"));
  assert.match(sql,/attribution-delivered-event-store-a-001/);
  assert.match(sql,/created_at',v_delivery_at/);
  assert.match(sql,/ingest_mailersend_webhook_v2\([\s\S]*?v_provider_key,v_signature/);
