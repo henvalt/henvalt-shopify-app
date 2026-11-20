@@ -30,7 +30,7 @@ test("recovery tick runs all candidate stages in order before claiming opaque wo
       handoffs.push(claim);
       return { ...claim, outcome: "HANDOFF_ACCEPTED", retry_after_seconds: 0 };
     },
-    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+    finishClaim: async value => { finishes.push(value); return { finished: true, outcome: value.outcome }; },
   });
   assert.deepEqual(calls.map(x => x.name), [
     "refresh_shopify_checkout_recovery_candidates_v2",
@@ -75,7 +75,7 @@ test("mismatched Delivery work identity is deferred instead of completing anothe
       outcome: "HANDOFF_ACCEPTED",
       retry_after_seconds: 0,
     }),
-    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+    finishClaim: async value => { finishes.push(value); return { finished: true, outcome: value.outcome }; },
   });
   assert.equal(finishes.length, 1);
   assert.equal(finishes[0].outcome, "DEFERRED");
@@ -92,7 +92,7 @@ test("a failed or rejected discovery stage stops before claim and handoff", asyn
     workerId: "worker-v2-01",
     rpc: async name => { calls.push(name); return name === "promote_shopify_checkout_recovery_candidates_v2" ? { accepted: false, code: "NOT_READY" } : { accepted: true }; },
     handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
-    finishClaim: async () => ({ finished: true }),
+    finishClaim: async value => ({ finished: true, outcome: value.outcome }),
   }), /v2_stage_rejected:promote_checkout/);
   assert.equal(calls.includes("claim_shopify_recovery_work_v2"), false);
   assert.equal(handoffs, 0);
@@ -105,7 +105,7 @@ test("tick bounds limits and lease policy before any RPC call", async () => {
     limits: { claimLimit: 101 },
     rpc: async () => { calls++; return { accepted: true, items: [] }; },
     handoff: async () => ({ outcome: "DEFERRED", retry_after_seconds: 3600 }),
-    finishClaim: async () => ({ finished: true }),
+    finishClaim: async value => ({ finished: true, outcome: value.outcome }),
   }), /invalid_tick_policy/);
   assert.equal(calls, 0);
 });
@@ -219,7 +219,7 @@ test("claim RPC cannot return more items than the configured bound", async () =>
       ? { accepted: true, claimed: 2, items: [{}, {}] }
       : { accepted: true },
     handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
-    finishClaim: async () => ({ finished: true }),
+    finishClaim: async value => ({ finished: true, outcome: value.outcome }),
   }), /v2_claim_items_invalid/);
   assert.equal(handoffs, 0);
 });
@@ -267,7 +267,7 @@ test("Recovery output allowlists Delivery reason codes and HTTP status", async (
       http_status: 700,
       retry_after_seconds: 3600,
     }),
-    finishClaim: async () => ({ finished: true }),
+    finishClaim: async value => ({ finished: true, outcome: value.outcome }),
   });
   assert.equal(result.summary.outcomes[0].reason_code, "unspecified");
   assert.equal(result.summary.outcomes[0].http_status, null);
@@ -299,7 +299,7 @@ test("Recovery rejects a claim count that disagrees with returned items", async 
       ? { accepted: true, claimed: 1, items: [] }
       : { accepted: true },
     handoff: async () => { handoffs++; return { outcome: "DEFERRED", retry_after_seconds: 3600 }; },
-    finishClaim: async () => ({ finished: true }),
+    finishClaim: async value => ({ finished: true, outcome: value.outcome }),
   }), /v2_claim_count_mismatch/);
   assert.equal(handoffs, 0);
 });
@@ -318,7 +318,7 @@ test("Delivery subworkflow failure is redacted, deferred and the Recovery lease 
       ? { accepted: true, claimed: 1, items: [item] }
       : { accepted: true },
     handoff: async () => { throw new Error("provider response contained customer@example.com"); },
-    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+    finishClaim: async value => { finishes.push(value); return { finished: true, outcome: value.outcome }; },
   });
   assert.equal(result.summary.deferred, 1);
   assert.equal(result.summary.lease_finish_unconfirmed, 0);
@@ -348,7 +348,7 @@ test("unknown Delivery outcomes fail closed to a bounded deferred lease result",
       http_status: 999,
       retry_after_seconds: 999999,
     }),
-    finishClaim: async value => { finishes.push(value); return { finished: true }; },
+    finishClaim: async value => { finishes.push(value); return { finished: true, outcome: value.outcome }; },
   });
   assert.equal(result.summary.deferred, 1);
   assert.equal(finishes[0].outcome, "DEFERRED");
