@@ -351,3 +351,6 @@ The retrieved deployed source has **no** `HENVALT_V1_MAILERSEND_SEND_READY` chec
 No secret values or execution payloads were retrieved. No function was deployed, no secret changed, and no production setting or workflow was modified. This production source evidence makes the release blocker definitive: the live V1 delivery path remains capable of provider submission when an eligible delivery request is authorized. The no-send cutover cannot be accepted until an owner-approved production control change is completed and independently verified, or an equivalent already-deployed hard stop is proven.
 
 Production remains **HOLD**. PR #6 remains draft and unmerged.
+
+
+The same production Edge Function inventory did **not** include deployed slugs `henvalt-shopify-contact-delivery-v2`, `henvalt-shopify-pixel-delivery-v2`, or `henvalt-mailersend-webhook-v2`. Those V2 functions are present in the candidate repository and CI, but were not present in the production function inventory at inspection time. This is deployment-state evidence only; no attempt was made to deploy them.
