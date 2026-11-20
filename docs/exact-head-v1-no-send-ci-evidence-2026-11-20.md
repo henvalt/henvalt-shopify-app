@@ -76,3 +76,18 @@ Exact-head CI:
 The tested source commit is `991d360fae98e79226a96eab264bf8aa905908e4`. This appendix is a subsequent documentation-only update and does not claim that a new source SHA was tested.
 
 No live workflow, production Edge Function, Supabase resource, Shopify app, Worker, provider setting, or customer data was changed. No outbound email was sent.
+
+
+## 20 November — Recovery lease acknowledgement and Delivery redirect boundary
+
+Candidate source revision: `bdba8362ca0ff04452967bd31a42c73a171fa041`.
+
+The Recovery orchestrator now treats a lease finish as confirmed only when the finisher returns both `finished: true` and the exact requested `outcome`. A regression test supplies a mismatched outcome and verifies the tick reports `LEASE_FINISH_UNCONFIRMED` rather than accepting the lease completion. Successful test fixtures now echo the requested outcome.
+
+The V2 Delivery handoff adapter now sets `redirect: "error"` on its HTTPS Supabase Edge Function POST. Its regression test verifies redirect rejection is requested and a redirect response is not classified as an accepted handoff. Transport ambiguity remains deferred; raw exception details are not returned.
+
+Exact-head CI for `bdba8362ca0ff04452967bd31a42c73a171fa041`:
+- Identity V2 validation: [run 44794720773](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44794720773) — success; job-level inspection reports 58 successful steps and no failed steps.
+- Shopify app configuration checks: [run 44794720768](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44794720768) — success; static validation and disposable database migration validation succeeded; deployment job was skipped.
+
+This is repository-candidate CI evidence only. It does not establish that production workflows are stopped, that live n8n nodes enforce the candidate contract, or that staging exists. The former partner-controlled n8n account remains inaccessible and its retention/redaction settings remain unverified. No production resource was changed or executed; no email was sent.
