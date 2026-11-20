@@ -176,6 +176,10 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-order-conversion-projection-v2.test.sql
+      - name: Verify exact-store attribution and fee-ledger uniqueness constraints
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-integrity-v2.test.sql
       - name: Exercise exact-store checkout recovery eligibility
         env:
           PGPASSWORD: postgres
