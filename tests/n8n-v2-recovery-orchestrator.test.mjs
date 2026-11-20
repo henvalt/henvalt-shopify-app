@@ -437,3 +437,37 @@ test("lease finish transport failure is contained and later claimed work is stil
   assert.equal(result.summary.outcomes[1].lease_finished, true);
   assert.equal(JSON.stringify(result).includes("recipient@example.com"), false);
 });
+
+
+test("final deferred attempt is marked exhausted and surfaced for operator review", async () => {
+  const item = {
+    work_type: "CHECKOUT_INTERVENTION",
+    work_id: "11111111-1111-4111-8111-111111111111",
+    lease_id: "22222222-2222-4222-8222-222222222222",
+  };
+  const result = await runV2RecoveryTick({
+    workerId: "worker-v2-05",
+    rpc: async name => name === "claim_shopify_recovery_work_v2"
+      ? { accepted: true, claimed: 1, items: [item] }
+      : { accepted: true },
+    handoff: async claim => ({
+      ...claim,
+      outcome: "DEFERRED",
+      reason: "edge_or_provider_unavailable",
+      retry_after_seconds: 3600,
+    }),
+    finishClaim: async value => ({
+      finished: true,
+      outcome: value.outcome,
+      exhausted: true,
+      reason_code: "retry_limit_reached",
+    }),
+  });
+  assert.equal(result.accepted, true);
+  assert.equal(result.status, "COMPLETED_WITH_EXHAUSTED_WORK");
+  assert.equal(result.summary.deferred, 1);
+  assert.equal(result.summary.exhausted, 1);
+  assert.equal(result.summary.lease_finish_unconfirmed, 0);
+  assert.equal(result.summary.outcomes[0].reason_code, "retry_limit_reached");
+  assert.equal(result.summary.outcomes[0].exhausted, true);
+});
