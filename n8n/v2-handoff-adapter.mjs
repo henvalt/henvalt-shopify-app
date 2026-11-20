@@ -11,7 +11,7 @@ const AMBIGUOUS_STATUSES = new Set([
 ]);
 
 function safeCorrelationId(value, workId) {
-  if (typeof value !== "string" || value !== \`v2:\${workId}\` ||
+  if (typeof value !== "string" || value !== `v2:${workId}` ||
       value.length > 80 || !/^[A-Za-z0-9._:-]+$/.test(value)) {
     throw new TypeError("invalid_correlation_id");
   }
@@ -97,10 +97,10 @@ export function createV2HandoffAdapter({ supabaseUrl, checkoutBearerToken, pixel
     let classification;
     let httpStatus = null;
     try {
-      const response = await fetchImpl(\`\${base}/functions/v1/\${valid.endpoint}\`, {
+      const response = await fetchImpl(`${base}/functions/v1/${valid.endpoint}`, {
         method: "POST",
         headers: {
-          authorization: \`Bearer \${bearerToken}\`,
+          authorization: `Bearer ${bearerToken}`,
           "content-type": "application/json",
           "x-henvalt-correlation-id": valid.correlationId,
         },
