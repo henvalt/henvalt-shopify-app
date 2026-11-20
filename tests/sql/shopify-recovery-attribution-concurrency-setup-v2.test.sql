@@ -1,7 +1,7 @@
 -- Committed disposable fixture for a deterministic competing-order attribution race.
 -- A test-only BEFORE INSERT barrier makes both evaluators reach the unique-key
 -- insert for the same opportunity before either insert can finish.
-\\set ON_ERROR_STOP on
+\set ON_ERROR_STOP on
 
 CREATE TABLE henvalt.test_attribution_race_fixture_v2 (
   opportunity_id uuid PRIMARY KEY,
