@@ -11,6 +11,8 @@ DECLARE
 BEGIN
   FOR v_constraint IN
     SELECT * FROM (VALUES
+      ('shopify_checkout_recovery_candidate_v2','shopify_checkout_recovery_candidate_v2_store_token_uidx'),
+      ('shopify_recovery_opportunity_v2','shopify_recovery_opportunity_v2_candidate_uidx'),
       ('shopify_recovery_attributions_v2','shopify_recovery_attributions_v2_order_uidx'),
       ('shopify_recovery_attributions_v2','shopify_recovery_attributions_v2_opportunity_uidx'),
       ('shopify_recovery_fee_measurements_v2','shopify_recovery_fee_measurements_v2_attribution_uidx')
