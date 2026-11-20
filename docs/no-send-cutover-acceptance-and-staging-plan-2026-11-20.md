@@ -193,7 +193,7 @@ Acceptance remains **PARTIAL**: NS-06 wrong-store and missing-auth composed case
 
 ## 6. Current decision
 
-**NO-SEND ACCEPTANCE: PARTIAL — latest exact-SHA CI on candidate `85053cd` passes 460 repository Node tests, 13 focused provider/uninstall tests, and 229 identity/cost/privacy tests, with both checkout and pixel provider-submission SQL gates passing; full 15-case composed acceptance (including wrong-store/missing-auth and live n8n redaction evidence) and staging execution remain open.**
+**NO-SEND ACCEPTANCE: PARTIAL — latest exact-SHA CI on candidate `71deb1b5cd26f8d8d23eecac937782a0148e7e5a` passes 464/464 repository Node tests, including the four new checkout/pixel exact-lineage and fail-closed source-contract tests. The Identity V2 workflow and Shopify app configuration workflow both pass. This remains source/CI evidence, not composed runtime wrong-store/missing-auth acceptance. Full NS-01–NS-15 composed acceptance and live n8n redaction evidence remain open.**
 
 **STAGING PLAN: PREPARED — execution is blocked until an owner-controlled, isolated, zero-cost staging boundary is identified.**
 
@@ -217,3 +217,21 @@ This evidence is limited to candidate CI and disposable PostgreSQL. It does not 
 PR #6 remains **OPEN, DRAFT, UNMERGED**. No merge, deployment, workflow activation, customer send, or billing action occurred.
 
 Acceptance remains **PARTIAL**: composed wrong-store and missing-auth runtime cases remain open; full NS-01–NS-15 composed acceptance, live n8n execution-data redaction evidence, and isolated staging execution remain open. Production remains **HOLD**.
+
+
+## 9. Latest exact-head validation — 20 November 2026, 18:37 PKT
+
+Candidate code commit: `71deb1b5cd26f8d8d23eecac937782a0148e7e5a`.
+
+Exact-SHA GitHub Actions:
+- Identity V2 validation: run [44745375330](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44745375330) — **success**.
+- Shopify app configuration checks and deployment workflow: run [44745375444](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44745375444) — **success**; the workflow result does not authorize or imply production deployment.
+- Identity V2 repository Node regression suite: **464/464 passed**, zero failures.
+- The following new source-contract tests passed: checkout final-gate tenant/store lineage; checkout missing/incorrect dedicated bearer and disabled-send interlock ordering; pixel opportunity/customer/tenant/store lineage; pixel missing/incorrect dedicated bearer and disabled-send interlock ordering.
+- The immediately preceding commit `52fe62cf441f74f28efd8abfdae60e85bc49b2b5` had one failing checkout test expectation because the test expected `delivery_not_configured` while the implementation contract returns `delivery_configuration_missing`. The assertion was corrected in `71deb1b`; the exact-head rerun passed.
+
+This is static/source-contract plus CI evidence. It does not prove composed runtime wrong-store/missing-auth behavior, deployed Edge Function behavior, provider transport blocking in staging, or n8n execution-data redaction.
+
+PR #6 remains **OPEN, DRAFT, UNMERGED**. No merge, deployment, production mutation, workflow activation, customer send, or billing action occurred.
+
+Acceptance remains **PARTIAL**. NS-06 composed wrong-store and missing-auth runtime cases, the full NS-01–NS-15 composed run, live n8n retention/redaction evidence, and isolated staging execution remain open. Production remains **HOLD**.
