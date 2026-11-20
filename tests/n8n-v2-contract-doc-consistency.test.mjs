@@ -22,7 +22,7 @@ test("V2 automation remains exactly three named workflows with strict responsibi
     assert.ok(buildSheet.includes(name), `missing workflow contract for ${name}`);
   }
   assert.match(buildSheet, /Preserve exactly three production workflows/);
-  assert.match(buildSheet, /must not render messages, resolve recipients, call MailerSend/);
-  assert.match(buildSheet, /must not call legacy send RPCs/);
-  assert.match(buildSheet, /must not receive the same V2 Shopify callback/);
+  assert.match(buildSheet, /must not render messages, resolve recipients, call MailerSend/i);
+  assert.match(buildSheet, /must not call legacy send RPCs/i);
+  assert.match(buildSheet, /must not receive the same V2 Shopify callback/i);
 });
