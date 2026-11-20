@@ -38,12 +38,11 @@ function rpcFixture(expectedContextRpc: string) {
   let nonRpcCalls = 0;
   const fetch = async (input: RequestInfo | URL): Promise<Response> => {
     const url = String(input);
-    const match = url.match(/\\/rpc\\/([^/?]+)/);
-    if (!match) {
+    if (!url.includes("/rpc/")) {
       nonRpcCalls++;
       throw new Error("provider or Shopify network access is forbidden in lineage runtime test");
     }
-    const name = match[1];
+    const name = url.split("/rpc/")[1]?.split(/[/?]/)[0] ?? "";
     calls.push(name);
     if (name === "resolve_shopify_recovery_message_context_v2") {
       return Response.json({ ready: true, shop_domain: "message-context.myshopify.com" });
