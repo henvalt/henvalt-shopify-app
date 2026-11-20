@@ -41,7 +41,7 @@ A case passes only when the provider boundary is structurally intercepted or dis
 
 | ID | Scenario | Required assertion | Current evidence / disposition |
 |---|---|---|---|
-| NS-01 | Empty candidate set | No claim, no delivery handoff, zero provider calls | Runtime sequence exists; add/retain explicit empty-set composed assertion before staging sign-off |
+| NS-01 | Empty candidate set | No claim, no delivery handoff, zero provider calls | Added composed offline regression: zero claimed items, no lease finish, no Edge Function call, and no provider request; exact-head CI pending |
 | NS-02 | Checkout candidate | Only checkout intervention is materialized/claimed; checkout endpoint receives only intervention ID | Candidate scheduler + opaque adapter contracts; verify in composed staging fixture |
 | NS-03 | Pixel candidate | Pixel opportunity remains pixel work; no checkout intervention fabricated | Candidate SQL lifecycle contracts; verify composed staging fixture |
 | NS-04 | Concurrent workers | Exactly one active lease for the same work item | Disposable PostgreSQL concurrent claim contract passed |
