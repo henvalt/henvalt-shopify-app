@@ -145,4 +145,9 @@ test("checkout attribution SQL fixture exercises first/last touches and prevents
   assert.match(fixture, /send_attempt_id=v_attempt_b2/);
   assert.match(fixture, /NO_ELIGIBLE_RECOVERY_TOUCH/);
   assert.match(fixture, /889003/);
+  assert.match(fixture, /status='AUTHORIZED'/);
+  assert.match(fixture, /status='SUBMITTED'/);
+  assert.match(fixture, /shopify_delivery_cost_reservations_v2/);
+  assert.match(fixture, /CREDIT_REQUIRED/);
+  assert.match(fixture, /ROLLBACK/);
 });
