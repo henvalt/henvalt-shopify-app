@@ -11,3 +11,15 @@ test("keyed fingerprint, permit checks and provider submission happen in trusted
 test("refresh uses existing serialized token lease and records outcomes",()=>{for(const x of ["claim_shopify_token_refresh","complete_shopify_token_refresh","fail_shopify_token_refresh",'grant_type:"refresh_token"'])assert.ok(edge.includes(x),x);assert.doesNotMatch(edge,/console\.(log|error)\([^\n]*(access|refresh)Token/i);});
 test("migration 019 replaces the historical delivery gate only after atomic reservation exists",()=>{assert.match(migration,/MONETARY_USAGE_RESERVATION_REQUIRED/);assert.match(reservationMigration,/CREATE OR REPLACE FUNCTION henvalt\.resolve_shopify_delivery_context_v2/);assert.doesNotMatch(reservationMigration,/MONETARY_USAGE_RESERVATION_REQUIRED/);assert.match(reservationMigration,/CREATE TRIGGER shopify_delivery_cost_reserve_after_attempt_v2/);});
 test("ambiguous provider submission is never blindly retried",()=>{assert.match(migration,/record_shopify_delivery_submission_v2/);assert.match(edge,/record\(attempt,"AMBIGUOUS"\)/);assert.match(edge,/record\(attempt,"SUBMITTED",messageId\)/);assert.match(edge,/record\(attempt,"FAILED"\)/);});
+
+test("no-send interlock rejects missing MailerSend event readiness before any delivery lookup or provider request",()=>{
+ const handler=edge.slice(edge.indexOf("Deno.serve("));
+ const auth=handler.indexOf('if(!bearer||!eq(bearer,DELIVERY_AUTH_TOKEN))');
+ const readiness=handler.indexOf('if(!MAILERSEND_V2_EVENTS_READY)');
+ const parse=handler.indexOf('readJsonObject(req');
+ const context=handler.indexOf('resolve_shopify_recovery_message_context_v2');
+ const provider=handler.indexOf('https://api.mailersend.com/v1/email');
+ assert.match(edge,/HENVALT_V2_MAILERSEND_EVENTS_READY/);
+ assert.ok(auth>=0&&readiness>auth&&parse>readiness&&context>parse&&provider>context);
+ assert.match(handler,/if\(!MAILERSEND_V2_EVENTS_READY\)return json\(503/);
+});
