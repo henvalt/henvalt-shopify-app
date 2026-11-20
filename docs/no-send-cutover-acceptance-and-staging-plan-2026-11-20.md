@@ -357,3 +357,50 @@ The same production Edge Function inventory did **not** include deployed slugs `
 
 
 The n8n graph inspection also confirmed that both the normal `MailerSend Send` node and the manual one-off test-send node call the same `henvalt-mailersend-delivery` Edge Function. The candidate Edge Function interlock therefore covers both entry paths when that candidate function is deployed; it does not independently disable either n8n node, and it has no effect on the currently deployed version until an approved deployment occurs.
+
+
+## 16. Candidate-wide sender interlocks — 20 November 2026, 20:30 PKT
+
+The candidate now has an independent default-off send interlock at each of its three provider-submission Edge Function entry points:
+
+| Candidate entry point | Required flag | Default when absent | Runtime evidence |
+|---|---|---|---|
+| Legacy V1 henvalt-mailersend-delivery | HENVALT_V1_MAILERSEND_SEND_READY=true | HTTP 503 delivery_send_disabled | Deno runtime test proves missing/false blocks before request parsing or outbound fetch; explicit true still does not submit an invalid request |
+| V2 checkout henvalt-shopify-contact-delivery-v2 | HENVALT_V2_MAILERSEND_SEND_READY=true | HTTP 503 delivery_send_disabled | Deno runtime test proves missing/false blocks before parsing, database lookup, Shopify request or provider request |
+| V2 pixel henvalt-shopify-pixel-delivery-v2 | HENVALT_V2_MAILERSEND_SEND_READY=true | HTTP 503 delivery_send_disabled | Deno runtime test proves missing/false blocks before parsing, database lookup, Shopify request or provider request |
+
+For both V2 functions, the send interlock is independent of HENVALT_V2_MAILERSEND_EVENTS_READY. Enabling the send flag alone is insufficient: the signed-event readiness gate must also pass. The runtime suite tests missing, explicit false, and explicit true while event readiness remains false. The exact-store lineage runtime suite explicitly sets both readiness flags true only to reach its synthetic wrong-store rejection; its fetch fixture blocks every non-RPC network request.
+
+Candidate commits:
+- Checkout V2 send interlock: 3c174cbf25662c3aee91abb0707160f684231dd7.
+- Pixel V2 send interlock: 60d98d3db1790f21247ed105c2340721e70300ba.
+- Runtime tests for all three V2/V1 entry points: 2969f8e3e622e59c245560f78c9f2946310165a1.
+- Lineage fixture updated to explicitly pass the send gate for deeper negative testing: e35715953e38aaba95d928a0d0f7a22962abfa4a.
+
+Exact-head CI for e35715953e38aaba95d928a0d0f7a22962abfa4a:
+- Identity V2 validation [run 44763750925](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44763750925): **success**.
+- Shopify app configuration [run 44763751057](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44763751057): **success**; app deployment remains skipped.
+- Repository Node suite: **464/464**.
+- Focused provider/uninstall suite: **15/15**.
+- Identity/cost/privacy suite: **231/231**.
+- Gitleaks, repository Deno checks, V1/V2 runtime interlock tests, exact-store lineage runtime tests, and disposable PostgreSQL migration/lifecycle tests: **passed**.
+
+One earlier run on 2969f8e correctly caught a fixture failure: the exact-store runtime tests were trying to reach the database lineage resolver while the newly independent V2 send interlock was absent. The fixture now explicitly enables the send interlock in its isolated test process; the subsequent exact-head run above passed. The first failure is retained as useful regression evidence, not hidden.
+
+**Important deployment distinction:** these are candidate source and CI results. The live production V1 Edge Function was previously read-only inspected and does not contain the V1 interlock. The V2 checkout/pixel functions were absent from the production Edge Function inventory. No interlock is currently proven active in production.
+
+## 17. Production stop mechanism and release decision — 20 November 2026, 20:30 PKT
+
+The candidate-side mechanism is now defined: deploy the reviewed V1 sender function with HENVALT_V1_MAILERSEND_SEND_READY absent or explicitly false; independently verify an authenticated request is rejected with HTTP 503 before parsing, credential lookup or provider network access. The V2 checkout/pixel functions have their own separate default-off HENVALT_V2_MAILERSEND_SEND_READY flag for any later deployment.
+
+However, **the production stop mechanism is not yet established or approved**. Production currently has an active legacy V1 sender without this interlock, and the three live n8n workflows remain active. A candidate environment flag cannot stop the deployed function. The exact production change, operator, maintenance window, rollback/restore procedure, and independent verifier still require explicit owner approval before any production operation.
+
+The only known candidate provider-submit entry points are the V1 sender and the V2 checkout/pixel sender functions listed above. The legacy n8n normal send and manual one-off branch both call the V1 Edge Function; the candidate function interlock is the shared enforcement point for those calls. This mapping must be re-confirmed against the live workflow export immediately before any approved cutover. The MailerSend setup function performs provider configuration/preflight, not an email submission.
+
+**Retention/redaction remains OPEN.** The available n8n workflow-detail interface does not expose instance-level execution-save, pruning, retention or field-redaction controls. The active workflow graph handles recipient addresses and message context, but no execution payloads or instance-level retention settings have been inspected. Obtain owner-visible instance settings and a safely redacted execution inspection before claiming evidence.
+
+**Acceptance: PARTIAL.** Candidate no-send interlocks now cover all three candidate sender functions and exact-head CI is green. The complete NS-01–NS-15 acceptance evidence is still not one immutable composed staging run; wrong-store/missing-auth composed acceptance, live n8n retention/redaction evidence and provider-event rehearsal remain open.
+
+**Staging: BLOCKED.** No owner-controlled isolated zero-cost staging Supabase/n8n/Worker/Shopify/provider boundary has been identified. Continue with disposable CI only; do not create paid infrastructure or reuse production.
+
+**Production: HOLD.** No production deployment, flag change, workflow edit/deactivation, provider configuration change, customer send, billing action, PR merge or Shopify release was performed by this work.
