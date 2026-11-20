@@ -150,4 +150,7 @@ test("checkout attribution SQL fixture exercises first/last touches and prevents
   assert.match(fixture, /shopify_delivery_cost_reservations_v2/);
   assert.match(fixture, /CREDIT_REQUIRED/);
   assert.match(fixture, /ROLLBACK/);
+  assert.match(fixture, /WHEN unique_violation/);
+  assert.match(fixture, /Database accepted a second order/);
+  assert.match(fixture, /Database accepted a duplicate fee measurement/);
 });
