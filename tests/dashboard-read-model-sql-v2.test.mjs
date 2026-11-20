@@ -28,7 +28,7 @@ test("dashboard V2 read-model integration test exercises seeded active and inact
 
 test("dashboard V2 seeded integration test is part of disposable PostgreSQL CI", () => {
   assert.match(workflow, /tests\/sql\/shopify-v2-dashboard-read-model\.test\.sql/);
-  assert.match(workflow, /Apply candidate migrations 001 through 060[\s\S]*202611180041_shopify_v2_dashboard_read_model\.sql/);
+  assert.match(workflow, /Apply candidate migrations 001 through 061[\s\S]*202611180041_shopify_v2_dashboard_read_model\.sql/);
 });
 
 test("dashboard V2 summary remains service-role-only and uses confirmed exact-store attribution", () => {
