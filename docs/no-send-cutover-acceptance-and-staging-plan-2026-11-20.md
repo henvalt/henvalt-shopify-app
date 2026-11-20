@@ -235,3 +235,22 @@ This is static/source-contract plus CI evidence. It does not prove composed runt
 PR #6 remains **OPEN, DRAFT, UNMERGED**. No merge, deployment, production mutation, workflow activation, customer send, or billing action occurred.
 
 Acceptance remains **PARTIAL**. NS-06 composed wrong-store and missing-auth runtime cases, the full NS-01–NS-15 composed run, live n8n retention/redaction evidence, and isolated staging execution remain open. Production remains **HOLD**.
+
+
+## 10. Runtime no-send acceptance expansion — 20 November 2026
+
+Candidate code commit: `7495c84825a1704ea337b4e65c865269bf0d4d23`.
+
+Exact-SHA GitHub Actions:
+- Identity V2 validation: run [44748447202](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44748447202) — **success**.
+- Shopify app configuration checks: run [44748458655](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44748458655) — **success**; CI evidence only, not a deployment.
+- Repository Node regression suite: **464/464 passed**.
+- Deno Edge runtime auth/readiness harness: **4/4 passed** across checkout and pixel handlers. Missing/incorrect dedicated bearer returned 401; authenticated requests with the provider-event readiness interlock disabled returned 503; outbound fetch remained blocked with zero calls.
+- Deno Edge runtime store-context rejection harness: **2/2 passed** across checkout and pixel handlers. With valid endpoint bearer and readiness enabled, each handler received a fail-closed `SHOPIFY_CONNECTION_MISMATCH` result from its mocked database context RPC, returned 409, and made no Shopify or MailerSend network request.
+- The mocked context result is deliberately a handler-boundary test, not a live database-to-Edge composed test. The real exact-store joins and provider submission gates are separately exercised against disposable PostgreSQL in this same CI run; both checkout and pixel provider gate SQL checks passed, as did the checkout ambiguous-provider reconciliation, pixel delivery lifecycle, uninstall stop, and shop/redact stop tests.
+
+This expands runtime evidence but does not close full NS-06 composed wrong-store acceptance: the runtime rejection test uses a mocked RPC result, while the SQL lineage checks use disposable PostgreSQL. A composed run against an isolated staging database and deployed candidate Edge Functions is still required. Missing-auth/readiness handler checks are runtime-tested, but no live provider path was enabled.
+
+PR #6 remains **OPEN, DRAFT, UNMERGED**. No production deployment, schema mutation, workflow activation, customer send, or billing action occurred.
+
+Acceptance remains **PARTIAL**. Full NS-01–NS-15 composed acceptance, live n8n execution-data retention/redaction evidence, and isolated staging execution remain open. Staging remains blocked until an owner-controlled isolated zero-cost boundary is available. Production remains **HOLD**.
