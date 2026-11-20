@@ -84,6 +84,7 @@ test("V2 Recovery retries have a finite ceiling and retain exhausted work for op
  assert.match(retryCeiling,/attempt_count>=max_attempt_count[\s\S]*?lease_expires_at<=now\(\)/);
  assert.match(retryCeiling,/last_result='EXHAUSTED'/);
  assert.match(retryCeiling,/CREATE OR REPLACE VIEW henvalt\.shopify_recovery_exhausted_work_v2/);
+ assert.match(retryCeiling,/shopify_connection_id,worker_id,[\s\S]*?attempt_count,max_attempt_count,exhausted_at/);
  assert.match(retryCeiling,/GRANT SELECT ON henvalt\.shopify_recovery_exhausted_work_v2 TO service_role/);
  assert.match(retryCeiling,/v_claim\.attempt_count>=v_claim\.max_attempt_count/);
  assert.match(retryCeiling,/'exhausted',true/);
