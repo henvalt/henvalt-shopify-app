@@ -29,10 +29,63 @@ if [[ "$claim_rows" != "1:1:1" ]]; then
  exit 1
 fi
 
+# Exercise the fifth permitted attempt and prove DEFERRED becomes operator-review work.
+"${psql_cmd[@]}" <<'SQL'
+DO $retry$
+DECLARE
+ v_fixture henvalt.test_recovery_work_claim_fixture_v2%ROWTYPE;
+ v_claim jsonb;
+ v_finish jsonb;
+ v_lease uuid;
+ v_crashed_id uuid:=extensions.gen_random_uuid();
+BEGIN
+ SELECT * INTO STRICT v_fixture FROM henvalt.test_recovery_work_claim_fixture_v2 LIMIT 1;
+ UPDATE henvalt.shopify_recovery_work_claims_v2
+ SET attempt_count=4,worker_id='retry-test-worker',
+     lease_expires_at=now()-interval '1 second',
+     next_attempt_at=now()-interval '1 second'
+ WHERE work_type='PIXEL_OPPORTUNITY' AND work_id=v_fixture.opportunity_id;
+
+ PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+ v_claim:=henvalt.claim_shopify_recovery_work_v2('retry-test-worker',100,120);
+ IF v_claim->>'claimed'<>'1' THEN
+  RAISE EXCEPTION 'Final permitted retry was not claimable: %',v_claim;
+ END IF;
+ v_lease:=(v_claim->'items'->0->>'lease_id')::uuid;
+ v_finish:=henvalt.finish_shopify_recovery_work_claim_v2(
+  v_lease,'retry-test-worker','DEFERRED',interval '1 hour'
+ );
+ IF v_finish->>'finished'<>'true' OR v_finish->>'exhausted'<>'true'
+    OR v_finish->>'reason_code'<>'retry_limit_reached' THEN
+  RAISE EXCEPTION 'Fifth deferred attempt did not enter exhausted review: %',v_finish;
+ END IF;
+
+ -- A worker crash on the final attempt is exhausted by the next claim tick
+ -- after its lease expires; it must never be reclaimed.
+ INSERT INTO henvalt.shopify_recovery_work_claims_v2(
+  id,work_type,work_id,tenant_id,shopify_connection_id,worker_id,
+  lease_expires_at,next_attempt_at,attempt_count,max_attempt_count
+ ) VALUES(v_crashed_id,'PIXEL_OPPORTUNITY',extensions.gen_random_uuid(),
+  v_fixture.tenant_id,v_fixture.shopify_connection_id,'crashed-worker',
+  now()-interval '1 second',now()-interval '1 second',5,5);
+ v_claim:=henvalt.claim_shopify_recovery_work_v2('retry-sweeper',100,120);
+ IF v_claim->>'exhausted_marked'<>'1' THEN
+  RAISE EXCEPTION 'Expired final lease was not swept into exhausted review: %',v_claim;
+ END IF;
+ IF (SELECT count(*) FROM henvalt.shopify_recovery_exhausted_work_v2
+     WHERE tenant_id=v_fixture.tenant_id
+       AND shopify_connection_id=v_fixture.shopify_connection_id)<>2 THEN
+  RAISE EXCEPTION 'Operator-review view did not retain both exhausted work items';
+ END IF;
+END;
+$retry$;
+SQL
+
 "${psql_cmd[@]}" <<'SQL'
 DELETE FROM henvalt.shopify_recovery_work_claims_v2 c
-USING henvalt.test_recovery_work_claim_fixture_v2 f
-WHERE c.work_type='PIXEL_OPPORTUNITY' AND c.work_id=f.opportunity_id;
+WHERE c.tenant_id=(SELECT tenant_id FROM henvalt.test_recovery_work_claim_fixture_v2 LIMIT 1)
+  AND c.shopify_connection_id=(SELECT shopify_connection_id FROM henvalt.test_recovery_work_claim_fixture_v2 LIMIT 1)
+  AND c.worker_id IN ('exhausted','retry-test-worker','crashed-worker');
 DELETE FROM henvalt.shopify_recovery_opportunity_v2 o
 USING henvalt.test_recovery_work_claim_fixture_v2 f
 WHERE o.id=f.opportunity_id;
