@@ -108,3 +108,17 @@ test("delivery confirmation requires a real provider timestamp and keeps the ear
   assert.ok(fn.includes("LEAST(delivered_at,NEW.occurred_at)"));
   assert.ok(!fn.includes("COALESCE(delivered_at,NEW.occurred_at,pg_catalog.now())"));
 });
+
+
+test("first/last touch selection spans all eligible checkout opportunities and skips consumed opportunities", () => {
+  const start = attributionMigration.indexOf("CREATE OR REPLACE FUNCTION henvalt.evaluate_shopify_recovery_attribution_v2");
+  const end = attributionMigration.indexOf("$function$;", start);
+  assert.ok(start >= 0 && end > start, "attribution evaluator must exist");
+  const fn = attributionMigration.slice(start, end);
+  assert.ok(fn.includes("FROM henvalt.shopify_recovery_opportunity_v2 o\\n  JOIN henvalt.shopify_recovery_intervention_v2 i"));
+  assert.ok(fn.includes("JOIN henvalt.shopify_recovery_send_attempt_v2 a"));
+  assert.ok(fn.includes("existing.opportunity_id=o.id"));
+  assert.ok(fn.includes("v_policy.touch_model='FIRST_ELIGIBLE_TOUCH'"));
+  assert.ok(fn.includes("v_policy.touch_model='LAST_ELIGIBLE_TOUCH'"));
+  assert.ok(!fn.includes("ORDER BY o.created_at DESC LIMIT 1"));
+});
