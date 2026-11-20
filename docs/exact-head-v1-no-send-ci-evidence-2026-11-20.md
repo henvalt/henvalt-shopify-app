@@ -54,3 +54,25 @@ Job-level inspection confirmed:
 ## Next gate
 
 Continue candidate-only review and establish an owner-controlled, no-cost isolated runtime before any staging rehearsal. Keep production on HOLD until a separate, explicit approval names the exact target and change.
+
+## 20 November — hostname normalization hardening (exact tested source)
+
+The offline no-send transport was further hardened after review found that a single trailing DNS dot was normalized but repeated terminal dots were not. The transport now removes all terminal dots before allowlist and provider-host classification.
+
+Regression coverage includes:
+- MailerSend apex and subdomains, including uppercase hostnames.
+- One or multiple terminal DNS dots.
+- A JavaScript `Request` object rather than only a URL string.
+- Allowlisted MailerSend names remain blocked.
+- Recorded attempts contain only normalized hostname and method; no query, credential, recipient, or body values.
+- Existing offline Recovery→Delivery tests continue to assert no provider egress.
+
+Exact tested candidate source SHA: `991d360fae98e79226a96eab264bf8aa905908e4`.
+
+Exact-head CI:
+- Identity V2 validation: [run 44788746117](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44788746117) — success.
+- Shopify static/configuration and disposable migration validation: [run 44788746254](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44788746254) — success; Shopify deployment skipped.
+
+The tested source commit is `991d360fae98e79226a96eab264bf8aa905908e4`. This appendix is a subsequent documentation-only update and does not claim that a new source SHA was tested.
+
+No live workflow, production Edge Function, Supabase resource, Shopify app, Worker, provider setting, or customer data was changed. No outbound email was sent.
