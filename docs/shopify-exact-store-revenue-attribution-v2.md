@@ -110,3 +110,8 @@ This is branch validation only. The new migrations, Edge Function changes and da
 ## 9. Explicit non-actions
 
 No production attribution policy was enabled. No production Supabase migration/function or billing row was changed. No performance percentage was selected. No Paddle transaction, Shopify charge, customer email or provider send was initiated by this work.
+
+
+## 10. Checkout attribution touch selection hardening
+
+The checkout attribution evaluator now ranks eligible send attempts across every recovery opportunity attached to the exact matched checkout, rather than selecting the newest opportunity first and potentially hiding an older eligible touch. Opportunities already consumed by another attributed order are excluded before ranking. FIRST_ELIGIBLE_TOUCH and LAST_ELIGIBLE_TOUCH therefore operate over the full eligible checkout touch set. A full multi-opportunity SQL fixture remains a launch acceptance requirement.
