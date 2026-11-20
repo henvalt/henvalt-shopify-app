@@ -268,3 +268,24 @@ The workflow-detail API exposed only `executionOrder`, `binaryMode`, `timeSavedM
 No workflow was edited, tested, activated, deactivated, or executed. All three remain active exactly as discovered. Live execution-data redaction/retention evidence remains **OPEN** and must be obtained from the n8n instance-level execution settings and an approved, safely redacted execution inspection before cutover. Do not enable V2 delivery or alter live V1 workflows as a substitute.
 
 The runtime and database CI evidence in section 10 does not change this operational blocker. Acceptance remains **PARTIAL**; staging execution remains blocked; production remains **HOLD**.
+
+
+## 12. Critical live no-send posture finding — 20 November 2026
+
+Read-only inspection of the n8n instance establishes that the existing three workflows are **active**, and the published version IDs equal the current draft version IDs for all three:
+- `HENVALT_RECOVERY`: active; published/current version `32e50bf7-4cbd-4070-bbba-f259ed17b369`. Its `Every Minute` Schedule Trigger is configured for a one-minute interval.
+- `HENVALT_DELIVERY`: active; published/current version `621ae6ce-a006-4fed-a70e-acf774c360fb`.
+- `HENVALT_INGEST`: active; published/current version `6368d539-708f-494a-8be8-b9601d0e8607`.
+
+The published Recovery graph has a sendable branch that creates a delivery request, builds a payload containing recipient and message content, and invokes `HENVALT_DELIVERY` as a synchronous sub-workflow. The published Delivery graph has an authorization/precheck gate followed by a MailerSend provider call through the Supabase `henvalt-mailersend-delivery` Edge Function. Therefore, the existing live workflow configuration is **capable of sending customer email**; it is not a verified no-send configuration.
+
+Read-only execution metadata:
+- Recovery reported 9,975 total executions; the 20 most recent returned entries were successful trigger-mode runs, spaced approximately one minute apart, with the newest at `2026-11-20T14:47:28Z`.
+- Delivery reported 10 executions total in the available listing; its newest returned execution was `2026-11-14T17:52:32Z`.
+- Ingest reported 15 executions total in the available listing; its newest returned execution was `2026-11-14T15:44:39Z`.
+
+These are metadata-only observations. No execution payloads, customer records, provider response bodies, or raw message contents were retrieved. The metadata does **not** establish whether a customer message was sent during any particular execution. The absence of newer Delivery executions in the returned listing is not proof of zero sends outside that execution history.
+
+**Release impact:** this finding blocks any assertion that the currently active live n8n configuration satisfies a no-send cutover. Before any release or controlled staging decision, the owner must explicitly authorize and supervise a separate operational change to establish the intended no-send state (or prove an existing upstream hard interlock), followed by fresh acceptance evidence. Do not disable or edit live workflows, alter the production Supabase send gate, or invoke any test-send path without explicit authorization.
+
+No n8n workflow was edited, published, unpublished, executed, or otherwise changed during this inspection. Production remains **HOLD**. No customer send was initiated by this inspection.
