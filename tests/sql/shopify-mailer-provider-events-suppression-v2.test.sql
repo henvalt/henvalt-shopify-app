@@ -32,7 +32,6 @@ DECLARE
   v_changed_body text:='{"type":"activity.unsubscribed","created_at":"2026-11-17T04:30:00Z","data":{"id":"provider-event-001","domain_id":"domain-123","message_id":"provider-message-001","email_id":"provider-email-001","type":"unsubscribed","recipient":"changed@example.invalid","meta":{"unsubscribe_reason":"NO_LONGER_WANT"}}}';
   v_signature text;
   v_result jsonb;
-  v_delivery_at timestamptz;
 BEGIN
   PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
@@ -500,6 +499,7 @@ DECLARE
   v_intervention uuid; v_attempt uuid; v_order_id uuid; v_attribution_id uuid;
   v_ordered_at timestamptz; v_body text; v_hmac text; v_refund_body text;
   v_result record; v_projection jsonb; v_policy_result jsonb;
+  v_signature text; v_delivery_at timestamptz;
   v_net numeric(18,4); v_fee numeric(18,4); v_status text; v_fee_status text;
 BEGIN
   SELECT id INTO v_store_a FROM henvalt.shopify_connections WHERE shop_domain='store-a.myshopify.com';
