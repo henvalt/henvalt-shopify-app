@@ -79,6 +79,10 @@ BEGIN
      WHERE id IN (v_lease,v_crashed_id))<>2 THEN
   RAISE EXCEPTION 'Operator-review view did not retain both exhausted work items';
  END IF;
+ IF NOT EXISTS (SELECT 1 FROM henvalt.shopify_recovery_exhausted_work_v2 WHERE id=v_lease AND worker_id='retry-test-worker')
+    OR NOT EXISTS (SELECT 1 FROM henvalt.shopify_recovery_exhausted_work_v2 WHERE id=v_crashed_id AND worker_id='crashed-worker') THEN
+  RAISE EXCEPTION 'Operator-review view did not preserve the final worker identity';
+ END IF;
 END;
 $retry$;
 SQL
