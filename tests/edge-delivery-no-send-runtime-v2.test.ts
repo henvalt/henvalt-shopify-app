@@ -30,8 +30,10 @@ async function loadHandler(modulePath: string, prefix: "checkout" | "pixel"): Pr
   return captured;
 }
 
+const checkoutHandler = await loadHandler("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts", "checkout");
+const pixelHandler = await loadHandler("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts", "pixel");
+
 Deno.test("checkout delivery rejects missing and incorrect bearer before parsing or network", async () => {
-  const handler = await loadHandler("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts", "checkout");
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
   globalThis.fetch = (() => {
@@ -39,13 +41,13 @@ Deno.test("checkout delivery rejects missing and incorrect bearer before parsing
     throw new Error("unexpected outbound request in no-send runtime test");
   }) as typeof fetch;
   try {
-    const missing = await handler(new Request("https://edge.invalid", {
+    const missing = await checkoutHandler(new Request("https://edge.invalid", {
       method: "POST", headers: { "content-type": "application/json" }, body: "{",
     }));
     assertEquals(missing.status, 401);
     assertEquals(await missing.json(), { error: "unauthorized" });
 
-    const incorrect = await handler(new Request("https://edge.invalid", {
+    const incorrect = await checkoutHandler(new Request("https://edge.invalid", {
       method: "POST",
       headers: { authorization: "Bearer wrong-secret", "content-type": "application/json" },
       body: "{",
@@ -59,7 +61,6 @@ Deno.test("checkout delivery rejects missing and incorrect bearer before parsing
 });
 
 Deno.test("checkout delivery readiness interlock rejects authenticated request before parsing or network", async () => {
-  const handler = await loadHandler("../supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts", "checkout");
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
   globalThis.fetch = (() => {
@@ -67,7 +68,7 @@ Deno.test("checkout delivery readiness interlock rejects authenticated request b
     throw new Error("unexpected outbound request in no-send runtime test");
   }) as typeof fetch;
   try {
-    const response = await handler(new Request("https://edge.invalid", {
+    const response = await checkoutHandler(new Request("https://edge.invalid", {
       method: "POST",
       headers: { authorization: "Bearer runtime-test-secret", "content-type": "application/json" },
       body: "{",
@@ -81,7 +82,6 @@ Deno.test("checkout delivery readiness interlock rejects authenticated request b
 });
 
 Deno.test("pixel delivery rejects missing and incorrect bearer before parsing or network", async () => {
-  const handler = await loadHandler("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts", "pixel");
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
   globalThis.fetch = (() => {
@@ -89,13 +89,13 @@ Deno.test("pixel delivery rejects missing and incorrect bearer before parsing or
     throw new Error("unexpected outbound request in no-send runtime test");
   }) as typeof fetch;
   try {
-    const missing = await handler(new Request("https://edge.invalid", {
+    const missing = await pixelHandler(new Request("https://edge.invalid", {
       method: "POST", headers: { "content-type": "application/json" }, body: "{",
     }));
     assertEquals(missing.status, 401);
     assertEquals(await missing.json(), { error: "unauthorized" });
 
-    const incorrect = await handler(new Request("https://edge.invalid", {
+    const incorrect = await pixelHandler(new Request("https://edge.invalid", {
       method: "POST",
       headers: { authorization: "Bearer wrong-secret", "content-type": "application/json" },
       body: "{",
@@ -109,7 +109,6 @@ Deno.test("pixel delivery rejects missing and incorrect bearer before parsing or
 });
 
 Deno.test("pixel delivery readiness interlock rejects authenticated request before parsing or network", async () => {
-  const handler = await loadHandler("../supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts", "pixel");
   const originalFetch = globalThis.fetch;
   let fetchCalls = 0;
   globalThis.fetch = (() => {
@@ -117,7 +116,7 @@ Deno.test("pixel delivery readiness interlock rejects authenticated request befo
     throw new Error("unexpected outbound request in no-send runtime test");
   }) as typeof fetch;
   try {
-    const response = await handler(new Request("https://edge.invalid", {
+    const response = await pixelHandler(new Request("https://edge.invalid", {
       method: "POST",
       headers: { authorization: "Bearer runtime-test-secret", "content-type": "application/json" },
       body: "{",
