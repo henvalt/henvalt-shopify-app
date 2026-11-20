@@ -154,3 +154,11 @@ test("checkout attribution SQL fixture exercises first/last touches and prevents
   assert.match(fixture, /Database accepted a second order/);
   assert.match(fixture, /Database accepted a duplicate fee measurement/);
 });
+test("same paid order replay reuses the original attribution and fee measurement",()=>{
+ const sql=readFileSync("tests/sql/shopify-recovery-attribution-touch-selection-v2.test.sql","utf8");
+ assert.match(sql,/v_first_attribution_id/);
+ assert.match(sql,/Repeated same-order evaluation was not idempotent/);
+ assert.match(sql,/v_eval->>'status'<>'RECONCILED'/);
+ assert.match(sql,/v_fee_count<>1/);
+ assert.match(sql,/WHERE order_identity_id=v_order_a AND shopify_connection_id=v_store_a\)<>1/);
+});
