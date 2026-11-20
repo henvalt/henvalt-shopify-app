@@ -95,6 +95,7 @@ Deno.serve(async(req:Request)=>{
  if(!SUPABASE_URL||!SERVICE_ROLE_KEY||!DELIVERY_AUTH_TOKEN)return json(503,{error:"pixel_delivery_not_configured"});
  const bearer=(req.headers.get("authorization")??"").match(/^Bearer\s+(.+)$/i)?.[1]??"";
  if(!bearer||!equal(bearer,DELIVERY_AUTH_TOKEN))return json(401,{error:"unauthorized"});
+ if(Deno.env.get("HENVALT_V2_MAILERSEND_SEND_READY")!=="true")return json(503,{error:"delivery_send_disabled"});
  if(!MAILERSEND_V2_EVENTS_READY)return json(503,{error:"v2_provider_event_path_not_ready"});
  const declaredLength=Number(req.headers.get("content-length")??"0");
  if(Number.isFinite(declaredLength)&&declaredLength>160000)return json(413,{error:"request_body_too_large"});
