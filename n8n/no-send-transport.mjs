@@ -3,7 +3,7 @@
  * No network is performed: every attempted request is rejected after recording
  * only non-sensitive destination metadata. Never wire this into production.
  */
-const normalizeHost = (host) => String(host).toLowerCase().replace(/\.$/, "");
+const normalizeHost = (host) => String(host).toLowerCase().replace(/\.+$/, "");
 const isMailerSendHost = (host) =>
   host === "mailersend.com" || host.endsWith(".mailersend.com");
 
