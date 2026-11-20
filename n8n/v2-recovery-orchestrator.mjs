@@ -184,7 +184,7 @@ export async function runV2RecoveryTick({
         outcome,
         retry_after_seconds: retryAfterSeconds,
       });
-      leaseFinished = finished?.finished === true;
+      leaseFinished = finished?.finished === true && finished?.outcome === outcome;
     } catch {
       // The RPC may have committed before its response was lost. Do not blindly
       // retry the finisher; continue the batch and report an unconfirmed lease.
