@@ -74,7 +74,7 @@ WHERE a.opportunity_id=f.opportunity_id;
 DELETE FROM henvalt.shopify_recovery_send_attempt_v2
 WHERE idempotency_key='attribution-race-send';
 DELETE FROM henvalt.shopify_recovery_intervention_v2
-WHERE step_number=91 AND opportunity_id IN (
+WHERE step_number=3 AND opportunity_id IN (
   SELECT opportunity_id FROM henvalt.test_attribution_race_fixture_v2
 );
 DELETE FROM henvalt.shopify_order_identity_v2 o
