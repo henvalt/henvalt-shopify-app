@@ -55,6 +55,8 @@ jobs:
         run: npm run check
       - name: Exercise checkout and pixel delivery auth/readiness interlocks in Deno runtime with outbound network blocked
         run: deno test --allow-env --allow-net --allow-read=. tests/edge-delivery-no-send-runtime-v2.test.ts
+      - name: Exercise checkout and pixel exact-store rejection in Deno runtime with provider network blocked
+        run: deno test --allow-env --allow-net --allow-read=. tests/edge-delivery-store-lineage-runtime-v2.test.ts
       - name: Type-check pixel delivery Edge Function
         run: deno check --no-config supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts
       - name: Type-check checkout delivery Edge Function and shared request reader
