@@ -254,3 +254,17 @@ This expands runtime evidence but does not close full NS-06 composed wrong-store
 PR #6 remains **OPEN, DRAFT, UNMERGED**. No production deployment, schema mutation, workflow activation, customer send, or billing action occurred.
 
 Acceptance remains **PARTIAL**. Full NS-01–NS-15 composed acceptance, live n8n execution-data retention/redaction evidence, and isolated staging execution remain open. Staging remains blocked until an owner-controlled isolated zero-cost boundary is available. Production remains **HOLD**.
+
+
+## 11. Read-only n8n retention/redaction inspection — 20 November 2026
+
+Read-only workflow discovery returned exactly the three expected live workflows:
+- `HENVALT_INGEST` — active; 51 nodes.
+- `HENVALT_RECOVERY` — active; 46 nodes.
+- `HENVALT_DELIVERY` — active; 62 nodes.
+
+The workflow-detail API exposed only `executionOrder`, `binaryMode`, `timeSavedMode`, and `callerPolicy` (plus the connector availability field) in workflow settings. It did not expose execution-save, pruning, retention, or field-redaction controls. The node graphs include multiple nodes whose configuration handles customer/recipient email, message subject/body, or related customer context. This is a data-minimization and retention review signal; it is **not proof** that execution records currently persist those values, because no execution payloads or instance-level retention settings were read.
+
+No workflow was edited, tested, activated, deactivated, or executed. All three remain active exactly as discovered. Live execution-data redaction/retention evidence remains **OPEN** and must be obtained from the n8n instance-level execution settings and an approved, safely redacted execution inspection before cutover. Do not enable V2 delivery or alter live V1 workflows as a substitute.
+
+The runtime and database CI evidence in section 10 does not change this operational blocker. Acceptance remains **PARTIAL**; staging execution remains blocked; production remains **HOLD**.
