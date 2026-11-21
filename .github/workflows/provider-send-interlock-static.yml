@@ -225,19 +225,13 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql
-      - name: Exercise complete active-ingest mutation fencing
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql
       - name: Apply transactional replay write lease heartbeat migration
         env:
           PGPASSWORD: postgres
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210011_shopify_replay_write_lease_heartbeat.sql
-      - name: Verify every fenced business write renews the replay lease
+      - name: Exercise complete active-ingest fencing and transactional lease heartbeat
         env:
           PGPASSWORD: postgres
         run: |
