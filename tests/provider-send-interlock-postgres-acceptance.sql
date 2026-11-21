@@ -328,9 +328,9 @@ DECLARE
   v_lease timestamptz;
 BEGIN
   INSERT INTO henvalt.tenants(id, status) VALUES (v_tenant, 'ACTIVE');
-  INSERT INTO vault.decrypted_secrets(id, decrypted_secret) VALUES
-    (v_due_secret, 'synthetic-refresh-token-due'),
-    (v_not_due_secret, 'synthetic-refresh-token-not-due');
+  INSERT INTO vault.decrypted_secrets(id, name, decrypted_secret) VALUES
+    (v_due_secret, 'synthetic-refresh-token-due', 'synthetic-refresh-token-due'),
+    (v_not_due_secret, 'synthetic-refresh-token-not-due', 'synthetic-refresh-token-not-due');
 
   INSERT INTO henvalt.shopify_connections(
     id, tenant_id, active, shop_domain, token_type, refresh_token_secret_ref,
