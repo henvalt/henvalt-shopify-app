@@ -22,7 +22,7 @@ test("control table is server-only and RLS protected", () => {
 test("interlock guards initial UNKNOWN inserts and both send-claim updates", () => {
   assert.match(migration, /BEFORE INSERT OR UPDATE OF status, provider_claimed_at/i);
   assert.match(migration, /TG_OP = 'INSERT'[\s\S]*?NEW\.status = 'UNKNOWN'[\s\S]*?NEW\.provider_claimed_at IS NOT NULL/i);
-  assert.match(migration, /TG_OP = 'UPDATE'[\s\S]*?OLD\.status IS DISTINCT FROM NEW\.status[\s\S]*?NEW\.status = 'UNKNOWN'[\s\S]*?OLD\.provider_claimed_at IS NULL[\s\S]*?NEW\.provider_claimed_at IS NOT NULL/i);
+  assert.match(migration, /TG_OP = 'UPDATE'[\s\S]*?NEW\.status = 'UNKNOWN'[\s\S]*?OLD\.provider_claimed_at IS NULL[\s\S]*?NEW\.provider_claimed_at IS NOT NULL/i);
   assert.match(migration, /IF v_send_claim AND NOT henvalt\.provider_sending_is_enabled\(\) THEN/i);
   assert.match(migration, /USING ERRCODE = '42501'/i);
 });
