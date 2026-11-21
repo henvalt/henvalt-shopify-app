@@ -9,6 +9,7 @@ DECLARE
   v_token text;
   v_secret_reads bigint;
   v_test_message uuid;
+  v_test_tenant uuid;
   v_test_request uuid;
 BEGIN
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
@@ -101,12 +102,12 @@ BEGIN
   -- gate is open for normal, otherwise-eligible recovery delivery.
   INSERT INTO henvalt.messages(tenant_id, metadata)
   VALUES (gen_random_uuid(), '{"test_only":"true"}'::jsonb)
-  RETURNING id, tenant_id INTO v_test_message, v_id;
+  RETURNING id, tenant_id INTO v_test_message, v_test_tenant;
   INSERT INTO henvalt.delivery_requests(tenant_id, message_reference, status)
-  VALUES (v_id, v_test_message, 'UNKNOWN')
+  VALUES (v_test_tenant, v_test_message, 'UNKNOWN')
   RETURNING id INTO v_test_request;
   BEGIN
-    PERFORM henvalt.get_mailersend_token_for_delivery(v_id, v_test_request);
+    PERFORM henvalt.get_mailersend_token_for_delivery(v_test_tenant, v_test_request);
     RAISE EXCEPTION 'legacy one-off test route was not blocked';
   EXCEPTION WHEN insufficient_privilege THEN
     IF SQLERRM <> 'HENVALT_ONE_OFF_TEST_SEND_DISABLED' THEN RAISE; END IF;
