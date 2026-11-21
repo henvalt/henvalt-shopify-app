@@ -16,6 +16,15 @@ Status: design/patch specification only. No active workflow or draft was modifie
 4. Add explicit response handling for invalid HMAC, missing verifier secret, unknown tenant, malformed payload, and durable acceptance. Every path must send exactly one response; do not hard-code 200.
 5. After a durable 200 response, stop the Shopify branch. Do not continue into canonical-event processing in parallel with the recovery worker. The replay worker becomes the single processing owner for Shopify events. Keep non-Shopify internal-event handling separate.
 
+## Exact response-node contract
+
+The installed n8n node type definitions were checked before specifying these parameters:
+- Webhook node: `responseMode: "responseNode"`.
+- Respond to Webhook node: `respondWith: "json"`, `responseBody: "={{ $json.__body }}"`, `options.responseCode: "={{ $json.__http }}"`, and `enableResponseOutput: true`.
+- Route the response output through a source-mode gate. Shopify ingress terminates after the response; it must not flow into the old inline processing branch. Only separately authorized internal events may continue through their existing synchronous branch.
+- All malformed-event, HMAC, tenant, and ingest outcomes must converge on the same response contract, with no double-response path.
+- The receive-RPC HTTP Request node uses the existing Supabase API credential, `fullResponse: true`, `neverError: true`, and a bounded timeout that fits inside the Cloudflare 3.5-second upstream budget. Its body fields are `p_shop_domain`, `p_topic`, `p_delivery_id`, `p_hmac`, `p_raw_body_base64`, `p_payload`, and `p_metadata`, sourced from the candidate normalizer.
+
 ## HENVALT_RECOVERY patch
 
 1. Change the claim query to:
