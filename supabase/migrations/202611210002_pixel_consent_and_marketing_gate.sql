@@ -138,7 +138,7 @@ BEGIN
     v_event_source_id,
     v_customer_reference,
     NULL,
-    NULL,
+    v_client_id,
     v_client_id,
     v_occurred_at,
     NULL,
