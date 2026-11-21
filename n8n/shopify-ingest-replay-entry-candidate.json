@@ -81,7 +81,7 @@
       "tenant_binding": "After Bind Tenant Context, compare resolved tenant_id with replay_context.tenant_id; mismatch or lookup error stops before any mutation.",
       "hmac": "Replay entry bypasses Verify Shopify HMAC only because loader proves ingress_hmac_verified=true on tenant-bound stored row. Public ingress always runs receive_shopify_webhook_v1 HMAC verification.",
       "classify": "Classify Result accepts a second input from replay branch and emits __proceed=true, __webhook_id=loaded.webhook_id only after tenant equality succeeds; normal ingress branch still requires explicit durable acknowledgement classifier.",
-      "downstream": "All 18 mutation nodes use conditional dispatch: legacy RPC only for non-replay ingress; matching *_fenced RPC with job_id, worker_id, lease_id first for replay. Every replay mutation remains sequential."
+      "downstream": "All 18 mutation nodes dispatch to matching *_fenced RPCs when replay_context is present, with job_id, worker_id, lease_id first. A pre-write renew_shopify_replay_lease(job_id,worker_id,lease_id,180) must return a confirmed expiry before the first business write; every later write still validates the lease transactionally."
     },
     "ingress_cutover": {
       "public_shopify_path": "Validate required Shopify headers and raw body; call henvalt.receive_shopify_webhook_v1(text,text,text,text,text,jsonb,jsonb); classify only its explicit row; respond exactly once using Respond to Webhook; terminate the Shopify path.",
@@ -103,13 +103,14 @@
         "malformed_event": 422,
         "unavailable": 503
       },
-      "legacy_409_is_not_duplicate": true
+      "legacy_409_is_not_duplicate": true,
+      "event_identity": "For public Shopify ingress, normalized source_event_id is always X-Shopify-Webhook-Id (delivery identity), never X-Shopify-Event-Id or body.id. A replay envelope reconstructs the same identity from the stored source_event_id."
     },
     "lifecycle": {
-      "processed": "mark_webhook_processed_fenced(job_id,worker_id,lease_id,webhook_id) must return true before subflow returns mark_webhook_processed=true.",
+      "processed": "mark_webhook_processed_fenced(job_id,worker_id,lease_id,webhook_id) must return true before the subflow exposes top-level mark_webhook_processed=true.",
       "failed": "mark_webhook_failed_fenced receives a constant non-PII reason for replay; recovery worker owns bounded retry/dead-letter.",
       "lease": "Renew only for early loss detection; transaction-local fenced wrappers remain mandatory.",
-      "deferred_payment": "A successful defer_payment_webhook_reconciliation_fenced(...)=true is a durable terminal handoff, not a processed webhook. It sets processing_status=FAILED and payment_reconciliation_pending=true with a due timestamp. The existing HENVALT_RECOVERY Every Minute trigger runs Reconcile Deferred Payment Webhooks -> henvalt.reconcile_deferred_payment_webhooks(10); that function claims due rows with FOR UPDATE SKIP LOCKED and marks them PROCESSED or reschedules/dead-letters them. Replay subflow may return deferred_payment_handoff=true only when the fenced defer RPC returns true; recovery may then complete the replay job without requiring mark_webhook_processed=true.",
+      "deferred_payment": "A successful defer_payment_webhook_reconciliation_fenced(...)=true is a durable terminal handoff, not a processed webhook. The subflow exposes top-level deferred_payment_handoff=true only after the RPC returns true. HENVALT_RECOVERY may complete the replay job on mark_webhook_processed=true OR deferred_payment_handoff=true. The existing every-minute reconciler subsequently processes, reschedules or dead-letters the payment webhook.",
       "deferred_payment_audit": {
         "workflow": "HENVALT_RECOVERY",
         "active_version": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
@@ -137,15 +138,15 @@
     "All replay business writes call only the mapped fenced wrappers with exact lease tuple and sequential ordering.",
     "Already processed webhook completes without re-running projections.",
     "Webhook processed marker returns true before replay subflow reports success.",
-    "Deferred payment branch remains blocked until terminal-state contract is resolved.",
     "No replay branch reaches HENVALT_DELIVERY or a provider request node.",
-    "Deferred payment path: fenced defer RPC returns true; webhook becomes FAILED with payment_reconciliation_pending=true; the existing every-minute recovery reconciler later processes or reschedules it; replay job completes only after this durable handoff is confirmed."
+    "Deferred payment path: fenced defer RPC returns true; webhook becomes FAILED with payment_reconciliation_pending=true; the existing every-minute recovery reconciler later processes or reschedules it; replay job completes only after this durable handoff is confirmed.",
+    "The recovery workflow completes the replay job only when the ingest subflow returns mark_webhook_processed=true or deferred_payment_handoff=true."
   ],
   "dependencies": [
-    "Author an isolated complete HENVALT_INGEST workflow JSON candidate; this manifest is not an importable workflow.",
     "Rewire every mutation node to conditional fenced dispatch and audit all SQL/HTTP nodes for unlisted writes.",
     "Use a disposable isolated database and isolated n8n draft only after cost approval; no paused project restore is implied.",
     "Keep provider sending default-deny and use network-denied stubs.",
-    "Test the deferred-payment handoff with the existing Every Minute recovery node and assert pending metadata, subsequent reconciler pickup, and eventual PROCESSED/retry/dead-letter state."
+    "Test the deferred-payment handoff with the existing Every Minute recovery node and assert pending metadata, subsequent reconciler pickup, and eventual PROCESSED/retry/dead-letter state.",
+    "Run n8n import/schema validation against the generated offline candidate and rebind Supabase service-role credentials only in an isolated draft."
   ]
 }
