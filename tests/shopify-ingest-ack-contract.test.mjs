@@ -35,25 +35,45 @@ test("all pre-ingest rejection paths have explicit fail-closed response codes", 
   assert.equal(buildPreIngestRejection("tenantLookupUnavailable", context).http, 503);
 });
 
-test("new durable ingest returns 200 and continues processing", () => {
+test("new durable ingest returns 200 only when a replay job is durably active", () => {
   const result = classifyIngestResponse({
     statusCode: 201,
-    body: [{ webhook_id: "wh-1", is_duplicate: false, should_process: true, processing_status: "PROCESSING", replay_job_id: "job-1", replay_job_status: "QUEUED" }],
+    body: [{
+      webhook_id: "wh-1",
+      is_duplicate: false,
+      should_process: true,
+      processing_status: "PROCESSING",
+      replay_job_id: "job-1",
+      replay_job_status: "QUEUED",
+    }],
   }, context);
   assert.equal(result.http, 200);
   assert.equal(result.proceed, true);
   assert.equal(result.webhookId, "wh-1");
   assert.equal(result.body.status, "accepted");
+  assert.equal(result.body.replay_job_id, "job-1");
 });
 
-test("processed and in-flight duplicates return 200 without reprocessing", () => {
+test("processed and actively queued duplicates return 200 without duplicate processing", () => {
   const processed = classifyIngestResponse({
     statusCode: 200,
-    body: [{ webhook_id: "wh-2", is_duplicate: true, should_process: false, processing_status: "PROCESSED" }],
+    body: [{
+      webhook_id: "wh-2",
+      is_duplicate: true,
+      should_process: false,
+      processing_status: "PROCESSED",
+    }],
   }, context);
   const processing = classifyIngestResponse({
     statusCode: 200,
-    body: [{ webhook_id: "wh-3", is_duplicate: true, should_process: false, processing_status: "PROCESSING", replay_job_id: "job-3", replay_job_status: "RUNNING" }],
+    body: [{
+      webhook_id: "wh-3",
+      is_duplicate: true,
+      should_process: false,
+      processing_status: "PROCESSING",
+      replay_job_id: "job-3",
+      replay_job_status: "RUNNING",
+    }],
   }, context);
   assert.equal(processed.http, 200);
   assert.equal(processed.proceed, false);
@@ -63,11 +83,28 @@ test("processed and in-flight duplicates return 200 without reprocessing", () =>
   assert.equal(processing.body.status, "already_processing");
 });
 
-test("missing durable ID or explicit decision returns retryable 503", () => {
+test("missing durable ID, decision or active replay job returns retryable 503", () => {
   for (const body of [
     [{ is_duplicate: false, should_process: true }],
     [{ webhook_id: "wh-4", is_duplicate: false }],
-    [{ webhook_id: "wh-5", should_process: false, processing_status: "UNKNOWN" }],\n    [{ webhook_id: "wh-6", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],\n    [{ webhook_id: "wh-7", is_duplicate: false, should_process: true, processing_status: "PROCESSING", replay_job_id: "job-7", replay_job_status: "DEAD_LETTER" }],
+    [{ webhook_id: "wh-5", should_process: false, processing_status: "UNKNOWN" }],
+    [{ webhook_id: "wh-6", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],
+    [{
+      webhook_id: "wh-7",
+      is_duplicate: false,
+      should_process: true,
+      processing_status: "PROCESSING",
+      replay_job_id: "job-7",
+      replay_job_status: "DEAD_LETTER",
+    }],
+    [{
+      webhook_id: "wh-8",
+      is_duplicate: true,
+      should_process: false,
+      processing_status: "PROCESSING",
+      replay_job_id: "job-8",
+      replay_job_status: "DEAD_LETTER",
+    }],
   ]) {
     const result = classifyIngestResponse({ statusCode: 200, body }, context);
     assert.equal(result.http, 503);
@@ -100,7 +137,8 @@ test("acknowledgement contract and nested collections are immutable", () => {
   for (const key of [
     "preIngestFailureRoutes",
     "acceptedIngestRequires",
-    "conflictHandling",\n    "replayQueue",
+    "replayQueue",
+    "conflictHandling",
     "preIngestFailureStatuses",
     "acceptedStatuses",
     "retryableStatuses",
