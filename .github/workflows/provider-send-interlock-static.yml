@@ -12,6 +12,7 @@ on:
       - "supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql"
       - "supabase/migrations/202611210008_shopify_replay_lease_fencing.sql"
       - "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql"
+      - "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -48,6 +49,7 @@ on:
       - "tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql"
       - "tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql"
       - "tests/shopify-replay-business-write-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql"
       - "tests/shopify-replay-business-write-fencing-static.test.mjs"
       - "tests/active-workflow-cutover-contract-static.test.mjs"
       - "tests/shopify-replay-worker-spec-static.test.mjs"
@@ -188,6 +190,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-replay-business-write-fencing-postgres-acceptance.sql
+      - name: Apply complete active-ingest mutation fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql
+      - name: Exercise complete active-ingest mutation fencing
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
