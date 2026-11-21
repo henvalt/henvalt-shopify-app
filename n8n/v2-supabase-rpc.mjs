@@ -7,6 +7,7 @@ const ALLOWED_RPC = new Set([
   "claim_shopify_recovery_work_v2",
   "finish_shopify_recovery_work_claim_v2",
   "reconcile_unmatched_shopify_checkout_provider_events_v2",
+  "reconcile_unmatched_shopify_pixel_provider_events_v2",
   "mark_stale_shopify_checkout_send_attempts_ambiguous_v2",
 ]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
