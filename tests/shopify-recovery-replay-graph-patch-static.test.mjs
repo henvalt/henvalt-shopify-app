@@ -102,7 +102,9 @@ test("only the trusted three-field lease tuple crosses into the ingest replay en
   const node = manifest.nodes_to_add.find((x) => x.name === "Call HENVALT_INGEST Replay Entry");
   assert.deepEqual(node.input_allowlist, ["job_id", "worker_id", "lease_id"]);
   assert.equal(node.wait_for_completion, true);
-  assert.equal(node.expected_result, "mark_webhook_processed === true");
+  assert.equal(node.expected_result, "mark_webhook_processed === true OR deferred_payment_handoff === true");
+  const processedGate = manifest.nodes_to_add.find((x) => x.name === "Replay Ingest Processed?");
+  assert.match(processedGate.condition, /deferred_payment_handoff === true/);
   assert.equal(manifest.dependencies_before_staging.some((x) =>
     x.includes("dedicated Execute Workflow Trigger")
   ), true);
