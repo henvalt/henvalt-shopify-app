@@ -39,6 +39,13 @@ test("Delivery provider-event reconciliation calls only the bounded service RPC"
           provider_cost_reservation_released:false,
         }),{status:200});
       }
+      if(url.endsWith("/mark_stale_shopify_pixel_send_attempts_ambiguous_v2")) {
+        return new Response(JSON.stringify({
+          accepted:true,marked_ambiguous:5,
+          automatic_retry_performed:false,
+          provider_cost_reservation_released:false,
+        }),{status:200});
+      }
       throw new Error("unexpected_rpc");
     },
   });
@@ -46,14 +53,16 @@ test("Delivery provider-event reconciliation calls only the bounded service RPC"
   assert.deepEqual(result,{
     accepted:true,events_reconciled:3,pixel_events_reconciled:4,pixel_events_deferred:1,
     stale_attempts_marked_ambiguous:2,
+    stale_pixel_attempts_marked_ambiguous:5,
     automatic_resend_performed:false,
     ambiguous_cost_reservation_released:false,
     provider_called:false,recipient_pii_returned:false,
   });
-  assert.equal(calls.length,3);
+  assert.equal(calls.length,4);
   assert.equal(calls[0].url,"https://project.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_checkout_provider_events_v2");
   assert.equal(calls[1].url,"https://project.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_pixel_provider_events_v2");
   assert.equal(calls[2].url,"https://project.supabase.co/rest/v1/rpc/mark_stale_shopify_checkout_send_attempts_ambiguous_v2");
+  assert.equal(calls[3].url,"https://project.supabase.co/rest/v1/rpc/mark_stale_shopify_pixel_send_attempts_ambiguous_v2");
   assert.equal(calls.some(x=>x.url.includes("api.mailersend.com")),false);
   assert.equal(JSON.stringify(result).includes("recipient@example.com"),false);
 });
@@ -86,5 +95,6 @@ test("reconciliation is a scheduled branch inside existing Delivery, not a fourt
   assert.match(n8nSpec,/reconcile_unmatched_shopify_pixel_provider_events_v2/);
   assert.match(n8nSpec,/Periodic pixel provider-event reconciliation/);
   assert.match(n8nSpec,/mark_stale_shopify_checkout_send_attempts_ambiguous_v2/);
+  assert.match(n8nSpec,/mark_stale_shopify_pixel_send_attempts_ambiguous_v2/);
   assert.match(n8nSpec,/automatic_resend_performed !== false/);
 });
