@@ -93,3 +93,19 @@ Add a workflow-contract test fixture (exported JSON snapshots, not live n8n API 
 ## Release state
 
 **NO-GO for production launch.** Candidate SQL/CI success does not prove the active n8n versions implement the replay and fencing contract, does not prove the real production credential-release functions are interlocked, and does not provide a complete staging end-to-end result. Production, active n8n versions, Shopify release state, and provider sending must remain unchanged until the separate staging acceptance and explicit release decision are complete.
+
+
+## Additional active-ingest write-boundary audit — 2026-11-21
+
+A read-only node/RPC and `pg_proc` audit found that the first candidate fencing inventory did not include four mutations present in the live `HENVALT_INGEST` graph:
+
+- `apply_eligibility` updates opportunity status.
+- `create_recovery_sequence` inserts a recovery sequence and updates its opportunity.
+- `post_recovery_to_ledger_and_measure_billing` writes revenue-ledger and billing-measurement state.
+- `defer_payment_webhook_reconciliation` updates webhook processing state and deferred-reconciliation metadata.
+
+Candidate migration `202611210010_shopify_replay_complete_ingest_write_fencing.sql` now adds transaction-local lease-checked wrappers for all four. The new disposable acceptance test must prove stale-lease rejection before legacy function invocation and successful calls under the current lease. Static coverage requires all four wrappers to remain in the replay contract.
+
+Read-only functions observed in the same graph include `evaluate_eligibility`, `score_recovery_intent`, and `get_recovery_flow_delay`; these were not classified as writes. The final replay graph must still be re-audited node by node before staging.
+
+**Release state remains NO-GO.** The active workflow continues to call its original unfenced RPC names. Migration 010 and the new acceptance test are candidate-only; no production migration or n8n workflow was changed.
