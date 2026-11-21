@@ -115,6 +115,23 @@ BEGIN
       RAISE EXCEPTION 'SHOPIFY_WEBHOOK_REPLAY_JOB_IDENTITY_MISMATCH'
         USING ERRCODE = '55000';
     END IF;
+
+    -- A still-PROCESSING webhook must never be acknowledged against a terminal job.
+    -- A redelivery is a repair signal: safely reopen the idempotent job.
+    IF v_job_status IN ('SUCCEEDED'::henvalt.job_status, 'DEAD_LETTER'::henvalt.job_status) THEN
+      UPDATE henvalt.background_jobs
+         SET status = 'QUEUED'::henvalt.job_status,
+             attempts = 0,
+             run_at = now(),
+             next_run_at = NULL,
+             locked_at = NULL,
+             locked_by = NULL,
+             last_error = NULL,
+             completed_at = NULL,
+             updated_at = now()
+       WHERE id = v_job_id
+       RETURNING status INTO v_job_status;
+    END IF;
   END IF;
 
   RETURN QUERY
