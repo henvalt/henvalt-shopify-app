@@ -700,6 +700,26 @@ BEGIN
  ) VALUES(v_provider,v_provider_event_id,v_provider_message_id,
   'activity.sent',repeat('e',64),'UNMATCHED');
 
+ INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
+  tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
+  occurred_at,analytics_processing_allowed,marketing_allowed,client_reference,
+  customer_reference,payload,status,processed_at
+ ) VALUES(v_tenant,v_connection,'pixel-batch-inbox-'||gen_random_uuid()::text,
+  'product_added_to_cart',encode(extensions.digest(convert_to(gen_random_uuid()::text,'UTF8'),'sha256'),'hex'),
+  now()-interval '1 hour',true,false,'batch-browser','12345',
+  '{"product":{"id":"batch-product"}}'::jsonb,'PROCESSED',now())
+ RETURNING id INTO v_inbox;
+ INSERT INTO henvalt.shopify_session_identity_v2(
+  tenant_id,shopify_connection_id,session_reference,customer_identity_id
+ ) VALUES(v_tenant,v_connection,'pixel-batch-session-'||gen_random_uuid()::text,v_customer)
+ RETURNING id INTO v_session;
+ INSERT INTO henvalt.shopify_pixel_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,candidate_type,session_identity_id,customer_identity_id,
+  source_inbox_event_id,product_key,product_context,last_activity_at,eligible_after,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,'ABANDONED_CART',v_session,v_customer,v_inbox,
+  'batch-product','{"product_id":"batch-product"}'::jsonb,now()-interval '1 hour',
+  now()-interval '30 minutes','PROMOTED','pixel-batch-candidate-'||gen_random_uuid()::text)
+ RETURNING id INTO v_candidate;
  INSERT INTO henvalt.shopify_recovery_opportunity_v2(
   tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,customer_identity_id,
   source_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
