@@ -5,6 +5,8 @@ on:
     paths:
       - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
+      - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
+      - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
       - "extensions/henvalt-pixel/src/index.js"
       - "tests/provider-send-interlock-static.test.mjs"
