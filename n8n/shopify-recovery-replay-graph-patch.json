@@ -72,7 +72,7 @@
       "settings": {
         "alwaysOutputData": true
       },
-      "onError": "continueErrorOutput",
+      "onError": "stopWorkflow",
       "purpose": "Claim at most one process_shopify_webhook job using its own lease."
     },
     {
@@ -256,6 +256,18 @@
     [
       "Replay Retry Accepted?#false",
       "Stop Replay Lease Lost"
+    ],
+    [
+      "Load Shopify Replay Job#error",
+      "Retry Shopify Replay Job"
+    ],
+    [
+      "Complete Shopify Replay Job#error",
+      "Stop Replay Lease Lost"
+    ],
+    [
+      "Retry Shopify Replay Job#error",
+      "Stop Replay Lease Lost"
     ]
   ],
   "invariants": [
@@ -271,7 +283,9 @@
     "A false completion/retry result is terminal lease-lost; do not attempt a generic fallback.",
     "All replay business mutations remain sequential and use the 18 transaction-local fenced wrappers in shopify-ingest-replay-write-map.json.",
     "No replay branch connects to HENVALT_DELIVERY or a provider send node.",
-    "The existing intervention business branch remains unchanged."
+    "The existing intervention business branch remains unchanged.",
+    "A claim RPC failure stops the scheduler execution; it must not be treated as an empty queue.",
+    "A load failure may retry only with the exact lease tuple; complete/retry RPC errors terminate fail-closed."
   ],
   "dependencies_before_staging": [
     "Add a dedicated Execute Workflow Trigger and isolated replay entry in HENVALT_INGEST candidate; reload payload with load_shopify_webhook_replay_job(job_id, worker_id, lease_id).",
