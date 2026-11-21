@@ -73,7 +73,7 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
-      - name: Apply candidate migrations 001 through 061
+      - name: Apply candidate migrations 001 through 062
         env:
           PGPASSWORD: postgres
         run: |
@@ -138,7 +138,7 @@ jobs:
             supabase/migrations/202611190004_shopify_checkout_candidate_terminal_state_v2.sql \
             supabase/migrations/202611190005_shopify_checkout_provider_submission_gate_v2.sql \
             supabase/migrations/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql \
-            supabase/migrations/202611200001_shopify_recovery_work_retry_ceiling_v2.sql; do
+            supabase/migrations/202611200001_shopify_recovery_work_retry_ceiling_v2.sql \\\n            supabase/migrations/202611210001_shopify_pixel_provider_event_batch_reconciliation_v2.sql; do
             psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
           done
       - name: Exercise two-store pixel cart/browse candidates and opportunity promotion
@@ -259,7 +259,7 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-submission-gate-v2.test.sql
 
-      - name: Exercise checkout ambiguous provider event reconciliation
+      - name: Exercise bounded pixel provider-event batch reconciliation\n        env:\n          PGPASSWORD: postgres\n        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-event-batch-reconciliation-v2.test.sql\n\n      - name: Exercise checkout ambiguous provider event reconciliation
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-ambiguous-provider-reconciliation-v2.test.sql
