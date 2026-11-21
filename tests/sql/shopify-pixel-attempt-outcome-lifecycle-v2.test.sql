@@ -688,6 +688,58 @@ BEGIN
   RAISE EXCEPTION 'Dashboard continued to count fully refunded pixel revenue: %',v_dashboard;
  END IF;
 
+
+ -- Event-before-attempt race: the signed event is durable first, then the
+ -- provider message reference appears on an ambiguous pixel attempt. The
+ -- scheduled batch RPC must reconcile it without a webhook redelivery.
+ v_provider_message_id:='synthetic-pixel-batch-'||gen_random_uuid()::text;
+ v_provider_event_id:='pixel-batch-event-'||gen_random_uuid()::text;
+ INSERT INTO henvalt.shopify_mailer_provider_events_v2(
+  provider_account_key,provider_event_id,provider_message_id,event_type,
+  body_sha256,processing_status
+ ) VALUES(v_provider,v_provider_event_id,v_provider_message_id,
+  'activity.sent',repeat('e',64),'UNMATCHED');
+
+ INSERT INTO henvalt.shopify_recovery_opportunities_v2(
+  tenant_id,shopify_connection_id,app_key,checkout_identity_id,session_identity_id,
+  customer_identity_id,pixel_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,NULL,NULL,v_customer,NULL,v_candidate,
+  'ABANDONED_CART','REVIEW_REQUIRED','pixel-batch-opportunity-'||gen_random_uuid()::text)
+ RETURNING id INTO v_opportunity;
+ INSERT INTO henvalt.shopify_pixel_send_attempts_v2(
+  tenant_id,shopify_connection_id,opportunity_id,pixel_candidate_id,customer_identity_id,
+  provider_account_key,idempotency_key,status
+ ) VALUES(v_tenant,v_connection,v_opportunity,v_candidate,v_customer,v_provider,
+  'pixel-batch-attempt-'||gen_random_uuid()::text,'AUTHORIZED')
+ RETURNING id INTO v_attempt;
+ v_result:=henvalt.record_shopify_pixel_send_attempt_result_v2(
+  v_attempt,'AMBIGUOUS',v_provider_message_id
+ );
+ IF v_result->>'recorded'<>'true' OR v_result->>'provider_cost_state'<>'RESERVED' THEN
+  RAISE EXCEPTION 'Pixel event-before-attempt fixture did not preserve ambiguity: %',v_result;
+ END IF;
+ v_result:=henvalt.reconcile_unmatched_shopify_pixel_provider_events_v2(100);
+ IF v_result->>'accepted'<>'true' OR (v_result->>'reconciled')::integer<>1
+   OR (v_result->>'deferred')::integer<>0
+   OR v_result->>'automatic_resend_performed'<>'false'
+   OR v_result->>'ambiguous_cost_reservation_released'<>'false'
+   OR v_result->>'provider_called'<>'false'
+   OR v_result->>'recipient_pii_returned'<>'false' THEN
+  RAISE EXCEPTION 'Pixel batch sweep did not reconcile the event-before-attempt race safely: %',v_result;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_mailer_provider_events_v2
+   WHERE provider_account_key=v_provider AND provider_event_id=v_provider_event_id
+    AND processing_status='PROCESSED' AND pixel_send_attempt_id=v_attempt)
+   OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2
+     WHERE id=v_attempt AND status='SUBMITTED'
+       AND provider_message_reference=v_provider_message_id) THEN
+  RAISE EXCEPTION 'Pixel batch sweep failed to persist exact event/attempt correlation';
+ END IF;
+ v_result:=henvalt.reconcile_unmatched_shopify_pixel_provider_events_v2(100);
+ IF v_result->>'accepted'<>'true' OR (v_result->>'reconciled')::integer<>0 THEN
+  RAISE EXCEPTION 'Pixel batch sweep was not idempotent after event processing: %',v_result;
+ END IF;
+
 END;
 $test$;
 ROLLBACK;
