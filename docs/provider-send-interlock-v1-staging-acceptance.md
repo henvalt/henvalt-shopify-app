@@ -21,7 +21,7 @@
 |---|---|---|
 | Ordinary recovery | authorize a due, otherwise eligible PENDING request | SQLSTATE 42501 / `HENVALT_PROVIDER_SENDING_DISABLED`; no request claim |
 | Provider credential RPC | call `get_mailersend_token_for_delivery` for a correctly claimed synthetic request | SQLSTATE 42501; no credential returned |
-| Manual one-off test route | execute the one-off test authorization + credential route | same deny; no credential returned |
+| Manual one-off test route | execute the one-off test authorization + credential route, including a direct INSERT already in UNKNOWN state | same deny; no credential returned |
 | Already-UNKNOWN request | attempt first `provider_claimed_at` stamp | same deny |
 | Missing singleton row | evaluate the gate | false; deny |
 | Client access | attempt SELECT/UPDATE through authenticated and service_role roles | permission denied |
