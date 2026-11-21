@@ -294,14 +294,16 @@ CREATE OR REPLACE FUNCTION henvalt.mark_webhook_processed_fenced(
 )
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $function$
+DECLARE
+  v_updated integer;
 BEGIN
   PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
   UPDATE henvalt.webhook_events
      SET processing_status = 'PROCESSED',
          processed_at = clock_timestamp()
-   WHERE id = p_webhook_id
-     AND processing_status <> 'PROCESSED';
-  RETURN FOUND;
+   WHERE id = p_webhook_id;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
 END;
 $function$;
 
@@ -310,6 +312,8 @@ CREATE OR REPLACE FUNCTION henvalt.mark_webhook_failed_fenced(
 )
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $function$
+DECLARE
+  v_updated integer;
 BEGIN
   PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
   UPDATE henvalt.webhook_events
@@ -318,7 +322,8 @@ BEGIN
          metadata = COALESCE(metadata, '{}'::jsonb)
            || jsonb_build_object('processing_error', p_error)
    WHERE id = p_webhook_id;
-  RETURN FOUND;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
 END;
 $function$;
 
