@@ -6,6 +6,10 @@ const migration = readFileSync(
   "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql",
   "utf8",
 );
+const completionMigration = readFileSync(
+  "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql",
+  "utf8",
+);
 const workerSpec = readFileSync(
   "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md",
   "utf8",
@@ -21,8 +25,8 @@ test("replay business-write guard locks and validates the current lease in-trans
   assert.match(migration, /lease_id = p_lease_id/);
 });
 
-test("replay write wrappers cover each declared business mutation family", () => {
-  for (const name of [
+test("replay write wrappers cover every discovered active-ingest mutation family", () => {
+  const migration009Names = [
     "upsert_customer_fenced",
     "apply_shopify_email_consent_update_fenced",
     "bind_session_alias_fenced",
@@ -38,9 +42,20 @@ test("replay write wrappers cover each declared business mutation family", () =>
     "stop_recovery_after_order_fenced",
     "mark_webhook_processed_fenced",
     "mark_webhook_failed_fenced",
-  ]) {
-    assert.match(migration, new RegExp(`FUNCTION henvalt\\.${name}\\(`), name);
-    assert.match(workerSpec, new RegExp(name), `worker spec must document ${name}`);
+  ];
+  const migration010Names = [
+    "apply_eligibility_fenced",
+    "create_recovery_sequence_fenced",
+    "post_recovery_to_ledger_and_measure_billing_fenced",
+    "defer_payment_webhook_reconciliation_fenced",
+  ];
+  for (const name of migration009Names) {
+    assert.match(migration, new RegExp("FUNCTION henvalt\\." + name + "\\("), name);
+    assert.match(workerSpec, new RegExp(name), "worker spec must document " + name);
+  }
+  for (const name of migration010Names) {
+    assert.match(completionMigration, new RegExp("FUNCTION henvalt\\." + name + "\\("), name);
+    assert.match(workerSpec, new RegExp(name), "worker spec must document " + name);
   }
 });
 
