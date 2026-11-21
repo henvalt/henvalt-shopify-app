@@ -307,3 +307,12 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - Live billing measurements: 0; billing periods: 0; billing usage charges: 0.
 - Email usage measurements: 4 rows, all 4 currently have unknown provider cost (NULL), so the billing summary correctly returns provider email cost as unavailable rather than reporting zero spend.
 - Billing pipeline checks the Shopify billing account is ACTIVE before creating a performance-fee measurement. The current PENDING account therefore does not authorize a charge.
+
+
+### Shopify privacy request handling and expiry
+- Live `henvalt-shopify-privacy` verifies Shopify HMAC over the raw body, accepts only `customers/data_request`, `customers/redact` and `shop/redact`, persists idempotently by webhook ID, and retains unmatched-shop requests in `REVIEW_REQUIRED` rather than silently dropping them.
+- Customer redaction deletes canonical events/messages and removes or anonymizes related checkout, order, session, delivery, provider-event, conversation, webhook, processing-error, background-job and audit payload data within the tenant.
+- Customer export payloads receive a 30-day expiry. The database has an active `henvalt-privacy-export-expiry-purge` pg_cron job scheduled every 15 minutes; the five most recent observed runs through 2026-11-21 05:45 UTC all succeeded.
+- The live privacy-request table had zero rows at the time of inspection, so no pending request or export bundle was present.
+- Open policy question: unresolved `REVIEW_REQUIRED` privacy receipts retain their original request payload until manually resolved; no age-based cleanup policy for those raw payloads was verified. Define a retention rule that preserves compliance evidence while minimizing PII.
+- n8n execution payload retention remains a separate issue: the historical delivery execution still retained message/recipient content for at least seven days and runtime redaction flags were false.
