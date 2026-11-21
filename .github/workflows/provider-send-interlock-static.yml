@@ -7,6 +7,7 @@ on:
       - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
       - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
       - "supabase/migrations/202611210004_align_shopify_token_refresh_window.sql"
+      - "supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -33,6 +34,7 @@ on:
       - "tests/pixel-consent-static.test.mjs"
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/provider-send-interlock-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-postgres-acceptance.sql"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
 
@@ -104,6 +106,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210004_align_shopify_token_refresh_window.sql
+      - name: Apply candidate Shopify webhook replay enqueue migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql
+      - name: Exercise atomic Shopify webhook replay enqueue and rollback
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-postgres-acceptance.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
