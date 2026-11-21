@@ -105,6 +105,10 @@ test("public ingress waits for durable acknowledgement and never runs the busine
   assert.equal(workflow.connections["Replay Pipeline?"].main[1][0].node,"Respond to Shopify");
   assert.equal(workflow.connections["Mark Webhook Processed"].main[0][0].node,"Processed Marker Confirmed?");
   assert.equal(workflow.connections["Defer Payment Reconciliation"].main[0][0].node,"Deferred Handoff Confirmed?");
+  const success = workflow.nodes.find(n=>n.name==="Build Success Response");
+  assert.ok(success.parameters.assignments.assignments.some(a=>a.name==="mark_webhook_processed"));
+  const deferred = workflow.nodes.find(n=>n.name==="Build Deferred Payment Response");
+  assert.ok(deferred.parameters.assignments.assignments.some(a=>a.name==="deferred_payment_handoff"));
   assert.equal(workflow.connections["Is Valid"].main[1][0].node,"Is Rejected Replay?");
 });
 
