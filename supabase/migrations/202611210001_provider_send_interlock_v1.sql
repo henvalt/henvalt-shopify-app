@@ -131,10 +131,8 @@ BEGIN
     v_send_claim := NEW.status = 'UNKNOWN'
       OR NEW.provider_claimed_at IS NOT NULL;
   ELSIF TG_OP = 'UPDATE' THEN
-    v_send_claim := (
-      (OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'UNKNOWN')
-      OR (OLD.provider_claimed_at IS NULL AND NEW.provider_claimed_at IS NOT NULL)
-    );
+    v_send_claim := NEW.status = 'UNKNOWN'
+      OR (OLD.provider_claimed_at IS NULL AND NEW.provider_claimed_at IS NOT NULL);
   END IF;
 
   -- Guard both authorization claim and one-time provider credential claim.
