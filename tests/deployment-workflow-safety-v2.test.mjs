@@ -35,20 +35,20 @@ test("Shopify preparation job has one unambiguous job-level condition", () => {
 });
 
 test("release documentation tracks the exact candidate migration chain", () => {
-  assert.match(identity, /Apply candidate migrations 001 through 061/);
-  assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 61);
+  assert.match(identity, /Apply candidate migrations 001 through 062/);
+  assert.equal((identity.match(/supabase\/migrations\/[A-Za-z0-9_.-]+\.sql/g) || []).length, 62);
   assert.equal((migrationRegister.match(/^\| \d{2} \|/gm) || []).length, 61);
   const workflowManifest = [...identity.matchAll(/supabase\/migrations\/([A-Za-z0-9_.-]+\.sql)/g)].map(([, name]) => name);
   const registeredManifest = [...migrationRegister.matchAll(/^\| \d{2} \| `([^`]+)`/gm)].map(([, name]) => name);
-  assert.equal(new Set(workflowManifest).size, 61);
+  assert.equal(new Set(workflowManifest).size, 62);
   assert.deepEqual(registeredManifest, workflowManifest);
-  assert.match(migrationRegister, /61 distinct migration paths/);
+  assert.match(migrationRegister, /62 distinct migration paths/);
   assert.match(migrationRegister, /REVIEW REQUIRED — NOT APPROVED FOR PRODUCTION/);
   assert.match(identity, /202611190004_shopify_checkout_candidate_terminal_state_v2\.sql/);
   assert.match(identity, /202611190005_shopify_checkout_provider_submission_gate_v2\.sql/);
   assert.match(identity, /202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2\.sql/);
-  assert.match(runbook, /candidate migrations 001–061/i);
-  assert.match(runbook, /Candidate migrations 001–061: CI fixture only; not production-applied\./);
+  assert.match(runbook, /candidate migrations 001–062/i);
+  assert.match(runbook, /Candidate migrations 001–062: CI fixture only; not production-applied\./);
   assert.match(launchMatrix, /Candidate migrations 001–061 apply in disposable PostgreSQL CI/);
   assert.doesNotMatch(runbook, /migrations 001–046/);
   assert.doesNotMatch(launchMatrix, /migrations 001–046/);
