@@ -27,7 +27,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(webhook.parameters.path,"henvalt/ingest-candidate-no-send");
   assert.equal(webhook.parameters.responseMode,"responseNode");
   assert.equal(w.nodes.find(n=>n.name==="Supabase Ingest RPC").parameters.url,
-    "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/receive_shopify_webhook_v1");
+    "https://supabase-staging.invalid/rest/v1/rpc/receive_shopify_webhook_v1");
   assert.ok(w.nodes.some(n=>n.name==="Respond to Shopify"));
   const replayTrigger = findNode(w,"Shopify Replay Entry Trigger");
   assert.ok(replayTrigger);
