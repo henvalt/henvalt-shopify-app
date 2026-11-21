@@ -222,3 +222,5 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - A direct read-only PostgreSQL check confirmed `'USD'::character` becomes `'U'` with length 1.
 - This can truncate three-letter currency codes returned to the recovery worker. It requires a separately reviewed return-type migration (drop/recreate with `character(3)`, preserving exact grants and checking dependencies) or a versioned V2 RPC plus worker update.
 - This is recorded as a release blocker; no production function was changed.
+
+- The live Cloudflare pixel Worker bindings were checked without revealing values: `SUPABASE_URL` targets the active `henvalt` project, the publishable key is present, and `COLLECTOR_SHARED_SECRET` plus `RATE_LIMITER` bindings are present.
