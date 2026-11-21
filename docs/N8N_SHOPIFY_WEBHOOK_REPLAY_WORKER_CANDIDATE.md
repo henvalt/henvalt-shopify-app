@@ -258,3 +258,12 @@ The recovery replay graph manifest now pins the installed node versions confirme
 The replay subworkflow call is specified with `mode=once`, database source, the existing `HENVALT_INGEST` workflow ID, wait-for-completion, and an explicit three-field `workflowInputs` mapping. The dedicated ingest trigger declares exactly `job_id`, `worker_id`, and `lease_id` as required strings. It must not accept a caller-provided tenant, webhook payload, HMAC flag, or any other field.
 
 These definitions are now recorded in `n8n/shopify-recovery-replay-graph-patch.json` and guarded by `tests/shopify-recovery-replay-graph-patch-static.test.mjs`. This is still a candidate graph contract, not an imported or runtime-tested n8n export. Credentials must be rebound only inside an isolated inactive draft. The live workflow remains unchanged.
+
+
+### Replay claim hardening and native n8n node contract — 2026-11-21
+
+The replay claim normalizer now validates the database row's locked_by value against the recovery worker ID and rejects an expired lease before any load/processing branch. The inline n8n Code node is executed directly in Node-based regression tests against the actual SETOF henvalt.background_jobs row shape, including malformed rows and a non-matching worker. Only the job/worker/lease tuple, lease expiry and webhook UUID are emitted; tenant and customer fields are dropped.
+
+The graph manifest now records exact SQL parameter expressions for claim, load, complete and retry. Load/complete/retry reference the normalized claim node directly, so an error output cannot accidentally erase the lease tuple needed for a safe retry. n8n alwaysOutputData and onError flags are specified as native top-level node properties, matching the live workflow export schema.
+
+A first CI attempt exposed two stale test assertions (the renamed inline Code node path and the native top-level alwaysOutputData flag); both were corrected. CI must pass again on the latest branch head before this candidate is treated as verified. The recovery graph remains a manifest, not a generated/imported workflow export; no live workflow was changed.
