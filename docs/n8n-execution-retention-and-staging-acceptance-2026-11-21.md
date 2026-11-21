@@ -10,7 +10,7 @@ The connected n8n instance returned exactly three HENVALT workflows:
 | Workflow | ID | Active version | Nodes | Triggers | Active |
 |---|---|---|---:|---:|---|
 | HENVALT_INGEST | `VTpfGKNtu1CSQ4Rv` | `6368d539-708f-494a-8be8-b9601d0e8607` | 51 | 1 | yes |
-| HENVALT_RECOVERY | `3GEDoeCA4paXTaDF` | `32e50bf7-4cbd-4070-bbbaf259ed17b369` | 46 | 1 | yes |
+| HENVALT_RECOVERY | `3GEDoeCA4paXTaDF` | `32e50bf7-4cbd-4070-bbba-f259ed17b369` | 46 | 1 | yes |
 | HENVALT_DELIVERY | `CvVyybGJZSnklxiZ` | `621ae6ce-a006-4fed-a70e-acf774c360fb` | 62 | 7 | yes |
 
 All three currently report only workflow-level settings for execution order, binary mode, saved-time mode, caller policy and MCP visibility. No per-workflow execution-pruning or execution-redaction policy was exposed in the retrieved workflow settings. Do not infer that instance-wide pruning is disabled solely from this absence.
