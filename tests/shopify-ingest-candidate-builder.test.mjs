@@ -72,7 +72,8 @@ test("builder produces a separate inactive candidate with all 18 fenced mutation
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(workflow.active,false);
   assert.equal(workflow.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
-  assert.equal(workflow.id,"00000000-0000-4000-8000-000000000001");
+  assert.equal(workflow.id,"00000000-0000-4000-8000-999999999999");
+  assert.ok(workflow.nodes.every(n=>n.id!==workflow.id));
   assert.equal(workflow.nodes.find(n=>n.name==="Event Webhook").parameters.path,"henvalt/ingest-candidate-no-send");
   assert.equal(workflow.nodes.find(n=>n.name==="Event Webhook").webhookId,undefined);
   assert.ok(workflow.nodes.every(n=>n.credentials===undefined));
