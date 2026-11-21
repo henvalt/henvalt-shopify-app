@@ -162,3 +162,14 @@ These names are the allowed mutation boundary for the replay path; any additiona
 - `mark_webhook_failed_fenced`
 
 Webhook lifecycle state transitions are fenced too; the replay worker must not call the original unfenced status functions.
+
+
+## Authoritative correction — transactional fencing supersedes heartbeat-only wording
+
+This section is normative and supersedes any earlier wording in this document that suggests periodic lease renewal plus idempotency alone is sufficient to protect downstream writes.
+
+- The replay worker MUST call the migration 009 `*_fenced` wrapper for every database mutation. A lease renewal before a stage is useful for early loss detection, but it is not a substitute for the wrapper's transaction-local lease check and `FOR UPDATE` lock.
+- Never route a replay job through an unfenced mutation RPC, including the original webhook status functions.
+- The exact allowed wrapper inventory is maintained in the final section of this document and in `docs/ACTIVE_WORKFLOW_CUTOVER_BLOCKERS_2026-11-21.md`. If a mutating RPC is not in that inventory, stop and add/test a fenced wrapper before staging.
+- A worker that loses its lease must stop. Its subsequent fenced mutation, processed/failed marker, completion, and retry calls must all fail closed.
+- The old numbered guidance in “HENVALT_INGEST replay entry” that describes heartbeat renewal as the primary protection is subordinate to this correction. Do not implement from that older paragraph without applying this authoritative correction.
