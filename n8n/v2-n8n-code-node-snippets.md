@@ -333,6 +333,17 @@ return {
 
 This sweep is idempotent: it claims the matching attempt before locking the event, maps only the exact provider account + message ID, applies late bounce/unsubscribe/complaint suppression from the original permit fingerprint, and never submits another provider request. If the RPC response is lost, the next scheduled tick is safe; never route this branch to a send node. If an exact 32-byte fingerprint from the original permit cannot be found, the suppression event stays `UNMATCHED`; do not fall back to recipient email from the webhook or n8n item.
 
+After checkout reconciliation, call the pixel-event batch reconciler in the same scheduled Delivery branch:
+
+- URL: `https://<project>.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_pixel_provider_events_v2`
+- Same Delivery-held Supabase service-role credential and profile headers.
+- Body: `{ "p_limit": 100 }`
+- Timeout: 15 seconds; never fan out one request per event.
+
+Validate `accepted === true`, `reconciled` and `deferred` are integers from 0 to 100 whose sum is no greater than 100, and all of `automatic_resend_performed`, `ambiguous_cost_reservation_released`, and `provider_called` are exactly `false`; `recipient_pii_returned` must also be exactly `false`. Any missing or contradictory acknowledgement fails the branch closed.
+
+The database RPC selects only verified UNMATCHED events whose exact provider-account/message-reference pair now exists on a pixel attempt, then delegates each event to the existing idempotent per-event reconciler. It preserves tenant/store lineage and suppression evidence, makes no provider call, never resends, and never releases an ambiguous reservation. Events still lacking a matching attempt remain eligible for a later tick.
+
 After the event sweep, call the second bounded RPC in the same scheduled branch:
 
 - URL: `https://<project>.supabase.co/rest/v1/rpc/mark_stale_shopify_checkout_send_attempts_ambiguous_v2`
