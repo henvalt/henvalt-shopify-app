@@ -32,6 +32,7 @@ Read-only production catalog inspection found `henvalt.shopify_privacy_requests`
 - `henvalt.redact_shopify_customer_data(uuid,text,text)` exists and is service-role-only. It performs tenant-scoped customer data deletion/anonymization, but does not itself enqueue or claim a Shopify privacy request.
 - `henvalt.redact_shopify_shop_data(uuid)` exists and is service-role-only. It consumes a queued `shop/redact` request and deletes the tenant after sanitizing the queue receipt.
 - `henvalt.purge_expired_shopify_privacy_exports()` exists.
+- The production pg_cron catalog shows the export-purge job active every 15 minutes. This only proves expiry cleanup is scheduled; it does not implement the missing request ingestion or customer-data export.
 - The inspected function catalog contains no `customers/data_request` export/response handler and no dedicated durable privacy webhook enqueue/worker entry point.
 
 The presence of a queue table and isolated redaction functions is not evidence that Shopify's incoming compliance webhooks are accepted, acknowledged, completed or retried correctly.
