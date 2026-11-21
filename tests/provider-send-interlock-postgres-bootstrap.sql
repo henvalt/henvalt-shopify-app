@@ -209,6 +209,42 @@ CREATE TABLE vault.decrypted_secrets (
   decrypted_secret text NOT NULL
 );
 
+CREATE SEQUENCE henvalt.mailersend_secret_read_counter;
+
+CREATE OR REPLACE FUNCTION henvalt.get_mailersend_token_for_delivery(
+  p_tenant_id uuid,
+  p_delivery_request_id uuid
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, henvalt, vault, pg_temp
+AS $function$
+DECLARE
+  v_claimed_id uuid;
+  v_token text;
+BEGIN
+  UPDATE henvalt.delivery_requests
+     SET provider_claimed_at = clock_timestamp()
+   WHERE id = p_delivery_request_id
+     AND status = 'UNKNOWN'
+     AND provider_claimed_at IS NULL
+  RETURNING id INTO v_claimed_id;
+
+  IF v_claimed_id IS NULL THEN
+    RAISE EXCEPTION 'DELIVERY_PROVIDER_ATTEMPT_ALREADY_CLAIMED_OR_UNAUTHORIZED'
+      USING ERRCODE = '42501';
+  END IF;
+
+  PERFORM nextval('henvalt.mailersend_secret_read_counter');
+  SELECT ds.decrypted_secret INTO v_token
+    FROM vault.decrypted_secrets ds
+   WHERE ds.name = 'synthetic-mailersend-token'
+   LIMIT 1;
+  RETURN v_token;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION henvalt.verify_shopify_webhook_hmac(p_hmac text, p_raw_body_base64 text)
 RETURNS boolean
 LANGUAGE sql
