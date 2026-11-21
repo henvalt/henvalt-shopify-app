@@ -172,11 +172,11 @@ test("fenced write wrappers are SECURITY DEFINER with a pinned empty search path
     assert.match(header, /SET search_path = ''/i, item.fenced_rpc);
     assert.ok(allMigrations.includes("REVOKE ALL ON FUNCTION henvalt." + item.fenced_rpc + "("),
       item.fenced_rpc + " must revoke PUBLIC");
-    assert.ok(allMigrations.includes("REVOKE EXECUTE ON FUNCTION henvalt." + item.fenced_rpc + "(") &&
-      allMigrations.includes(" FROM anon,authenticated;"),
+    assert.match(allMigrations,
+      new RegExp("REVOKE EXECUTE ON FUNCTION henvalt\\\\." + item.fenced_rpc + "\\\\([^;]* FROM anon,authenticated;"),
       item.fenced_rpc + " must revoke anon/authenticated");
-    assert.ok(allMigrations.includes("GRANT EXECUTE ON FUNCTION henvalt." + item.fenced_rpc + "(") &&
-      allMigrations.includes(" TO service_role;"),
+    assert.match(allMigrations,
+      new RegExp("GRANT EXECUTE ON FUNCTION henvalt\\\\." + item.fenced_rpc + "\\\\([^;]* TO service_role;"),
       item.fenced_rpc + " must grant service_role");
   }
 });
