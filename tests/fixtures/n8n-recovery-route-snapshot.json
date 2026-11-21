@@ -1,0 +1,23 @@
+{
+  "workflowId": "3GEDoeCA4paXTaDF",
+  "activeVersionId": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+  "schedulerTrigger": "Every Minute",
+  "claimNode": "Claim Due Job",
+  "claimFunction": "henvalt.claim_next_job",
+  "activeClaimJobTypes": [
+    "execute_intervention"
+  ],
+  "observedBackgroundJobTypes": [
+    "execute_intervention",
+    "HENVALT_TEST_JOB"
+  ],
+  "staleRepairFunctions": [
+    "henvalt.requeue_stale_jobs(900)",
+    "henvalt.recover_stale_interventions(900)"
+  ],
+  "paymentReconciliationFunction": "henvalt.reconcile_deferred_payment_webhooks",
+  "requiredReplayJobType": "process_shopify_webhook",
+  "replayJobTypeCurrentlyClaimed": false,
+  "generalWebhookReplayRpcPresent": false,
+  "generalWebhookReplayLaunchBlocker": true
+}
