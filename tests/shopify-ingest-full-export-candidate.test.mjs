@@ -72,3 +72,26 @@ test("all 18 write paths are lease-fenced and every connection resolves", () => 
   assert.equal(w.connections["Replay Already Processed?"].main[1][0].node,"Validate & Normalize");
   assert.match(findNode(w,"Build Shopify Replay Envelope").parameters.jsCode,/__replay_already_processed/);
 });
+
+
+test("public Shopify ingress always responds explicitly while replay subflow returns its own result", () => {
+  const w = buildCandidate(source,map,pinned).workflow;
+  const byName = new Map(w.nodes.map(n=>[n.name,n]));
+  const response = byName.get("Respond to Shopify");
+  assert.ok(response);
+  assert.equal(w.nodes.filter(n=>n.type==="n8n-nodes-base.respondToWebhook").length,1);
+  assert.equal(response.parameters.respondWith,"json");
+  assert.match(response.parameters.responseBody,/__body/);
+  assert.match(response.parameters.options.responseCode,/__http/);
+  assert.equal(w.connections["Replay Pipeline?"].main[1][0].node,"Respond to Shopify");
+  assert.equal(w.connections["Build Invalid Ingress Response"].main[0][0].node,"Respond to Shopify");
+  assert.equal(w.connections["Replay Pipeline?"].main[0][0].node,"Renew Replay Lease Before Writes");
+  assert.equal(w.connections["Respond to Shopify"],undefined);
+  // Internal Execute Workflow callers consume these terminal result nodes;
+  // they must not attempt to answer the original public webhook a second time.
+  assert.equal(w.connections["Build Success Response"],undefined);
+  assert.equal(w.connections["Build Deferred Payment Response"],undefined);
+  assert.equal(w.connections["Build Already Processed Replay Result"],undefined);
+  assert.match(byName.get("Build Success Response").parameters.assignments.assignments.find(a=>a.name==="mark_webhook_processed").value,/replay_context/);
+  assert.equal(byName.get("Build Deferred Payment Response").parameters.assignments.assignments.find(a=>a.name==="deferred_payment_handoff").value,true);
+});
