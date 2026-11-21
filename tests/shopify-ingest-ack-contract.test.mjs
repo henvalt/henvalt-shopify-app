@@ -38,7 +38,7 @@ test("all pre-ingest rejection paths have explicit fail-closed response codes", 
 test("new durable ingest returns 200 and continues processing", () => {
   const result = classifyIngestResponse({
     statusCode: 201,
-    body: [{ webhook_id: "wh-1", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],
+    body: [{ webhook_id: "wh-1", is_duplicate: false, should_process: true, processing_status: "PROCESSING", replay_job_id: "job-1", replay_job_status: "QUEUED" }],
   }, context);
   assert.equal(result.http, 200);
   assert.equal(result.proceed, true);
@@ -53,7 +53,7 @@ test("processed and in-flight duplicates return 200 without reprocessing", () =>
   }, context);
   const processing = classifyIngestResponse({
     statusCode: 200,
-    body: [{ webhook_id: "wh-3", is_duplicate: true, should_process: false, processing_status: "PROCESSING" }],
+    body: [{ webhook_id: "wh-3", is_duplicate: true, should_process: false, processing_status: "PROCESSING", replay_job_id: "job-3", replay_job_status: "RUNNING" }],
   }, context);
   assert.equal(processed.http, 200);
   assert.equal(processed.proceed, false);
@@ -67,7 +67,7 @@ test("missing durable ID or explicit decision returns retryable 503", () => {
   for (const body of [
     [{ is_duplicate: false, should_process: true }],
     [{ webhook_id: "wh-4", is_duplicate: false }],
-    [{ webhook_id: "wh-5", should_process: false, processing_status: "UNKNOWN" }],
+    [{ webhook_id: "wh-5", should_process: false, processing_status: "UNKNOWN" }],\n    [{ webhook_id: "wh-6", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],\n    [{ webhook_id: "wh-7", is_duplicate: false, should_process: true, processing_status: "PROCESSING", replay_job_id: "job-7", replay_job_status: "DEAD_LETTER" }],
   ]) {
     const result = classifyIngestResponse({ statusCode: 200, body }, context);
     assert.equal(result.http, 503);
@@ -100,7 +100,7 @@ test("acknowledgement contract and nested collections are immutable", () => {
   for (const key of [
     "preIngestFailureRoutes",
     "acceptedIngestRequires",
-    "conflictHandling",
+    "conflictHandling",\n    "replayQueue",
     "preIngestFailureStatuses",
     "acceptedStatuses",
     "retryableStatuses",
