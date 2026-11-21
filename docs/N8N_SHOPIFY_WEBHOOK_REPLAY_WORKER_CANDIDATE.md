@@ -242,3 +242,19 @@ The replay claim normalizer is now implemented as a pure candidate module at `n8
 
 
 Replay retries use the constant `SHOPIFY_REPLAY_PROCESSING_FAILED` with a bounded 300-second default delay (the database caps delay at 3,600 seconds). The worker must not copy raw exception text, stack traces, webhook payload, customer email, URLs, or other customer data into `background_jobs.last_error`.
+
+
+## Exact installed n8n node contracts — 2026-11-21
+
+The recovery replay graph manifest now pins the installed node versions confirmed from the connected n8n instance:
+
+- Postgres 2.7
+- Code 2
+- IF 2.3
+- Execute Workflow 1.4
+- Execute Workflow Trigger 1.1
+- No Operation 1
+
+The replay subworkflow call is specified with `mode=once`, database source, the existing `HENVALT_INGEST` workflow ID, wait-for-completion, and an explicit three-field `workflowInputs` mapping. The dedicated ingest trigger declares exactly `job_id`, `worker_id`, and `lease_id` as required strings. It must not accept a caller-provided tenant, webhook payload, HMAC flag, or any other field.
+
+These definitions are now recorded in `n8n/shopify-recovery-replay-graph-patch.json` and guarded by `tests/shopify-recovery-replay-graph-patch-static.test.mjs`. This is still a candidate graph contract, not an imported or runtime-tested n8n export. Credentials must be rebound only inside an isolated inactive draft. The live workflow remains unchanged.
