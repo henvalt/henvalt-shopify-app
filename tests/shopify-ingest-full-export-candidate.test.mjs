@@ -6,7 +6,7 @@ import { buildCandidate } from "../n8n/shopify-ingest-candidate-builder.mjs";
 const source = JSON.parse(readFileSync("n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json","utf8"));
 const map = JSON.parse(readFileSync("n8n/shopify-ingest-replay-write-map.json","utf8"));
 const pinned = "6368d539-708f-494a-8be8-b9601d0e8607";
-const byName = (w,name) => w.nodes.find(n=>n.name===name);
+const findNode = (w,name) => w.nodes.find(n=>n.name===name);
 
 test("full pinned 51-node active INGEST export builds an isolated no-send candidate", () => {
   const result = buildCandidate(source,map,pinned);
@@ -31,7 +31,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.ok(w.nodes.some(n=>n.name==="Shopify Replay Entry Trigger"));
   assert.equal(w.connections["Is Trusted Replay?"].main[0][0].node,"Resolve Shopify Tenant");
   assert.equal(w.connections["Is Trusted Replay?"].main[1][0].node,"Supabase Ingest RPC");
-  assert.equal(byName(w,"Verify Shopify HMAC"),undefined);
+  assert.equal(findNode(w,"Verify Shopify HMAC"),undefined);
   assert.equal(byName(w,"HMAC Verified?"),undefined);
   assert.match(byName(w,"Supabase Ingest RPC").parameters.jsonBody,/p_raw_body_base64/);
   assert.match(byName(w,"Supabase Ingest RPC").parameters.jsonBody,/p_hmac/);
