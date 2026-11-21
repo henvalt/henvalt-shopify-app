@@ -57,3 +57,10 @@ test("Shopify Pixel and Cloudflare collector event allowlists stay identical", (
   const values = (source) => [...source.matchAll(/"([^"]+)"/g)].map((match) => match[1]).sort();
   assert.deepEqual(values(workerBlock), values(pixelBlock));
 });
+
+test("browse delivery eligibility rechecks source-event consent at send time", () => {
+  assert.ok(migration.includes("CREATE OR REPLACE FUNCTION henvalt.browse_opportunity_advanced("));
+  assert.ok(migration.includes("e.metadata->>'analytics_processing_allowed' = 'true'"));
+  assert.ok(migration.includes("e.metadata->>'marketing_allowed' = 'true'"));
+  assert.ok(migration.includes("NOT COALESCE("));
+});
