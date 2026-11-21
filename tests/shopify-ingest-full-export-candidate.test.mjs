@@ -15,10 +15,10 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(w.active,false);
   assert.equal(w.id,"00000000-0000-4000-8000-999999999999");
   assert.equal(w.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
-  assert.equal(w.nodes.length,67);
-  assert.equal(result.graphAudit.node_count,67);
-  assert.equal(result.graphAudit.unique_node_ids,67);
-  assert.equal(result.graphAudit.unique_node_names,67);
+  assert.equal(w.nodes.length,69);
+  assert.equal(result.graphAudit.node_count,69);
+  assert.equal(result.graphAudit.unique_node_ids,69);
+  assert.equal(result.graphAudit.unique_node_names,69);
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
@@ -64,4 +64,8 @@ test("all 18 write paths are lease-fenced and every connection resolves", () => 
   assert.equal(w.connections["Replay Pipeline?"].main[0][0].node,"Renew Replay Lease Before Writes");
   assert.equal(w.connections["Replay Pipeline?"].main[1][0].node,"Respond to Shopify");
   assert.equal(w.connections["Shopify Replay Entry Trigger"].main[0][0].node,"Load Shopify Replay Row");
+  assert.equal(w.connections["Replay Envelope Valid?"].main[0][0].node,"Replay Already Processed?");
+  assert.equal(w.connections["Replay Already Processed?"].main[0][0].node,"Build Already Processed Replay Result");
+  assert.equal(w.connections["Replay Already Processed?"].main[1][0].node,"Validate & Normalize");
+  assert.match(byName(w,"Build Shopify Replay Envelope").parameters.jsCode,/__replay_already_processed/);
 });
