@@ -54,6 +54,9 @@ on:
       - "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
+  push:
+    branches:
+      - work/48h-system-readiness-2026-11-21
 
 permissions:
   contents: read
