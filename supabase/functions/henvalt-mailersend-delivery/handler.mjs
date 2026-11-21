@@ -19,7 +19,7 @@ function constantTimeEqual(a, b) {
 function validEmail(value) {
   return typeof value === "string" &&
     value.length <= 254 &&
-    /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value);
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 function isUuid(value) {
@@ -44,7 +44,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
     if (!supabaseUrl || !serviceRoleKey) return json(503, { error: "delivery_service_not_configured" });
 
     const authorization = req.headers.get("authorization") ?? "";
-    const bearer = authorization.match(/^Bearer\\s+(.+)$/i)?.[1] ?? "";
+    const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
     if (!constantTimeEqual(bearer, serviceRoleKey)) return json(401, { error: "service_role_required" });
 
     let apiToken = "";
