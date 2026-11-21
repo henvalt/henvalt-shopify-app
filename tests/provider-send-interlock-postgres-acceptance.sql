@@ -282,11 +282,11 @@ BEGIN
     RAISE EXCEPTION 'dashboard summary included unconfirmed revenue or lost confirmed attribution: %', v_summary;
   END IF;
   IF v_summary #>> '{activity,0,outcome}' <> 'recovered'
-     OR v_summary #> '{activity,0,amount}' IS NOT NULL THEN
+     OR v_summary #>> '{activity,0,amount}' IS NOT NULL THEN
     RAISE EXCEPTION 'confirmed attribution with nullable order value was not still shown as recovered: %', v_summary #> '{activity,0}';
   END IF;
   IF v_summary #>> '{activity,1,outcome}' <> 'pending'
-     OR v_summary #> '{activity,1,amount}' IS NOT NULL THEN
+     OR v_summary #>> '{activity,1,amount}' IS NOT NULL THEN
     RAISE EXCEPTION 'unconfirmed recovered opportunity was shown as recovered: %', v_summary #> '{activity,1}';
   END IF;
   IF v_summary #>> '{activity,2,outcome}' <> 'recovered'
