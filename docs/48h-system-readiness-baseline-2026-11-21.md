@@ -242,3 +242,9 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 
 - The active connection for `ur4jvw-nz.myshopify.com` has one active, non-revoked pixel key with a persisted Shopify Web Pixel ID. This proves a pixel identity was created for that connection, but does not prove the currently checked-out extension version is the one installed or that a live storefront event is reaching the current collector.
 - The inspected execution runtime metadata also reports `redaction.production = false` and `redaction.manual = false`; this is additional evidence that no effective redaction has been demonstrated for either execution mode.
+
+
+### Production webhook receipt snapshot
+- `webhook_events` contains 44 `checkouts/create` events and 49 `checkouts/update` events, with the latest receipt at 2026-11-14 15:44 UTC.
+- It contains 36 `carts/update` events, latest 2026-11-14 15:10 UTC; 2 customer email marketing consent updates, latest 2026-11-08 16:47 UTC; and 1 `carts/create`, latest 2026-11-08 11:11 UTC.
+- No Shopify webhook receipt later than 2026-11-14 was present in the snapshot on 2026-11-21. The Cloudflare-to-n8n endpoint configuration matches, but current live event delivery is not demonstrated.
