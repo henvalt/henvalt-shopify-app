@@ -27,7 +27,7 @@ test("replay loader uses the exact migration 008 lease-fenced signature", () => 
 test("replay envelope requires trusted ingress attestation, exact tenant and live lease", () => {
   for (const token of [
     "ingress_hmac_verified !== true",
-    "metadata.shopify_webhook_id !== r.source_event_id",
+    "r.metadata?.shopify_webhook_id !== r.source_event_id",
     "r.tenant_id",
     "r.lease_expires_at",
     "c.lease_id",
