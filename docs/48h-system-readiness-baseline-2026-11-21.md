@@ -255,3 +255,10 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - The inspected Worker source logs only structured failure metadata (`shop`, `topic`, `webhookId`, upstream status); no request body or customer email is passed to its console error calls.
 - This still retains store-domain and webhook identifiers in Cloudflare logs. Confirm the account's log retention and access policy before release.
 - The pixel collector Worker has no explicit observability settings returned by the settings API.
+
+
+### Exact provider-token release boundary
+- The live `get_mailersend_token_for_delivery(uuid, uuid)` function first updates the matching `delivery_requests.provider_claimed_at` from NULL to a timestamp, and only after that reads the Vault secret and returns the token.
+- Its authorization predicate contains a narrowly hard-coded one-off test exception tied to a specific tenant, opportunity, test-only message marker and idempotency key. That exception bypasses the tenant `recoveryEnabled` flag for the test route.
+- The candidate interlock trigger blocks the `provider_claimed_at: NULL -> timestamp` update before the function can read/return the provider token. It therefore covers the observed one-off exception as well as the ordinary send path.
+- The exact one-off recipient address and secret references are intentionally omitted from repository evidence.
