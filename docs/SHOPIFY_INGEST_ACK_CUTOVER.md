@@ -13,9 +13,15 @@ Read-only inspection of active workflow `HENVALT_INGEST` (workflow ID `VTpfGKNtu
 - Current path: normalization → HMAC verification → Shopify tenant resolution → tenant binding/validation → `ingest_raw_webhook_v2` → `Classify Result` → `Should Process?`.
 - `HMAC Verified?` false output has no connected response node.
 - `Is Valid` false output reaches `Reject Invalid Event` (`stopAndError`), not an HTTP response node.
-- The active classifier maps a generic HTTP 409 to `200 duplicate` without requiring a durable webhook ID.
+- The active classifier maps a generic HTTP 409 to `200 duplicate` without requiring a durable webhook ID.\n- The active normalizer prioritizes `X-Shopify-Event-Id` ahead of `X-Shopify-Webhook-Id` for its event identity.
 
 With `onReceived`, n8n can acknowledge before HMAC verification and before durable ingestion. That is a delivery-acceptance gap.
+
+## Shopify delivery identity defect
+
+Read-only inspection of the live `Validate & Normalize` node found this current event-ID precedence: `body.event_id` → `X-Shopify-Event-Id` → `X-Shopify-Webhook-Id` → `body.id`. That is unsafe for delivery deduplication. Shopify documents `X-Shopify-Webhook-Id` as the unique delivery ID and `X-Shopify-Event-Id` as a correlation ID shared across deliveries from the same merchant action (including separate subscriptions). The normalizer must use `X-Shopify-Webhook-Id` as `source_event_id` and in the idempotency key; retain `X-Shopify-Event-Id` only in metadata for correlation. Do not fall back to the event ID when the delivery ID is absent.
+
+The candidate Cloudflare worker now requires `x-shopify-webhook-id` and no longer accepts `x-shopify-event-id` as a substitute. A regression test verifies that an event ID alone is rejected before forwarding. The live n8n normalizer still needs the precedence correction before release.
 
 ## Critical post-ack recovery finding
 
@@ -29,7 +35,7 @@ A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if d
 - `ingest_raw_webhook_v2` can reclaim an old failed/in-flight row when Shopify sends the same delivery again. That is not sufficient after HENVALT has already returned 200, because Shopify stops retrying successful deliveries.
 - Read-only status aggregation found two current `FAILED` webhook rows: one was a privilege probe, and one checkout event failed because required checkout/customer data was missing. No rows were modified.
 
-**Conclusion:** an early 200 immediately after inserting only `webhook_events` is not yet safe. The accepted row needs an atomic, independently claimable replay job, and the existing three-workflow architecture needs a worker path that actually processes it.
+**Conclusion:** an early 200 immediately after inserting only `webhook_events` is not yet safe. The accepted row needs an atomic, independently claimable replay job, the delivery ID must be used for deduplication, and the existing three-workflow architecture needs a worker path that actually processes it.
 
 ## Required candidate architecture — keep exactly three workflows
 
