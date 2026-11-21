@@ -34,17 +34,17 @@ The installed n8n node type definitions were checked before specifying these par
    - Reject every unknown job type.
 3. Add a Switch on `job_type`; the existing intervention output must connect to the current `Atomic Claim Intervention` node without behavior changes.
 4. The replay output calls `henvalt.load_shopify_webhook_replay_job(job_id, worker_id, lease_id)` using the exact lease returned by the replay claim RPC. If `webhook_processed=true`, complete the claimed job and stop.
-5. Otherwise call the dedicated replay-processing entry in `HENVALT_INGEST` with only `job_id` and `worker_id`. Do not pass an untrusted tenant ID or raw payload from the worker itself.
+5. Otherwise call the dedicated replay-processing entry in `HENVALT_INGEST` with only `job_id`, `worker_id`, and the exact `lease_id` returned by the claim. The lease token is required for the subflow's second fenced load; do not pass an untrusted tenant ID or raw payload from the worker itself.
 6. Complete the replay job only after the ingest subflow confirms `mark_webhook_processed=true`, using `complete_shopify_replay_job(job_id, worker_id, lease_id)`. On transient failures call `retry_shopify_replay_job(job_id, worker_id, lease_id, error, bounded_delay)`; on exhausted retries the RPC sets DEAD_LETTER. Keep the existing `complete_job` / `retry_job` calls for the intervention branch only.
 
 ## HENVALT_INGEST replay entry
 
 Add an `Execute Workflow Trigger` dedicated to replay jobs. It must:
-1. Call `load_shopify_webhook_replay_job(job_id, worker_id)` again (defense in depth).
+1. Call `load_shopify_webhook_replay_job(job_id, worker_id, lease_id)` again (defense in depth). Migration 008 revokes the two-argument loader from `service_role`; no replay subflow may call it.
 2. Stop with an idempotent success if the row is already PROCESSED.
 3. Reconstruct the normalized event from the trusted stored `payload`, `topic`, `source_event_id`, tenant and metadata using the candidate normalizer.
 4. Skip external HMAC verification only because the service-role-only loader verifies the durable `ingress_hmac_verified=true` marker written by the single-round-trip ingress RPC. Never accept a caller-provided “verified” boolean.
-5. Skip tenant resolution only because the loader returns the tenant ID bound to the claimed job and webhook row.
+5. Skip tenant resolution only because the lease-fenced loader returns the tenant ID bound to the claimed job and webhook row. The subflow must keep the same `lease_id` for any lease renewal and must stop before downstream commits if renewal returns NULL.
 6. Reuse the existing canonical-event, identity, checkout/order, eligibility, intervention, attribution and ledger pipeline.
 7. Mark the webhook PROCESSED only after every required downstream operation completes. On failure, mark it FAILED and return a structured retryable error to the recovery worker.
 
