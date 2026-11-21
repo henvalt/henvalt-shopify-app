@@ -135,3 +135,8 @@ A cross-document review found the HENVALT_INGEST replay-entry section still desc
 The exact candidate head `9dc247ff7aa78dad933b628edbd2e32257ea3f23` passed HENVALT safety run [44887910222](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44887910222). Verified successful steps include the Node static test suite, both Edge Function type checks, disposable PostgreSQL 17 bootstrap, all candidate migrations 001–008, replay enqueue/loader/ingress acceptance, lease fencing acceptance, and the existing interlock/consent/dashboard/token-refresh acceptance suite. Shopify configuration static validation passed on [44887910188](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44887910188); deployment was skipped.
 
 This remains candidate CI only. The three active n8n workflows were re-read and remain on their original active versions; no workflow draft or active version was changed. The live ingress and recovery paths therefore remain unconverted, and isolated full-schema staging remains a release blocker.
+
+
+## 21 November — production migration boundary recheck
+
+A fresh read-only Supabase MCP inspection reconfirmed the connected project is `ACTIVE_HEALTHY` on PostgreSQL 17.6.1. Its latest applied migration remains `20261114174204` (`fix_mailersend_token_browse_case_expression`); candidate migrations `202611210001` through `202611210008` are not applied. The development-branch inventory is still empty. No migration, data write, branch creation, or deployment was performed during this check.
