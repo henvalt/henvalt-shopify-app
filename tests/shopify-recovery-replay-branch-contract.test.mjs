@@ -116,3 +116,18 @@ test("read-only active recovery snapshot proves replay support is not live yet",
   assert.equal(activeSnapshot.generalWebhookReplayLaunchBlocker, true);
   assert.equal(activeSnapshot.normalizeGuard.replayJobsPassCurrentGuard, false);
 });
+
+test("every existing intervention terminal node hands control to the replay claim", () => {
+  const recovery = contract.recovery_workflow;
+  assert.deepEqual(recovery.intervention_terminal_nodes, [
+    "Complete Job",
+    "Retry Job",
+    "Retry Preflight Job",
+    "Retry Delivery Job",
+    "Retry Pipeline Job",
+  ]);
+  assert.deepEqual(
+    recovery.scheduling.must_attempt_replay_after,
+    recovery.intervention_terminal_nodes,
+  );
+});
