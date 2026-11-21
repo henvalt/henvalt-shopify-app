@@ -318,3 +318,11 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - n8n execution payload retention remains a separate issue: the historical delivery execution still retained message/recipient content for at least seven days and runtime redaction flags were false.
 
 - The candidate pixel-ingest, browse-candidate and shared browse-eligibility SECURITY DEFINER functions all now set `search_path` explicitly to `pg_catalog, henvalt, pg_temp`; static CI asserts all three use the hardened path.
+
+
+### Shopify offline-token refresh timing mismatch
+- The active recovery scheduler queries connections whose access token expires within 10 minutes.
+- The live `claim_shopify_token_refresh` RPC only claims tokens within 5 minutes of expiry. On 2026-11-21 05:48 UTC, the scheduler selected the test connection with about 10 minutes remaining, but the refresh Edge Function returned `TOKEN_STILL_VALID` (HTTP 409). The scheduler will retry each minute until the five-minute threshold is reached.
+- This is not token loss; the token remained valid and the refresh token expiry was in February 2027. It is unnecessary polling and a mismatch between scheduler and claim policy.
+- Candidate migration `202611210004_align_shopify_token_refresh_window.sql` aligns the claim threshold to 10 minutes. Disposable PostgreSQL tests cover a token with 9 minutes remaining (claim) and one with 11 minutes remaining (do not claim), plus the existing advisory lock, service-role check and refresh lease.
+- No live token or refresh RPC was changed.
