@@ -53,9 +53,13 @@ test("replay mutations use the audited write map and never downgrade to unfenced
   assert.match(contract.design.lifecycle.failed, /mark_webhook_failed_fenced/);
 });
 
-test("deferred payment path is explicitly blocked pending a terminal-state contract", () => {
-  assert.match(contract.design.lifecycle.deferred_payment, /Do not return successful replay completion/);
-  assert.ok(contract.dependencies.some(x => /deferred-payment terminal semantics/.test(x)));
+test("deferred payment is a durable terminal handoff through the active recovery reconciler", () => {
+  assert.match(contract.design.lifecycle.deferred_payment, /deferred_payment_handoff=true/);
+  assert.equal(contract.design.lifecycle.deferred_payment_audit.observed_active, true);
+  assert.equal(contract.design.lifecycle.deferred_payment_audit.trigger, "Every Minute");
+  assert.equal(contract.design.lifecycle.deferred_payment_audit.node, "Reconcile Deferred Payment Webhooks");
+  assert.match(contract.design.lifecycle.deferred_payment_audit.selection, /FOR UPDATE SKIP LOCKED/);
+  assert.ok(contract.acceptance.some(x => /Deferred payment path: fenced defer RPC returns true/.test(x)));
 });
 
 test("no replay route is allowed to reach the delivery provider", () => {
