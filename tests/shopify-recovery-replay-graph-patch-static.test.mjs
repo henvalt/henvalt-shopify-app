@@ -83,10 +83,17 @@ test("replay claim, load, complete and retry use dedicated lease-fenced RPCs", (
   for (const name of [
     "Load Shopify Replay Job",
     "Complete Shopify Replay Job",
-    "Retry Shopify Replay Job",
   ]) {
     assert.deepEqual(nodes.get(name).parameters, ["job_id", "worker_id", "lease_id"]);
   }
+  assert.deepEqual(
+    nodes.get("Retry Shopify Replay Job").parameters.slice(0, 3),
+    ["job_id", "worker_id", "lease_id"],
+  );
+  assert.deepEqual(
+    nodes.get("Retry Shopify Replay Job").parameters.slice(3),
+    ["bounded sanitized failure reason", 300],
+  );
   assert.equal(nodes.get("Retry Shopify Replay Job").retry_delay_seconds_default, 300);
   assert.equal(nodes.get("Retry Shopify Replay Job").retry_delay_seconds_max, 3600);
 });
