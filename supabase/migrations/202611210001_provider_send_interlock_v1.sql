@@ -114,8 +114,8 @@ AS $function$
   );
 $function$;
 
-REVOKE ALL ON FUNCTION henvalt.provider_sending_is_enabled() FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION henvalt.provider_sending_is_enabled() TO service_role;
+REVOKE ALL ON FUNCTION henvalt.provider_sending_is_enabled()
+  FROM PUBLIC, anon, authenticated, service_role;
 
 CREATE OR REPLACE FUNCTION henvalt.enforce_provider_send_interlock()
 RETURNS trigger
