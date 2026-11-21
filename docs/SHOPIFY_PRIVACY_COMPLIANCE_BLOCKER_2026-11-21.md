@@ -152,3 +152,17 @@ A separate ACTIVE Supabase Edge Function was found and captured in the candidate
 - The endpoint's independent authentication is a positive control; do not turn on gateway JWT verification without validating the dashboard's token forwarding and deployment behavior.
 
 Both deployed v1 functions are now preserved under `supabase/functions/` as **AUDIT BASELINES ONLY**. These files are not remediations and must not be deployed unchanged. Their source hashes are pinned in-file. Production remains unchanged.
+
+
+### Latest queue-state and privilege verification — 2026-11-21 (read-only)
+
+- The production `shopify_privacy_requests` table had **zero rows** at this inspection. There are no currently queued privacy requests to remediate or manually deliver.
+- `service_role` has only the table privileges needed by the handler (INSERT, SELECT, UPDATE); no anon/authenticated grants were present in the inspected grants.
+- The queue has a unique constraint on `webhook_id`, an allowed-status check, and topic allowlist check.
+- Existing indexes cover export expiry, pending/review/failed state scans, shop/status scans and webhook idempotency. The candidate tenant FK index is still not production-applied.
+- The deployed `purge_expired_shopify_privacy_exports()` function only nulls expired `result_payload` and `result_expires_at`; it does not clear inbound `payload`, `customer_id`, or `last_error`.
+- The queue state count query returned no rows, consistent with the empty table.
+
+### Candidate CI evidence for baseline capture
+
+The two audit-baseline files, documentation, and static regression test were added to the candidate branch. The offline contract workflow passed (run 44937879940) and the full safety/pixel-consent workflow passed (run 44937880000) on candidate commit `cb686659d1c3b1678b264a23db6a4c2785e419f7`. These are code/fixture checks only; they do not exercise production webhooks or prove the live privacy flow is compliant.
