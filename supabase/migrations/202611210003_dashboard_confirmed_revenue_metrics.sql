@@ -109,13 +109,11 @@ BEGIN
     LEFT JOIN LATERAL (
       SELECT ri.status,
         (SELECT rl.amount
-           FROM henvalt.revenue_ledger rl
-          WHERE rl.tenant_id = o.tenant_id
-            AND rl.opportunity_id = o.id
-            AND rl.entry_type = 'RECOVERY'
-            AND rl.billable IS TRUE
-            AND rl.attribution_confidence = 'CONFIRMED'
-          ORDER BY rl.created_at DESC
+           FROM henvalt.order_attributions oa
+          WHERE oa.tenant_id = o.tenant_id
+            AND oa.opportunity_id = o.id
+            AND oa.attribution_confidence = 'CONFIRMED'
+          ORDER BY oa.evaluated_at DESC
           LIMIT 1) AS confirmed_amount
       FROM henvalt.recovery_interventions ri
       WHERE ri.tenant_id = o.tenant_id AND ri.opportunity_id = o.id
@@ -160,16 +158,14 @@ BEGIN
           AND ri.status IN ('SENT', 'DELIVERED')
           AND COALESCE(ri.sent_at, ri.delivered_at, ri.updated_at) >= p_from
           AND COALESCE(ri.sent_at, ri.delivered_at, ri.updated_at) < p_to + interval '1 day') AS messages_sent,
-      (SELECT count(DISTINCT rl.order_id)
-         FROM henvalt.revenue_ledger rl
+      (SELECT count(DISTINCT oa.order_id)
+         FROM henvalt.order_attributions oa
          JOIN henvalt.opportunities o
-           ON o.id = rl.opportunity_id AND o.tenant_id = rl.tenant_id
-        WHERE rl.tenant_id = v_tenant.id
+           ON o.id = oa.opportunity_id AND o.tenant_id = oa.tenant_id
+        WHERE oa.tenant_id = v_tenant.id
           AND o.opportunity_type::text = any(m.db_types)
-          AND rl.entry_type = 'RECOVERY'
-          AND rl.billable IS TRUE
-          AND rl.attribution_confidence = 'CONFIRMED'
-          AND rl.created_at >= p_from AND rl.created_at < p_to + interval '1 day') AS recovered,
+          AND oa.attribution_confidence = 'CONFIRMED'
+          AND oa.evaluated_at >= p_from AND oa.evaluated_at < p_to + interval '1 day') AS recovered,
       (SELECT coalesce(sum(rl.amount), 0)
          FROM henvalt.revenue_ledger rl
          JOIN henvalt.opportunities o
