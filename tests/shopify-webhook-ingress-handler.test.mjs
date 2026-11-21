@@ -1,9 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
-import { handleRequest } from "../cloudflare/worker.js";
+import { readFileSync } from "node:fs";
 
 globalThis.crypto ??= webcrypto;
+const workerSource = readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
+const workerModuleUrl = "data:text/javascript;base64," + Buffer.from(workerSource).toString("base64");
+const { handleRequest } = await import(workerModuleUrl);
 
 const secret = "synthetic-shopify-secret";
 const env = { SHOPIFY_API_SECRET: secret, N8N_INGEST_URL: "https://ingest.example.test/webhook" };
