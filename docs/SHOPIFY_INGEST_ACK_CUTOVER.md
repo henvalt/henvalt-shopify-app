@@ -62,7 +62,7 @@ The connected production database was inspected with SELECT-only catalog/functio
 | Ingest RPC omits webhook ID or decision | 503 | Fail closed |\n| Generic HTTP 409 without durable webhook ID | 503 | Never infer duplicate from status code alone |
 | Downstream processing fails after 200 | Already acknowledged | Durable row must be repairable/replayable |
 
-## Implementation cautions
+## n8n response-node runtime constraints\n\nThe current n8n Respond to Webhook documentation states that if a workflow finishes without executing a Respond node, n8n returns a standard 200; if it errors before the first Respond node executes, n8n returns 500; and a later second Respond node is ignored. Therefore, setting `responseMode: responseNode` alone is not fail-closed: every normal branch must reach exactly one explicit response node with its status set, and every error path before it must be handled or deliberately produce a retryable 5xx. The Respond node's default output carries the input data onward, which is the intended mechanism for continuing canonical processing after the acknowledgement.\n\n## Implementation cautions
 
 - Do not put the shared response node only after `Classify Result`: that misses the current HMAC-false and validation-false branches.
 - Do not use `stopAndError` for a webhook branch that must return a defined HTTP status.
