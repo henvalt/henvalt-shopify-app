@@ -99,10 +99,13 @@ test("public ingress waits for durable acknowledgement and never runs the busine
   assert.equal(workflow.nodes.find(n=>n.name==="Event Webhook").parameters.responseMode,"responseNode");
   assert.match(workflow.nodes.find(n=>n.name==="Supabase Ingest RPC").parameters.url,/receive_shopify_webhook_v1/);
   assert.ok(workflow.nodes.some(n=>n.name==="Respond to Shopify"));
-  assert.equal(workflow.connections["Replay Pipeline?"].main[0][0].node,"Should Process?");
+  assert.equal(workflow.connections["Replay Pipeline?"].main[0][0].node,"Renew Replay Lease Before Writes");
+  assert.match(workflow.nodes.find(n=>n.name==="Renew Replay Lease Before Writes").parameters.jsonBody,/p_lease_seconds: 180/);
+  assert.equal(workflow.connections["Confirm Replay Lease Renewal"].main[0][0].node,"Should Process?");
   assert.equal(workflow.connections["Replay Pipeline?"].main[1][0].node,"Respond to Shopify");
   assert.equal(workflow.connections["Mark Webhook Processed"].main[0][0].node,"Processed Marker Confirmed?");
   assert.equal(workflow.connections["Defer Payment Reconciliation"].main[0][0].node,"Deferred Handoff Confirmed?");
+  assert.equal(workflow.connections["Is Valid"].main[1][0].node,"Is Rejected Replay?");
 });
 
 test("builder rejects workflow or active-version drift", () => {
