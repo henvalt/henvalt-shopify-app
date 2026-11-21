@@ -26,7 +26,8 @@ CREATE TYPE henvalt.event_class AS ENUM ('OTHER');
 
 CREATE TABLE henvalt.tenants (
   id uuid PRIMARY KEY,
-  status text NOT NULL
+  status text NOT NULL,
+  default_currency character(3) NOT NULL DEFAULT 'USD'
 );
 
 CREATE TABLE henvalt.shopify_connections (
@@ -34,6 +35,52 @@ CREATE TABLE henvalt.shopify_connections (
   tenant_id uuid NOT NULL,
   active boolean NOT NULL,
   shop_domain text NOT NULL
+);
+
+
+CREATE TABLE henvalt.opportunities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  opportunity_type text NOT NULL,
+  status text NOT NULL,
+  value_at_risk numeric,
+  currency character(3)
+);
+
+CREATE TABLE henvalt.recovery_interventions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  opportunity_id uuid NOT NULL,
+  status text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  sent_at timestamptz,
+  delivered_at timestamptz
+);
+
+CREATE TABLE henvalt.order_attributions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  order_id uuid NOT NULL,
+  opportunity_id uuid,
+  attribution_confidence text NOT NULL,
+  attributed_value numeric,
+  evaluated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE henvalt.revenue_ledger (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  order_id uuid,
+  opportunity_id uuid,
+  entry_type text NOT NULL,
+  amount numeric NOT NULL,
+  currency character(3) NOT NULL,
+  billable boolean NOT NULL,
+  attribution_confidence text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE henvalt.pixel_keys (
