@@ -195,3 +195,20 @@ Candidate migration `202611210010_shopify_replay_complete_ingest_write_fencing.s
 The following active-ingest RPCs were classified as read-only in the same inspection and do not require write wrappers: `evaluate_eligibility`, `score_recovery_intent`, `get_recovery_flow_delay`, and the payment-order lookup SELECT. This classification is based on the current live definitions and must be repeated against the final replay graph before staging.
 
 This audit correction does not mean the active workflow has been rewired: the published workflow still calls its original RPCs. Migration 010 is candidate-only and is not applied to production.
+
+
+## Recovery replay branch contract — candidate revision
+
+A machine-readable scheduler contract now lives at `n8n/shopify-recovery-replay-branch-contract.json`, with static assertions in `tests/shopify-recovery-replay-branch-contract.test.mjs`.
+
+The scheduler must attempt at most one job from each queue per cycle. The existing intervention claim remains restricted to `execute_intervention`; after every intervention terminal outcome it attempts one separately leased Shopify replay claim. If no intervention is available, it attempts the replay claim immediately. A replay terminal outcome returns to the scheduler loop. This prevents a continuously non-empty intervention queue from starving webhook replay while retaining the existing intervention business path.
+
+The replay branch is a separate contract:
+- Claim only through `claim_shopify_replay_job(worker_id, 180)`.
+- Validate `job_id`, `worker_id`, `lease_id`, and `payload.webhook_id`; reject unknown job types.
+- Load, complete, and retry only with the exact `job_id + worker_id + lease_id` tuple.
+- Call the dedicated `HENVALT_INGEST` replay entry with only that tuple. The ingest subflow reloads the trusted stored payload and executes sequential transaction-local fenced writes from the audited write map.
+- Complete only when the subflow confirms `mark_webhook_processed === true`; otherwise use bounded retry and allow the database RPC to dead-letter exhausted attempts.
+- Never route replay work through `Atomic Claim Intervention` or the generic `complete_job` / `retry_job` functions.
+
+This is a tested design contract, **not a constructed n8n graph**. It does not alter or publish the live workflow, and passing static CI does not establish that the n8n nodes have been wired. The exact active version remains the read-only baseline until a separate candidate graph can be authored and accepted in isolated staging.
