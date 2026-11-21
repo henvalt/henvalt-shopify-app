@@ -322,4 +322,68 @@ AS $function$
   LIMIT greatest(1, least(coalesce(p_limit, 100), 500));
 $function$;
 
+
+CREATE OR REPLACE FUNCTION henvalt.browse_opportunity_advanced(
+  p_tenant_id uuid,
+  p_session_reference text,
+  p_source_event_id uuid,
+  p_fallback_at timestamptz DEFAULT NULL
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'henvalt', 'pg_temp'
+AS $function$
+  WITH source_event AS (
+    SELECT e.occurred_at, e.payload, e.metadata
+    FROM henvalt.canonical_events e
+    WHERE e.tenant_id = p_tenant_id
+      AND e.id = p_source_event_id
+    LIMIT 1
+  ),
+  boundary AS (
+    SELECT COALESCE((SELECT occurred_at FROM source_event), p_fallback_at) AS occurred_at
+  )
+  SELECT p_tenant_id IS NULL
+    OR NULLIF(btrim(p_session_reference), '') IS NULL
+    OR NOT COALESCE(
+      (
+        SELECT
+          e.payload->>'analytics_consent' = 'true'
+          AND e.metadata->>'analytics_processing_allowed' = 'true'
+          AND e.metadata->>'marketing_allowed' = 'true'
+        FROM source_event e
+      ),
+      false
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM henvalt.canonical_events later
+      CROSS JOIN boundary b
+      WHERE later.tenant_id = p_tenant_id
+        AND later.source = 'SHOPIFY_WEB_PIXEL'
+        AND later.session_reference = p_session_reference
+        AND later.occurred_at > COALESCE(b.occurred_at, '-infinity'::timestamptz)
+        AND upper(later.event_type) IN ('PRODUCT_ADDED_TO_CART', 'CHECKOUT_STARTED')
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM henvalt.checkouts ck
+      CROSS JOIN boundary b
+      WHERE ck.tenant_id = p_tenant_id
+        AND (
+          ck.session_reference = p_session_reference
+          OR EXISTS (
+            SELECT 1
+            FROM henvalt.session_aliases sa
+            WHERE sa.tenant_id = ck.tenant_id
+              AND sa.alias_reference = ck.metadata->>'cart_token'
+              AND sa.session_reference = p_session_reference
+          )
+        )
+        AND greatest(ck.created_at, ck.updated_at) >= COALESCE(b.occurred_at, '-infinity'::timestamptz)
+    );
+$function$;
+
 COMMIT;
