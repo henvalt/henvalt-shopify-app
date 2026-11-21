@@ -20,6 +20,9 @@ BEGIN
      OR v_status.control_present IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'non-secret status surface did not report default-deny state: %', v_status;
   END IF;
+  IF position('FOR SHARE' in pg_get_functiondef('henvalt.assert_provider_sending_enabled()'::regprocedure)) = 0 THEN
+    RAISE EXCEPTION 'provider send assertion does not serialize against operator stop';
+  END IF;
   IF NOT has_function_privilege('service_role', 'henvalt.get_mailersend_token_for_delivery(uuid,uuid)', 'EXECUTE')
      OR has_function_privilege('anon', 'henvalt.get_mailersend_token_for_delivery(uuid,uuid)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'henvalt.get_mailersend_token_for_delivery(uuid,uuid)', 'EXECUTE')
@@ -38,6 +41,7 @@ BEGIN
        OR has_table_privilege(v_role, 'henvalt.provider_send_control_events', 'SELECT')
        OR has_table_privilege(v_role, 'henvalt.provider_send_control_events', 'INSERT')
        OR has_function_privilege(v_role, 'henvalt.provider_sending_is_enabled()', 'EXECUTE')
+       OR has_function_privilege(v_role, 'henvalt.assert_provider_sending_enabled()', 'EXECUTE')
        OR has_function_privilege(v_role, 'henvalt.set_provider_sending_enabled(boolean,text)', 'EXECUTE')
        OR has_function_privilege(v_role, 'henvalt.enforce_provider_send_interlock()', 'EXECUTE') THEN
       RAISE EXCEPTION 'application role % has unexpected interlock privileges', v_role;
