@@ -14,6 +14,8 @@ DECLARE
   v_result boolean;
   v_sequence uuid;
   v_ledger jsonb;
+  v_lease_before timestamptz;
+  v_lease_after timestamptz;
 BEGIN
   UPDATE henvalt.background_jobs
      SET status = 'SUCCEEDED'::henvalt.job_status,
@@ -100,11 +102,17 @@ BEGIN
   SELECT count(*) INTO v_calls FROM henvalt.replay_fence_test_calls;
   IF v_calls <> 0 THEN RAISE EXCEPTION 'STALE_WORKER_REACHED_LEGACY_INGEST_WRITES: %',v_calls; END IF;
 
+  v_lease_before := v_new.lease_expires_at;
   v_result := henvalt.apply_eligibility_fenced(
     v_job,'complete-current-worker',v_new.lease_id,
     '11111111-1111-4111-8111-111111111111','ELIGIBLE'::henvalt.opportunity_status
   );
   IF v_result IS DISTINCT FROM true THEN RAISE EXCEPTION 'CURRENT_APPLY_ELIGIBILITY_FAILED'; END IF;
+  SELECT lease_expires_at INTO v_lease_after
+    FROM henvalt.background_jobs WHERE id = v_job;
+  IF v_lease_after <= v_lease_before THEN
+    RAISE EXCEPTION 'FENCED_BUSINESS_WRITE_DID_NOT_RENEW_REPLAY_LEASE';
+  END IF;
 
   v_sequence := henvalt.create_recovery_sequence_fenced(
     v_job,'complete-current-worker',v_new.lease_id,'22222222-2222-4222-8222-222222222222'
