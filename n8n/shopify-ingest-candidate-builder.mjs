@@ -386,6 +386,7 @@ function buildCandidate(input, map, activeVersionId) {
   delete workflow.scopes; delete workflow.canExecute; delete workflow.parentFolderId; delete workflow.isArchived;
   workflow.name = "HENVALT_INGEST_CANDIDATE_NO_SEND";
   workflow.active = false;
+  workflow.settings = { ...(workflow.settings || {}), availableInMCP: false };
   workflow.meta = { ...(workflow.meta || {}), henvalt_candidate: true, source_workflow_id: REQUIRED_WORKFLOW_ID, source_active_version: REQUIRED_ACTIVE_VERSION, credential_rebinding_required: true, provider_sending_enabled: false };
   workflow.tags = [];
   const graphAudit = validateGraph(workflow);
