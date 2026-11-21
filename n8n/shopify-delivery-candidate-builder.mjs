@@ -35,7 +35,7 @@ export function buildDeliveryCandidate(source) {
   workflow.nodes = workflow.nodes
     .filter((node) => !REMOVED_ONE_OFF_NODES.includes(node.name))
     .map((node) => {
-      const clean = { ...node, parameters: JSON.parse(JSON.stringify(node.parameters || {})) };
+      const clean = { ...node, parameters: JSON.parse(JSON.stringify(node.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid").replace(/https:\/\/henvalt-reply-ai\.chmuhammadrehan18\.workers\.dev/gi, "https://reply-ai-staging.invalid")) };
       delete clean.credentials;
       delete clean.webhookId;
       if (clean.type === "n8n-nodes-base.webhook" && typeof clean.parameters.path === "string") {
