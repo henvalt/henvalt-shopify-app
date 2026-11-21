@@ -87,3 +87,10 @@ test("RPC transport failures remain retryable", () => {
   const result = classify({ error: { message: "network unavailable" } });
   assert.equal(result.__http, 503);
 });
+
+test("ingest RPC authorization and endpoint failures are retryable, not bad-HMAC responses", () => {
+  for (const statusCode of [401, 403, 404, 408, 429, 500]) {
+    const result = classify({ statusCode, body: { error: "synthetic" } });
+    assert.equal(result.__http, 503, `expected retryable 503 for upstream ${statusCode}`);
+  }
+});
