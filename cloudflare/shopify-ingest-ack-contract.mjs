@@ -17,6 +17,11 @@ export const SHOPIFY_INGEST_ACK_CONTRACT = Object.freeze({
     "webhook_id is present",
     "should_process is an explicit boolean",
   ]),
+  conflictHandling: Object.freeze({
+    generic409WithoutWebhookId: 503,
+    requireDurableWebhookIdForDuplicate200: true,
+    requireExplicitProcessingDecision: true,
+  }),
   preIngestFailureStatuses: Object.freeze({
     invalidHmac: 401,
     unknownTenant: 404,
