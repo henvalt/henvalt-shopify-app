@@ -63,7 +63,7 @@ BEGIN
   IF v_duplicate.http_status <> 200
      OR v_duplicate.webhook_id IS DISTINCT FROM v_first.webhook_id
      OR v_duplicate.replay_job_id IS DISTINCT FROM v_first.replay_job_id THEN
-    RAISE EXCEPTION 'SINGLE_ROUNDTRIP_DUPLICATE_CREATED_NEW_IDENTITIES';
+    RAISE EXCEPTION 'SINGLE_ROUNDTRIP_DUPLICATE_CREATED_NEW_IDENTITIES: status %, webhook %, first webhook %, job %, first job %, job status %', v_duplicate.http_status, v_duplicate.webhook_id, v_first.webhook_id, v_duplicate.replay_job_id, v_first.replay_job_id, v_duplicate.replay_job_status;
   END IF;
 
   SELECT count(*) INTO v_count
