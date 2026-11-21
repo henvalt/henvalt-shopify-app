@@ -12,7 +12,7 @@ on:
       - "cloudflare/pixel-collector.js"
       - "extensions/henvalt-pixel/src/index.js"
       - "tests/provider-send-interlock-static.test.mjs"
-      - "tests/n8n-delivery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs"
+      - "tests/n8n-delivery-route-snapshot.test.mjs"
       - "tests/henvalt-mailersend-delivery-handler.test.mjs"
       - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
       - "supabase/functions/henvalt-mailersend-delivery/index.ts"
@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify static safety and pixel consent invariants
-        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs
+        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
