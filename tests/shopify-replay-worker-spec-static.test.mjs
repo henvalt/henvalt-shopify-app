@@ -17,6 +17,14 @@ test("replay worker renewal loss is a hard stop before downstream commits", () =
   assert.match(spec, /If renewal returns NULL, stop processing and do not commit downstream effects/);
 });
 
+test("replay worker renews its lease before each sequential mutation stage", () => {
+  assert.match(spec, /Before each potentially long-running or mutating pipeline stage[\s\S]*renew the same lease/i);
+  assert.match(spec, /Keep stage calls sequential; never fan out mutating work in parallel/i);
+  assert.match(spec, /If renewal fails, stop immediately[\s\S]*do not begin another downstream mutation/i);
+  assert.match(spec, /Downstream stage RPCs must remain idempotent by tenant \+ source webhook\/event identity/i);
+  assert.match(spec, /not itself a transaction lock over all downstream systems/i);
+});
+
 test("database loader and terminal operations are lease-fenced", () => {
   assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\.load_shopify_webhook_replay_job\(\s*p_job_id uuid,\s*p_worker_id text,\s*p_lease_id uuid/s);
   assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\.complete_shopify_replay_job\(\s*p_job_id uuid, p_worker_id text, p_lease_id uuid/s);
