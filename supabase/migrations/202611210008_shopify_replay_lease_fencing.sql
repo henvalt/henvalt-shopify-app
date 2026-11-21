@@ -27,6 +27,23 @@ BEGIN
     RAISE EXCEPTION 'SHOPIFY_REPLAY_WORKER_ID_REQUIRED' USING ERRCODE = '22023';
   END IF;
 
+  -- An expired final attempt cannot be reclaimed. Move it out of CLAIMED
+  -- atomically so it does not remain stranded with an expired lease forever.
+  UPDATE henvalt.background_jobs
+     SET status = 'DEAD_LETTER'::henvalt.job_status,
+         next_run_at = NULL,
+         last_error = 'shopify_replay_lease_expired_after_max_attempts',
+         locked_at = NULL,
+         locked_by = NULL,
+         lease_id = NULL,
+         lease_expires_at = NULL,
+         updated_at = now()
+   WHERE job_type = 'process_shopify_webhook'
+     AND status = 'CLAIMED'::henvalt.job_status
+     AND lease_expires_at IS NOT NULL
+     AND lease_expires_at <= now()
+     AND attempts >= max_attempts;
+
   RETURN QUERY
   WITH candidate AS (
     SELECT j.id
