@@ -143,11 +143,19 @@ function addReplayAndIngressNodes(workflow) {
   const classifier = nodeByName(workflow, "Classify Result");
   const processed = nodeByName(workflow, "Mark Webhook Processed");
   const defer = nodeByName(workflow, "Defer Payment Reconciliation");
+  const successResponse = nodeByName(workflow, "Build Success Response");
+  const deferredResponse = nodeByName(workflow, "Build Deferred Payment Response");
 
   event.parameters.responseMode = "responseNode";
   preserveReplayContext(normalizer);
   addTenantReplayGuard(bind);
   replaceClassifier(classifier);
+  const successAssignment = successResponse.parameters.assignments.assignments.find((a) => a.name === "__body");
+  if (!successAssignment || typeof successAssignment.value !== "string") throw new Error("Success response body assignment missing");
+  successAssignment.value = successAssignment.value.replace("status: 'processed',", "status: 'processed', mark_webhook_processed: !!$('Validate & Normalize').item.json.replay_context,");
+  const deferredAssignment = deferredResponse.parameters.assignments.assignments.find((a) => a.name === "__body");
+  if (!deferredAssignment || typeof deferredAssignment.value !== "string") throw new Error("Deferred response body assignment missing");
+  deferredAssignment.value = deferredAssignment.value.replace("status: 'deferred_for_reconciliation',", "status: 'deferred_for_reconciliation', deferred_payment_handoff: true,");
 
   // Atomic public ingress: verify + resolve again inside one database transaction,
   // then persist the webhook and replay job before responding to Shopify.
@@ -224,6 +232,13 @@ return {
       {id:"invalid-body",name:"__body",type:"object",value:"={{ { status: $json.__tenant_lookup_error ? 'temporarily_unavailable' : 'malformed_event', correlation_id: $json.correlation_id } }}"}
     ]},includeOtherFields:true,options:{}
   },[448,320],3.4);
+  const processedGate = createNode("Processed Marker Confirmed?","n8n-nodes-base.if",{
+    conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"processed-marker-true",leftValue:"={{ $json.body === true || $json.body === 'true' }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
+  },[4160,768],2.2);
+  const deferredGate = createNode("Deferred Handoff Confirmed?","n8n-nodes-base.if",{
+    conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"deferred-handoff-true",leftValue:"={{ $json.body === true || $json.body === 'true' }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
+  },[-336,1008],2.2);
+  const stopMarker = createNode("Stop Unconfirmed Processed Marker","n8n-nodes-base.stopAndError",{errorMessage:"HENVALT replay processed marker was not confirmed; lease must be retried."},[4384,992],1);
   const hmacResponse = createNode("Build HMAC Rejection Response","n8n-nodes-base.set",{
     mode:"manual",assignments:{assignments:[
       {id:"hmac-http",name:"__http",type:"number",value:401},
@@ -253,6 +268,10 @@ return {
     [{node:"Should Process?",type:"main",index:0}],
     [{node:"Respond to Shopify",type:"main",index:0}]
   ]};
+  workflow.connections["Mark Webhook Processed"].main = [[{node:"Processed Marker Confirmed?",type:"main",index:0}]];
+  workflow.connections["Processed Marker Confirmed?"] = {main:[[{node:"Build Success Response",type:"main",index:0}],[{node:"Stop Unconfirmed Processed Marker",type:"main",index:0}]]};
+  workflow.connections["Defer Payment Reconciliation"].main = [[{node:"Deferred Handoff Confirmed?",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
+  workflow.connections["Deferred Handoff Confirmed?"] = {main:[[{node:"Build Deferred Payment Response",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
   workflow.connections["Should Process?"].main[1] = [{node:"Respond to Shopify",type:"main",index:0}];
   workflow.connections["Build Invalid Ingress Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Build HMAC Rejection Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
@@ -272,6 +291,7 @@ return {
   addNode(workflow,trigger); addNode(workflow,loader); addNode(workflow,envelope); addNode(workflow,envelopeValid);
   addNode(workflow,invalidReplay); addNode(workflow,trustedReplay); addNode(workflow,replayOrIngress);
   addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse); addNode(workflow,hmacResponse);
+  addNode(workflow,processedGate); addNode(workflow,deferredGate); addNode(workflow,stopMarker);
 
   // n8n graph connections support multiple upstream nodes. Append replay envelope
   // as an additional source for the existing normalizer.
@@ -280,7 +300,7 @@ return {
     [{node:"Validate & Normalize",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
   ]};
-  return {trigger,loader,envelope,envelopeValid,invalidReplay,trustedReplay,replayOrIngress,replayPipeline,respond,invalidResponse,hmacResponse};
+  return {trigger,loader,envelope,envelopeValid,invalidReplay,trustedReplay,replayOrIngress,replayPipeline,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker};
 }
 
 function buildCandidate(input, map, activeVersionId) {
