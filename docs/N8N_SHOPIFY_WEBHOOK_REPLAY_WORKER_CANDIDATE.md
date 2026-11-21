@@ -239,3 +239,6 @@ A further graph-level guard now makes the replay payload reload emit an explicit
 
 
 The replay claim normalizer is now implemented as a pure candidate module at `n8n/shopify-replay-claim-normalizer-candidate.mjs`. It maps the database row's `id` to `job_id`, validates job type and UUIDs, requires a nonblank worker identity and valid lease expiry, and emits only the job/worker/lease tuple plus `webhook_id`. It drops the raw payload and unrelated job columns. An empty claim is a normal queue miss; a present but malformed claim terminates fail-closed instead of entering the intervention branch. Unit tests cover valid object/string payloads, empty rows, malformed JSON, wrong job type, invalid UUIDs, missing worker identity, and payload-data minimization.
+
+
+Replay retries use the constant `SHOPIFY_REPLAY_PROCESSING_FAILED` with a bounded 300-second default delay (the database caps delay at 3,600 seconds). The worker must not copy raw exception text, stack traces, webhook payload, customer email, URLs, or other customer data into `background_jobs.last_error`.
