@@ -248,3 +248,10 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - `webhook_events` contains 44 `checkouts/create` events and 49 `checkouts/update` events, with the latest receipt at 2026-11-14 15:44 UTC.
 - It contains 36 `carts/update` events, latest 2026-11-14 15:10 UTC; 2 customer email marketing consent updates, latest 2026-11-08 16:47 UTC; and 1 `carts/create`, latest 2026-11-08 11:11 UTC.
 - No Shopify webhook receipt later than 2026-11-14 was present in the snapshot on 2026-11-21. The Cloudflare-to-n8n endpoint configuration matches, but current live event delivery is not demonstrated.
+
+
+### Cloudflare ingress observability snapshot
+- Live `henvalt-clean-ingress-v1` has observability enabled, head sampling rate 1, logs enabled, persistent logging enabled and invocation logs enabled.
+- The inspected Worker source logs only structured failure metadata (`shop`, `topic`, `webhookId`, upstream status); no request body or customer email is passed to its console error calls.
+- This still retains store-domain and webhook identifiers in Cloudflare logs. Confirm the account's log retention and access policy before release.
+- The pixel collector Worker has no explicit observability settings returned by the settings API.
