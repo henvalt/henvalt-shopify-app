@@ -20,16 +20,18 @@ async function sign(body, key = secret) {
   return btoa(String.fromCharCode(...signature));
 }
 
-function request(hmac, body = rawBody) {
+function request(hmac, body = rawBody, identity = {}) {
+  const headers = {
+    "content-type": "application/json",
+    "x-shopify-shop-domain": "synthetic-shop.myshopify.com",
+    "x-shopify-topic": "orders/paid",
+    "x-shopify-hmac-sha256": hmac,
+  };
+  if (identity.webhookId !== "") headers["x-shopify-webhook-id"] = identity.webhookId || "synthetic-delivery-001";
+  if (identity.eventId) headers["x-shopify-event-id"] = identity.eventId;
   return new Request("https://ingress.example.test/shopify/webhooks", {
     method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-shopify-shop-domain": "synthetic-shop.myshopify.com",
-      "x-shopify-topic": "orders/paid",
-      "x-shopify-webhook-id": "synthetic-delivery-001",
-      "x-shopify-hmac-sha256": hmac,
-    },
+    headers,
     body,
   });
 }
@@ -50,6 +52,18 @@ test("Shopify ingress fails closed when required secrets or upstream URL are mis
     assert.equal((await response.json()).error, "ingress_configuration_missing");
     assert.equal(calls, 0);
   }
+});
+
+test("Shopify event correlation ID cannot substitute for the unique delivery ID", async () => {
+  const signature = await sign(rawBody);
+  let calls = 0;
+  const response = await handleRequest(request(signature, rawBody, { webhookId: "", eventId: "event-001" }), env, async () => {
+    calls++;
+    return Response.json({ accepted: true });
+  });
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).error, "invalid_webhook_headers");
+  assert.equal(calls, 0);
 });
 
 test("invalid Shopify HMAC is rejected without forwarding to n8n", async () => {
