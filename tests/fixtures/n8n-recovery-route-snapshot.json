@@ -19,5 +19,12 @@
   "requiredReplayJobType": "process_shopify_webhook",
   "replayJobTypeCurrentlyClaimed": false,
   "generalWebhookReplayRpcPresent": false,
-  "generalWebhookReplayLaunchBlocker": true
+  "generalWebhookReplayLaunchBlocker": true,
+  "normalizeGuard": {
+    "currentHasJobExpression": "jobId != null && interventionId != null",
+    "requiresInterventionId": true,
+    "replayPayloadHasInterventionId": false,
+    "replayJobsPassCurrentGuard": false,
+    "requiresJobTypeRouter": true
+  }
 }
