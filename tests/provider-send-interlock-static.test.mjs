@@ -38,6 +38,8 @@ test("trigger implementation is not callable as a client-facing RPC", () => {
 test("operator changes are audited and the setter is not granted to app roles", () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS henvalt[.]provider_send_control_events/i);
   assert.match(migration, /INSERT INTO henvalt[.]provider_send_control_events/i);
+  assert.match(migration, /ALTER TABLE henvalt[.]provider_send_control_events ENABLE ROW LEVEL SECURITY/i);
+  assert.match(migration, /REVOKE ALL ON henvalt[.]provider_send_control_events FROM PUBLIC, anon, authenticated, service_role/i);
   assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt[.]set_provider_sending_enabled[(]/i);
   assert.match(migration, /p_enabled boolean,/i);
   assert.match(migration, /p_reason text/i);
