@@ -1,10 +1,14 @@
-name: HENVALT provider-send interlock tests
+name: HENVALT safety and pixel consent tests
 
 on:
   pull_request:
     paths:
       - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
+      - "cloudflare/pixel-collector.js"
+      - "extensions/henvalt-pixel/src/index.js"
       - "tests/provider-send-interlock-static.test.mjs"
+      - "tests/pixel-consent-static.test.mjs"
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/provider-send-interlock-postgres-acceptance.sql"
       - ".github/workflows/provider-send-interlock-static.yml"
@@ -35,8 +39,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify deny-by-default static invariants
-        run: node --test tests/provider-send-interlock-static.test.mjs
+      - name: Verify static safety and pixel consent invariants
+        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
@@ -53,7 +57,13 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
-      - name: Exercise deny, allow, audit and fail-closed paths
+      - name: Apply candidate pixel consent migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+            -f supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql
+      - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
         run: |
