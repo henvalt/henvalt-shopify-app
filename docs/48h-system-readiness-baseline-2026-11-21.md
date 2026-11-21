@@ -241,3 +241,4 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - The Worker source validates Shopify HMAC before forwarding the raw request. This confirms the configured ingress path aligns with n8n, but does not prove that a live Shopify webhook was delivered end-to-end today.
 
 - The active connection for `ur4jvw-nz.myshopify.com` has one active, non-revoked pixel key with a persisted Shopify Web Pixel ID. This proves a pixel identity was created for that connection, but does not prove the currently checked-out extension version is the one installed or that a live storefront event is reaching the current collector.
+- The inspected execution runtime metadata also reports `redaction.production = false` and `redaction.manual = false`; this is additional evidence that no effective redaction has been demonstrated for either execution mode.
