@@ -24,6 +24,7 @@ DECLARE
   v_invalid record;
   v_unknown record;
   v_no_secret record;
+  v_mismatch record;
   v_count integer;
   v_failed boolean := false;
   v_function text := 'henvalt.receive_shopify_webhook_v1(text,text,text,text,text,jsonb,jsonb)';
@@ -34,7 +35,7 @@ BEGIN
       'orders/paid',
       'single-roundtrip-delivery-001',
       'valid-test-hmac',
-      'e30=',
+      'eyJpZCI6Im9yZGVyLTAwMSIsInRlc3QiOnRydWV9',
       '{"id":"order-001","test":true}'::jsonb,
       '{"shopify_event_id":"correlation-001","correlation_id":"22222222-2222-4222-8222-222222222222"}'::jsonb
     );
@@ -80,7 +81,7 @@ BEGIN
       'orders/paid',
       'invalid-signature-delivery',
       'invalid-test-hmac',
-      'e30=',
+      'eyJpZCI6Im9yZGVyLWludmFsaWQiLCJ0ZXN0Ijp0cnVlfQ==',
       '{"id":"order-invalid","test":true}'::jsonb,
       '{}'::jsonb
     );
@@ -97,6 +98,21 @@ BEGIN
     RAISE EXCEPTION 'INVALID_HMAC_CREATED_DURABLE_WEBHOOK_ROW';
   END IF;
 
+  SELECT * INTO v_mismatch
+    FROM henvalt.receive_shopify_webhook_v1(
+      'single-roundtrip.myshopify.com',
+      'orders/paid',
+      'payload-mismatch-delivery',
+      'valid-test-hmac',
+      'eyJpZCI6Im9yZGVyLTAwMSIsInRlc3QiOnRydWV9',
+      '{"id":"tampered-payload","test":true}'::jsonb,
+      '{}'::jsonb
+    );
+
+  IF v_mismatch.http_status <> 422 OR v_mismatch.result_status <> 'malformed_event' THEN
+    RAISE EXCEPTION 'UNSIGNED_PARSED_PAYLOAD_MISMATCH_WAS_ACCEPTED';
+  END IF;
+
   DELETE FROM vault.decrypted_secrets WHERE name = 'henvalt_shopify_app_secret';
 
   SELECT * INTO v_no_secret
@@ -105,7 +121,7 @@ BEGIN
       'orders/paid',
       'missing-secret-delivery',
       'valid-test-hmac',
-      'e30=',
+      'eyJpZCI6Im9yZGVyLXNlY3JldCIsInRlc3QiOnRydWV9',
       '{"id":"order-secret","test":true}'::jsonb,
       '{}'::jsonb
     );
@@ -124,7 +140,7 @@ BEGIN
       'orders/paid',
       'unknown-tenant-delivery',
       'valid-test-hmac',
-      'e30=',
+      'eyJpZCI6Im9yZGVyLXVua25vd24iLCJ0ZXN0Ijp0cnVlfQ==',
       '{"id":"order-unknown","test":true}'::jsonb,
       '{}'::jsonb
     );
@@ -139,7 +155,7 @@ BEGIN
       'orders/paid',
       '',
       'valid-test-hmac',
-      'e30=',
+      'eyJpZCI6Im9yZGVyLW1pc3NpbmctZGVsaXZlcnkiLCJ0ZXN0Ijp0cnVlfQ==',
       '{"id":"order-missing-delivery","test":true}'::jsonb,
       '{}'::jsonb
     );
