@@ -9,6 +9,7 @@ DECLARE
   v_first record;
   v_duplicate record;
   v_processed record;
+  v_repaired record;
   v_count integer;
   v_failed boolean := false;
   v_function text := 'henvalt.ingest_shopify_webhook_with_replay_job(uuid,text,text,text,text,jsonb,jsonb)';
@@ -60,6 +61,51 @@ BEGIN
      OR v_duplicate.replay_job_id IS DISTINCT FROM v_first.replay_job_id
      OR v_duplicate.replay_job_status IS DISTINCT FROM 'QUEUED' THEN
     RAISE EXCEPTION 'DUPLICATE_DID_NOT_RETURN_EXISTING_REPLAY_JOB';
+  END IF;
+
+  -- A terminal job cannot be treated as an active replay for a PROCESSING webhook.
+  -- A Shopify redelivery must reopen it idempotently instead of returning a false 200.
+  SELECT * INTO v_repaired
+    FROM henvalt.ingest_shopify_webhook_with_replay_job(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'shopify',
+      'delivery-replay-terminal',
+      'checkouts/update',
+      'shopify:delivery-replay-terminal',
+      '{"id":"checkout-terminal","test":true}'::jsonb,
+      '{}'::jsonb
+    );
+
+  UPDATE henvalt.background_jobs
+     SET status = 'DEAD_LETTER', attempts = max_attempts, completed_at = now()
+   WHERE id = v_repaired.replay_job_id;
+
+  SELECT * INTO v_repaired
+    FROM henvalt.ingest_shopify_webhook_with_replay_job(
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      'shopify',
+      'delivery-replay-terminal',
+      'checkouts/update',
+      'shopify:delivery-replay-terminal',
+      '{"id":"checkout-terminal","test":true}'::jsonb,
+      '{}'::jsonb
+    );
+
+  IF v_repaired.replay_job_status IS DISTINCT FROM 'QUEUED' THEN
+    RAISE EXCEPTION 'TERMINAL_REPLAY_JOB_NOT_REQUEUED_ON_REDELIVERY';
+  END IF;
+
+  SELECT count(*) INTO v_count
+    FROM henvalt.background_jobs
+   WHERE id = v_repaired.replay_job_id
+     AND status = 'QUEUED'
+     AND attempts = 0
+     AND locked_at IS NULL
+     AND locked_by IS NULL
+     AND completed_at IS NULL;
+
+  IF v_count <> 1 THEN
+    RAISE EXCEPTION 'TERMINAL_REPLAY_JOB_RESET_STATE_INVALID';
   END IF;
 
   UPDATE henvalt.webhook_events
