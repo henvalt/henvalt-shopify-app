@@ -7,8 +7,14 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   if (request.method !== "POST" || url.pathname !== "/shopify/webhooks") return Response.json({ error: "not_found" }, { status: 404 });
 
   // Fail closed before reading or forwarding a delivery when ingress is misconfigured.
-  if (typeof env.SHOPIFY_API_SECRET !== "string" || !env.SHOPIFY_API_SECRET ||
-      typeof env.N8N_INGEST_URL !== "string" || !/^https:\/\//i.test(env.N8N_INGEST_URL)) {
+  let upstreamUrl;
+  try {
+    const parsed = new URL(env.N8N_INGEST_URL);
+    if (parsed.protocol === "https:" && !parsed.username && !parsed.password) upstreamUrl = parsed.toString();
+  } catch {
+    // Invalid or absent upstream configuration is handled by the fail-closed response below.
+  }
+  if (typeof env.SHOPIFY_API_SECRET !== "string" || !env.SHOPIFY_API_SECRET || !upstreamUrl) {
     return Response.json({ error: "ingress_configuration_missing" }, { status: 503 });
   }
 
@@ -28,8 +34,22 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   const expected = btoa(String.fromCharCode(...sig));
   if (!constantTimeEqual(expected, hmac)) return Response.json({ error: "invalid_hmac" }, { status: 401 });
 
-  const upstream = await fetchImpl(env.N8N_INGEST_URL, { method: "POST", headers: request.headers, body: rawBytes });
-  if (!upstream.ok) return Response.json({ error: "ingest_unavailable" }, { status: 503 });
+  let upstream;
+  try {
+    upstream = await fetchImpl(upstreamUrl, {
+      method: "POST",
+      headers: request.headers,
+      body: rawBytes,
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return Response.json({ error: "ingest_unavailable" }, { status: 503 });
+  }
+  // Never acknowledge a delivery after following a redirect or receiving a non-2xx response.
+  if (!upstream.ok || (upstream.status >= 300 && upstream.status < 400)) {
+    return Response.json({ error: "ingest_unavailable" }, { status: 503 });
+  }
   const text = await upstream.text();
   return new Response(text || JSON.stringify({ accepted: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 }
