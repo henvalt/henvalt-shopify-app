@@ -5,7 +5,7 @@ import { normalizeShopifyReplayClaim } from "../n8n/shopify-replay-claim-normali
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const LEASE_ID = "22222222-2222-4222-8222-222222222222";
 const WEBHOOK_ID = "33333333-3333-4333-8333-333333333333";
-const EXPIRY = "2026-11-21T16:00:00.000Z";
+const EXPIRY = "2026-11-21T23:00:00.000Z";
 const WORKER = "henvalt_recovery:execution-42";
 
 function row(overrides = {}) {
@@ -14,6 +14,7 @@ function row(overrides = {}) {
     job_type: "process_shopify_webhook",
     lease_id: LEASE_ID,
     lease_expires_at: EXPIRY,
+    locked_by: WORKER,
     payload: { webhook_id: WEBHOOK_ID, tenant_id: "must-not-leave-normalizer" },
     ...overrides,
   };
@@ -98,4 +99,19 @@ test("normalizer does not expose raw payload or unrelated claim columns", () => 
     "webhook_id",
     "worker_id",
   ].sort());
+});
+
+
+test("claim is rejected if the database owner differs from the recovery worker", () => {
+  const result = normalizeShopifyReplayClaim(row({ locked_by: "different-worker" }), WORKER);
+  assert.equal(result.guard_valid, false);
+  assert.match(result.guard_reason, /WORKER_MISMATCH/);
+});
+
+test("expired lease is rejected even if its UUID and worker are otherwise valid", () => {
+  const result = normalizeShopifyReplayClaim(row({
+    lease_expires_at: "2020-01-01T00:00:00.000Z"
+  }), WORKER);
+  assert.equal(result.guard_valid, false);
+  assert.match(result.guard_reason, /INVALID_LEASE_EXPIRY/);
 });
