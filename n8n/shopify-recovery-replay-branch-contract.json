@@ -49,7 +49,14 @@
         "After a replay terminal outcome, return to the scheduler loop."
       ],
       "no_queue_may_starve_the_other": true,
-      "existing_intervention_business_branch_must_remain_semantically_unchanged": true
+      "existing_intervention_business_branch_must_remain_semantically_unchanged": true,
+      "must_attempt_replay_after": [
+        "Complete Job",
+        "Retry Job",
+        "Retry Preflight Job",
+        "Retry Delivery Job",
+        "Retry Pipeline Job"
+      ]
     },
     "replay_guard": {
       "accepted_job_type": "process_shopify_webhook",
@@ -89,6 +96,13 @@
       "Fan out replay business mutations in parallel",
       "Route replay jobs through Atomic Claim Intervention",
       "Change HENVALT_DELIVERY as part of replay-worker integration"
+    ],
+    "intervention_terminal_nodes": [
+      "Complete Job",
+      "Retry Job",
+      "Retry Preflight Job",
+      "Retry Delivery Job",
+      "Retry Pipeline Job"
     ]
   },
   "production_boundary": {
