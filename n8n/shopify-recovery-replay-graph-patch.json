@@ -313,7 +313,8 @@
     "Apply migrations 001-010 only to isolated disposable/staging PostgreSQL and verify actual n8n credentials and RPC grants.",
     "Test empty queues, intervention success/retry/failure, replay already processed, replay success, replay retry, lease expiry/reclaim, and all terminal loop paths.",
     "Keep provider sending disabled during every staging acceptance test.",
-    "Exercise the deferred_payment_handoff output through the Execute Workflow result and confirm the recovery worker completes the replay job only on that explicit boolean."
+    "Exercise the deferred_payment_handoff output through the Execute Workflow result and confirm the recovery worker completes the replay job only on that explicit boolean.",
+    "Use the exact Execute Workflow node v1.4 workflowInputs mapping and Execute Workflow Trigger v1.1 three-string input declaration in executable candidate; reject any extra input field."
   ],
   "connections_to_add": [
     {
@@ -364,5 +365,88 @@
     "versions_are_exact": true,
     "credentials_rebound_only_in_isolated_draft": true,
     "production_workflow_unchanged": true
+  },
+  "executable_node_contracts": {
+    "Call HENVALT_INGEST Replay Entry": {
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.4,
+      "parameters": {
+        "mode": "once",
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "VTpfGKNtu1CSQ4Rv"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "job_id": "={{ $json.job_id }}",
+            "worker_id": "={{ $json.worker_id }}",
+            "lease_id": "={{ $json.lease_id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "job_id",
+              "displayName": "job_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            },
+            {
+              "id": "worker_id",
+              "displayName": "worker_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            },
+            {
+              "id": "lease_id",
+              "displayName": "lease_id",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": false,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false
+        },
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    "Dedicated Replay Execute Workflow Trigger": {
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "workflowInputs",
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "job_id",
+              "type": "string"
+            },
+            {
+              "name": "worker_id",
+              "type": "string"
+            },
+            {
+              "name": "lease_id",
+              "type": "string"
+            }
+          ]
+        },
+        "returnOutput": "lastRunOnly"
+      },
+      "isTrigger": true
+    }
   }
 }
