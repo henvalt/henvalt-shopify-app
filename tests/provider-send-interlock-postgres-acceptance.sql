@@ -6,6 +6,8 @@ DECLARE
   v_role text;
   v_events integer;
   v_status record;
+  v_token text;
+  v_secret_reads bigint;
 BEGIN
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'default interlock is not closed';
@@ -15,6 +17,12 @@ BEGIN
   IF v_status.enabled IS DISTINCT FROM false
      OR v_status.control_present IS DISTINCT FROM true THEN
     RAISE EXCEPTION 'non-secret status surface did not report default-deny state: %', v_status;
+  END IF;
+  IF NOT has_function_privilege('service_role', 'henvalt.get_mailersend_token_for_delivery(uuid,uuid)', 'EXECUTE')
+     OR has_function_privilege('anon', 'henvalt.get_mailersend_token_for_delivery(uuid,uuid)', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'henvalt.get_mailersend_token_for_delivery(uuid,uuid)', 'EXECUTE')
+     OR has_function_privilege('service_role', 'henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid,uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'credential-release wrapper or private legacy implementation has incorrect grants';
   END IF;
   IF NOT has_function_privilege('service_role', 'henvalt.provider_sending_status()', 'EXECUTE')
      OR has_function_privilege('anon', 'henvalt.provider_sending_status()', 'EXECUTE')
@@ -56,8 +64,31 @@ BEGIN
     IF SQLERRM <> 'HENVALT_PROVIDER_SENDING_DISABLED' THEN RAISE; END IF;
   END;
 
-  PERFORM henvalt.set_provider_sending_enabled(true, 'synthetic PostgreSQL staging integration test');
+  INSERT INTO vault.decrypted_secrets(id, name, decrypted_secret)
+  VALUES (gen_random_uuid(), 'synthetic-mailersend-token', 'synthetic-mailersend-token-value');
+
+  -- Closed gate must deny the real credential-release RPC wrapper before its
+  -- private implementation can claim the row or reach the Vault read.
   INSERT INTO henvalt.delivery_requests(status) VALUES ('UNKNOWN') RETURNING id INTO v_id;
+  BEGIN
+    PERFORM henvalt.get_mailersend_token_for_delivery(gen_random_uuid(), v_id);
+    RAISE EXCEPTION 'expected credential release to be blocked while closed';
+  EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM <> 'HENVALT_PROVIDER_SENDING_DISABLED' THEN RAISE; END IF;
+  END;
+  SELECT last_value INTO v_secret_reads FROM henvalt.mailersend_secret_read_counter;
+  IF (SELECT is_called FROM henvalt.mailersend_secret_read_counter) IS TRUE THEN
+    RAISE EXCEPTION 'Vault read was reached while provider sending was disabled';
+  END IF;
+
+  PERFORM henvalt.set_provider_sending_enabled(true, 'synthetic PostgreSQL staging integration test');
+  v_token := henvalt.get_mailersend_token_for_delivery(gen_random_uuid(), v_id);
+  IF v_token IS DISTINCT FROM 'synthetic-mailersend-token-value' THEN
+    RAISE EXCEPTION 'enabled credential-release wrapper did not return the synthetic test token';
+  END IF;
+  IF (SELECT is_called FROM henvalt.mailersend_secret_read_counter) IS NOT TRUE THEN
+    RAISE EXCEPTION 'enabled credential-release wrapper did not reach synthetic Vault fixture';
+  END IF;
 
   PERFORM henvalt.set_provider_sending_enabled(false, 'close after synthetic staging integration test');
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
@@ -81,6 +112,16 @@ BEGIN
   DELETE FROM henvalt.provider_send_control WHERE control_key = 'global';
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'missing control row did not fail closed';
+  END IF;
+  INSERT INTO henvalt.delivery_requests(status) VALUES ('UNKNOWN') RETURNING id INTO v_id;
+  BEGIN
+    PERFORM henvalt.get_mailersend_token_for_delivery(gen_random_uuid(), v_id);
+    RAISE EXCEPTION 'missing control row allowed credential release';
+  EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM <> 'HENVALT_PROVIDER_SENDING_DISABLED' THEN RAISE; END IF;
+  END;
+  IF (SELECT is_called FROM henvalt.mailersend_secret_read_counter) IS NOT TRUE THEN
+    RAISE EXCEPTION 'missing control row changed the Vault-read counter unexpectedly';
   END IF;
 
   SELECT * INTO v_status FROM henvalt.provider_sending_status();
