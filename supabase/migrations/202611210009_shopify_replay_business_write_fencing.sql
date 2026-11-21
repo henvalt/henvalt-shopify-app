@@ -80,6 +80,19 @@ BEGIN
 END;
 $function$;
 
+-- Identity resolution also creates/updates sessions and session aliases.
+CREATE OR REPLACE FUNCTION henvalt.resolve_identity_fenced(
+  p_job_id uuid, p_worker_id text, p_lease_id uuid, p_event_id uuid
+)
+RETURNS TABLE(customer_id uuid, checkout_id uuid, session_id uuid)
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+BEGIN
+  PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
+  RETURN QUERY SELECT * FROM henvalt.resolve_identity(p_event_id);
+END;
+$function$;
+
 -- Canonical event, checkout and opportunity writes
 CREATE OR REPLACE FUNCTION henvalt.upsert_canonical_event_fenced(
   p_job_id uuid, p_worker_id text, p_lease_id uuid,
@@ -226,6 +239,7 @@ REVOKE ALL ON FUNCTION henvalt.assert_shopify_replay_lease_for_write(uuid,text,u
 REVOKE EXECUTE ON FUNCTION henvalt.assert_shopify_replay_lease_for_write(uuid,text,uuid) FROM anon,authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.assert_shopify_replay_lease_for_write(uuid,text,uuid) TO service_role;
 
+REVOKE ALL ON FUNCTION henvalt.resolve_identity_fenced(uuid,text,uuid,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION henvalt.upsert_customer_fenced(uuid,text,uuid,uuid,text,text,text,text,text,boolean,boolean,boolean,jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION henvalt.apply_shopify_email_consent_update_fenced(uuid,text,uuid,uuid,text,text,boolean,jsonb) FROM PUBLIC;
 REVOKE ALL ON FUNCTION henvalt.bind_session_alias_fenced(uuid,text,uuid,uuid,text,text) FROM PUBLIC;
@@ -240,6 +254,7 @@ REVOKE ALL ON FUNCTION henvalt.process_shopify_revenue_adjustment_fenced(uuid,te
 REVOKE ALL ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(uuid,text,uuid,uuid,text,uuid,uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION henvalt.stop_recovery_after_order_fenced(uuid,text,uuid,uuid) FROM PUBLIC;
 
+REVOKE EXECUTE ON FUNCTION henvalt.resolve_identity_fenced(uuid,text,uuid,uuid) FROM anon,authenticated;
 REVOKE EXECUTE ON FUNCTION henvalt.upsert_customer_fenced(uuid,text,uuid,uuid,text,text,text,text,text,boolean,boolean,boolean,jsonb) FROM anon,authenticated;
 REVOKE EXECUTE ON FUNCTION henvalt.apply_shopify_email_consent_update_fenced(uuid,text,uuid,uuid,text,text,boolean,jsonb) FROM anon,authenticated;
 REVOKE EXECUTE ON FUNCTION henvalt.bind_session_alias_fenced(uuid,text,uuid,uuid,text,text) FROM anon,authenticated;
@@ -254,6 +269,7 @@ REVOKE EXECUTE ON FUNCTION henvalt.process_shopify_revenue_adjustment_fenced(uui
 REVOKE EXECUTE ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(uuid,text,uuid,uuid,text,uuid,uuid) FROM anon,authenticated;
 REVOKE EXECUTE ON FUNCTION henvalt.stop_recovery_after_order_fenced(uuid,text,uuid,uuid) FROM anon,authenticated;
 
+GRANT EXECUTE ON FUNCTION henvalt.resolve_identity_fenced(uuid,text,uuid,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.upsert_customer_fenced(uuid,text,uuid,uuid,text,text,text,text,text,boolean,boolean,boolean,jsonb) TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.apply_shopify_email_consent_update_fenced(uuid,text,uuid,uuid,text,text,boolean,jsonb) TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.bind_session_alias_fenced(uuid,text,uuid,uuid,text,text) TO service_role;
