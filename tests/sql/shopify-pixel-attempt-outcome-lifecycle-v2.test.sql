@@ -752,7 +752,9 @@ BEGIN
     AND processing_status='PROCESSED' AND pixel_send_attempt_id=v_attempt)
    OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2
      WHERE id=v_attempt AND status='SUBMITTED'
-       AND provider_message_reference=v_provider_message_id) THEN
+       AND provider_message_reference=v_provider_message_id)
+   OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2
+     WHERE pixel_send_attempt_id=v_attempt AND status='SETTLED') THEN
   RAISE EXCEPTION 'Pixel batch sweep failed to persist exact event/attempt correlation';
  END IF;
  v_result:=henvalt.reconcile_unmatched_shopify_pixel_provider_events_v2(100);
