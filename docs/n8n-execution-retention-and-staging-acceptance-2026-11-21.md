@@ -159,3 +159,19 @@ After this runbook commit, GitHub Actions run `44873237209` completed successful
 Cloudflare Pages generated branch-preview deployments for commit `3d72b9e` on both dashboard Pages projects. These are preview builds only; no production Worker, Edge Function or Shopify app version was deployed.
 
 These CI and preview results strengthen candidate evidence but do not replace the missing full-schema isolated staging and real Shopify event chain.
+
+
+## 10. Sanitized active delivery-route snapshot — 2026-11-21
+
+A second read-only inspection captured the active `HENVALT_DELIVERY` graph topology and pinned active version `621ae6ce-a006-4fed-a70e-acf774c360fb`. The sanitized snapshot is stored at `tests/fixtures/n8n-delivery-route-snapshot.json` and checked by `tests/n8n-delivery-route-snapshot.test.mjs` in CI.
+
+The snapshot records two separate outbound provider entry points:
+
+- Ordinary: `Internal Delivery Webhook` → `Validate & Normalize` → `Precheck Valid?` → `Authorize & Context` → `Cleared to Send?` → `Build Reply-To Address` → `MailerSend Send`.
+- Manual one-off: `One-Off Test Email Trigger` → `Prepare One-Off Test Delivery` → `One-Off Test Authorized?` → `MailerSend One-Off Test Email`.
+
+Both provider nodes issue POST requests to the same function slug, `henvalt-mailersend-delivery`. The fixture intentionally excludes endpoint hostnames, credentials, request payloads and customer data.
+
+This CI test is a **route-topology regression guard**, not a live n8n query and not evidence that the stop control is installed or that either route is blocked. A live route can change without this fixture changing; refresh the snapshot after any approved workflow-version change. Staging still requires independent tests of both routes against provider egress denied, asserting zero provider-stub calls and no token release.
+
+**Production remains NO-GO.** No live workflow was changed, no sender was disabled or enabled, and no provider request was generated during this inspection.
