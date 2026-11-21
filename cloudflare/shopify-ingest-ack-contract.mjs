@@ -51,6 +51,12 @@ const response = (http, body, proceed = false, webhookId = null) => ({
 const failure = (http, status, message, correlationId) =>
   response(http, { status, message, correlation_id: correlationId });
 
+const activeReplayJob = (row) => {
+  const jobId = row?.replay_job_id;
+  const status = String(row?.replay_job_status || "").toUpperCase();
+  return Boolean(jobId) && ["QUEUED", "CLAIMED", "RUNNING", "RETRY_WAIT"].includes(status);
+};
+
 export function classifyIngestResponse(input, context = {}) {
   const eventId = context.eventId ?? null;
   const correlationId = context.correlationId ?? null;
@@ -71,23 +77,43 @@ export function classifyIngestResponse(input, context = {}) {
       return failure(503, "temporarily_unavailable", "Ingest omitted its processing decision.", correlationId);
     }
 
+    const processingStatus = String(row.processing_status || "").toUpperCase();
     if (row.should_process === false) {
-      const status = String(row.processing_status || "").toUpperCase();
-      if (status !== "PROCESSED" && status !== "PROCESSING") {
-        return failure(503, "temporarily_unavailable", "Ingest returned an unknown duplicate state.", correlationId);
+      if (processingStatus === "PROCESSED") {
+        return response(
+          200,
+          {
+            status: "duplicate",
+            event_id: eventId,
+            webhook_id: row.webhook_id,
+            processing_status: processingStatus,
+            correlation_id: correlationId,
+          },
+          false,
+          row.webhook_id,
+        );
+      }
+      if (processingStatus !== "PROCESSING" || !activeReplayJob(row)) {
+        return failure(503, "temporarily_unavailable", "In-flight webhook has no verifiable active replay job.", correlationId);
       }
       return response(
         200,
         {
-          status: status === "PROCESSED" ? "duplicate" : "already_processing",
+          status: "already_processing",
           event_id: eventId,
           webhook_id: row.webhook_id,
-          processing_status: status,
+          replay_job_id: row.replay_job_id,
+          replay_job_status: String(row.replay_job_status).toUpperCase(),
+          processing_status: processingStatus,
           correlation_id: correlationId,
         },
         false,
         row.webhook_id,
       );
+    }
+
+    if (!activeReplayJob(row)) {
+      return failure(503, "temporarily_unavailable", "Durable webhook replay job was not confirmed.", correlationId);
     }
 
     return response(
@@ -96,6 +122,8 @@ export function classifyIngestResponse(input, context = {}) {
         status: row.is_duplicate === true ? "replay_accepted" : "accepted",
         event_id: eventId,
         webhook_id: row.webhook_id,
+        replay_job_id: row.replay_job_id,
+        replay_job_status: String(row.replay_job_status).toUpperCase(),
         replayed: row.is_duplicate === true,
         correlation_id: correlationId,
       },
@@ -114,7 +142,7 @@ export function classifyIngestResponse(input, context = {}) {
     return failure(422, "rejected", "Event was not accepted by validation rules.", correlationId);
   }
 
-  // A generic 409 is not proof of a duplicate. The durable row and decision
+  // A generic 409 is not proof of a duplicate. The durable row and replay job
   // must be returned by the idempotent RPC before success can be acknowledged.
   return failure(503, "temporarily_unavailable", "Ingest conflict or backend failure; retry.", correlationId);
 }
