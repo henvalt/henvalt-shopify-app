@@ -78,3 +78,53 @@ A passing queue-only test is not sufficient. A passing heartbeat-only static tes
 ## Safety boundary
 
 Production is read-only for this work. No candidate migration has been applied to the production project. No live workflow has been edited or published. No provider call or email was made. No PR was merged and no app/Worker release was performed.
+
+
+## Active HENVALT_INGEST call graph — inspected 2026-11-21
+
+Read-only inspection of active workflow version `6368d539-708f-494a-8be8-b9601d0e8607` confirms that the currently published workflow is still an inline projection pipeline after the webhook trigger (the webhook uses `responseMode: onReceived`). It is not yet the candidate queue-only replay subflow. The current active node calls are:
+
+### Ingress / trust / canonical event
+- `ingest_raw_webhook_v2` — persists the webhook event.
+- `verify_shopify_webhook_hmac` — validates raw-body HMAC.
+- `resolve_shopify_tenant` — resolves the active tenant from shop domain.
+- `upsert_canonical_event` — inserts the canonical event.
+- `resolve_identity` — resolves customer/checkout identity.
+
+### Checkout/cart opportunity path
+- `upsert_customer`
+- `upsert_checkout`
+- `score_recovery_intent`
+- `create_opportunity_idempotent`
+- `evaluate_eligibility` (read/evaluation stage)
+- `apply_eligibility` (opportunity status write)
+- `get_recovery_flow_delay` (read/config stage)
+- `create_recovery_sequence`
+- `create_intervention_and_enqueue` (intervention + background delivery enqueue)
+- `mark_webhook_processed` / `mark_webhook_failed`
+
+### Order / payment / revenue path
+- `project_order_from_event`
+- `evaluate_order_attribution`
+- `stop_recovery_after_order`
+- `post_recovery_to_ledger_and_measure_billing`
+- `process_shopify_revenue_adjustment`
+- `defer_payment_webhook_reconciliation`
+- `Lookup Payment Order` performs a tenant-filtered read from `orders`.
+
+### Customer consent / uninstall paths
+- `apply_shopify_email_consent_update` — multi-table customer/suppression/opportunity/delivery/intervention/sequence mutation.
+- `deactivate_shopify_connection_on_uninstall` — connection lifecycle mutation.
+
+### Fencing implication
+
+A lease-aware replay implementation cannot fence only `upsert_canonical_event` and then let later calls continue without the tuple. The minimum candidate migration scope must account for the write calls on the path actually selected by each topic:
+- Checkout/cart: customer, checkout, opportunity, eligibility state, sequence, intervention/enqueue, webhook processed marker.
+- Order: order projection, attribution, stop-recovery, ledger/billing measurement, and webhook processed marker.
+- Consent: consent/suppression and all related cancellations, plus webhook processed marker.
+- Payment failure/reconciliation: order lookup, opportunity/intervention creation, and deferred reconciliation state.
+- Uninstall: connection deactivation and webhook processed marker.
+
+The same RPC name may be used by non-replay callers. Before changing its signature or revoking its legacy grant, inventory every internal and external caller and provide an explicit non-replay compatibility path. The safest design may be topic-specific transactional replay processors that call private internal routines, rather than exposing a large set of partially fenced generic RPCs.
+
+The active `HENVALT_RECOVERY` version `32e50bf7-4cbd-4070-bbba-f259ed17b369` currently claims only `execute_intervention` jobs via `claim_next_job`; its current guard requires an intervention ID. No replay worker is live. This confirms that migration 009 and replay wiring must remain candidate-only until the call graph and write boundaries are refactored and tested.
