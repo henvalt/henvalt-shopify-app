@@ -1,6 +1,6 @@
-# Shopify ingress acknowledgement cutover
+# Shopify ingress acknowledgement and replay cutover
 
-Status: **release blocker identified by read-only inspection**. This is a candidate-only cutover specification; it does not change the active n8n workflow.
+Status: **release blocker identified by read-only inspection**. This is a candidate-only cutover specification; it does not change the active n8n workflows or production database.
 
 ## Observed active configuration
 
@@ -10,32 +10,68 @@ Read-only inspection of active workflow `HENVALT_INGEST` (workflow ID `VTpfGKNtu
 - `rawBody: true`
 - `responseMode: onReceived`
 - No `Respond to Webhook` node in the active workflow.
-- The current path is normalization → HMAC verification → Shopify tenant resolution → tenant binding/validation → `ingest_raw_webhook_v2` → `Classify Result` → `Should Process?`.
-- The current `HMAC Verified?` false output has no connected response node.
-- The current `Is Valid` false output reaches `Reject Invalid Event` (`stopAndError`), not an HTTP response node.
+- Current path: normalization → HMAC verification → Shopify tenant resolution → tenant binding/validation → `ingest_raw_webhook_v2` → `Classify Result` → `Should Process?`.
+- `HMAC Verified?` false output has no connected response node.
+- `Is Valid` false output reaches `Reject Invalid Event` (`stopAndError`), not an HTTP response node.
+- The active classifier maps a generic HTTP 409 to `200 duplicate` without requiring a durable webhook ID.
 
-The Cloudflare ingress worker waits for the n8n HTTP response. With `onReceived`, n8n can acknowledge the HTTP request before HMAC verification and before `ingest_raw_webhook_v2` has durably accepted the event. A later n8n failure therefore cannot be communicated to Shopify as a retryable HTTP failure. This is an event-loss/retryability risk, even though the worker's HMAC check has already succeeded.
+With `onReceived`, n8n can acknowledge before HMAC verification and before durable ingestion. That is a delivery-acceptance gap.
 
-## Required candidate workflow change
+## Critical post-ack recovery finding
 
-Do not edit the active workflow without explicit approval and a controlled change window.
+A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if durable asynchronous processing is guaranteed:
 
-Build and validate this topology in an isolated staging workflow first:
+- Shopify's official delivery guidance says the endpoint must respond within five seconds; failed deliveries are retried up to eight times over four hours. A 2xx response is considered successful, so later application-processing failures are not retried by Shopify. See the official verification and troubleshooting docs.
+- Active `HENVALT_RECOVERY` calls `claim_next_job` with only `execute_intervention`; it does not claim Shopify webhook processing jobs.
+- Its `Repair Stale Work` node calls `requeue_stale_jobs(900)` and `recover_stale_interventions(900)`. This repairs background jobs/interventions, not arbitrary failed `webhook_events`.
+- `reconcile_deferred_payment_webhooks` handles only `order_transactions/create` rows explicitly marked `payment_reconciliation_pending`; it is not a general Shopify webhook replay worker.
+- `mark_webhook_failed` only sets the webhook row to `FAILED`, stamps `processed_at`, and records `processing_error`. It does not enqueue a retry or increment a retry counter.
+- `ingest_raw_webhook_v2` can reclaim an old failed/in-flight row when Shopify sends the same delivery again. That is not sufficient after HENVALT has already returned 200, because Shopify stops retrying successful deliveries.
+- Read-only status aggregation found two current `FAILED` webhook rows: one was a privilege probe, and one checkout event failed because required checkout/customer data was missing. No rows were modified.
 
-1. Preserve the active workflow export/version and current webhook configuration.
-2. Change the staging webhook response mode to `responseNode`.
-3. Add one shared `Respond to Webhook` node named `Acknowledge Ingress Request`.
-4. Successful ingest path: keep `Classify Result` as the success-envelope builder, then route `Classify Result` → `Acknowledge Ingress Request` → `Should Process?`. The response node must send the classifier's `__http` and `__body`, then allow execution to continue.
-5. Add a rejection-envelope builder for pre-ingest failures. Route the false output of `HMAC Verified?` into it with HTTP 401. Route the false output of `Is Valid` into it and classify the failure:
-   - tenant lookup infrastructure/RPC error (`__tenant_lookup_error`): HTTP 503;
-   - verified Shopify shop with no tenant mapping (`__tenant_mapping_missing`): HTTP 404;
-   - malformed or incomplete event: HTTP 422.
-6. Connect the rejection-envelope builder to the same `Acknowledge Ingress Request` node. Replace the current `Reject Invalid Event` stop/error response path in staging; do not leave any webhook-triggered branch without a response path.
-7. For accepted events, return HTTP 200 only when `ingest_raw_webhook_v2` returns a successful HTTP status, a non-empty `webhook_id`, and an explicit boolean `should_process` decision. Missing ID/decision, RPC timeout, network error, or Supabase 5xx must return HTTP 503. The current classifier has a separate generic HTTP 409 shortcut that returns `duplicate`/200 without proving a durable `webhook_id`; remove that shortcut or make it return 503 unless a durable row ID and explicit processing state are present.
-8. Preserve duplicate semantics: already-processed and currently-processing duplicates return HTTP 200 without re-running canonical processing. A durable newly accepted row returns HTTP 200, after which execution continues through `Should Process?` and downstream processing.
-9. Preserve existing post-ack failure marking and stale-work repair. Verify that an error after durable acceptance can be recovered from the persisted webhook row; a post-ack error cannot be converted into a Shopify retry because the HTTP response has already been sent.
-10. Verify exactly one response is sent for every path. Test valid HMAC, invalid HMAC, unknown shop, tenant lookup timeout, malformed event, ingest RPC 5xx/timeout, missing webhook ID, missing processing decision, new accepted event, processed duplicate, processing duplicate, and post-ack processing failure.
+**Conclusion:** an early 200 immediately after inserting only `webhook_events` is not yet safe. The accepted row needs an atomic, independently claimable replay job, and the existing three-workflow architecture needs a worker path that actually processes it.
 
+## Required candidate architecture — keep exactly three workflows
+
+### 1. Atomic durable enqueue at ingress
+
+Extend the candidate `ingest_raw_webhook_v2` transaction so that it:
+
+1. Verifies the tenant and accepts the authenticated event only after HMAC and tenant resolution.
+2. Inserts or idempotently finds the `webhook_events` row.
+3. For a new or reclaimable unprocessed event, inserts/upserts a `background_jobs` row with job type `process_shopify_webhook`, payload containing only the webhook row ID and required correlation/tenant context, and an idempotency key derived from the webhook ID.
+4. Returns `webhook_id`, `should_process`, `processing_status`, `replay_job_id`, and `replay_job_status` from the same transaction boundary.
+5. Does not return an accepted response if the job could not be durably queued.
+
+The existing `background_jobs` table already has tenant, payload, status, attempts, max_attempts, lock lease, retry timing, last_error and idempotency fields. Existing `claim_next_job`, `retry_job`, `complete_job`, and `requeue_stale_jobs` provide reusable primitives, but their current live worker usage is limited to intervention jobs.
+
+### 2. Ingress response contract
+
+In a candidate staging workflow:
+
+1. Set the webhook response mode to `responseNode`.
+2. Route every pre-ingest rejection to an explicit response envelope: invalid HMAC → 401; unknown tenant → 404; malformed event → 422; tenant lookup/RPC infrastructure failure → 503.
+3. Route the success classifier to the shared `Acknowledge Ingress Request` response node.
+4. Return 200 for a new event only when the ingest RPC returns a durable webhook ID, an explicit `should_process` decision, and an active replay job ID/status.
+5. Return 200 for a duplicate already marked `PROCESSED` when the durable webhook ID is present.
+6. Return 200 for a duplicate still `PROCESSING` only when its durable replay job is verifiably `QUEUED`, `CLAIMED`, `RUNNING`, or `RETRY_WAIT`.
+7. Return 503 for generic 409, missing webhook ID, missing processing decision, missing/inactive replay job, timeout, network error, or backend 5xx. Never infer a duplicate from a status code alone.
+8. End the webhook execution after the response. Do not continue the old synchronous processing chain in parallel with the replay worker.
+
+### 3. Replay processing inside the existing workflows
+
+Keep the three-workflow limit:
+
+- `HENVALT_RECOVERY`: extend `claim_next_job` worker types to include `process_shopify_webhook`. Add a job-type branch; intervention jobs keep their current path, webhook jobs enter the replay path. Retry through the existing job lease/backoff primitives and dead-letter after the configured attempt limit.
+- `HENVALT_INGEST`: add a private Execute Sub-workflow Trigger path for replayed webhook jobs. It must load the stored webhook row through a service-role-only RPC that validates the claimed job ID/worker lease; never trust a tenant ID or raw payload supplied by an external caller. Rehydrate the normalized event from the stored payload/metadata and run the existing canonical event, opportunity, eligibility and intervention logic.
+- `HENVALT_INGEST`: mark the webhook row `PROCESSED` only after its downstream processing reaches a terminal successful/intentional-no-op outcome. On transient failure, mark it failed and schedule the replay job retry. On permanent invalid/business-rule outcomes, record an explicit terminal reason and complete the job without attempting unsafe recovery.
+- `HENVALT_DELIVERY`: remains unchanged; it continues to own provider delivery and tracking.
+
+The replay path must be idempotent across duplicate job claims and worker crashes. If a worker dies after downstream processing but before job completion, the retry must detect already-completed webhook processing and safely complete the job without creating a second opportunity/intervention.
+
+### 4. n8n response-node runtime constraints
+
+The n8n Respond to Webhook documentation states that if a workflow finishes without executing a Respond node, n8n returns a standard 200; if it errors before the first Respond node executes, n8n returns 500; and a later second Respond node is ignored. Therefore, setting `responseMode: responseNode` alone is not fail-closed: every normal branch must reach exactly one explicit response node with its status set, and every error path before it must be handled or deliberately produce a retryable 5xx.
 
 ## Read-only database contract verification
 
@@ -44,32 +80,37 @@ The connected production database was inspected with SELECT-only catalog/functio
 - `henvalt.verify_shopify_webhook_hmac(text,text)` returns a boolean and its execute ACL is limited to `service_role` and `postgres`.
 - `henvalt.resolve_shopify_tenant(text)` returns a UUID or NULL for an unmapped/inactive shop; its execute ACL is limited to `service_role` and `postgres`.
 - `henvalt.ingest_raw_webhook_v2(...)` returns `webhook_id`, `is_duplicate`, `should_process`, and `processing_status`; its execute ACL is limited to `service_role` and `postgres`.
-- The ingest RPC locks matching idempotency rows, returns completed/in-flight duplicate decisions, and inserts a new row with `PROCESSING` state before returning. PostgREST's successful RPC response therefore provides the durable row identity needed before HTTP acknowledgement.
-- These database contracts support the proposed acknowledgement boundary, but they do not fix the current n8n response mode or the classifier's generic 409 shortcut.
+- The ingest RPC locks matching idempotency rows and inserts a new webhook row with `PROCESSING` state, but it does not currently create a `process_shopify_webhook` job or return a replay job ID.
+- `claim_next_job` supports caller-supplied job-type filters, but the active recovery workflow currently filters to `execute_intervention` only.
 
 ## Acceptance matrix
 
-| Scenario | Expected response | Requirement |
-|---|---:|---|
-| New webhook accepted by ingest RPC | 200 | Durable row + webhook ID + explicit decision first |
+| Scenario | Expected response / outcome | Requirement |
+|---|---|---|
+| New event + atomic replay job | 200 | Durable webhook row and active replay job exist first |
 | Duplicate already processed | 200 | Existing durable row |
-| Duplicate currently processing | 200 | Existing durable row |
+| Duplicate processing with active replay job | 200 | Existing durable job lease/state |
+| Duplicate processing without active replay job | 503 | Do not hide a stranded event |
+| Generic HTTP 409 without durable row/job | 503 | Never infer duplicate from status alone |
 | Invalid HMAC | 401 | Reject before tenant lookup/ingest |
 | Tenant mapping missing | 404 | HMAC verified; no tenant guessed |
-| Tenant lookup infrastructure failure | 503 | Retryable; do not mislabel as unknown tenant |
+| Tenant lookup infrastructure failure | 503 | Retryable; not mislabeled as unknown tenant |
 | Malformed/incomplete event | 422 | Explicit rejection response |
-| Ingest RPC unavailable / timeout / 5xx | 503 | No success acknowledgement |
-| Ingest RPC omits webhook ID or decision | 503 | Fail closed |\n| Generic HTTP 409 without durable webhook ID | 503 | Never infer duplicate from status code alone |
-| Downstream processing fails after 200 | Already acknowledged | Durable row must be repairable/replayable |
+| Ingest RPC or enqueue unavailable | 503 | No success acknowledgement |
+| Replay worker transient failure | Job retry | Bounded backoff; webhook remains recoverable |
+| Replay worker exhausted retries | Dead letter | Visible operational alert/reconciliation path |
+| Worker crashes after processing | Safe idempotent completion | No duplicate opportunity/intervention |
 
-## n8n response-node runtime constraints\n\nThe current n8n Respond to Webhook documentation states that if a workflow finishes without executing a Respond node, n8n returns a standard 200; if it errors before the first Respond node executes, n8n returns 500; and a later second Respond node is ignored. Therefore, setting `responseMode: responseNode` alone is not fail-closed: every normal branch must reach exactly one explicit response node with its status set, and every error path before it must be handled or deliberately produce a retryable 5xx. The Respond node's default output carries the input data onward, which is the intended mechanism for continuing canonical processing after the acknowledgement.\n\n## Implementation cautions
+## Implementation cautions
 
+- Do not acknowledge immediately after `ingest_raw_webhook_v2` until the replay job is atomically confirmed.
 - Do not put the shared response node only after `Classify Result`: that misses the current HMAC-false and validation-false branches.
 - Do not use `stopAndError` for a webhook branch that must return a defined HTTP status.
-- Do not return 200 for an RPC response that lacks the durable webhook ID or explicit processing decision.\n- Do not treat a generic HTTP 409 as a duplicate unless the RPC response includes the durable webhook ID and explicit processing decision.
-- Confirm the n8n version's Respond to Webhook continuation behavior in staging; the intended topology is response first, then continue downstream processing.
-- Confirm a single HTTP response per execution when success and rejection routes converge.
+- Do not run the old synchronous processing branch and the replay worker in parallel for the same event.
+- Do not treat `PROCESSING` alone as proof that an active worker exists; require an active durable job state.
+- Do not return 200 for a generic 409 or for a row with no durable webhook ID.
+- Confirm a single explicit HTTP response for every request path and prove the replay worker's retry/dead-letter behavior in isolated staging.
 
 ## Safety boundary
 
-This is documentation, contract code, and candidate regression tests only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed.
+This document, candidate contract code and regression tests are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
