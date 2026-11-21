@@ -233,3 +233,6 @@ The read-only inspection found a second scheduler defect: only `Complete Job` an
 The replay claim RPC error stops the tick; a load failure may retry only with the exact lease tuple; completion/retry RPC errors and false results terminate fail-closed. The candidate does not add a fourth workflow or modify the delivery workflow.
 
 The manifest is deliberately not an executable n8n export: the dedicated replay trigger and stored-payload replay entry still need to be built inside the existing `HENVALT_INGEST` candidate, and the combined three-workflow graph must be validated in isolated staging before any cutover.
+
+
+A further graph-level guard now makes the replay payload reload emit an explicit empty item and checks the returned job/webhook/tenant/lease fields before branching. Empty or incomplete loads go to the lease-bound retry path; they cannot be interpreted as “already processed” and cannot reach the ingest subflow. This behavior is pinned by a separate static graph test.
