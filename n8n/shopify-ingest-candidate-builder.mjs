@@ -388,7 +388,7 @@ function buildCandidate(input, map, activeVersionId) {
   addReplayAndIngressNodes(workflow);
   // Credential references are deliberately removed from the candidate export.
   // Rebind the existing Supabase service-role credential in an isolated n8n draft.
-  for (const node of workflow.nodes) { delete node.credentials; if (node.name === "Event Webhook") { node.parameters.path = "henvalt/ingest-candidate-no-send"; delete node.webhookId; } }
+  for (const node of workflow.nodes) { delete node.credentials; node.parameters = JSON.parse(JSON.stringify(node.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid")); if (node.name === "Event Webhook") { node.parameters.path = "henvalt/ingest-candidate-no-send"; delete node.webhookId; } }
   workflow.id = "00000000-0000-4000-8000-999999999999";
   delete workflow.versionId; delete workflow.activeVersionId; delete workflow.activeVersion;
   delete workflow.createdAt; delete workflow.updatedAt; delete workflow.nodeCount; delete workflow.triggerCount;
