@@ -316,3 +316,5 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - The live privacy-request table had zero rows at the time of inspection, so no pending request or export bundle was present.
 - Open policy question: unresolved `REVIEW_REQUIRED` privacy receipts retain their original request payload until manually resolved; no age-based cleanup policy for those raw payloads was verified. Define a retention rule that preserves compliance evidence while minimizing PII.
 - n8n execution payload retention remains a separate issue: the historical delivery execution still retained message/recipient content for at least seven days and runtime redaction flags were false.
+
+- The candidate pixel-ingest, browse-candidate and shared browse-eligibility SECURITY DEFINER functions all now set `search_path` explicitly to `pg_catalog, henvalt, pg_temp`; static CI asserts all three use the hardened path.
