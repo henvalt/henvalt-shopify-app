@@ -62,9 +62,9 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check Shopify OAuth Edge Function
-        run: deno check supabase/functions/henvalt-shopify-oauth/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
       - name: Type-check MailerSend delivery Edge Function
-        run: deno check supabase/functions/henvalt-mailersend-delivery/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
