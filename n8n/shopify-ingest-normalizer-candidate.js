@@ -129,7 +129,9 @@ const normalized = {
 };
 
 const verification = { source, shop_domain: shopDomain, hmac_sha256: hmac, raw_body_base64: rawBodyBase64 };
-const idempotencyKey = source === "shopify"\n  ? ["shopify", tenantReference, shopifyWebhookId].join(":")\n  : (body.idempotency_key || [source, tenantReference, eventType, eventId].join(":"));
+const idempotencyKey = source === "shopify"
+  ? ["shopify", tenantReference, shopifyWebhookId].join(":")
+  : (body.idempotency_key || [source, tenantReference, eventType, eventId].join(":"));
 
 return {
   __valid: missing.length === 0,
