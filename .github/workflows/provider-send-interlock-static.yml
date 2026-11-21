@@ -19,7 +19,6 @@ on:
       - "tests/shopify-oauth-completion-url.test.mjs"
       - "tests/shopify-oauth-infrastructure-config.test.mjs"
       - "tests/shopify-oauth-webhook-contract.test.mjs"
-      - "tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingest-ack-contract.test.mjs"
       - "tests/shopify-ingest-ack-contract.test.mjs"
       - "cloudflare/shopify-ingest-ack-contract.mjs"
       - "supabase/functions/henvalt-shopify-oauth/infrastructure-config.mjs"
