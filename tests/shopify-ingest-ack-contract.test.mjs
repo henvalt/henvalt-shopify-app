@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SHOPIFY_INGEST_ACK_CONTRACT as c } from "../cloudflare/shopify-ingest-ack-contract.mjs";
+import {
+  SHOPIFY_INGEST_ACK_CONTRACT as c,
+  buildPreIngestRejection,
+  classifyIngestResponse,
+} from "../cloudflare/shopify-ingest-ack-contract.mjs";
+
+const context = { eventId: "evt-123", correlationId: "corr-123" };
 
 test("Shopify webhook uses explicit response mode and one shared acknowledgement node", () => {
   assert.equal(c.webhookResponseMode, "responseNode");
@@ -12,7 +18,7 @@ test("Shopify webhook uses explicit response mode and one shared acknowledgement
   assert.equal(c.continueExecutionAfterResponse, true);
 });
 
-test("all pre-ingest rejection paths must converge on an explicit response", () => {
+test("all pre-ingest rejection paths have explicit fail-closed response codes", () => {
   assert.deepEqual(c.preIngestFailureRoutes, [
     "HMAC Verified? false",
     "Is Valid false",
@@ -23,28 +29,70 @@ test("all pre-ingest rejection paths must converge on an explicit response", () 
     malformedEvent: 422,
     tenantLookupUnavailable: 503,
   });
+  assert.equal(buildPreIngestRejection("invalidHmac", context).http, 401);
+  assert.equal(buildPreIngestRejection("unknownTenant", context).http, 404);
+  assert.equal(buildPreIngestRejection("malformedEvent", context).http, 422);
+  assert.equal(buildPreIngestRejection("tenantLookupUnavailable", context).http, 503);
 });
 
-test("accepted acknowledgement requires durable ingest and a complete RPC decision", () => {
-  assert.deepEqual(c.acceptedIngestRequires, [
-    "ingest_raw_webhook_v2 returned HTTP 2xx",
-    "webhook_id is present",
-    "should_process is an explicit boolean",
-  ]);
-  assert.deepEqual(c.acceptedStatuses, [200]);
-  assert.deepEqual(c.duplicateStatuses, [200]);
-  assert.deepEqual(c.retryableStatuses, [503]);
-  assert.deepEqual(c.rejectStatuses, [401, 404, 422]);
-  assert.equal(c.responseCodeExpression, "={{ $json.__http }}");
-  assert.equal(c.responseBodyExpression, "={{ $json.__body }}");
+test("new durable ingest returns 200 and continues processing", () => {
+  const result = classifyIngestResponse({
+    statusCode: 201,
+    body: [{ webhook_id: "wh-1", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],
+  }, context);
+  assert.equal(result.http, 200);
+  assert.equal(result.proceed, true);
+  assert.equal(result.webhookId, "wh-1");
+  assert.equal(result.body.status, "accepted");
 });
 
-test("ambiguous conflict responses cannot be converted into unverified duplicate success", () => {
-  assert.deepEqual(c.conflictHandling, {
-    generic409WithoutWebhookId: 503,
-    requireDurableWebhookIdForDuplicate200: true,
-    requireExplicitProcessingDecision: true,
-  });
+test("processed and in-flight duplicates return 200 without reprocessing", () => {
+  const processed = classifyIngestResponse({
+    statusCode: 200,
+    body: [{ webhook_id: "wh-2", is_duplicate: true, should_process: false, processing_status: "PROCESSED" }],
+  }, context);
+  const processing = classifyIngestResponse({
+    statusCode: 200,
+    body: [{ webhook_id: "wh-3", is_duplicate: true, should_process: false, processing_status: "PROCESSING" }],
+  }, context);
+  assert.equal(processed.http, 200);
+  assert.equal(processed.proceed, false);
+  assert.equal(processed.body.status, "duplicate");
+  assert.equal(processing.http, 200);
+  assert.equal(processing.proceed, false);
+  assert.equal(processing.body.status, "already_processing");
+});
+
+test("missing durable ID or explicit decision returns retryable 503", () => {
+  for (const body of [
+    [{ is_duplicate: false, should_process: true }],
+    [{ webhook_id: "wh-4", is_duplicate: false }],
+    [{ webhook_id: "wh-5", should_process: false, processing_status: "UNKNOWN" }],
+  ]) {
+    const result = classifyIngestResponse({ statusCode: 200, body }, context);
+    assert.equal(result.http, 503);
+    assert.equal(result.proceed, false);
+  }
+});
+
+test("generic 409 and transient backend failures are never acknowledged as duplicates", () => {
+  for (const input of [
+    { statusCode: 409, body: { message: "conflict" } },
+    { statusCode: 503, body: { message: "unavailable" } },
+    { error: "timeout" },
+    {},
+  ]) {
+    const result = classifyIngestResponse(input, context);
+    assert.equal(result.http, 503);
+    assert.equal(result.proceed, false);
+  }
+});
+
+test("authentication, tenant and validation errors map to explicit rejection codes", () => {
+  assert.equal(classifyIngestResponse({ statusCode: 401 }, context).http, 401);
+  assert.equal(classifyIngestResponse({ statusCode: 403 }, context).http, 401);
+  assert.equal(classifyIngestResponse({ statusCode: 404 }, context).http, 404);
+  assert.equal(classifyIngestResponse({ statusCode: 422 }, context).http, 422);
 });
 
 test("acknowledgement contract and nested collections are immutable", () => {
