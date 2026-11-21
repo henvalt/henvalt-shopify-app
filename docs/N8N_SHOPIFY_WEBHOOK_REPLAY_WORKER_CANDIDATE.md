@@ -212,3 +212,8 @@ The replay branch is a separate contract:
 - Never route replay work through `Atomic Claim Intervention` or the generic `complete_job` / `retry_job` functions.
 
 This is a tested design contract, **not a constructed n8n graph**. It does not alter or publish the live workflow, and passing static CI does not establish that the n8n nodes have been wired. The exact active version remains the read-only baseline until a separate candidate graph can be authored and accepted in isolated staging.
+
+
+### Exact replay-claim row normalization
+
+The migration 008 implementation returns `SETOF henvalt.background_jobs`, so the raw claim row exposes `id`, not a `job_id` column. The candidate recovery normalizer must map `id → job_id`, carry the worker ID used for the claim, preserve `lease_id` byte-for-byte, retain `lease_expires_at`, and parse `payload.webhook_id` as a UUID. It must not assume the RPC returns a pre-normalized `job_id` or a `worker_id` field. This exact return-shape check is pinned to migration 008 in the recovery branch static test.
