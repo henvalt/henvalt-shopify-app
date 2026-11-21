@@ -49,21 +49,23 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, henvalt, pg_temp
 AS $function$
+DECLARE
+  v_send_claim boolean := false;
 BEGIN
-  -- A send requires both the authorization claim (PENDING -> UNKNOWN) and
-  -- the one-time provider credential claim (provider_claimed_at NULL -> set).
-  -- Guard both transitions so the ordinary and manual test-send paths cannot
-  -- bypass the interlock by calling the credential RPC directly.
-  IF (
-    (TG_OP = 'INSERT' AND (
-      NEW.status = 'UNKNOWN'
-      OR NEW.provider_claimed_at IS NOT NULL
-    ))
-    OR (TG_OP = 'UPDATE' AND (
+  -- Check INSERT and UPDATE separately; INSERT has no OLD row.
+  IF TG_OP = 'INSERT' THEN
+    v_send_claim := NEW.status = 'UNKNOWN'
+      OR NEW.provider_claimed_at IS NOT NULL;
+  ELSIF TG_OP = 'UPDATE' THEN
+    v_send_claim := (
       (OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'UNKNOWN')
       OR (OLD.provider_claimed_at IS NULL AND NEW.provider_claimed_at IS NOT NULL)
-    ))
-  ) AND NOT henvalt.provider_sending_is_enabled() THEN
+    );
+  END IF;
+
+  -- Guard both authorization claim and one-time provider credential claim.
+  -- This covers ordinary recovery and manual one-off test-send request paths.
+  IF v_send_claim AND NOT henvalt.provider_sending_is_enabled() THEN
     RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED'
       USING ERRCODE = '42501';
   END IF;
