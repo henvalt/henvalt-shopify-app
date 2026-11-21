@@ -66,15 +66,15 @@ test("executed no-send stub and delivery classifier cannot report provider accep
   assert.equal(stub.json.statusCode, 503);
   assert.equal(stub.json.body.no_send_candidate, true);
   const context = {
-    "Validate & Normalize": { json: {
+    "Validate & Normalize": { item: { json: {
       precheck_ok: true, tenant_id: "tenant", delivery_request_id: "request",
       intervention_id: "intervention", recovery_id: "recovery", opportunity_id: "opportunity",
       correlation_id: "correlation"
-    }},
-    "Authorize & Context": { json: { statusCode: 200, body: {
-      can_send: true, delivery_request_id: "request", provider: "MailerSend"
     }}},
-    "No-Send Provider Stub": stub
+    "Authorize & Context": { item: { json: { statusCode: 200, body: {
+      can_send: true, delivery_request_id: "request", provider: "MailerSend"
+    }}}},
+    "No-Send Provider Stub": { item: { json: stub.json } }
   };
   const classifier = new Function("$", "$json", nodes.get("Classify Result").parameters.jsCode)(
     (name) => context[name],
