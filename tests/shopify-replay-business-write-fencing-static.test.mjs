@@ -14,6 +14,10 @@ const workerSpec = readFileSync(
   "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md",
   "utf8",
 );
+const activeIngestSnapshot = JSON.parse(readFileSync(
+  "tests/fixtures/n8n-shopify-ingest-route-snapshot.json",
+  "utf8",
+));
 const writeMap = JSON.parse(readFileSync(
   "n8n/shopify-ingest-replay-write-map.json",
   "utf8",
@@ -84,4 +88,49 @@ test("audited active-ingest replay mutation map is complete and points only to f
       "worker contract omits " + item.fenced_rpc);
   }
   assert.ok(writeMap.requirements.some((item) => item.includes("does not imply the active workflow")));
+});
+
+test("fenced wrapper signatures put the lease tuple first and guard before mutation", () => {
+  const allMigrations = migration + "\\n" + completionMigration;
+  for (const item of writeMap.replay_mutations) {
+    const escapedName = item.fenced_rpc.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
+    const definition = new RegExp(
+      "CREATE OR REPLACE FUNCTION henvalt\\\\." + escapedName +
+      "\\\\(([\\\\s\\\\S]*?)\\\\)\\\\s*RETURNS[\\\\s\\\\S]*?AS \\\\$function\\\\$([\\\\s\\\\S]*?)\\\\$function\\\\$",
+      "i",
+    ).exec(allMigrations);
+    assert.ok(definition, "missing complete wrapper definition: " + item.fenced_rpc);
+    const args = definition[1].replace(/\\\\s+/g, " ").trim();
+    assert.ok(
+      args.startsWith("p_job_id uuid, p_worker_id text, p_lease_id uuid"),
+      item.fenced_rpc + " must take the exact lease tuple first",
+    );
+    const body = definition[2];
+    const guardAt = body.indexOf("PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id)");
+    assert.ok(guardAt >= 0, item.fenced_rpc + " must validate the current lease");
+    const mutationAt = body.indexOf("henvalt." + item.current_rpc + "(");
+    if (mutationAt >= 0) {
+      assert.ok(guardAt < mutationAt, item.fenced_rpc + " must validate before the underlying mutation");
+    } else {
+      const directUpdateAt = body.indexOf("UPDATE henvalt.webhook_events");
+      assert.ok(directUpdateAt >= 0 && guardAt < directUpdateAt,
+        item.fenced_rpc + " must guard its direct webhook update");
+    }
+  }
+});
+
+test("the live active-ingest mutation inventory is exactly covered by the replay write map", () => {
+  assert.equal(activeIngestSnapshot.workflowId, writeMap.source_workflow);
+  assert.equal(activeIngestSnapshot.activeVersionId, writeMap.inspected_active_version);
+  const active = activeIngestSnapshot.activeMutationInventory;
+  assert.ok(Array.isArray(active) && active.length === 18);
+  const mapped = writeMap.replay_mutations;
+  assert.equal(mapped.length, active.length);
+  const mapByRpc = new Map(mapped.map((item) => [item.current_rpc, item]));
+  for (const item of active) {
+    const mappedItem = mapByRpc.get(item.rpc);
+    assert.ok(mappedItem, "active mutating RPC is missing from replay map: " + item.rpc);
+    assert.equal(mappedItem.node, item.node);
+  }
+  assert.equal(mapByRpc.size, active.length, "replay map must not contain duplicate or unobserved RPCs");
 });
