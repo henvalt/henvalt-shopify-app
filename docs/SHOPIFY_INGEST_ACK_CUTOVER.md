@@ -94,7 +94,8 @@ The connected production database was inspected with SELECT-only catalog/functio
 | Duplicate processing with active replay job | 200 | Existing durable job lease/state |
 | Duplicate processing without active replay job | 503 | Do not hide a stranded event |
 | Generic HTTP 409 without durable row/job | 503 | Never infer duplicate from status alone |
-| Invalid HMAC | 401 | Reject before tenant lookup/ingest |\n| HMAC secret/verifier unavailable | 503 | Retryable configuration/backend failure, not a bad-signature 401 |
+| Invalid HMAC | 401 | Reject before tenant lookup/ingest |
+| HMAC secret/verifier unavailable | 503 | Retryable configuration/backend failure, not a bad-signature 401 |
 | Tenant mapping missing | 404 | HMAC verified; no tenant guessed |
 | Tenant lookup infrastructure failure | 503 | Retryable; not mislabeled as unknown tenant |
 | Malformed/incomplete event | 422 | Explicit rejection response |
