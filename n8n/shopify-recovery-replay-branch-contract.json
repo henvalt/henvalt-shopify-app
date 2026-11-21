@@ -92,7 +92,7 @@
     "replay_outcomes": {
       "already_processed": "Complete with the exact lease tuple; do not invoke the ingest subflow.",
       "unprocessed": "Load with the exact lease tuple, then call the dedicated HENVALT_INGEST replay entry.",
-      "ingest_success_requires": "mark_webhook_processed === true",
+      "ingest_success_requires": "mark_webhook_processed === true OR deferred_payment_handoff === true",
       "ingest_failure": "Retry with the exact lease tuple and bounded delay; exhausted attempts become DEAD_LETTER in the RPC.",
       "all_terminal_paths_return_to_scheduler_loop": true
     },
