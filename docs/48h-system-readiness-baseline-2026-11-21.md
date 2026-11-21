@@ -190,3 +190,28 @@ Additional read-only checks were completed after the initial baseline.
 - The connected Supabase organization currently lists one active healthy project: `henvalt` (`ocyplckdojdubyrsxcxa`).
 - The other listed projects (`henvalt_v23`, `henvalt-sales-factory`, `henvalt-core-vault`) are inactive. None has been verified as an approved, isolated staging environment, and none was reactivated.
 - PR #7 now includes an ephemeral PostgreSQL 17 CI service to validate migration syntax and exercise trigger, ACL, operator audit and fail-closed behavior. This is useful database integration evidence, but it is not a substitute for Supabase staging validation of the full application schema and managed roles.
+
+
+## Storefront consent and pixel compatibility audit — 2026-11-21
+
+A read-only comparison of the deployed Cloudflare Worker, repository source, deployed Supabase RPC and live browse-candidate function found two additional V1 blockers.
+
+### Event compatibility
+- The live Worker `henvalt-pixel-collector` and repository `cloudflare/pixel-collector.js` allow `page_viewed`, `product_viewed`, `product_added_to_cart`, and `checkout_started`.
+- The Shopify Pixel extension also emits `product_removed_from_cart`.
+- The live Worker rejects that event before it reaches Supabase. The deployed legacy SQL function already recognizes the event type, so the Worker allowlist is the compatibility gap.
+- Candidate fix in this branch adds `product_removed_from_cart` to the Worker allowlist.
+
+### Server-side consent enforcement
+- The Pixel extension itself returns before `fetch` when `analyticsProcessingAllowed` is not true. That is a useful client-side guard.
+- The deployed Worker did not independently require `analytics_consent = true`.
+- The deployed legacy `henvalt.ingest_pixel_event` RPC only nulls `customer_reference` when analytics consent is false; it still passed the client ID into anonymous/session references, retained the full payload (minus the public key), and could bind a checkout alias.
+- Therefore server-side consent enforcement was incomplete for crafted, stale or future clients. The candidate fix rejects analytics-denied events in both Worker and SQL before rate-limit/event writes.
+- The live browse-candidate function required analytics consent and customer email consent, but did not require the recorded Shopify privacy `marketing_allowed` flag. The candidate fix adds that independent marketing-privacy gate.
+- Candidate migration: `202611210002_pixel_consent_and_marketing_gate.sql`.
+- Candidate tests include analytics-denied no-write behavior, marketing-denied browse suppression, marketing-allowed candidate creation, and product-removal event acceptance in ephemeral PostgreSQL 17.
+
+### Deployment boundary
+- The live Cloudflare Worker and Supabase SQL function were inspected read-only; neither was changed.
+- Candidate code exists in PR #7 only. No Cloudflare Worker upload, Supabase migration, Edge Function deployment, Shopify version release or production test event was performed.
+- Browse recovery remains NO-GO until the candidate passes CI and is validated in an approved isolated Supabase staging environment.
