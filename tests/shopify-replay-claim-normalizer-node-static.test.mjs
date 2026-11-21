@@ -63,3 +63,56 @@ test("inline node validation remains aligned with the pure tested helper", () =>
     assert.ok(helper.includes(token), "pure helper missing " + token);
   }
 });
+
+
+test("inline Code node executes against actual background_jobs claim-row shape", () => {
+  const runNode = (row, workerId = "replay-worker-1") => {
+    const lookup = (name) => {
+      assert.equal(name, "Init Worker");
+      return { first: () => ({ json: { worker_id: workerId } }) };
+    };
+    return new Function("$", "$json", source)(lookup, row).json;
+  };
+  const claim = {
+    id: "11111111-1111-4111-8111-111111111111",
+    job_type: "process_shopify_webhook",
+    payload: { webhook_id: "22222222-2222-4222-8222-222222222222" },
+    lease_id: "33333333-3333-4333-8333-333333333333",
+    lease_expires_at: "2026-11-21T18:00:00.000Z",
+    tenant_id: "44444444-4444-4444-8444-444444444444",
+    locked_by: "replay-worker-1",
+    customer_email: "must-not-escape@example.invalid"
+  };
+  const result = runNode(claim);
+  assert.deepEqual(Object.keys(result).sort(), [
+    "claim_row_present", "guard_valid", "has_replay_job", "job_id",
+    "worker_id", "lease_id", "lease_expires_at", "webhook_id"
+  ].sort());
+  assert.equal(result.guard_valid, true);
+  assert.equal(result.job_id, claim.id);
+  assert.equal(result.webhook_id, claim.payload.webhook_id);
+  assert.equal(result.worker_id, "replay-worker-1");
+  assert.equal("tenant_id" in result, false);
+  assert.equal("customer_email" in result, false);
+});
+
+test("inline Code node treats empty claims normally and malformed present claims as fail-closed", () => {
+  const runNode = (row) => new Function(
+    "$", "$json", source
+  )((name) => ({ first: () => ({ json: { worker_id: "worker" } }) }), row).json;
+  assert.equal(runNode({}).guard_reason, "EMPTY_CLAIM");
+  const malformed = runNode({
+    id: "not-a-uuid",
+    job_type: "execute_intervention",
+    payload: "{bad json",
+    lease_id: "not-a-uuid",
+    lease_expires_at: "not-a-date"
+  });
+  assert.equal(malformed.claim_row_present, true);
+  assert.equal(malformed.guard_valid, false);
+  assert.match(malformed.guard_reason, /UNEXPECTED_JOB_TYPE/);
+  assert.match(malformed.guard_reason, /INVALID_JOB_ID/);
+  assert.match(malformed.guard_reason, /INVALID_LEASE_ID/);
+  assert.match(malformed.guard_reason, /INVALID_WEBHOOK_ID/);
+  assert.match(malformed.guard_reason, /INVALID_LEASE_EXPIRY/);
+});
