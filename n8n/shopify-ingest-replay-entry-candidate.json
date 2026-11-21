@@ -109,7 +109,21 @@
       "processed": "mark_webhook_processed_fenced(job_id,worker_id,lease_id,webhook_id) must return true before subflow returns mark_webhook_processed=true.",
       "failed": "mark_webhook_failed_fenced receives a constant non-PII reason for replay; recovery worker owns bounded retry/dead-letter.",
       "lease": "Renew only for early loss detection; transaction-local fenced wrappers remain mandatory.",
-      "deferred_payment": "Do not return successful replay completion until deferred-reconciliation semantics explicitly establish a terminal webhook state and durable follow-up job."
+      "deferred_payment": "A successful defer_payment_webhook_reconciliation_fenced(...)=true is a durable terminal handoff, not a processed webhook. It sets processing_status=FAILED and payment_reconciliation_pending=true with a due timestamp. The existing HENVALT_RECOVERY Every Minute trigger runs Reconcile Deferred Payment Webhooks -> henvalt.reconcile_deferred_payment_webhooks(10); that function claims due rows with FOR UPDATE SKIP LOCKED and marks them PROCESSED or reschedules/dead-letters them. Replay subflow may return deferred_payment_handoff=true only when the fenced defer RPC returns true; recovery may then complete the replay job without requiring mark_webhook_processed=true.",
+      "deferred_payment_audit": {
+        "workflow": "HENVALT_RECOVERY",
+        "active_version": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+        "trigger": "Every Minute",
+        "node": "Reconcile Deferred Payment Webhooks",
+        "rpc": "henvalt.reconcile_deferred_payment_webhooks(10)",
+        "observed_active": true,
+        "selection": "FAILED + payment_reconciliation_pending=true + next_at<=now(); FOR UPDATE SKIP LOCKED",
+        "terminal_outcomes": [
+          "PROCESSED",
+          "retry with bounded next_at",
+          "dead-letter after 60 attempts"
+        ]
+      }
     }
   },
   "fenced_mutations_file": "n8n/shopify-ingest-replay-write-map.json",
@@ -124,13 +138,14 @@
     "Already processed webhook completes without re-running projections.",
     "Webhook processed marker returns true before replay subflow reports success.",
     "Deferred payment branch remains blocked until terminal-state contract is resolved.",
-    "No replay branch reaches HENVALT_DELIVERY or a provider request node."
+    "No replay branch reaches HENVALT_DELIVERY or a provider request node.",
+    "Deferred payment path: fenced defer RPC returns true; webhook becomes FAILED with payment_reconciliation_pending=true; the existing every-minute recovery reconciler later processes or reschedules it; replay job completes only after this durable handoff is confirmed."
   ],
   "dependencies": [
     "Author an isolated complete HENVALT_INGEST workflow JSON candidate; this manifest is not an importable workflow.",
     "Rewire every mutation node to conditional fenced dispatch and audit all SQL/HTTP nodes for unlisted writes.",
-    "Resolve deferred-payment terminal semantics and add a dedicated acceptance case.",
     "Use a disposable isolated database and isolated n8n draft only after cost approval; no paused project restore is implied.",
-    "Keep provider sending default-deny and use network-denied stubs."
+    "Keep provider sending default-deny and use network-denied stubs.",
+    "Test the deferred-payment handoff with the existing Every Minute recovery node and assert pending metadata, subsequent reconciler pickup, and eventual PROCESSED/retry/dead-letter state."
   ]
 }
