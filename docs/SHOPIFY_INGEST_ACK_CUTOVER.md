@@ -52,7 +52,7 @@ The existing `background_jobs` table already has tenant, payload, status, attemp
 In a candidate staging workflow:
 
 1. Set the webhook response mode to `responseNode`.
-2. Route every pre-ingest rejection to an explicit response envelope: invalid HMAC → 401; unknown tenant → 404; malformed event → 422; tenant lookup/RPC infrastructure failure → 503.
+2. Route every pre-ingest rejection to an explicit response envelope: actual invalid HMAC → 401; missing HMAC secret/verifier outage → 503; unknown tenant → 404; malformed event → 422; tenant lookup/RPC infrastructure failure → 503.
 3. Route the success classifier to the shared `Acknowledge Ingress Request` response node.
 4. Return 200 for a new event only when the ingest RPC returns a durable webhook ID, an explicit `should_process` decision, and an active replay job ID/status.
 5. Return 200 for a duplicate already marked `PROCESSED` when the durable webhook ID is present.
