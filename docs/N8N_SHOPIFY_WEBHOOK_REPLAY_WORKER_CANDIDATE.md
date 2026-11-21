@@ -155,6 +155,10 @@ The current fenced RPC names are:
 - `process_shopify_revenue_adjustment_fenced`
 - `deactivate_shopify_connection_on_uninstall_fenced`
 - `stop_recovery_after_order_fenced`
+- `apply_eligibility_fenced`
+- `create_recovery_sequence_fenced`
+- `post_recovery_to_ledger_and_measure_billing_fenced`
+- `defer_payment_webhook_reconciliation_fenced`
 
 These names are the allowed mutation boundary for the replay path; any additional write RPC discovered in the final workflow graph must receive the same lease-checked wrapper before staging.
 
@@ -168,8 +172,26 @@ Webhook lifecycle state transitions are fenced too; the replay worker must not c
 
 This section is normative and supersedes any earlier wording in this document that suggests periodic lease renewal plus idempotency alone is sufficient to protect downstream writes.
 
-- The replay worker MUST call the migration 009 `*_fenced` wrapper for every database mutation. A lease renewal before a stage is useful for early loss detection, but it is not a substitute for the wrapper's transaction-local lease check and `FOR UPDATE` lock.
+- The replay worker MUST call the migration 009/010 `*_fenced` wrapper for every database mutation. A lease renewal before a stage is useful for early loss detection, but it is not a substitute for the wrapper's transaction-local lease check and `FOR UPDATE` lock.
 - Never route a replay job through an unfenced mutation RPC, including the original webhook status functions.
 - The exact allowed wrapper inventory is maintained in the final section of this document and in `docs/ACTIVE_WORKFLOW_CUTOVER_BLOCKERS_2026-11-21.md`. If a mutating RPC is not in that inventory, stop and add/test a fenced wrapper before staging.
 - A worker that loses its lease must stop. Its subsequent fenced mutation, processed/failed marker, completion, and retry calls must all fail closed.
 - The old numbered guidance in “HENVALT_INGEST replay entry” that describes heartbeat renewal as the primary protection is subordinate to this correction. Do not implement from that older paragraph without applying this authoritative correction.
+
+
+## Complete active-ingest mutation inventory — audit correction
+
+A read-only inspection of the live `HENVALT_INGEST` HTTP Request/Postgres node targets and the production `pg_proc` definitions found four additional mutation boundaries that were missing from migration 009's first wrapper inventory:
+
+| Active node | Existing RPC | Candidate fenced RPC | Why it must be fenced |
+|---|---|---|---|
+| Apply Eligibility | `apply_eligibility` | `apply_eligibility_fenced` | Updates opportunity status. |
+| Create Recovery Sequence | `create_recovery_sequence` | `create_recovery_sequence_fenced` | Inserts the recovery sequence and updates the opportunity. |
+| Post Recovery To Ledger | `post_recovery_to_ledger_and_measure_billing` | `post_recovery_to_ledger_and_measure_billing_fenced` | Writes confirmed recovery revenue and billing measurement. |
+| Defer Payment Reconciliation | `defer_payment_webhook_reconciliation` | `defer_payment_webhook_reconciliation_fenced` | Updates webhook state and deferred-reconciliation metadata. |
+
+Candidate migration `202611210010_shopify_replay_complete_ingest_write_fencing.sql` adds these four wrappers. Its disposable PostgreSQL acceptance test forces lease replacement, proves each stale call is rejected before reaching the legacy RPC, then proves the current lease can call all four wrappers.
+
+The following active-ingest RPCs were classified as read-only in the same inspection and do not require write wrappers: `evaluate_eligibility`, `score_recovery_intent`, `get_recovery_flow_delay`, and the payment-order lookup SELECT. This classification is based on the current live definitions and must be repeated against the final replay graph before staging.
+
+This audit correction does not mean the active workflow has been rewired: the published workflow still calls its original RPCs. Migration 010 is candidate-only and is not applied to production.
