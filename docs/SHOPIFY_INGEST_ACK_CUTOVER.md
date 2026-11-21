@@ -36,6 +36,17 @@ Build and validate this topology in an isolated staging workflow first:
 9. Preserve existing post-ack failure marking and stale-work repair. Verify that an error after durable acceptance can be recovered from the persisted webhook row; a post-ack error cannot be converted into a Shopify retry because the HTTP response has already been sent.
 10. Verify exactly one response is sent for every path. Test valid HMAC, invalid HMAC, unknown shop, tenant lookup timeout, malformed event, ingest RPC 5xx/timeout, missing webhook ID, missing processing decision, new accepted event, processed duplicate, processing duplicate, and post-ack processing failure.
 
+
+## Read-only database contract verification
+
+The connected production database was inspected with SELECT-only catalog/function-definition queries; no data or schema was changed:
+
+- `henvalt.verify_shopify_webhook_hmac(text,text)` returns a boolean and its execute ACL is limited to `service_role` and `postgres`.
+- `henvalt.resolve_shopify_tenant(text)` returns a UUID or NULL for an unmapped/inactive shop; its execute ACL is limited to `service_role` and `postgres`.
+- `henvalt.ingest_raw_webhook_v2(...)` returns `webhook_id`, `is_duplicate`, `should_process`, and `processing_status`; its execute ACL is limited to `service_role` and `postgres`.
+- The ingest RPC locks matching idempotency rows, returns completed/in-flight duplicate decisions, and inserts a new row with `PROCESSING` state before returning. PostgREST's successful RPC response therefore provides the durable row identity needed before HTTP acknowledgement.
+- These database contracts support the proposed acknowledgement boundary, but they do not fix the current n8n response mode or the classifier's generic 409 shortcut.
+
 ## Acceptance matrix
 
 | Scenario | Expected response | Requirement |
