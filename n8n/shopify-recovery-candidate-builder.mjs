@@ -187,6 +187,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const manifest = JSON.parse(readFileSync("n8n/shopify-recovery-replay-graph-patch.json", "utf8"));
   const normalizer = readFileSync("n8n/shopify-replay-claim-normalizer-node-candidate.js", "utf8");
   const result = buildRecoveryCandidate(fixture.workflow, manifest, normalizer);
-  writeFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json", JSON.stringify(result.workflow, null, 2) + "\\n");
-  process.stdout.write(JSON.stringify(result.audit) + "\\n");
+  writeFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json", JSON.stringify(result.workflow, null, 2) + "\n");
+  process.stdout.write(JSON.stringify(result.audit) + "\n");
 }
