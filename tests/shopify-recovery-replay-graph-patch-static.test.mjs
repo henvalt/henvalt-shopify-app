@@ -160,3 +160,19 @@ test("empty or incomplete replay payload loads retry rather than invoking ingest
     x[0] === "Replay Load Valid?#true" && x[1] === "Replay Already Processed?"
   ));
 });
+
+test("empty claim loops while a present malformed claim stops fail-closed", () => {
+  const nodes = new Map(manifest.nodes_to_add.map((x) => [x.name, x]));
+  assert.equal(
+    nodes.get("Normalize Shopify Replay Claim").code_ref,
+    "n8n/shopify-replay-claim-normalizer-candidate.mjs",
+  );
+  assert.equal(nodes.get("Replay Job Claimed?").condition, "={{ $json.claim_row_present === true }}");
+  assert.equal(nodes.get("Replay Claim Valid?").condition, "={{ $json.guard_valid === true }}");
+  assert.ok(manifest.required_connections.some((x) =>
+    x[0] === "Replay Job Claimed?#false" && x[1] === "Loop Interventions"
+  ));
+  assert.ok(manifest.required_connections.some((x) =>
+    x[0] === "Replay Claim Valid?#false" && x[1] === "Stop Replay Lease Lost"
+  ));
+});
