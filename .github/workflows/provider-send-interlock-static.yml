@@ -1,0 +1,24 @@
+name: HENVALT provider-send interlock static tests
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "tests/provider-send-interlock-static.test.mjs"
+      - ".github/workflows/provider-send-interlock-static.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  interlock-static:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify deny-by-default interlock invariants
+        run: node --test tests/provider-send-interlock-static.test.mjs
