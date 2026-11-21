@@ -700,9 +700,9 @@ BEGIN
  ) VALUES(v_provider,v_provider_event_id,v_provider_message_id,
   'activity.sent',repeat('e',64),'UNMATCHED');
 
- INSERT INTO henvalt.shopify_recovery_opportunities_v2(
-  tenant_id,shopify_connection_id,app_key,checkout_identity_id,session_identity_id,
-  customer_identity_id,pixel_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,customer_identity_id,
+  source_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
  ) VALUES(v_tenant,v_connection,v_app_key,NULL,NULL,v_customer,NULL,v_candidate,
   'ABANDONED_CART','REVIEW_REQUIRED','pixel-batch-opportunity-'||gen_random_uuid()::text)
  RETURNING id INTO v_opportunity;
