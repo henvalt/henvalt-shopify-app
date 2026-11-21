@@ -306,3 +306,16 @@ All three candidate workflows must be imported into an isolated n8n instance tog
 The generated candidate exports deliberately replace the production Supabase host with https://supabase-staging.invalid in INGEST, RECOVERY, and DELIVERY. The DELIVERY candidate also replaces the live reply-AI Worker host with https://reply-ai-staging.invalid. Independent artifact inspection confirmed the three exports contain no live production Supabase or reply-AI Worker hostname, no email literals, no credential references, and no webhook IDs.
 
 These .invalid hosts are intentional non-routable placeholders, not working endpoints. Before runtime testing, an operator must replace them with the actual isolated staging Supabase project and staging reply-AI endpoint, then re-run the host allowlist audit. Rebind only isolated staging credentials. Never use production credentials or restore the paused production-adjacent projects to perform this test.
+
+
+## Isolated import and acceptance order
+
+1. Create/use an isolated n8n instance and an isolated disposable Supabase project. Do not restore a paused production-adjacent project without explicit cost approval.
+2. Replace every `https://supabase-staging.invalid` URL with the isolated staging project's Supabase URL. Replace `https://reply-ai-staging.invalid` only if a staging reply-AI endpoint is required; otherwise leave it blocked.
+3. Import HENVALT_INGEST_CANDIDATE_NO_SEND first, then HENVALT_DELIVERY_CANDIDATE_NO_SEND, then HENVALT_RECOVERY_CANDIDATE_NO_SEND. After import, inspect the actual workflow IDs; if n8n regenerated any IDs, update the two Execute Workflow references in RECOVERY to the imported candidate IDs.
+4. Rebind Postgres and Supabase credentials only to the isolated staging project. Do not bind production credentials. Keep all three workflows inactive and all webhook paths unregistered during initial validation.
+5. Verify DELIVERY still has the No-Send Provider Stub, no MailerSend provider HTTP node, and no one-off test-send branch. Do not replace the stub with a real provider call during this acceptance phase.
+6. Apply candidate migrations 001-011 only to disposable staging, then test ingress acknowledgement, duplicate delivery, distinct delivery IDs, replay claim/load, stale lease rejection, fenced writes, deferred-payment handoff, and all recovery loop exits.
+7. Confirm no real customer data, real Shopify store, real provider, or production endpoint is used. Capture execution-retention/redaction settings and a complete synthetic event-to-ledger result before any go/no-go review.
+
+Importing these JSON files is not permission to activate workflows or perform a production cutover.
