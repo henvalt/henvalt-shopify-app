@@ -89,32 +89,39 @@ BEGIN
         ELSE 'payment_failure'
       END,
       'summary', CASE
-        WHEN ri.confirmed_amount IS NOT NULL THEN 'Recovered'
+        WHEN ri.has_confirmed_attribution IS TRUE THEN 'Recovered'
         WHEN o.status = 'RECOVERED' THEN 'Awaiting confirmed attribution'
         WHEN ri.status IN ('SENT', 'DELIVERED') THEN 'Message sent'
         ELSE lower(replace(o.status::text, '_', ' '))
       END,
       'outcome', CASE
-        WHEN ri.confirmed_amount IS NOT NULL THEN 'recovered'
+        WHEN ri.has_confirmed_attribution IS TRUE THEN 'recovered'
         WHEN o.status = 'RECOVERED' THEN 'pending'
         WHEN ri.status IN ('SENT', 'DELIVERED') THEN 'sent'
         WHEN ri.status IN ('SKIPPED', 'CANCELLED')
           OR o.status IN ('INELIGIBLE', 'SUPPRESSED') THEN 'skipped'
         ELSE 'pending'
       END,
-      'amount', CASE WHEN ri.confirmed_amount IS NOT NULL THEN ri.confirmed_amount ELSE NULL END
+      'amount', CASE WHEN ri.has_confirmed_attribution IS TRUE THEN ri.attributed_value ELSE NULL END
     ) AS item,
     o.created_at
     FROM henvalt.opportunities o
     LEFT JOIN LATERAL (
       SELECT ri.status,
+        EXISTS (
+          SELECT 1
+          FROM henvalt.order_attributions oa
+          WHERE oa.tenant_id = o.tenant_id
+            AND oa.opportunity_id = o.id
+            AND oa.attribution_confidence = 'CONFIRMED'
+        ) AS has_confirmed_attribution,
         (SELECT oa.attributed_value
            FROM henvalt.order_attributions oa
           WHERE oa.tenant_id = o.tenant_id
             AND oa.opportunity_id = o.id
             AND oa.attribution_confidence = 'CONFIRMED'
           ORDER BY oa.evaluated_at DESC
-          LIMIT 1) AS confirmed_amount
+          LIMIT 1) AS attributed_value
       FROM henvalt.recovery_interventions ri
       WHERE ri.tenant_id = o.tenant_id AND ri.opportunity_id = o.id
       ORDER BY ri.created_at DESC
