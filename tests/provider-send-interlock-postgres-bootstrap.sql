@@ -468,3 +468,47 @@ BEGIN
   RETURN;
 END;
 $function$;
+
+-- Test-only stubs for the remaining legacy Shopify ingest mutation RPCs.
+-- The fenced wrappers must reject stale leases before any stub is invoked.
+CREATE TYPE henvalt.opportunity_status AS ENUM ('DETECTED','ELIGIBLE','INELIGIBLE','SUPPRESSED','EXPIRED','RECOVERED','CLOSED');
+CREATE TABLE henvalt.replay_fence_test_calls (
+  id bigserial PRIMARY KEY,
+  function_name text NOT NULL
+);
+
+CREATE OR REPLACE FUNCTION henvalt.apply_eligibility(
+  p_opportunity_id uuid, p_status henvalt.opportunity_status
+) RETURNS boolean LANGUAGE plpgsql AS $function$
+BEGIN
+  INSERT INTO henvalt.replay_fence_test_calls(function_name) VALUES ('apply_eligibility');
+  RETURN true;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.create_recovery_sequence(
+  p_opportunity_id uuid
+) RETURNS uuid LANGUAGE plpgsql AS $function$
+BEGIN
+  INSERT INTO henvalt.replay_fence_test_calls(function_name) VALUES ('create_recovery_sequence');
+  RETURN 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.post_recovery_to_ledger_and_measure_billing(
+  p_attribution_id uuid
+) RETURNS jsonb LANGUAGE plpgsql AS $function$
+BEGIN
+  INSERT INTO henvalt.replay_fence_test_calls(function_name) VALUES ('post_recovery_to_ledger_and_measure_billing');
+  RETURN '{"ledger_entry_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","billing_measured":true}'::jsonb;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.defer_payment_webhook_reconciliation(
+  p_webhook_id uuid, p_error text DEFAULT 'payment_order_not_projected_or_not_linkable'
+) RETURNS boolean LANGUAGE plpgsql AS $function$
+BEGIN
+  INSERT INTO henvalt.replay_fence_test_calls(function_name) VALUES ('defer_payment_webhook_reconciliation');
+  RETURN true;
+END;
+$function$;
