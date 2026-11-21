@@ -290,13 +290,9 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   ]};
   workflow.connections["Renew Replay Lease Before Writes"] = {main:[[{node:"Confirm Replay Lease Renewal",type:"main",index:0}]]};
   workflow.connections["Confirm Replay Lease Renewal"] = {main:[[{node:"Should Process?",type:"main",index:0}]]};
-  workflow.connections["Replay Pipeline?"] = {main:[
-    [{node:"Should Process?",type:"main",index:0}],
-    [{node:"Respond to Shopify",type:"main",index:0}]
-  ]};
   workflow.connections["Mark Webhook Processed"].main = [[{node:"Processed Marker Confirmed?",type:"main",index:0}]];
   workflow.connections["Processed Marker Confirmed?"] = {main:[[{node:"Build Success Response",type:"main",index:0}],[{node:"Stop Unconfirmed Processed Marker",type:"main",index:0}]]};
-  workflow.connections["Defer Payment Reconciliation"].main = [[{node:"Deferred Handoff Confirmed?",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
+  workflow.connections["Defer Payment Reconciliation"].main = [[{node:"Deferred Handoff Confirmed?",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]];
   workflow.connections["Deferred Handoff Confirmed?"] = {main:[[{node:"Build Deferred Payment Response",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
   workflow.connections["Is Rejected Replay?"] = {main:[[{node:"Stop Invalid Replay Envelope",type:"main",index:0}],[{node:"Build Invalid Ingress Response",type:"main",index:0}]]};
   workflow.connections["Build Invalid Ingress Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
@@ -309,9 +305,6 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   workflow.connections["Load Shopify Replay Row"] = {main:[[{node:"Build Shopify Replay Envelope",type:"main",index:0}]]};
   workflow.connections["Build Shopify Replay Envelope"] = {main:[[{node:"Replay Envelope Valid?",type:"main",index:0}]]};
   workflow.connections["Event Webhook"].main = [[{node:"Validate & Normalize",type:"main",index:0}]];
-  // Existing ingress path and replay trigger are separate roots feeding the same normalizer.
-  workflow.connections["Event Webhook"].main[0].push({node:"Validate & Normalize",type:"main",index:0});
-  // n8n allows multiple incoming edges; avoid a second copy of the public root edge.
   workflow.connections["Event Webhook"].main[0] = [{node:"Validate & Normalize",type:"main",index:0}];
 
   addNode(workflow,trigger); addNode(workflow,loader); addNode(workflow,envelope); addNode(workflow,envelopeValid);
