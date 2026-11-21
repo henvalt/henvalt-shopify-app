@@ -215,3 +215,10 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - The live Cloudflare Worker and Supabase SQL function were inspected read-only; neither was changed.
 - Candidate code exists in PR #7 only. No Cloudflare Worker upload, Supabase migration, Edge Function deployment, Shopify version release or production test event was performed.
 - Browse recovery remains NO-GO until the candidate passes CI and is validated in an approved isolated Supabase staging environment.
+
+
+### Browse-candidate currency type defect
+- The live `get_browse_abandonment_candidates` return signature declares `currency character` (unbounded `character` defaults to `character(1)` in PostgreSQL).
+- A direct read-only PostgreSQL check confirmed `'USD'::character` becomes `'U'` with length 1.
+- This can truncate three-letter currency codes returned to the recovery worker. It requires a separately reviewed return-type migration (drop/recreate with `character(3)`, preserving exact grants and checking dependencies) or a versioned V2 RPC plus worker update.
+- This is recorded as a release blocker; no production function was changed.
