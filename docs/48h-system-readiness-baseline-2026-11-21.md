@@ -184,3 +184,9 @@ Additional read-only checks were completed after the initial baseline.
 - Live billing snapshot: 1 billing account, 0 billing periods, 0 billing usage charges, 0 billing measurements, 0 confirmed revenue-ledger rows and 0 confirmed order attributions.
 - Billing must remain non-live/read-only until at least one real order is independently attributed and the revenue ledger + fee measurement are verified end-to-end.
 - Current delivery request statuses: 2 `ACCEPTED`, 1 `DELIVERED`; no `PENDING` request was present in the snapshot. These are historical test states, not evidence of ongoing recovery throughput.
+
+
+### Staging project inventory clarification
+- The connected Supabase organization currently lists one active healthy project: `henvalt` (`ocyplckdojdubyrsxcxa`).
+- The other listed projects (`henvalt_v23`, `henvalt-sales-factory`, `henvalt-core-vault`) are inactive. None has been verified as an approved, isolated staging environment, and none was reactivated.
+- PR #7 now includes an ephemeral PostgreSQL 17 CI service to validate migration syntax and exercise trigger, ACL, operator audit and fail-closed behavior. This is useful database integration evidence, but it is not a substitute for Supabase staging validation of the full application schema and managed roles.
