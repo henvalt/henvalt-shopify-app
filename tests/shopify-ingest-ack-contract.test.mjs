@@ -39,11 +39,20 @@ test("accepted acknowledgement requires durable ingest and a complete RPC decisi
   assert.equal(c.responseBodyExpression, "={{ $json.__body }}");
 });
 
+test("ambiguous conflict responses cannot be converted into unverified duplicate success", () => {
+  assert.deepEqual(c.conflictHandling, {
+    generic409WithoutWebhookId: 503,
+    requireDurableWebhookIdForDuplicate200: true,
+    requireExplicitProcessingDecision: true,
+  });
+});
+
 test("acknowledgement contract and nested collections are immutable", () => {
   assert.equal(Object.isFrozen(c), true);
   for (const key of [
     "preIngestFailureRoutes",
     "acceptedIngestRequires",
+    "conflictHandling",
     "preIngestFailureStatuses",
     "acceptedStatuses",
     "retryableStatuses",
