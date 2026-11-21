@@ -140,3 +140,12 @@ This remains candidate CI only. The three active n8n workflows were re-read and 
 ## 21 November — production migration boundary recheck
 
 A fresh read-only Supabase MCP inspection reconfirmed the connected project is `ACTIVE_HEALTHY` on PostgreSQL 17.6.1. Its latest applied migration remains `20261114174204` (`fix_mailersend_token_browse_case_expression`); candidate migrations `202611210001` through `202611210008` are not applied. The development-branch inventory is still empty. No migration, data write, branch creation, or deployment was performed during this check.
+
+
+## 21 November — replay side-effect fencing limitation identified
+
+A further design review distinguishes lease fencing at the queue boundary from strict fencing of downstream business writes. Migration 008 fences claim, payload load, renewal, retry and completion, but it does not inject the lease tuple into every existing canonical-event, customer/checkout, opportunity, intervention, attribution or ledger RPC. Therefore it cannot by itself guarantee that a worker whose lease expires during an in-flight downstream call is prevented from completing that call.
+
+The candidate worker specification now requires a sequential heartbeat renewal before each potentially long-running or mutating stage, bounded per-stage timeouts, idempotency keyed by tenant plus source event/webhook, and immediate stop when renewal returns NULL. It explicitly does not claim strict cross-system side-effect fencing until mutating RPCs validate the lease inside their own transaction. A static regression test covers this boundary. This is a release blocker for claiming strong lease fencing, not something to hide behind the queue-level acceptance test.
+
+The heartbeat-contract code/spec update is at candidate commit `51622178fef4ac299f608a040e7673b7f207930b`; exact-head CI has not yet been observed for this commit.
