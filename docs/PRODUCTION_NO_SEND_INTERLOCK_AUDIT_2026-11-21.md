@@ -55,3 +55,33 @@ The global stop must be enforced at the final credential-release boundary, not m
 ## Release decision
 
 **BLOCKED — do not enable sending.** The current production credential-release boundary has no global no-send interlock and contains a hard-coded one-off exception. Do not apply candidate migrations, deploy Edge Functions, publish n8n changes, or enable any send path until the interlock is implemented, independently tested, and explicitly approved.
+
+
+## 21 November — candidate interlock code review (read-only)
+
+The PR #7 candidate migration and acceptance SQL were inspected against the live credential-release RPC definitions. This review does not modify or deploy either system.
+
+### Candidate strengths
+
+- provider_send_control is initialized closed and provider_sending_is_enabled() uses COALESCE(..., false), so a missing singleton row evaluates to deny.
+- The delivery_requests trigger rejects a send-claim transition while closed, including an insert already marked UNKNOWN and a first provider-claim timestamp.
+- The candidate delivery Edge Function authenticates its service-role bearer before parsing the body and calls the database credential-release RPC before the MailerSend network request.
+- The candidate staging document correctly notes that a database gate cannot revoke a credential already released to an in-flight request.
+
+### Remaining candidate gaps — staging sign-off blocked
+
+1. **The SQL acceptance file does not exercise the real send RPCs.** tests/provider-send-interlock-postgres-acceptance.sql checks synthetic inserts/updates against the trigger, but contains no invocation of authorize_delivery_request, reauthorize_one_off_test_delivery, or get_mailersend_token_for_delivery. It therefore does not yet prove that the ordinary and legacy one-off paths are denied end-to-end by the candidate migration against the real schema/function definitions.
+2. **The legacy one-off exception remains in the live credential-release function source.** The candidate migration adds a database trigger that should stop the current one-off path when it attempts to claim the delivery, but it does not replace/remove the hard-coded exception in get_mailersend_token_for_delivery. Keep it explicitly subordinate to the global gate and remove it as a separate reviewed cleanup; never enable the global gate merely to exercise that route.
+3. **No application-readable status surface is provided.** The candidate revokes execution of provider_sending_is_enabled() from service_role, authenticated, and anon, and provides no separate status view/RPC. The operator can inspect through privileged SQL, but the required independent non-secret status check is not yet implemented.
+4. **The audit log is access-restricted but not database-enforced immutable.** The candidate revokes application-role access to provider_send_control_events, but does not add a trigger rejecting UPDATE/DELETE. If append-only integrity is a requirement, enforce it in the database and test it.
+5. **Malformed/unreadable control-state behavior is not fully exercised.** The current acceptance SQL tests a missing row after deletion and a false state, but does not test an unavailable/permission-error read through the actual credential-release path. The fail-closed result must be proven at that boundary.
+
+### Required next candidate work
+
+- Add disposable full-schema integration coverage that invokes the actual ordinary authorization, one-off reauthorization, and credential-release functions with the interlock closed; assert no provider token is returned and no provider HTTP call occurs.
+- Add a least-privilege, non-secret status surface and test that application roles can read status but cannot mutate control state.
+- Enforce append-only audit events if retained as the stated audit contract.
+- Add missing-row and simulated read-failure tests at the final credential-release boundary.
+- Re-run all checks on the exact resulting commit SHA. Do not infer production protection from the trigger-only fixture.
+
+These are candidate-code review findings, not evidence of a production change. Production remains unchanged and send-capable until an explicitly approved, independently verified cutover is completed.
