@@ -58,6 +58,14 @@ The isolated recovery snapshot/test now records this blocker. The candidate work
 
 Do not broaden the existing guard or claim filter without adding this job-type-specific branch. The active recovery workflow remains unchanged.
 
+## Candidate durable-ack classifier
+
+The candidate node script `n8n/shopify-ingest-classifier-candidate.js` replaces the current generic-409 shortcut. A 2xx is returned only when the RPC response contains a durable webhook ID and either:
+- The webhook is already `PROCESSED`; or
+- A replay job ID exists in an active state (`QUEUED`, `CLAIMED`, `RUNNING`, `RETRY_WAIT`).
+
+Missing job identity, terminal job state, generic 409, transport failure, and upstream authorization/endpoint errors all become retryable 503. Invalid HMAC must be classified before this node; an ingest RPC 401/403 is not evidence of a bad Shopify signature and must not become a permanent 401. Candidate tests exercise these response branches.
+
 ## Critical post-ack recovery finding
 
 A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if durable asynchronous processing is guaranteed:
