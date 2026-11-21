@@ -20,7 +20,7 @@ BEGIN
          locked_by = NULL, locked_at = NULL, lease_id = NULL,
          lease_expires_at = NULL, completed_at = now()
    WHERE job_type = 'process_shopify_webhook'
-     AND status IN ('QUEUED'::henvalt.job_status, 'RETRY_WAIT'::henvalt.job_status);
+     AND status <> 'SUCCEEDED'::henvalt.job_status;
 
   INSERT INTO henvalt.webhook_events(
     tenant_id, source, source_event_id, topic, idempotency_key,
