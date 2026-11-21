@@ -8,6 +8,7 @@ on:
       - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
       - "supabase/migrations/202611210004_align_shopify_token_refresh_window.sql"
       - "supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql"
+      - "supabase/migrations/202611210006_shopify_webhook_replay_load.sql"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -37,6 +38,7 @@ on:
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/provider-send-interlock-postgres-acceptance.sql"
       - "tests/shopify-webhook-replay-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-loader-postgres-acceptance.sql"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
 
