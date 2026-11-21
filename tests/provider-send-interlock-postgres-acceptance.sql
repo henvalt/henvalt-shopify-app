@@ -134,7 +134,6 @@ BEGIN
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'missing control row did not fail closed';
   END IF;
-  INSERT INTO henvalt.delivery_requests(status) VALUES ('UNKNOWN') RETURNING id INTO v_id;
   BEGIN
     PERFORM henvalt.get_mailersend_token_for_delivery(gen_random_uuid(), v_id);
     RAISE EXCEPTION 'missing control row allowed credential release';
