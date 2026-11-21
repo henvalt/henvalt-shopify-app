@@ -81,6 +81,21 @@ BEGIN
     RAISE EXCEPTION 'STALE_WORKER_CREATED_CANONICAL_EVENT';
   END IF;
 
+  v_rejected := false;
+  BEGIN
+    PERFORM henvalt.mark_webhook_failed_fenced(
+      v_job,'write-worker-old',v_old.lease_id,v_webhook,'stale worker failure'
+    );
+  EXCEPTION WHEN insufficient_privilege THEN
+    v_rejected := true;
+  END;
+  IF NOT v_rejected OR NOT EXISTS (
+    SELECT 1 FROM henvalt.webhook_events
+     WHERE id=v_webhook AND processing_status='PROCESSING'
+  ) THEN
+    RAISE EXCEPTION 'STALE_WORKER_CHANGED_WEBHOOK_FAILURE_STATE';
+  END IF;
+
   PERFORM * FROM henvalt.upsert_canonical_event_fenced(
     v_job,'write-worker-current',v_new.lease_id,
     'acacacac-acac-4cac-8cac-acacacacacac',v_webhook,
@@ -97,6 +112,15 @@ BEGIN
        AND idempotency_key='business-write-fence-idempotency-current'
   ) THEN
     RAISE EXCEPTION 'CURRENT_WORKER_COULD_NOT_COMMIT_FENCED_CANONICAL_EVENT';
+  END IF;
+
+  IF henvalt.mark_webhook_processed_fenced(
+    v_job,'write-worker-current',v_new.lease_id,v_webhook
+  ) IS DISTINCT FROM true OR NOT EXISTS (
+    SELECT 1 FROM henvalt.webhook_events
+     WHERE id=v_webhook AND processing_status='PROCESSED'
+  ) THEN
+    RAISE EXCEPTION 'CURRENT_WORKER_COULD_NOT_MARK_WEBHOOK_PROCESSED';
   END IF;
 
   RAISE NOTICE 'SHOPIFY_REPLAY_BUSINESS_WRITE_FENCING_ACCEPTANCE_PASSED';
