@@ -72,6 +72,10 @@ test("builder produces a separate inactive candidate with all 18 fenced mutation
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(workflow.active,false);
   assert.equal(workflow.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
+  assert.equal(workflow.id,"00000000-0000-4000-8000-000000000001");
+  assert.equal(workflow.nodes.find(n=>n.name==="Event Webhook").parameters.path,"henvalt/ingest-candidate-no-send");
+  assert.equal(workflow.nodes.find(n=>n.name==="Event Webhook").webhookId,undefined);
+  assert.ok(workflow.nodes.every(n=>n.credentials===undefined));
   assert.equal(workflow.meta.provider_sending_enabled,false);
   for (const entry of map.replay_mutations) {
     const node = workflow.nodes.find(n=>n.name===entry.node);
@@ -110,6 +114,8 @@ test("public ingress waits for durable acknowledgement and never runs the busine
   const deferred = workflow.nodes.find(n=>n.name==="Build Deferred Payment Response");
   assert.ok(deferred.parameters.assignments.assignments.some(a=>a.name==="deferred_payment_handoff"));
   assert.equal(workflow.connections["Is Valid"].main[1][0].node,"Is Rejected Replay?");
+  assert.equal(workflow.connections["Should Process?"].main[1][0].node,"Stop Replay Not Proceedable");
+  assert.match(workflow.nodes.find(n=>n.name==="Build Invalid Ingress Response").parameters.assignments.assignments[0].value,/__tenant_lookup_error \? 503/);
 });
 
 test("builder rejects workflow or active-version drift", () => {
