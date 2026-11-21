@@ -117,6 +117,7 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     const clean = { ...node };
     delete clean.credentials;
     delete clean.webhookId;
+    clean.parameters = JSON.parse(JSON.stringify(clean.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid"));
     if (clean.name === "Claim Due Job") clean.alwaysOutputData = true;
     if (clean.name === "Return One-Off Email Preview" && clean.parameters?.jsCode) {
       clean.parameters.jsCode = clean.parameters.jsCode.replace(/recipient:\s*["'][^"']*["']/, "recipient: null");
