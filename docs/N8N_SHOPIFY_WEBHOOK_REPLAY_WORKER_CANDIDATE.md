@@ -81,6 +81,9 @@ The active recovery worker assumes every job has an intervention ID, while the e
 The replay worker must use the fenced RPC contract, not the generic job claim/completion functions:
 
 1. Claim with `henvalt.claim_shopify_replay_job(worker_id, 180)`. The result includes `lease_id` and `lease_expires_at`. Lease duration is clamped to 30–900 seconds.
+
+- For processing that may exceed the lease window, renew before expiry with `henvalt.renew_shopify_replay_lease(job_id, worker_id, lease_id, 180)`. It extends only the still-current lease and cannot revive an expired or superseded claim. If renewal returns NULL, stop processing and do not commit downstream effects.
+
 2. Load the webhook with `henvalt.load_shopify_webhook_replay_job(job_id, worker_id, lease_id)`. The former two-argument loader is revoked from service_role; a worker-id-only claim is no longer sufficient.
 3. Complete only with `henvalt.complete_shopify_replay_job(job_id, worker_id, lease_id)`.
 4. Retry only with `henvalt.retry_shopify_replay_job(job_id, worker_id, lease_id, error, delay_seconds)`. The function caps delay at one hour and moves exhausted jobs to DEAD_LETTER.
