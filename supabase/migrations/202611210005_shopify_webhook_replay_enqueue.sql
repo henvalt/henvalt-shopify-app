@@ -32,7 +32,7 @@ DECLARE
   v_correlation_id uuid;
 BEGIN
   IF p_tenant_id IS NULL
-     OR NULLIF(p_source, '') IS NULL
+     OR p_source IS DISTINCT FROM 'shopify'
      OR NULLIF(p_source_event_id, '') IS NULL
      OR NULLIF(p_topic, '') IS NULL
      OR NULLIF(p_idempotency_key, '') IS NULL
