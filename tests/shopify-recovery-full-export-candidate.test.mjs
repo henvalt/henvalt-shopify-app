@@ -25,7 +25,7 @@ test("full recovery graph builds as a distinct inactive no-send export", () => {
   assert.equal(result.audit.webhook_ids_removed, true);
   assert.equal(result.audit.provider_send_nodes, 0);
   assert.ok(w.nodes.every((n) => !n.credentials && !n.webhookId));
-  assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i));
+  assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i));
 });
 
 test("recovery replay can call only the isolated INGEST candidate", () => {
