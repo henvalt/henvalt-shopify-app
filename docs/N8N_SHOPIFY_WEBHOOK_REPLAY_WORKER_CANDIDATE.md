@@ -267,3 +267,20 @@ The replay claim normalizer now validates the database row's locked_by value aga
 The graph manifest now records exact SQL parameter expressions for claim, load, complete and retry. Load/complete/retry reference the normalized claim node directly, so an error output cannot accidentally erase the lease tuple needed for a safe retry. n8n alwaysOutputData and onError flags are specified as native top-level node properties, matching the live workflow export schema.
 
 A first CI attempt exposed two stale test assertions (the renamed inline Code node path and the native top-level alwaysOutputData flag); both were corrected. CI must pass again on the latest branch head before this candidate is treated as verified. The recovery graph remains a manifest, not a generated/imported workflow export; no live workflow was changed.
+
+
+## Full recovery candidate export — 2026-11-21
+
+An offline builder now assembles a complete inactive HENVALT_RECOVERY_CANDIDATE_NO_SEND export from the sanitized, read-only 46-node active workflow fixture:
+
+- Builder: n8n/shopify-recovery-candidate-builder.mjs.
+- Source fixture: n8n/fixtures/henvalt-recovery-active-2026-11-21.sanitized.json.
+- Static acceptance: tests/shopify-recovery-full-export-candidate.test.mjs.
+- Generated CI artifact: henvalt-recovery-candidate-no-send (7-day retention).
+- Candidate ID: 00000000-0000-4000-8000-999999999997.
+- It appends 14 replay nodes to the 46-node baseline (60 total), preserves the intervention business nodes, routes all five intervention terminal paths into the dedicated replay claim, and keeps replay completion/retry lease-bound.
+- The recovery candidate calls only the offline INGEST candidate ID 00000000-0000-4000-8000-999999999999, never the active production INGEST workflow ID.
+- Credentials and webhook IDs are removed; candidate is inactive, hidden from MCP, and contains no provider-send node. The manual email preview recipient is redacted in the source fixture.
+- Candidate graph tests assert node/connection integrity, stable lease tuple bindings, explicit error exits, deferred-payment handoff gating, and no-send constraints.
+
+This export is still an offline candidate. It has not been imported into isolated n8n, credentials have not been rebound, and no workflow runtime test has been executed. The INGEST candidate must include its dedicated three-field replay trigger and both candidate workflows must be imported together into an isolated environment before acceptance testing. Production remains NO-GO.
