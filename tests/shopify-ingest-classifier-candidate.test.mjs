@@ -94,3 +94,14 @@ test("ingest RPC authorization and endpoint failures are retryable, not bad-HMAC
     assert.equal(result.__http, 503, `expected retryable 503 for upstream ${statusCode}`);
   }
 });
+
+test("application-level ingress statuses are mapped to the Shopify HTTP response", () => {
+  for (const [http_status, expected] of [[401, 401], [404, 404], [422, 422], [503, 503]]) {
+    const result = classify({
+      statusCode: 200,
+      body: [{ http_status, result_status: "synthetic_result" }],
+    });
+    assert.equal(result.__http, expected);
+    assert.equal(result.__proceed, false);
+  }
+});
