@@ -270,3 +270,34 @@ GRANT EXECUTE ON FUNCTION henvalt.stop_recovery_after_order_fenced(uuid,text,uui
 
 COMMENT ON FUNCTION henvalt.assert_shopify_replay_lease_for_write(uuid,text,uuid) IS
   'Locks the current Shopify replay job row FOR UPDATE and validates the unexpired lease. The row lock is held through the caller transaction, preventing concurrent lease reclaim until its business write commits.';
+
+
+-- Replay lifecycle state writes must be fenced as well as business projections.
+CREATE OR REPLACE FUNCTION henvalt.mark_webhook_processed_fenced(
+  p_job_id uuid, p_worker_id text, p_lease_id uuid, p_webhook_id uuid
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+BEGIN
+  PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
+  RETURN henvalt.mark_webhook_processed(p_webhook_id);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.mark_webhook_failed_fenced(
+  p_job_id uuid, p_worker_id text, p_lease_id uuid, p_webhook_id uuid, p_error text
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+BEGIN
+  PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
+  RETURN henvalt.mark_webhook_failed(p_webhook_id,p_error);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.mark_webhook_processed_fenced(uuid,text,uuid,uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION henvalt.mark_webhook_failed_fenced(uuid,text,uuid,uuid,text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION henvalt.mark_webhook_processed_fenced(uuid,text,uuid,uuid) FROM anon,authenticated;
+REVOKE EXECUTE ON FUNCTION henvalt.mark_webhook_failed_fenced(uuid,text,uuid,uuid,text) FROM anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.mark_webhook_processed_fenced(uuid,text,uuid,uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION henvalt.mark_webhook_failed_fenced(uuid,text,uuid,uuid,text) TO service_role;
