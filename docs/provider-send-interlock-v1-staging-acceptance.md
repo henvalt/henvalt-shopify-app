@@ -14,8 +14,11 @@
 2. The table has RLS enabled and no grants to `anon`, `authenticated`, or `service_role`.
 3. `provider_sending_is_enabled()` returns false if the row is absent (test in a disposable transaction/schema fixture).
 4. Only the privileged database owner/operator can call `henvalt.set_provider_sending_enabled(boolean, text)`; clients and n8n service-role credentials cannot execute it or update the control tables directly.
-5. Every setting change is recorded in `henvalt.provider_send_control_events` with previous/new value, timestamp, database session actor and reason.
-5. Trigger `delivery_requests_provider_send_interlock` is enabled on `henvalt.delivery_requests`.
+5. Every setting change is recorded in `henvalt.provider_send_control_events` with previous/new value, timestamp, database session actor and reason; UPDATE/DELETE are rejected by an append-only trigger.
+6. Trigger `delivery_requests_provider_send_interlock` is enabled on `henvalt.delivery_requests`.
+7. The non-secret `provider_sending_status()` RPC is executable by service_role only and reports a missing control row as closed.
+8. `get_mailersend_token_for_delivery` is a service-role-only wrapper; the renamed legacy implementation is not directly executable by service_role.
+9. The wrapper permanently rejects `messages.metadata.test_only=true`, even while ordinary recovery sending is enabled.
 
 ## Negative-path matrix (must all deny while interlock is closed)
 | Case | Action | Expected |
@@ -44,7 +47,7 @@ Verify these continue to work while sending is disabled:
 
 ## Concurrency / race checks
 - Run two concurrent claims for one synthetic request: at most one claim may succeed when enabled.
-- Close the interlock between authorization and credential claim: credential RPC must deny.
+- Close the interlock between authorization and credential claim: the setter must wait for any in-flight transaction holding the gate's `FOR SHARE` lock, then later credential RPCs must deny.
 - Close the interlock before a repeated/retried delivery: no provider credential may be released.
 - A credential already released to an in-flight edge request cannot be recalled by this database gate. Before any live release, also establish a provider-side emergency revocation procedure and test the response.
 
