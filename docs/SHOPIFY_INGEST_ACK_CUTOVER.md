@@ -79,7 +79,7 @@ The n8n Respond to Webhook documentation states that if a workflow finishes with
 
 The connected production database was inspected with SELECT-only catalog/function-definition queries; no data or schema was changed:
 
-- `henvalt.verify_shopify_webhook_hmac(text,text)` returns a boolean and its execute ACL is limited to `service_role` and `postgres`.
+- `henvalt.verify_shopify_webhook_hmac(text,text)` returns a boolean and its execute ACL is limited to `service_role` and `postgres`. Its current implementation returns `false` both for a bad signature and when the Vault secret is missing/empty; the candidate ingress RPC must distinguish those cases so a configuration outage becomes retryable 503 rather than a permanent 401.
 - `henvalt.resolve_shopify_tenant(text)` returns a UUID or NULL for an unmapped/inactive shop; its execute ACL is limited to `service_role` and `postgres`.
 - `henvalt.ingest_raw_webhook_v2(...)` returns `webhook_id`, `is_duplicate`, `should_process`, and `processing_status`; its execute ACL is limited to `service_role` and `postgres`.
 - The ingest RPC locks matching idempotency rows and inserts a new webhook row with `PROCESSING` state, but it does not currently create a `process_shopify_webhook` job or return a replay job ID.
@@ -94,7 +94,7 @@ The connected production database was inspected with SELECT-only catalog/functio
 | Duplicate processing with active replay job | 200 | Existing durable job lease/state |
 | Duplicate processing without active replay job | 503 | Do not hide a stranded event |
 | Generic HTTP 409 without durable row/job | 503 | Never infer duplicate from status alone |
-| Invalid HMAC | 401 | Reject before tenant lookup/ingest |
+| Invalid HMAC | 401 | Reject before tenant lookup/ingest |\n| HMAC secret/verifier unavailable | 503 | Retryable configuration/backend failure, not a bad-signature 401 |
 | Tenant mapping missing | 404 | HMAC verified; no tenant guessed |
 | Tenant lookup infrastructure failure | 503 | Retryable; not mislabeled as unknown tenant |
 | Malformed/incomplete event | 422 | Explicit rejection response |
