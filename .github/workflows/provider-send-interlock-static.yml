@@ -52,7 +52,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify static safety and pixel consent invariants
-        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs
+        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/shopify-oauth-completion-url.test.mjs
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
