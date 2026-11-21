@@ -284,3 +284,18 @@ An offline builder now assembles a complete inactive HENVALT_RECOVERY_CANDIDATE_
 - Candidate graph tests assert node/connection integrity, stable lease tuple bindings, explicit error exits, deferred-payment handoff gating, and no-send constraints.
 
 This export is still an offline candidate. It has not been imported into isolated n8n, credentials have not been rebound, and no workflow runtime test has been executed. The INGEST candidate must include its dedicated three-field replay trigger and both candidate workflows must be imported together into an isolated environment before acceptance testing. Production remains NO-GO.
+
+
+## Three-workflow no-send isolation boundary — 2026-11-21
+
+The recovery candidate must not invoke the active DELIVERY workflow. A sanitized read-only 62-node delivery source fixture and offline candidate builder now exist:
+
+- Fixture: n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json.
+- Builder: n8n/shopify-delivery-candidate-builder.mjs.
+- Tests: tests/shopify-delivery-full-export-candidate.test.mjs.
+- Candidate ID: 00000000-0000-4000-8000-999999999996.
+- The candidate removes the entire one-off test-send branch, replaces the ordinary MailerSend provider HTTP call with a deterministic no-send Code node, prevents no-send results from being recorded as provider results, and prefixes webhook paths for isolation.
+- Recovery candidate now targets this DELIVERY candidate ID, while its replay subflow targets only the INGEST candidate ID.
+- CI generates and uploads the three inactive candidates as separate seven-day artifacts; serialized JSON is parsed before upload.
+
+All three candidate workflows must be imported into an isolated n8n instance together and use isolated staging database credentials. The delivery candidate still contains non-provider application/API nodes; no candidate may be activated against production credentials. Production remains NO-GO until isolated runtime acceptance and owner-level retention evidence are complete.
