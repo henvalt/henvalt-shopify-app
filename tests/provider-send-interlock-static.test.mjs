@@ -16,7 +16,7 @@ test("global send control defaults closed and missing row fails closed", () => {
 test("control table is server-only and RLS protected", () => {
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/i);
   assert.match(migration, /REVOKE ALL ON henvalt\.provider_send_control FROM PUBLIC, anon, authenticated, service_role/i);
-  assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.provider_sending_is_enabled\(\) TO service_role/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.provider_sending_is_enabled\(\)/i);
 });
 
 test("interlock guards initial UNKNOWN inserts and both send-claim updates", () => {
