@@ -173,8 +173,8 @@ BEGIN
   END;
 
   SELECT count(*) INTO v_events FROM henvalt.provider_send_control_events;
-  IF v_events <> 2 THEN
-    RAISE EXCEPTION 'append-only audit log changed unexpectedly, expected 2 events, got %', v_events;
+  IF v_events <> 4 THEN
+    RAISE EXCEPTION 'append-only audit log changed unexpectedly, expected 4 events, got %', v_events;
   END IF;
 END
 $acceptance$;
