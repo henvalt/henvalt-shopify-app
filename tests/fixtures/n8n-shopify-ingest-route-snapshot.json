@@ -87,5 +87,80 @@
     "correctSourceEventId": "x-shopify-webhook-id",
     "eventCorrelationIsNotDeduplicationKey": true,
     "launchBlocker": true
-  }
+  },
+  "activeMutationInventory": [
+    {
+      "node": "Upsert Canonical Event",
+      "rpc": "upsert_canonical_event"
+    },
+    {
+      "node": "Resolve Identity",
+      "rpc": "resolve_identity"
+    },
+    {
+      "node": "Upsert Customer",
+      "rpc": "upsert_customer"
+    },
+    {
+      "node": "Upsert Checkout",
+      "rpc": "upsert_checkout"
+    },
+    {
+      "node": "Create Opportunity",
+      "rpc": "create_opportunity_idempotent"
+    },
+    {
+      "node": "Apply Eligibility",
+      "rpc": "apply_eligibility"
+    },
+    {
+      "node": "Create Recovery Sequence",
+      "rpc": "create_recovery_sequence"
+    },
+    {
+      "node": "Create Intervention",
+      "rpc": "create_intervention_and_enqueue"
+    },
+    {
+      "node": "Mark Webhook Processed",
+      "rpc": "mark_webhook_processed"
+    },
+    {
+      "node": "Mark Webhook Failed",
+      "rpc": "mark_webhook_failed"
+    },
+    {
+      "node": "Project Order From Event",
+      "rpc": "project_order_from_event"
+    },
+    {
+      "node": "Evaluate Order Attribution",
+      "rpc": "evaluate_order_attribution"
+    },
+    {
+      "node": "Stop Recovery After Order",
+      "rpc": "stop_recovery_after_order"
+    },
+    {
+      "node": "Post Recovery To Ledger",
+      "rpc": "post_recovery_to_ledger_and_measure_billing"
+    },
+    {
+      "node": "Deactivate Shopify Connection",
+      "rpc": "deactivate_shopify_connection_on_uninstall"
+    },
+    {
+      "node": "Upsert Customer Consent",
+      "rpc": "apply_shopify_email_consent_update"
+    },
+    {
+      "node": "Process Shopify Revenue Adjustment",
+      "rpc": "process_shopify_revenue_adjustment"
+    },
+    {
+      "node": "Defer Payment Reconciliation",
+      "rpc": "defer_payment_webhook_reconciliation"
+    }
+  ],
+  "activeMutationInventorySource": "read-only active HENVALT_INGEST version 6368d539-708f-494a-8be8-b9601d0e8607; excludes read-only RPCs and the atomic ingress RPC"
 }
