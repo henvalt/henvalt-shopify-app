@@ -49,6 +49,7 @@ test("new durable ingest returns 200 only when a replay job is durably active", 
   }, context);
   assert.equal(result.http, 200);
   assert.equal(result.asyncProcessingGuaranteed, true);
+  assert.equal(Object.hasOwn(result, "asyncProcessingGuaranteed"), true);
   assert.equal(result.webhookId, "wh-1");
   assert.equal(result.body.status, "accepted");
   assert.equal(result.body.replay_job_id, "job-1");
