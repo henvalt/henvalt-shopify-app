@@ -260,7 +260,12 @@ jobs:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-submission-gate-v2.test.sql
 
-      - name: Exercise bounded pixel provider-event batch reconciliation\n        env:\n          PGPASSWORD: postgres\n        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-event-batch-reconciliation-v2.test.sql\n\n      - name: Exercise checkout ambiguous provider event reconciliation
+      - name: Exercise bounded pixel provider-event batch reconciliation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-event-batch-reconciliation-v2.test.sql
+
+      - name: Exercise checkout ambiguous provider event reconciliation
         env:
           PGPASSWORD: postgres
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-ambiguous-provider-reconciliation-v2.test.sql
