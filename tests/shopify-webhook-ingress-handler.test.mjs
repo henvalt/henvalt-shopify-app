@@ -34,15 +34,22 @@ function request(hmac, body = rawBody) {
   });
 }
 
-test("Shopify ingress fails closed when required secrets or upstream URL are missing", async () => {
-  let calls = 0;
-  const response = await handleRequest(request("unused"), { SHOPIFY_API_SECRET: "", N8N_INGEST_URL: "" }, async () => {
-    calls++;
-    return new Response("unexpected");
-  });
-  assert.equal(response.status, 503);
-  assert.equal((await response.json()).error, "ingress_configuration_missing");
-  assert.equal(calls, 0);
+test("Shopify ingress fails closed when required secrets or upstream URL are missing or unsafe", async () => {
+  for (const config of [
+    { SHOPIFY_API_SECRET: "", N8N_INGEST_URL: "" },
+    { SHOPIFY_API_SECRET: secret, N8N_INGEST_URL: "http://ingest.example.test/hook" },
+    { SHOPIFY_API_SECRET: secret, N8N_INGEST_URL: "https://user:pass@ingest.example.test/hook" },
+    { SHOPIFY_API_SECRET: secret, N8N_INGEST_URL: "not a URL" },
+  ]) {
+    let calls = 0;
+    const response = await handleRequest(request("unused"), config, async () => {
+      calls++;
+      return new Response("unexpected");
+    });
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error, "ingress_configuration_missing");
+    assert.equal(calls, 0);
+  }
 });
 
 test("invalid Shopify HMAC is rejected without forwarding to n8n", async () => {
@@ -101,4 +108,24 @@ test("valid signatures cover exact UTF-8 bytes without text re-encoding", async 
   assert.equal(response.status, 200);
   assert.equal(new TextDecoder().decode(forwarded[0]), unicodeBody);
   assert.deepEqual([...forwarded[0]], [...new TextEncoder().encode(unicodeBody)]);
+});
+
+test("upstream redirects are not followed or acknowledged to Shopify", async () => {
+  let forwardedOptions;
+  const response = await handleRequest(request(await sign(rawBody)), env, async (url, init) => {
+    forwardedOptions = init;
+    return new Response(null, { status: 302, headers: { location: "https://login.example.test/" } });
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "ingest_unavailable");
+  assert.equal(forwardedOptions.redirect, "manual");
+  assert.equal(forwardedOptions.signal instanceof AbortSignal, true);
+});
+
+test("upstream network exceptions return retryable 503", async () => {
+  const response = await handleRequest(request(await sign(rawBody)), env, async () => {
+    throw new Error("synthetic network failure");
+  });
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error, "ingest_unavailable");
 });
