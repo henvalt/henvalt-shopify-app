@@ -110,6 +110,9 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   delete workflow.staticData;
   delete workflow.pinData;
   workflow.settings = { ...(workflow.settings || {}), availableInMCP: false };
+  const deliveryCall = workflow.nodes.find((node) => node.name === "Call HENVALT_DELIVERY");
+  if (!deliveryCall || !deliveryCall.parameters?.workflowId) throw new Error("Existing delivery subworkflow call is missing");
+  deliveryCall.parameters.workflowId.value = "00000000-0000-4000-8000-999999999996";
   workflow.nodes = workflow.nodes.map((node) => {
     const clean = { ...node };
     delete clean.credentials;
