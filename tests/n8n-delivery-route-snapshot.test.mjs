@@ -75,9 +75,7 @@ test("manual one-off route remains explicitly isolated and must be denied in sta
   assert.equal(route.trigger, "One-Off Test Email Trigger");
   assert.equal(route.provider_node, "MailerSend One-Off Test Email");
   assert.ok(workflow.safety_notes.some((note) =>
-    note.includes("Both routes must be independently tested")
-  ));
-  assert.ok(workflow.safety_notes.some((note) =>
-    note.includes("network-denied provider stub")
+    note.includes("manual one-off route is isolated from ordinary delivery")
+    && note.includes("must be denied during staging")
   ));
 });
