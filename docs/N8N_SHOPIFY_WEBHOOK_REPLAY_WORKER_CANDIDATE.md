@@ -222,3 +222,14 @@ The migration 008 implementation returns `SETOF henvalt.background_jobs`, so the
 ### Active mutation inventory and fenced-wrapper signature audit
 
 The sanitized active-ingest snapshot now records all 18 observed mutating RPC nodes from version `6368d539-708f-494a-8be8-b9601d0e8607`. CI requires an exact one-to-one match between that inventory and the replay write map. It also parses every mapped SQL wrapper definition and verifies that the exact `job_id, worker_id, lease_id` arguments are first, and that the transaction-local lease guard executes before the wrapped legacy mutation (or the direct webhook status update). This is still static source validation; it does not prove the live workflow has been rewired.
+
+
+## Recovery graph patch manifest — inspected topology correction
+
+A candidate-only graph patch is now captured in `n8n/shopify-recovery-replay-graph-patch.json` and checked by `tests/shopify-recovery-replay-graph-patch-static.test.mjs`.
+
+The read-only inspection found a second scheduler defect: only `Complete Job` and `Retry Job` currently return to `Loop Interventions`; `Retry Preflight Job`, `Retry Delivery Job`, and `Retry Pipeline Job` currently have no outgoing edge. The candidate patch connects all five intervention terminal outcomes to the replay claim, then returns the replay terminal path to the existing loop. It also connects the false output of `Job Claimed?` to replay claim and requires `alwaysOutputData` on both claim nodes so an empty result cannot silently bypass the other queue.
+
+The replay claim RPC error stops the tick; a load failure may retry only with the exact lease tuple; completion/retry RPC errors and false results terminate fail-closed. The candidate does not add a fourth workflow or modify the delivery workflow.
+
+The manifest is deliberately not an executable n8n export: the dedicated replay trigger and stored-payload replay entry still need to be built inside the existing `HENVALT_INGEST` candidate, and the combined three-workflow graph must be validated in isolated staging before any cutover.
