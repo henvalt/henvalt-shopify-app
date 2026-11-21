@@ -245,3 +245,25 @@ test("every required replay graph edge resolves to a known baseline or candidate
     assert.ok(known.has(edge.to), "unknown added-edge target: " + edge.to);
   }
 });
+
+
+test("lease-fenced SQL keeps its claim tuple across success and error branches", () => {
+  const bindings = manifest.node_parameter_bindings;
+  assert.deepEqual(Object.keys(bindings).sort(), [
+    "Claim Shopify Replay Job",
+    "Complete Shopify Replay Job",
+    "Load Shopify Replay Job",
+    "Retry Shopify Replay Job"
+  ].sort());
+  assert.equal(bindings["Claim Shopify Replay Job"].queryReplacement,
+    "={{ [$('Init Worker').first().json.worker_id] }}");
+  for (const name of ["Load Shopify Replay Job", "Complete Shopify Replay Job", "Retry Shopify Replay Job"]) {
+    const expr = bindings[name].queryReplacement;
+    assert.match(expr, /Normalize Shopify Replay Claim/);
+    assert.match(expr, /\.job_id/);
+    assert.match(expr, /\.worker_id/);
+    assert.match(expr, /\.lease_id/);
+  }
+  assert.match(bindings["Retry Shopify Replay Job"].queryReplacement, /SHOPIFY_REPLAY_PROCESSING_FAILED/);
+  assert.ok(manifest.invariants.some((x) => x.includes("error outputs cannot erase the job/worker/lease tuple")));
+});
