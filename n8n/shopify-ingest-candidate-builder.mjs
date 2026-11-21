@@ -191,8 +191,16 @@ const shop = String(row?.metadata?.shop_domain || "").toLowerCase();
 if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop)) errors.push("SHOP_INVALID");
 if (row?.metadata?.shopify_webhook_id !== row?.source_event_id || !row?.source_event_id) errors.push("DELIVERY_ID_INVALID");
 if (!row?.lease_expires_at || Date.parse(row.lease_expires_at) <= Date.now()) errors.push("LEASE_EXPIRED");
-if (row?.webhook_processed === true) errors.push("ALREADY_PROCESSED");\nif (!["PROCESSING","FAILED"].includes(String(row?.processing_status || "").toUpperCase())) errors.push("WEBHOOK_STATE_NOT_REPLAYABLE");
+const alreadyProcessed = row?.webhook_processed === true || String(row?.processing_status || "").toUpperCase() === "PROCESSED";
+if (!alreadyProcessed && !["PROCESSING","FAILED"].includes(String(row?.processing_status || "").toUpperCase())) errors.push("WEBHOOK_STATE_NOT_REPLAYABLE");
 if (errors.length) return { __replay_invalid: true, __replay_reason: errors.join(",") };
+const replayContext = {
+  job_id: claim.job_id, worker_id: claim.worker_id.trim(), lease_id: claim.lease_id,
+  lease_expires_at: row.lease_expires_at, tenant_id: row.tenant_id,
+  webhook_id: row.webhook_id, correlation_id: row.correlation_id || null,
+  source_event_id: row.source_event_id, ingress_hmac_verified: true
+};
+if (alreadyProcessed) return { __replay_already_processed: true, replay_context: replayContext, mark_webhook_processed: true };
 const body = { ...row.payload, event_id: row.source_event_id, correlation_id: row.correlation_id || undefined };
 const headers = {
   "x-shopify-shop-domain": shop,
@@ -212,6 +220,15 @@ return {
   const envelopeValid = createNode("Replay Envelope Valid?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"replay-envelope-valid",leftValue:"={{ $json.replay_context !== undefined && !$json.__replay_invalid }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
   },[-440,900],2.2);
+  const alreadyProcessed = createNode("Replay Already Processed?","n8n-nodes-base.if",{
+    conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"replay-already-processed",leftValue:"={{ $json.__replay_already_processed === true }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
+  },[-220,900],2.2);
+  const alreadyProcessedResult = createNode("Build Already Processed Replay Result","n8n-nodes-base.set",{
+    mode:"manual",assignments:{assignments:[
+      {id:"already-processed-flag",name:"mark_webhook_processed",type:"boolean",value:true},
+      {id:"already-processed-status",name:"replay_status",type:"string",value:"already_processed"}
+    ]},includeOtherFields:true,options:{}
+  },[0,760],3.4);
   const invalidReplay = createNode("Stop Invalid Replay Envelope","n8n-nodes-base.stopAndError",{errorMessage:"=Shopify replay envelope rejected: {{ $json.__replay_reason || 'invalid lease-bound stored event' }}"},[-220,1120],1);
   const trustedReplay = createNode("Is Trusted Replay?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"trusted-replay",leftValue:"={{ !!$('Validate & Normalize').item.json.replay_context }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
@@ -291,8 +308,12 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   workflow.connections["Is Rejected Replay?"] = {main:[[{node:"Stop Invalid Replay Envelope",type:"main",index:0}],[{node:"Build Invalid Ingress Response",type:"main",index:0}]]};
   workflow.connections["Build Invalid Ingress Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Replay Envelope Valid?"] = {main:[
-    [{node:"Validate & Normalize",type:"main",index:0}],
+    [{node:"Replay Already Processed?",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
+  ]};
+  workflow.connections["Replay Already Processed?"] = {main:[
+    [{node:"Build Already Processed Replay Result",type:"main",index:0}],
+    [{node:"Validate & Normalize",type:"main",index:0}]
   ]};
   workflow.connections["Shopify Replay Entry Trigger"] = {main:[[{node:"Load Shopify Replay Row",type:"main",index:0}]]};
   workflow.connections["Load Shopify Replay Row"] = {main:[[{node:"Build Shopify Replay Envelope",type:"main",index:0}]]};
@@ -306,7 +327,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   delete workflow.connections["Verify Shopify HMAC"];
   delete workflow.connections["HMAC Verified?"];
   addNode(workflow,trigger); addNode(workflow,loader); addNode(workflow,envelope); addNode(workflow,envelopeValid);
-  addNode(workflow,invalidReplay); addNode(workflow,trustedReplay); addNode(workflow,replayOrIngress);
+  addNode(workflow,invalidReplay); addNode(workflow,alreadyProcessed); addNode(workflow,alreadyProcessedResult); addNode(workflow,trustedReplay); addNode(workflow,replayOrIngress);
   addNode(workflow,invalidReplayContext);
   addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse);
   addNode(workflow,renewLease); addNode(workflow,confirmRenewal);
