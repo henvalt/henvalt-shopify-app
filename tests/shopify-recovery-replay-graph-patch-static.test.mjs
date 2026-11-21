@@ -201,3 +201,27 @@ test("candidate node versions are pinned to installed n8n definitions", () => {
   assert.equal(manifest.node_type_version_evidence.credentials_rebound_only_in_isolated_draft, true);
   assert.equal(manifest.node_type_version_evidence.production_workflow_unchanged, true);
 });
+
+
+test("replay subworkflow node contracts expose only the exact three required inputs", () => {
+  const contracts = manifest.executable_node_contracts;
+  const call = contracts["Call HENVALT_INGEST Replay Entry"];
+  const trigger = contracts["Dedicated Replay Execute Workflow Trigger"];
+  assert.equal(call.type, "n8n-nodes-base.executeWorkflow");
+  assert.equal(call.typeVersion, 1.4);
+  assert.equal(call.parameters.mode, "once");
+  assert.equal(call.parameters.source, "database");
+  assert.equal(call.parameters.workflowId.value, "VTpfGKNtu1CSQ4Rv");
+  assert.equal(call.parameters.options.waitForSubWorkflow, true);
+  assert.equal(call.onError, "continueErrorOutput");
+  const values = call.parameters.workflowInputs.value;
+  assert.deepEqual(Object.keys(values), ["job_id", "worker_id", "lease_id"]);
+  assert.deepEqual(trigger.parameters.workflowInputs.values, [
+    {name:"job_id",type:"string"},
+    {name:"worker_id",type:"string"},
+    {name:"lease_id",type:"string"},
+  ]);
+  assert.equal(trigger.typeVersion, 1.1);
+  assert.equal(trigger.isTrigger, true);
+  assert.equal(trigger.parameters.returnOutput, "lastRunOnly");
+});
