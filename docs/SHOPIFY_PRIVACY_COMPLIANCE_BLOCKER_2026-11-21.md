@@ -122,3 +122,33 @@ The candidate branch's offline workflow is guarded by:
 - `tests/shopify-privacy-workflow-safety.test.mjs`
 
 No production function, workflow, secret, database row, app configuration or deployment was changed during this inspection.
+
+
+## Additional deployed export endpoint inspection — 2026-11-21 (read-only)
+
+A separate ACTIVE Supabase Edge Function was found and captured in the candidate source tree:
+
+- Slug: `henvalt-privacy-export`
+- Version: `1`
+- JWT verification: disabled at the gateway; the function independently validates the bearer token against Supabase Auth.
+- Deployed source SHA-256: `708f0d953874f9e4896f433d950d57b823b56cbb33e30e8c0b1f966ec1212d97`
+- Candidate baseline: `supabase/functions/henvalt-privacy-export/index.ts`
+
+### What this endpoint adds
+
+- Requires a valid Supabase user session.
+- Requires exactly one OWNER/ADMIN tenant membership.
+- Lists up to 50 customer data-request rows for that tenant.
+- Allows download of a non-expired `result_payload` for a tenant-scoped privacy-request UUID.
+- Sets `result_delivered_at` before returning the JSON attachment.
+
+### Remaining concerns
+
+- This is a merchant-owner pull/download endpoint, not automatic delivery to Shopify or the customer. It narrows the gap but does not prove that the data subject received the export.
+- `result_delivered_at` is set before the response body has been confirmed received, so it records a download attempt/response initiation rather than verified receipt.
+- The export request remains `REVIEW_REQUIRED` after the download timestamp is set; no terminal completion transition is made by this endpoint.
+- The URL parameter named `request_id` is actually matched against the internal queue row UUID (`id`), not Shopify's external `request_id`; the naming should be clarified.
+- CORS allows any origin, although the endpoint still requires a bearer token validated by Supabase Auth and an owner/admin membership. Review this against the dashboard's actual deployment origins.
+- The endpoint's independent authentication is a positive control; do not turn on gateway JWT verification without validating the dashboard's token forwarding and deployment behavior.
+
+Both deployed v1 functions are now preserved under `supabase/functions/` as **AUDIT BASELINES ONLY**. These files are not remediations and must not be deployed unchanged. Their source hashes are pinned in-file. Production remains unchanged.
