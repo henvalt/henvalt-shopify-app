@@ -27,7 +27,6 @@ function connect(workflow, from, to, output = 0) {
 }
 let candidateNodeCounter = 1;
 function id() { return "00000000-0000-4000-8000-" + String(candidateNodeCounter++).padStart(12,"0"); }
-}
 function fencedBody(source, nodeName) {
   const original = expressionBody(source);
   const forceConstantError = nodeName === "Mark Webhook Failed" || nodeName === "Defer Payment Reconciliation";
