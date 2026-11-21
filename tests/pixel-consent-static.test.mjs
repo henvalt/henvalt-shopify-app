@@ -88,3 +88,7 @@ test("dashboard revenue chart uses the confirmed revenue series", () => {
   assert.match(dashboard, /good&&x\.amount!=null\?money\(x\.amount,currency\):"—"/);
   assert.doesNotMatch(dashboard, /a\.filter\(x=>x\.outcome==="recovered"&&x\.amount!=null\)/);
 });
+
+test("pixel security-definer RPCs use a hardened search path", () => {
+  assert.equal((migration.match(/SET search_path TO pg_catalog, henvalt, pg_temp/g) || []).length, 2);
+});
