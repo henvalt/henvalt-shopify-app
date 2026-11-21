@@ -178,3 +178,9 @@ Additional read-only checks were completed after the initial baseline.
 - All three tenant records currently report `recovery_enabled = false`; configured recovery flow entries are disabled where present.
 - This is tenant-level configuration, not a provider-wide kill switch.
 - Because the manual one-off test route has historically bypassed the tenant recovery toggle through its dedicated authorizer, tenant-level false values alone are insufficient evidence for a no-send cutover.
+
+
+### Billing and delivery queue snapshot
+- Live billing snapshot: 1 billing account, 0 billing periods, 0 billing usage charges, 0 billing measurements, 0 confirmed revenue-ledger rows and 0 confirmed order attributions.
+- Billing must remain non-live/read-only until at least one real order is independently attributed and the revenue ledger + fee measurement are verified end-to-end.
+- Current delivery request statuses: 2 `ACCEPTED`, 1 `DELIVERED`; no `PENDING` request was present in the snapshot. These are historical test states, not evidence of ongoing recovery throughput.
