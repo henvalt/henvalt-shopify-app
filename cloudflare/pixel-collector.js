@@ -3,6 +3,7 @@ const ALLOWED_EVENTS = new Set([
   "page_viewed",
   "product_viewed",
   "product_added_to_cart",
+  "product_removed_from_cart",
   "checkout_started",
 ]);
 
@@ -107,6 +108,13 @@ export default {
       payload = JSON.parse(raw);
     } catch {
       return corsJson({ error: "invalid_json" }, 400);
+    }
+
+    // The storefront extension normally suppresses events without analytics
+    // consent. Enforce that boundary again at the collector so crafted or stale
+    // clients cannot persist identifiers or storefront payload without consent.
+    if (payload.analytics_consent !== true) {
+      return corsJson({ error: "analytics_consent_required" }, 403);
     }
 
     if (
