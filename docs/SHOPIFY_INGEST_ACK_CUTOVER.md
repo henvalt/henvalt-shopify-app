@@ -83,7 +83,7 @@ The connected production database was inspected with SELECT-only catalog/functio
 - `henvalt.resolve_shopify_tenant(text)` returns a UUID or NULL for an unmapped/inactive shop; its execute ACL is limited to `service_role` and `postgres`.
 - `henvalt.ingest_raw_webhook_v2(...)` returns `webhook_id`, `is_duplicate`, `should_process`, and `processing_status`; its execute ACL is limited to `service_role` and `postgres`.
 - The ingest RPC locks matching idempotency rows and inserts a new webhook row with `PROCESSING` state, but it does not currently create a `process_shopify_webhook` job or return a replay job ID.
-- `claim_next_job` supports caller-supplied job-type filters, but the active recovery workflow currently filters to `execute_intervention` only.
+- `claim_next_job` supports caller-supplied job-type filters, but the active recovery workflow currently filters to `execute_intervention` only. A read-only aggregate of `background_jobs` found only `execute_intervention` and a historical `HENVALT_TEST_JOB`; no `process_shopify_webhook` jobs exist.
 
 ## Acceptance matrix
 
