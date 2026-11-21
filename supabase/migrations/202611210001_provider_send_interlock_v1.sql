@@ -164,8 +164,7 @@ CREATE OR REPLACE FUNCTION henvalt.provider_sending_status()
 RETURNS TABLE (
   enabled boolean,
   control_present boolean,
-  changed_at timestamptz,
-  change_reason text
+  changed_at timestamptz
 )
 LANGUAGE sql
 STABLE
@@ -174,8 +173,7 @@ SET search_path = pg_catalog, henvalt, pg_temp
 AS $function$
   SELECT COALESCE(c.provider_sending_enabled, false),
          c.control_key IS NOT NULL,
-         c.changed_at,
-         COALESCE(c.change_reason, 'default_deny')
+         c.changed_at
     FROM (SELECT 'global'::text AS control_key) expected
     LEFT JOIN henvalt.provider_send_control c
       ON c.control_key = expected.control_key;
