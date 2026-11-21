@@ -1,0 +1,2688 @@
+{
+  "id": "VTpfGKNtu1CSQ4Rv",
+  "name": "HENVALT_INGEST",
+  "active": true,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "henvalt/ingest",
+        "responseMode": "onReceived",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "99029359-80a3-43f9-9167-d6a2fdbd61a2",
+      "name": "Event Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -672,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst query = $json.query || {};\nconst h = (n) => headers[n] ?? headers[n.toLowerCase()] ?? headers[n.toUpperCase()];\nconst UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\n\nconst shopDomain = h(\"x-shopify-shop-domain\") || body.shop_domain || (body.commerce && body.commerce.shop_domain) || null;\nconst shopifyTopic = h(\"x-shopify-topic\") || null;\nconst shopifyWebhookId = h(\"x-shopify-webhook-id\") || null;\nconst shopifyEventId = h(\"x-shopify-event-id\") || null;\nconst shopifyApiVersion = h(\"x-shopify-api-version\") || null;\nconst shopifyTriggeredAt = h(\"x-shopify-triggered-at\") || null;\nconst hmac = h(\"x-shopify-hmac-sha256\") || null;\nconst rawBodyBase64 = ($input.item.binary && $input.item.binary.data && $input.item.binary.data.data) ? $input.item.binary.data.data : null;\n\nconst source = (shopDomain || shopifyTopic) ? \"shopify\" : (body.source || \"internal\");\nconst eventId = body.event_id || shopifyEventId || shopifyWebhookId || body.id || null;\nconst eventType = body.event_type || shopifyTopic || body.type || null;\nconst occurredAt = body.occurred_at || body.updated_at || body.created_at || body.email_marketing_consent?.consent_updated_at || shopifyTriggeredAt || new Date().toISOString();\n\n// Tenant identity signal only (shop domain). Never trusted as a tenant_id.\nconst tenantReference = source === \"shopify\" ? shopDomain : (body.tenant_reference || null);\n\n// tenant_id is NEVER invented or hard-coded. It must arrive explicitly as a UUID\n// (body.tenant_id or ?tenant_id= on the webhook URL registered for that shop).\nconst tenantRaw = body.tenant_id || query.tenant_id || null;\nconst tenantId = tenantRaw && UUID_RE.test(String(tenantRaw)) ? String(tenantRaw) : null;\n\n// correlation_id must be a UUID for the downstream RPCs.\nconst uuidv4 = () => \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, (c) => {\n  const r = (Math.random() * 16) | 0;\n  return (c === \"x\" ? r : ((r & 0x3) | 0x8)).toString(16);\n});\nconst correlationId = body.correlation_id && UUID_RE.test(String(body.correlation_id)) ? String(body.correlation_id) : uuidv4();\n\nconst missing = [];\nif (!eventId) missing.push(\"event_id\");\nif (!eventType) missing.push(\"event_type\");\nif (!source) missing.push(\"source\");\nif (!tenantReference) missing.push(\"tenant_reference\");\nif (!occurredAt) missing.push(\"occurred_at\");\nif (!tenantId && source !== \"shopify\") missing.push(\"tenant_id\");\n\nconst customer = body.customer || {};\nconst commerce = body.commerce || {};\nconst shippingAddress = body.shipping_address || body.shippingAddress || {};\nconst billingAddress = body.billing_address || body.billingAddress || {};\nconst customerAddress = customer.default_address || customer.defaultAddress || {};\nconst countryCode = String(\n  shippingAddress.country_code || shippingAddress.countryCode ||\n  billingAddress.country_code || billingAddress.countryCode ||\n  customerAddress.country_code || customerAddress.countryCode || \"\"\n).trim().toUpperCase() || null;\nconst countryCodeSource = countryCode\n  ? (shippingAddress.country_code || shippingAddress.countryCode ? \"checkout_shipping_address\"\n    : billingAddress.country_code || billingAddress.countryCode ? \"checkout_billing_address\"\n    : \"customer_default_address\")\n  : \"unavailable\";\nconst topicLower = String(eventType || \"\").toLowerCase();\nconst isCustomerConsentUpdate = topicLower === \"customers/email_marketing_consent/update\" || topicLower === \"customers_email_marketing_consent/update\" || topicLower === \"customers_email_marketing_consent_update\" || topicLower === \"customers_email_marketing_consent_update\";\nconst isCheckoutTopic = topicLower.includes(\"checkout\");\nconst isCartTopic = topicLower.includes(\"cart\");\nconst isCheckoutOrCartTopic = isCheckoutTopic || isCartTopic;\nconst cartItems = Array.isArray(body.line_items) ? body.line_items : [];\nconst cartPath = cartItems.map((item) => {\n  const variantId = String((item && item.variant_id) ?? \"\");\n  const quantity = Number((item && item.quantity) ?? 0);\n  return /^\\d+$/.test(variantId) && Number.isInteger(quantity) && quantity > 0 ? variantId + \":\" + quantity : null;\n}).filter(Boolean).join(\",\");\nconst cartDestination = isCartTopic && shopDomain && cartPath ? \"https://\" + shopDomain + \"/cart/\" + cartPath : null;\nlet cartValue = 0;\nfor (const item of cartItems) {\n  const lineTotal = Number(item.line_price || item.discounted_price || 0);\n  const unitPrice = Number(item.price || item.original_price || 0);\n  const quantity = Number(item.quantity || 0);\n  cartValue += lineTotal > 0 ? lineTotal : unitPrice * quantity;\n}\nconst consent = (o) => (o && o.state ? o.state === \"subscribed\" : null);\nconst consentRecord = customer.email_marketing_consent || body.email_marketing_consent || null;\nconst consentState = consentRecord && typeof consentRecord.state === \"string\" ? consentRecord.state.toLowerCase() : null;\n// Shopify's checkout buyer_accepts_marketing is a checkout-level marketing choice,\n// not a global unsubscribe. Only the customer marketing-consent record updates the\n// stored subscription state. Preserve an existing subscribed state when this flag is false.\nconst checkoutConsent = typeof body.buyer_accepts_marketing === \"boolean\" ? body.buyer_accepts_marketing : null;\nconst customerConsent = typeof customer.accepts_marketing === \"boolean\" ? customer.accepts_marketing : null;\nconst emailConsent = consentState\n  ? consentState === \"subscribed\"\n  : (customerConsent !== null ? customerConsent : null);\n\nconst normalized = {\n  event_id: eventId,\n  event_type: eventType,\n  source,\n  tenant_reference: tenantReference,\n  occurred_at: occurredAt,\n  customer: {\n    id: customer.id ?? body.customer_id ?? (isCustomerConsentUpdate ? body.id : null),\n    email: customer.email ?? body.email ?? body.email_address ?? null,\n    phone: customer.phone ?? body.phone ?? null,\n    first_name: customer.first_name ?? null,\n    last_name: customer.last_name ?? null,\n    email_consent: emailConsent,\n    sms_consent: consent(customer.sms_marketing_consent),\n  },\n  commerce: {\n    shop_domain: shopDomain,\n    country_code: countryCode,\n    country_code_source: countryCodeSource,\n    checkout_id: body.checkout_id ?? commerce.checkout_id ?? (isCheckoutTopic ? (body.id ?? body.token) : (isCartTopic ? body.id : null)) ?? null,\n    checkout_token: body.token ?? commerce.checkout_token ?? null,\n    cart_token: body.cart_token ?? (isCartTopic ? body.token : null) ?? null,\n    cart_id: body.cart_id ?? commerce.cart_id ?? (isCartTopic ? body.id : null) ?? null,\n    order_id: body.order_id ?? commerce.order_id ?? (eventType && String(eventType).indexOf(\"order\") !== -1 ? body.id : null) ?? null,\n    currency: body.currency ?? commerce.currency ?? null,\n    value: Number(body.total_price ?? body.value ?? commerce.value ?? (isCartTopic ? cartValue : 0)) || 0,\n    items: cartItems.slice(0, 20).map((item) => ({\n      title: String(item.title || item.name || \"\").slice(0, 200),\n      quantity: Number.isFinite(Number(item.quantity)) ? Math.max(0, Math.floor(Number(item.quantity))) : 0,\n      unit_price: Number(item.price || item.original_price || 0) || 0,\n      line_total: Number(item.line_price || item.discounted_price || 0) || 0,\n      product_id: item.product_id == null ? null : String(item.product_id),\n      variant_id: item.variant_id == null ? null : String(item.variant_id),\n      sku: item.sku == null ? null : String(item.sku).slice(0, 100)\n    })).filter((item) => item.title || item.product_id || item.variant_id),\n  },\n  destination_url: body.destination_url ?? body.abandoned_checkout_url ?? cartDestination ?? null,\n  metadata: { shopify_topic: shopifyTopic, hmac_present: !!hmac, email_marketing_consent_state: consentState, email_marketing_consent_updated_at: consentRecord?.consent_updated_at ?? null, country_code: countryCode, country_code_source: countryCodeSource },\n  correlation_id: correlationId,\n};\n\nconst verification = { source, shop_domain: shopDomain, hmac_sha256: hmac, raw_body_base64: rawBodyBase64 };\nconst idempotencyKey = body.idempotency_key || [source, tenantReference, eventType, eventId].join(\":\");\n\nreturn {\n  __valid: missing.length === 0,\n  __missing: missing,\n  __tenant_mapping_missing: source === \"shopify\" ? !shopDomain : !tenantId,\n  correlation_id: correlationId,\n  event: normalized,\n  verification,\n  ingest: {\n    tenant_id: tenantId,\n    source,\n    source_event_id: eventId == null ? null : String(eventId),\n    topic: eventType,\n    idempotency_key: idempotencyKey,\n    payload: body,\n    metadata: {\n      shop_domain: shopDomain,\n      shopify_webhook_id: shopifyWebhookId,\n      shopify_event_id: shopifyEventId,\n      shopify_topic: shopifyTopic,\n      shopify_api_version: shopifyApiVersion,\n      shopify_triggered_at: shopifyTriggeredAt,\n      tenant_reference: tenantReference,\n      verification: { source, shop_domain: shopDomain, hmac_present: !!hmac },\n      correlation_id: correlationId,\n      n8n_execution_id: $execution.id,\n    },\n    occurred_at: occurredAt,\n    correlation_id: correlationId,\n  },\n};",
+        "parameters": {
+          "jsCode": "const body = $json.body || {};\nconst headers = $json.headers || {};\nconst query = $json.query || {};\nconst h = (n) => headers[n] ?? headers[n.toLowerCase()] ?? headers[n.toUpperCase()];\nconst UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\n\nconst shopDomain = h(\"x-shopify-shop-domain\") || body.shop_domain || (body.commerce && body.commerce.shop_domain) || null;\nconst shopifyTopic = h(\"x-shopify-topic\") || null;\nconst shopifyWebhookId = h(\"x-shopify-webhook-id\") || null;\nconst shopifyEventId = h(\"x-shopify-event-id\") || null;\nconst shopifyApiVersion = h(\"x-shopify-api-version\") || null;\nconst shopifyTriggeredAt = h(\"x-shopify-triggered-at\") || null;\nconst hmac = h(\"x-shopify-hmac-sha256\") || null;\nconst rawBodyBase64 = ($input.item.binary && $input.item.binary.data && $input.item.binary.data.data) ? $input.item.binary.data.data : null;\n\nconst source = (shopDomain || shopifyTopic) ? \"shopify\" : (body.source || \"internal\");\nconst eventId = body.event_id || shopifyEventId || shopifyWebhookId || body.id || null;\nconst eventType = body.event_type || shopifyTopic || body.type || null;\nconst occurredAt = body.occurred_at || body.updated_at || body.created_at || body.email_marketing_consent?.consent_updated_at || shopifyTriggeredAt || new Date().toISOString();\n\n// Tenant identity signal only (shop domain). Never trusted as a tenant_id.\nconst tenantReference = source === \"shopify\" ? shopDomain : (body.tenant_reference || null);\n\n// tenant_id is NEVER invented or hard-coded. It must arrive explicitly as a UUID\n// (body.tenant_id or ?tenant_id= on the webhook URL registered for that shop).\nconst tenantRaw = body.tenant_id || query.tenant_id || null;\nconst tenantId = tenantRaw && UUID_RE.test(String(tenantRaw)) ? String(tenantRaw) : null;\n\n// correlation_id must be a UUID for the downstream RPCs.\nconst uuidv4 = () => \"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx\".replace(/[xy]/g, (c) => {\n  const r = (Math.random() * 16) | 0;\n  return (c === \"x\" ? r : ((r & 0x3) | 0x8)).toString(16);\n});\nconst correlationId = body.correlation_id && UUID_RE.test(String(body.correlation_id)) ? String(body.correlation_id) : uuidv4();\n\nconst missing = [];\nif (!eventId) missing.push(\"event_id\");\nif (!eventType) missing.push(\"event_type\");\nif (!source) missing.push(\"source\");\nif (!tenantReference) missing.push(\"tenant_reference\");\nif (!occurredAt) missing.push(\"occurred_at\");\nif (!tenantId && source !== \"shopify\") missing.push(\"tenant_id\");\n\nconst customer = body.customer || {};\nconst commerce = body.commerce || {};\nconst topicLower = String(eventType || \"\").toLowerCase();\nconst isCustomerConsentUpdate = topicLower === \"customers/email_marketing_consent/update\" || topicLower === \"customers_email_marketing_consent/update\" || topicLower === \"customers_email_marketing_consent_update\" || topicLower === \"customers_email_marketing_consent_update\";\nconst isCheckoutTopic = topicLower.includes(\"checkout\");\nconst isCartTopic = topicLower.includes(\"cart\");\nconst isCheckoutOrCartTopic = isCheckoutTopic || isCartTopic;\nconst cartItems = Array.isArray(body.line_items) ? body.line_items : [];\nconst cartPath = cartItems.map((item) => {\n  const variantId = String((item && item.variant_id) ?? \"\");\n  const quantity = Number((item && item.quantity) ?? 0);\n  return /^\\d+$/.test(variantId) && Number.isInteger(quantity) && quantity > 0 ? variantId + \":\" + quantity : null;\n}).filter(Boolean).join(\",\");\nconst cartDestination = isCartTopic && shopDomain && cartPath ? \"https://\" + shopDomain + \"/cart/\" + cartPath : null;\nlet cartValue = 0;\nfor (const item of cartItems) {\n  const lineTotal = Number(item.line_price || item.discounted_price || 0);\n  const unitPrice = Number(item.price || item.original_price || 0);\n  const quantity = Number(item.quantity || 0);\n  cartValue += lineTotal > 0 ? lineTotal : unitPrice * quantity;\n}\nconst consent = (o) => (o && o.state ? o.state === \"subscribed\" : null);\nconst consentRecord = customer.email_marketing_consent || body.email_marketing_consent || null;\nconst consentState = consentRecord && typeof consentRecord.state === \"string\" ? consentRecord.state.toLowerCase() : null;\n// Shopify's checkout buyer_accepts_marketing is a checkout-level marketing choice,\n// not a global unsubscribe. Only the customer marketing-consent record updates the\n// stored subscription state. Preserve an existing subscribed state when this flag is false.\nconst checkoutConsent = typeof body.buyer_accepts_marketing === \"boolean\" ? body.buyer_accepts_marketing : null;\nconst customerConsent = typeof customer.accepts_marketing === \"boolean\" ? customer.accepts_marketing : null;\nconst emailConsent = consentState\n  ? consentState === \"subscribed\"\n  : (customerConsent !== null ? customerConsent : null);\n\nconst normalized = {\n  event_id: eventId,\n  event_type: eventType,\n  source,\n  tenant_reference: tenantReference,\n  occurred_at: occurredAt,\n  customer: {\n    id: customer.id ?? body.customer_id ?? (isCustomerConsentUpdate ? body.id : null),\n    email: customer.email ?? body.email ?? body.email_address ?? null,\n    phone: customer.phone ?? body.phone ?? null,\n    first_name: customer.first_name ?? null,\n    last_name: customer.last_name ?? null,\n    email_consent: emailConsent,\n    sms_consent: consent(customer.sms_marketing_consent),\n  },\n  commerce: {\n    shop_domain: shopDomain,\n    checkout_id: body.checkout_id ?? commerce.checkout_id ?? (isCheckoutTopic ? (body.id ?? body.token) : (isCartTopic ? body.id : null)) ?? null,\n    checkout_token: body.token ?? commerce.checkout_token ?? null,\n    cart_token: body.cart_token ?? (isCartTopic ? body.token : null) ?? null,\n    cart_id: body.cart_id ?? commerce.cart_id ?? (isCartTopic ? body.id : null) ?? null,\n    order_id: body.order_id ?? commerce.order_id ?? (eventType && String(eventType).indexOf(\"order\") !== -1 ? body.id : null) ?? null,\n    currency: body.currency ?? commerce.currency ?? null,\n    value: Number(body.total_price ?? body.value ?? commerce.value ?? (isCartTopic ? cartValue : 0)) || 0,\n    items: cartItems.slice(0, 20).map((item) => ({\n      title: String(item.title || item.name || \"\").slice(0, 200),\n      quantity: Number.isFinite(Number(item.quantity)) ? Math.max(0, Math.floor(Number(item.quantity))) : 0,\n      unit_price: Number(item.price || item.original_price || 0) || 0,\n      line_total: Number(item.line_price || item.discounted_price || 0) || 0,\n      product_id: item.product_id == null ? null : String(item.product_id),\n      variant_id: item.variant_id == null ? null : String(item.variant_id),\n      sku: item.sku == null ? null : String(item.sku).slice(0, 100)\n    })).filter((item) => item.title || item.product_id || item.variant_id),\n  },\n  destination_url: body.destination_url ?? body.abandoned_checkout_url ?? cartDestination ?? null,\n  metadata: { shopify_topic: shopifyTopic, hmac_present: !!hmac, email_marketing_consent_state: consentState, email_marketing_consent_updated_at: consentRecord?.consent_updated_at ?? null },\n  correlation_id: correlationId,\n};\n\nconst verification = { source, shop_domain: shopDomain, hmac_sha256: hmac, raw_body_base64: rawBodyBase64 };\nconst idempotencyKey = body.idempotency_key || [source, tenantReference, eventType, eventId].join(\":\");\n\nreturn {\n  __valid: missing.length === 0,\n  __missing: missing,\n  __tenant_mapping_missing: !tenantId,\n  correlation_id: correlationId,\n  event: normalized,\n  verification,\n  ingest: {\n    tenant_id: tenantId,\n    source,\n    source_event_id: eventId == null ? null : String(eventId),\n    topic: eventType,\n    idempotency_key: idempotencyKey,\n    payload: body,\n    metadata: {\n      shop_domain: shopDomain,\n      shopify_webhook_id: shopifyWebhookId,\n      shopify_event_id: shopifyEventId,\n      shopify_topic: shopifyTopic,\n      shopify_api_version: shopifyApiVersion,\n      shopify_triggered_at: shopifyTriggeredAt,\n      tenant_reference: tenantReference,\n      verification: { source, shop_domain: shopDomain, hmac_present: !!hmac },\n      correlation_id: correlationId,\n      n8n_execution_id: $execution.id,\n    },\n    occurred_at: occurredAt,\n    correlation_id: correlationId,\n  },\n};"
+        }
+      },
+      "id": "887f3698-4f98-486c-b707-78783d7cfd54",
+      "name": "Validate & Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -448,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "valid",
+              "leftValue": "={{ $json.__valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "edd9a2aa-5dee-4461-8d41-433afdfe0b25",
+      "name": "Is Valid",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-event-class",
+              "name": "event_class",
+              "value": "={{ (() => { const topic = String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase(); const payload = $('Validate & Normalize').item.json.ingest.payload || {}; const status = String(payload.status || '').toLowerCase(); if (topic.includes('order_transactions') || topic.includes('transaction')) { if (['failure','failed','error','declined'].includes(status)) return 'ADJUSTMENT'; return 'CONVERSION'; } if (topic.startsWith('orders/')) return 'CONVERSION'; if (topic.includes('checkout') || topic.includes('cart')) return 'RECOVERABLE'; return 'OTHER'; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "cfg-opp-type",
+              "name": "opportunity_type",
+              "value": "={{ (() => { const topic=String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase(); const payload=$('Validate & Normalize').item.json.ingest.payload || {}; if (topic === 'order_transactions/create' && ['failure','failed','error','declined'].includes(String(payload.status || '').toLowerCase()) && ['authorization','sale'].includes(String(payload.kind || '').toLowerCase())) return 'PAYMENT_FAILURE'; if (topic.includes('cart')) return 'ABANDONED_CART'; if (topic.includes('checkout')) return 'ABANDONED_CHECKOUT'; return ''; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "cfg-eligible",
+              "name": "eligible_statuses",
+              "value": "ELIGIBLE",
+              "type": "string"
+            },
+            {
+              "id": "cfg-template",
+              "name": "template_reference",
+              "value": "={{ (() => { const topic=String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase(); if (topic === 'order_transactions/create') return 'payment_failure'; if (topic.includes('cart')) return 'abandoned_cart'; if (topic.includes('checkout')) return 'abandoned_checkout'; return ''; })() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "58058161-d250-4ac2-befa-127a60e185ad",
+      "name": "Engine Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/ingest_raw_webhook_v2",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_tenant_id\": $json.ingest.tenant_id, \"p_source\": $json.ingest.source, \"p_source_event_id\": $json.ingest.source_event_id, \"p_topic\": $json.ingest.topic, \"p_idempotency_key\": $json.ingest.idempotency_key, \"p_payload\": $json.ingest.payload, \"p_metadata\": $json.ingest.metadata } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "113033e4-a6b4-4fe2-b1e1-37c059532c3c",
+      "name": "Supabase Ingest RPC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        0,
+        0
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const resp = $json || {};\nconst corr = $(\"Validate & Normalize\").item.json.correlation_id;\nconst eventId = $(\"Validate & Normalize\").item.json.event.event_id;\n\n// Connection / unexpected failure (node error output has no statusCode) -> retryable.\nif (resp.error !== undefined || resp.statusCode === undefined) {\n  return { __proceed: false, __http: 503, __body: { status: \"temporarily_unavailable\", message: \"Processing backend unavailable, please retry.\", correlation_id: corr } };\n}\n\nconst code = resp.statusCode;\nconst raw = resp.body;\nconst row = Array.isArray(raw) ? (raw[0] || {}) : (raw || {});\n\nif (code >= 200 && code < 300) {\n  if (!row.webhook_id) {\n    return { __proceed: false, __http: 503, __body: { status: \"temporarily_unavailable\", message: \"Ingest returned no webhook_id.\", correlation_id: corr } };\n  }\n  if (row.should_process === false) {\n    const status = String(row.processing_status || \"\").toUpperCase();\n    const duplicateStatus = status === \"PROCESSED\" ? \"duplicate\" : \"already_processing\";\n    return { __proceed: false, __webhook_id: row.webhook_id, __http: 200, __body: { status: duplicateStatus, event_id: eventId, webhook_id: row.webhook_id, processing_status: status || null, correlation_id: corr } };\n  }\n  if (row.should_process === true) {\n    const replayed = row.is_duplicate === true;\n    return { __proceed: true, __webhook_id: row.webhook_id, __http: 200, __body: { status: replayed ? \"replay_accepted\" : \"accepted\", event_id: eventId, webhook_id: row.webhook_id, replayed, correlation_id: corr } };\n  }\n  // Fail closed if the RPC is still returning the legacy contract.\n  return { __proceed: false, __webhook_id: row.webhook_id, __http: 503, __body: { status: \"temporarily_unavailable\", message: \"Ingest RPC omitted processing decision.\", correlation_id: corr } };\n}\nif (code === 409) {\n  return { __proceed: false, __http: 200, __body: { status: \"duplicate\", event_id: eventId, correlation_id: corr } };\n}\nif (code === 401 || code === 403) {\n  return { __proceed: false, __http: 401, __body: { status: \"unauthorized\", message: \"Tenant or integration could not be verified.\", correlation_id: corr } };\n}\nif (code === 404) {\n  return { __proceed: false, __http: 404, __body: { status: \"unknown_tenant\", message: \"No matching integration for this event source.\", correlation_id: corr } };\n}\nif (code >= 400 && code < 500) {\n  return { __proceed: false, __http: 422, __body: { status: \"rejected\", message: \"Event was not accepted by business rules.\", correlation_id: corr } };\n}\n// 5xx from Supabase -> retryable.\nreturn { __proceed: false, __http: 503, __body: { status: \"temporarily_unavailable\", message: \"Processing backend error, please retry.\", correlation_id: corr } };"
+      },
+      "id": "f18356d6-68f5-4f42-a840-0fbbb710c9fe",
+      "name": "Classify Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "proceed",
+              "leftValue": "={{ $json.__proceed === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "055481c5-c72e-4817-874b-d4fc6d2351fe",
+      "name": "Should Process?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/upsert_canonical_event",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_tenant_id\": $('Bind Tenant Context').item.json.ingest.tenant_id, \"p_webhook_event_id\": $('Classify Result').item.json.__webhook_id, \"p_event_type\": $('Validate & Normalize').item.json.ingest.topic, \"p_event_class\": $('Engine Config').item.json.event_class, \"p_source\": $('Validate & Normalize').item.json.ingest.source, \"p_source_event_id\": $('Validate & Normalize').item.json.ingest.source_event_id, \"p_customer_reference\": $('Validate & Normalize').item.json.event.customer.id == null ? null : String($('Validate & Normalize').item.json.event.customer.id), \"p_email\": $('Validate & Normalize').item.json.event.customer.email, \"p_anonymous_reference\": $('Validate & Normalize').item.json.event.commerce.cart_token, \"p_session_reference\": $('Validate & Normalize').item.json.event.commerce.checkout_token, \"p_occurred_at\": $('Validate & Normalize').item.json.ingest.occurred_at, \"p_value_at_risk\": $('Validate & Normalize').item.json.event.commerce.value, \"p_currency\": $('Validate & Normalize').item.json.event.commerce.currency, \"p_payload\": $('Validate & Normalize').item.json.ingest.payload, \"p_metadata\": $('Validate & Normalize').item.json.ingest.metadata, \"p_idempotency_key\": $('Validate & Normalize').item.json.ingest.idempotency_key, \"p_correlation_id\": $('Validate & Normalize').item.json.correlation_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "62388717-0606-4622-9d59-3a81a0d90b44",
+      "name": "Upsert Canonical Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        608,
+        976
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/resolve_identity",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_event_id\": [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "8b02a4bb-0afe-4a20-9898-ef5bb11a26a2",
+      "name": "Resolve Identity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1248,
+        1056
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "checkout",
+              "leftValue": "={{ String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase().includes('checkout') || String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase().includes('cart') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ed155644-4257-4671-9d96-7a5c1de1ede2",
+      "name": "Is Checkout Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1472,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "checkout-id",
+              "leftValue": "={{ $('Validate & Normalize').item.json.event.commerce.checkout_id == null ? '' : String($('Validate & Normalize').item.json.event.commerce.checkout_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "email",
+              "leftValue": "={{ $('Validate & Normalize').item.json.event.customer.email || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0bbe683b-64c7-4702-9148-551364d5da84",
+      "name": "Has Checkout Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1696,
+        912
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/upsert_customer",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_tenant_id\": $('Bind Tenant Context').item.json.ingest.tenant_id, \"p_shopify_customer_id\": $('Validate & Normalize').item.json.event.customer.id == null ? null : String($('Validate & Normalize').item.json.event.customer.id), \"p_email\": $('Validate & Normalize').item.json.event.customer.email, \"p_phone\": $('Validate & Normalize').item.json.event.customer.phone, \"p_first_name\": $('Validate & Normalize').item.json.event.customer.first_name, \"p_last_name\": $('Validate & Normalize').item.json.event.customer.last_name, \"p_email_consent\": $('Validate & Normalize').item.json.event.customer.email_consent, \"p_whatsapp_consent\": null, \"p_sms_consent\": $('Validate & Normalize').item.json.event.customer.sms_consent, \"p_metadata\": { \"source\": \"shopify\", \"shop_domain\": $('Validate & Normalize').item.json.ingest.metadata.shop_domain, \"correlation_id\": $('Validate & Normalize').item.json.correlation_id, \"resolved_customer_id\": [].concat($('Resolve Identity').item.json.body)[0].customer_id, \"email_consent_source\": $('Validate & Normalize').item.json.event.customer.email_consent === null ? 'no_customer_consent_update_in_checkout_event' : 'shopify_customer_marketing_consent', \"checkout_marketing_preference\": typeof $('Validate & Normalize').item.json.ingest.payload.buyer_accepts_marketing === 'boolean' ? $('Validate & Normalize').item.json.ingest.payload.buyer_accepts_marketing : null, \"email_marketing_consent_state\": $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_state, \"email_marketing_consent_updated_at\": $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_updated_at, \"email_consent_observed_at\": $('Validate & Normalize').item.json.event.occurred_at, \"country_code\": $('Validate & Normalize').item.json.event.commerce.country_code, \"country_code_source\": $('Validate & Normalize').item.json.event.commerce.country_code_source } } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        },
+        "parameters": {
+          "jsonBody": "={{ { \"p_tenant_id\": $('Bind Tenant Context').item.json.ingest.tenant_id, \"p_shopify_customer_id\": $('Validate & Normalize').item.json.event.customer.id == null ? null : String($('Validate & Normalize').item.json.event.customer.id), \"p_email\": $('Validate & Normalize').item.json.event.customer.email, \"p_phone\": $('Validate & Normalize').item.json.event.customer.phone, \"p_first_name\": $('Validate & Normalize').item.json.event.customer.first_name, \"p_last_name\": $('Validate & Normalize').item.json.event.customer.last_name, \"p_email_consent\": $('Validate & Normalize').item.json.event.customer.email_consent, \"p_whatsapp_consent\": null, \"p_sms_consent\": $('Validate & Normalize').item.json.event.customer.sms_consent, \"p_metadata\": { \"source\": \"shopify\", \"shop_domain\": $('Validate & Normalize').item.json.ingest.metadata.shop_domain, \"correlation_id\": $('Validate & Normalize').item.json.correlation_id, \"resolved_customer_id\": [].concat($('Resolve Identity').item.json.body)[0].customer_id, \"email_consent_source\": $('Validate & Normalize').item.json.event.customer.email_consent === null ? 'no_customer_consent_update_in_checkout_event' : 'shopify_customer_marketing_consent', \"checkout_marketing_preference\": typeof $('Validate & Normalize').item.json.ingest.payload.buyer_accepts_marketing === 'boolean' ? $('Validate & Normalize').item.json.ingest.payload.buyer_accepts_marketing : null, \"email_marketing_consent_state\": $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_state, \"email_marketing_consent_updated_at\": $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_updated_at, \"email_consent_observed_at\": $('Validate & Normalize').item.json.event.occurred_at } } }}"
+        }
+      },
+      "id": "9d06aea5-9f21-404f-bf47-fe527f5df08b",
+      "name": "Upsert Customer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1920,
+        832
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/upsert_checkout",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_tenant_id\": $('Bind Tenant Context').item.json.ingest.tenant_id, \"p_shopify_checkout_id\": String($('Validate & Normalize').item.json.event.commerce.checkout_id), \"p_customer_id\": (String($('Upsert Customer').item.json.data || '').trim().replace(/^\\\"|\\\"$/g, '') || [].concat($('Resolve Identity').item.json.body)[0].customer_id || null), \"p_checkout_token\": $('Validate & Normalize').item.json.event.commerce.checkout_token, \"p_session_reference\": $('Validate & Normalize').item.json.event.commerce.checkout_token, \"p_email\": $('Validate & Normalize').item.json.event.customer.email, \"p_total_value\": $('Validate & Normalize').item.json.event.commerce.value, \"p_currency\": $('Validate & Normalize').item.json.event.commerce.currency, \"p_status\": null, \"p_metadata\": { \"source\": \"shopify\", \"shop_domain\": $('Validate & Normalize').item.json.ingest.metadata.shop_domain, \"abandoned_checkout_url\": $('Validate & Normalize').item.json.event.destination_url, \"destination_url\": $('Validate & Normalize').item.json.event.destination_url, \"commerce_type\": String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase().includes('cart') ? 'cart' : 'checkout', \"cart_id\": $('Validate & Normalize').item.json.event.commerce.cart_id, \"cart_token\": $('Validate & Normalize').item.json.event.commerce.cart_token, \"line_items\": $('Validate & Normalize').item.json.event.commerce.items, \"country_code\": $('Validate & Normalize').item.json.event.commerce.country_code, \"country_code_source\": $('Validate & Normalize').item.json.event.commerce.country_code_source, \"correlation_id\": $('Validate & Normalize').item.json.correlation_id, \"resolved_checkout_id\": [].concat($('Resolve Identity').item.json.body)[0].checkout_id } } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "17ba3304-391e-4104-9782-8fa8c3184400",
+      "name": "Upsert Checkout",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2144,
+        768
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/create_opportunity_idempotent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const isPayment = String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'order_transactions/create'; const paymentOrder = isPayment ? (((Array.isArray($('Lookup Payment Order').item.json.body) ? $('Lookup Payment Order').item.json.body[0] : $('Lookup Payment Order').item.json.body) || {})) : {}; const base = $('Validate & Normalize').item.json; const tenant = $('Bind Tenant Context').item.json.ingest.tenant_id; const eventId = [].concat($('Upsert Canonical Event').item.json.body)[0].event_id; const identity = [].concat($('Resolve Identity').item.json.body)[0] || {}; return { p_tenant_id: tenant, p_source_event_id: eventId, p_customer_id: isPayment ? paymentOrder.customer_id : (String($('Upsert Customer').item.json.data || '').trim().replace(/^\\\"|\\\"$/g, '') || identity.customer_id || null), p_checkout_id: isPayment ? paymentOrder.checkout_id : (identity.checkout_id || null), p_opportunity_type: isPayment ? 'PAYMENT_FAILURE' : $('Engine Config').item.json.opportunity_type, p_value_at_risk: isPayment ? Number(base.ingest.payload.amount || 0) : base.event.commerce.value, p_currency: isPayment ? base.ingest.payload.currency : base.event.commerce.currency, p_confidence_score: isPayment ? 0.85 : Number([].concat($('Score Recovery Intent').item.json.body)[0]?.score ?? 0.70), p_idempotency_key: isPayment ? ('shopify:' + tenant + ':payment:' + String(base.ingest.payload.id) + ':opportunity') : (base.ingest.source + ':' + tenant + (String(base.ingest.topic || '').toLowerCase().includes('cart') ? ':cart:' + String(base.event.commerce.cart_id || base.event.commerce.cart_token || base.event.event_id) : ':checkout:' + String(base.event.commerce.checkout_id || base.event.commerce.checkout_token || base.event.event_id)) + ':opportunity'), p_expires_at: null, p_correlation_id: base.correlation_id }; })() }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "c3f1322d-2523-4c74-aaef-62b2c068ef50",
+      "name": "Create Opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2368,
+        688
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "new-opp",
+              "leftValue": "={{ !!([].concat($json.body)[0] || {}).opportunity_id }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "93323ca1-9093-46cb-aabf-a9001212da0a",
+      "name": "Opportunity Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2592,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/evaluate_eligibility",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_opportunity_id\": [].concat($('Create Opportunity').item.json.body)[0].opportunity_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "8f6f950d-974d-4e17-af01-8c7a69643025",
+      "name": "Evaluate Eligibility",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2816,
+        544
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/apply_eligibility",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_opportunity_id\": [].concat($('Create Opportunity').item.json.body)[0].opportunity_id, \"p_status\": $('Evaluate Eligibility').item.json.data } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "6a647476-2469-446b-8310-f6f8dc4b86fc",
+      "name": "Apply Eligibility",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3040,
+        480
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "eligible",
+              "leftValue": "={{ String($('Engine Config').item.json.eligible_statuses || '').split(',').map(s => s.trim()).filter(s => s).includes(String($('Evaluate Eligibility').item.json.data || [].concat($('Evaluate Eligibility').item.json.body || [])[0] || '').trim()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e16f20bf-f51f-4ff2-ba25-fd1c57a8af10",
+      "name": "Is Eligible?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3264,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/create_recovery_sequence",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_opportunity_id\": [].concat($('Create Opportunity').item.json.body)[0].opportunity_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "b37f0351-f89c-44f4-b1fc-62168f98bc9a",
+      "name": "Create Recovery Sequence",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3488,
+        336
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/create_intervention_and_enqueue",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const isPayment = String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'order_transactions/create'; const base = $('Validate & Normalize').item.json; const tenant = $('Bind Tenant Context').item.json.ingest.tenant_id; const paymentId = String(base.ingest.payload.id || base.ingest.source_event_id); const delayResponse = $('Resolve Recovery Delay').item.json; const delayBody = delayResponse.body !== undefined ? delayResponse.body : (delayResponse.data !== undefined ? delayResponse.data : delayResponse); const delayValue = Number(Array.isArray(delayBody) ? delayBody[0] : delayBody); if (!Number.isInteger(delayValue) || delayValue < 5 || delayValue > 10080) throw new Error('Invalid tenant recovery delay; intervention not scheduled'); return { p_recovery_id: String($('Create Recovery Sequence').item.json.data || $('Create Recovery Sequence').item.json.body?.[0] || $('Create Recovery Sequence').item.json.body), p_channel: 'EMAIL', p_step_number: 1, p_scheduled_at: $now.plus({ minutes: delayValue }).toISO(), p_template_reference: isPayment ? 'payment_failure' : $('Engine Config').item.json.template_reference, p_recipient_reference: (() => { if (!isPayment) return base.event.customer.email; const o = $('Lookup Payment Order').item.json.body; const row = Array.isArray(o) ? o[0] : o; const c = row && row.customers; const customer = Array.isArray(c) ? c[0] : c; return customer ? customer.email : null; })(), p_idempotency_key: isPayment ? ('shopify:' + tenant + ':payment:' + paymentId + ':intervention:EMAIL:1') : (base.ingest.source + ':' + tenant + (String(base.ingest.topic || '').toLowerCase().includes('cart') ? ':cart:' + String(base.event.commerce.cart_id || base.event.commerce.cart_token || base.event.event_id) : ':checkout:' + String(base.event.commerce.checkout_id || base.event.commerce.checkout_token || base.event.event_id)) + ':intervention:EMAIL:1'), p_correlation_id: base.correlation_id }; })() }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "6266d752-9463-412d-824a-8885cde02561",
+      "name": "Create Intervention",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3712,
+        256
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/mark_webhook_processed",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_webhook_id\": $('Classify Result').item.json.__webhook_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "1061d9bd-7c98-4229-ae68-dce366121fe6",
+      "name": "Mark Webhook Processed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3936,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "err-msg",
+              "name": "__error",
+              "value": "={{ (() => { const isPayment = String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'order_transactions/create'; if (isPayment) { const b=$('Lookup Payment Order').item.json.body; const r=Array.isArray(b)?b[0]:b; if (!r || !r.id || !r.customer_id || !r.checkout_id) return 'payment_order_not_projected_or_not_recovery_linkable_yet: returning HTTP 500 so Shopify can retry; order and checkout linkage must exist before recovery'; } return $json.error ? ((typeof $json.error === 'string' ? $json.error : ($json.error.message || JSON.stringify($json.error))) + ($json.error.description ? ' - ' + $json.error.description : '')) : 'missing_checkout_data: Shopify checkout id and customer email are required to create a recovery opportunity'; })() }}",
+              "type": "string"
+            },
+            {
+              "id": "err-corr",
+              "name": "correlation_id",
+              "value": "={{ $('Validate & Normalize').item.json.correlation_id }}",
+              "type": "string"
+            },
+            {
+              "id": "err-wh",
+              "name": "webhook_id",
+              "value": "={{ $('Classify Result').item.json.__webhook_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5abc0b9a-ddf9-436d-b46d-f947b1aa9080",
+      "name": "Capture Error",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3936,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "=Invalid event [correlation_id={{ $json.correlation_id }}]: missing {{ ($json.__missing || []).join(\", \") }}{{ $json.__tenant_mapping_missing ? \" | TENANT MAPPING MISSING for shop_domain=\" + $json.verification.shop_domain + \" (no tenant_id supplied; refusing to guess)\" : \"\" }}"
+      },
+      "id": "a00a0faf-965c-4c00-aeaa-06383f41df59",
+      "name": "Reject Invalid Event",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        224,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ok-http",
+              "name": "__http",
+              "value": 200,
+              "type": "number"
+            },
+            {
+              "id": "ok-body",
+              "name": "__body",
+              "type": "object",
+              "value": "={{ (() => {\n  const topic = String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase();\n  let outcome = 'event_recorded';\n  if (topic.startsWith('orders/')) {\n    outcome = topic === 'orders/cancelled' ? 'order_cancelled_adjustment_processed' : 'order_processed';\n  } else if ($('Upsert Customer Consent').isExecuted) {\n    outcome = 'consent_updated';\n  } else if ($('Create Intervention').isExecuted) {\n    outcome = 'intervention_scheduled';\n  } else if ($('Is Eligible?').isExecuted) {\n    outcome = 'not_eligible';\n  } else if ($('Create Opportunity').isExecuted) {\n    outcome = 'opportunity_created';\n  } else if ($('Opportunity Exists?').isExecuted) {\n    outcome = 'opportunity_duplicate';\n  } else if (topic.startsWith('checkouts/') && (!$('Validate & Normalize').item.json.event.commerce.checkout_id || !$('Validate & Normalize').item.json.event.customer.email)) {\n    outcome = 'checkout_event_missing_recovery_data';\n  }\n  const first = (value) => [].concat(value || [])[0] || null;\n  return {\n    status: 'processed',\n    outcome,\n    order_id: $('Project Order From Event').isExecuted ? $('Project Order From Event').item.json.body : null,\n    attribution_id: $('Evaluate Order Attribution').isExecuted ? $('Evaluate Order Attribution').item.json.body : null,\n    ledger_result: $('Post Recovery To Ledger').isExecuted ? $('Post Recovery To Ledger').item.json.body : null,\n    eligibility: $('Evaluate Eligibility').isExecuted ? first($('Evaluate Eligibility').item.json.body) : null,\n    webhook_id: $('Classify Result').item.json.__webhook_id || null,\n    canonical_event_id: first($('Upsert Canonical Event').item.json.body)?.event_id || null,\n    opportunity_id: $('Create Opportunity').isExecuted ? first($('Create Opportunity').item.json.body)?.opportunity_id || null : null,\n    recovery_id: $('Create Recovery Sequence').isExecuted ? first($('Create Recovery Sequence').item.json.body) : null,\n    intervention_id: $('Create Intervention').isExecuted ? first($('Create Intervention').item.json.body) : null,\n    event_id: $('Validate & Normalize').item.json.event.event_id || null,\n    correlation_id: $('Validate & Normalize').item.json.correlation_id || null\n  };\n})() }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "adbb534f-dc12-463f-9f84-e2285018e540",
+      "name": "Build Success Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/mark_webhook_failed",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_webhook_id\": $json.webhook_id, \"p_error\": $json.__error + \" [correlation_id=\" + $json.correlation_id + \"]\" } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "629ca815-9fba-40cf-b55c-1b23491cd3a9",
+      "name": "Mark Webhook Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        4160,
+        1104
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "errorMessage": "=HENVALT_INGEST failed [webhook_id={{ $('Capture Error').item.json.webhook_id }} correlation_id={{ $('Capture Error').item.json.correlation_id }}]: {{ $('Capture Error').item.json.__error }}"
+      },
+      "id": "beae224c-1341-4d88-9053-eec294128c01",
+      "name": "Fail Execution",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4608,
+        1104
+      ]
+    },
+    {
+      "id": "ef12d180-8ca5-4d39-9e5a-5f64d8c5bbc2",
+      "name": "Resolve Shopify Tenant",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        384
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/resolve_shopify_tenant",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            },
+            {
+              "name": "Accept-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_shop_domain: $('Validate & Normalize').item.json.event.tenant_reference } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "notes": "Resolve the tenant from the signed Shopify shop-domain identity; never trust a tenant UUID supplied by the webhook."
+    },
+    {
+      "id": "5412aa5b-7d7f-488c-9acd-d150ee191d78",
+      "name": "Bind Tenant Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        384
+      ],
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const norm = $(\"Validate & Normalize\").item.json;\nconst rpc = $json || {};\nconst isShopify = norm.ingest && norm.ingest.source === \"shopify\";\nconst body = rpc.body;\nlet resolved = null;\nif (typeof rpc.data === \"string\" && rpc.data.trim()) {\n  resolved = rpc.data.trim().replace(/^\"|\"$/g, \"\");\n} else if (typeof body === \"string\") {\n  resolved = body;\n} else if (Array.isArray(body) && body.length) {\n  resolved = body[0];\n} else if (body && typeof body === \"object\") {\n  resolved = body.tenant_id || body.resolve_shopify_tenant || null;\n}\nconst tenantId = isShopify ? resolved : norm.ingest.tenant_id;\nconst uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst validTenant = typeof tenantId === \"string\" && uuidRe.test(tenantId);\nconst out = JSON.parse(JSON.stringify(norm));\nout.ingest.tenant_id = validTenant ? tenantId : null;\nout.__tenant_mapping_missing = !validTenant;\nout.__tenant_lookup_error = rpc.error !== undefined || (rpc.statusCode !== undefined && rpc.statusCode >= 400);\nout.__http = out.__tenant_lookup_error ? 503 : (validTenant ? 200 : (isShopify ? 404 : 400));\nif (!validTenant && !out.__missing.includes(\"tenant_id\")) out.__missing.push(\"tenant_id\");\nout.__valid = norm.__valid === true && validTenant && !out.__tenant_lookup_error;\nreturn out;",
+        "parameters": {
+          "jsCode": "const norm = $(\"Validate & Normalize\").item.json;\nconst rpc = $json || {};\nconst isShopify = norm.ingest && norm.ingest.source === \"shopify\";\nconst body = rpc.body;\nlet resolved = null;\n// The Resolve Shopify Tenant HTTP node is configured for full response + text.\n// n8n stores that response body in rpc.data (a plain UUID string).\nif (typeof rpc.data === \"string\" && rpc.data.trim()) {\n  resolved = rpc.data.trim().replace(/^\"|\"$/g, \"\");\n} else if (typeof body === \"string\") {\n  resolved = body;\n} else if (Array.isArray(body) && body.length) {\n  resolved = body[0];\n} else if (body && typeof body === \"object\") {\n  resolved = body.tenant_id || body.resolve_shopify_tenant || null;\n}\nconst tenantId = isShopify ? resolved : norm.ingest.tenant_id;\nconst uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst validTenant = typeof tenantId === \"string\" && uuidRe.test(tenantId);\nconst out = JSON.parse(JSON.stringify(norm));\nout.ingest.tenant_id = validTenant ? tenantId : null;\nout.__tenant_mapping_missing = !validTenant;\nout.__tenant_lookup_error = rpc.error !== undefined || (rpc.statusCode !== undefined && rpc.statusCode >= 400);\nout.__http = out.__tenant_lookup_error ? 503 : (!validTenant && isShopify ? 404 : 400);\nif (!validTenant && !out.__missing.includes(\"tenant_id\")) out.__missing.push(\"tenant_id\");\nout.__valid = norm.__valid === true && validTenant;\nreturn out;"
+        }
+      },
+      "notes": "Apply the authoritative shop-domain mapping or retain the explicit tenant for authenticated internal events."
+    },
+    {
+      "id": "6967f4f0-8750-4475-bfb1-cf1ec3a71139",
+      "name": "Verify Shopify HMAC",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        224,
+        384
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/verify_shopify_webhook_hmac",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_hmac: $('Validate & Normalize').item.json.verification.hmac_sha256, p_raw_body_base64: $('Validate & Normalize').item.json.verification.raw_body_base64 } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 10000
+        }
+      },
+      "notes": "Fail closed unless the exact raw Shopify request body validates against the app secret stored in Supabase Vault as henvalt_shopify_app_secret."
+    },
+    {
+      "id": "ca93a79c-9f4a-4bdd-8400-2b2bea6330a4",
+      "name": "HMAC Verified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        448,
+        384
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "hmac-valid",
+              "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && $json.body === true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "adb7d50d-7f16-4cab-9180-f2774a6a383f",
+      "name": "Is Order Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1696,
+        1248
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "order-event",
+              "leftValue": "={{ String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase().startsWith('orders/') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d974c619-0f90-4835-9e58-7b5d1df66cf3",
+      "name": "Project Order From Event",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1920,
+        1168
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/project_order_from_event",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_event_id: [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "notes": "Project the Shopify order event into the tenant-scoped orders table idempotently.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "e03ded40-148b-4eca-bea0-11f860911243",
+      "name": "Evaluate Order Attribution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2144,
+        1168
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/evaluate_order_attribution",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_order_id: $('Project Order From Event').item.json.body } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "notes": "Evaluate tracking-token, checkout, and customer evidence; billing eligibility remains governed by attribution confidence.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "b29541ab-aed1-4f3d-961b-cdac7229eb3c",
+      "name": "Stop Recovery After Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2368,
+        1168
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/stop_recovery_after_order",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_attribution_id: $('Evaluate Order Attribution').item.json.body } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "notes": "Stop outstanding recovery interventions only for confirmed/probable order attribution.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "f9ae43a8-1ff7-438d-9437-b466c891d32a",
+      "name": "Post Recovery To Ledger",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2592,
+        1168
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/post_recovery_to_ledger_and_measure_billing",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_attribution_id: $('Evaluate Order Attribution').item.json.body } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "notes": "Post only economically attributable recovered revenue; the RPC is idempotent.",
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "561badf4-c8af-4f7b-9c57-ce69179a4e12",
+      "name": "Is Shopify Uninstall?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        976
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "shopify-uninstall",
+              "leftValue": "={{ String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'app/uninstalled' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "9040cfc9-0211-41cf-98f7-b2fc32340ae4",
+      "name": "Deactivate Shopify Connection",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1056,
+        880
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT henvalt.deactivate_shopify_connection_on_uninstall($1, $2, $3, $4) AS result",
+        "options": {
+          "queryReplacement": "={{ [ $('Bind Tenant Context').item.json.ingest.tenant_id, $('Validate & Normalize').item.json.verification.shop_domain, $('Classify Result').item.json.__webhook_id, $('Validate & Normalize').item.json.correlation_id ] }}"
+        }
+      },
+      "notes": "Deactivate only the Shopify connection that emitted app/uninstalled. Recovery preflight and delivery authorization also require the originating connection to remain active.",
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "993abf01-ce24-4295-b426-d30e222f0880",
+      "name": "Is Failed Payment?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -120,
+        520
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "payment-topic",
+              "leftValue": "={{ String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'order_transactions/create' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "payment-status",
+              "leftValue": "={{ ['failure','failed','error','declined'].includes(String($('Validate & Normalize').item.json.ingest.payload.status || '').toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "payment-kind",
+              "leftValue": "={{ ['authorization','sale'].includes(String($('Validate & Normalize').item.json.ingest.payload.kind || '').toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "payment-test",
+              "leftValue": "={{ $('Validate & Normalize').item.json.ingest.payload.test !== true }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "payment-value",
+              "leftValue": "={{ Number($('Validate & Normalize').item.json.ingest.payload.amount || 0) > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "f81be153-4a07-40c1-a7aa-059356c9988d",
+      "name": "Lookup Payment Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        420
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/orders?tenant_id=eq.' + $('Bind Tenant Context').item.json.ingest.tenant_id + '&shopify_order_id=eq.' + encodeURIComponent(String($('Validate & Normalize').item.json.ingest.payload.order_id || '')) + '&select=id,customer_id,checkout_id,total_value,currency,financial_status,cancelled_at,customers(id,email,email_consent)&limit=1' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "f23beb9a-1132-4cc6-aaa5-633981b2ba40",
+      "name": "Payment Order Usable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        360,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "payment-order-projected",
+              "leftValue": "={{ (() => { const b=$('Lookup Payment Order').item.json.body; const r=Array.isArray(b)?b[0]:b; return !!(r && r.id && r.customer_id && r.checkout_id); })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "224e7d83-0f2a-4192-8543-a58b2474f439",
+      "name": "Is Consent Update?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        560
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "consent-topic",
+              "leftValue": "={{ ['customers/email_marketing_consent/update','customers_email_marketing_consent/update','customers_email_marketing_consent_update'].includes(String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase()) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "consent-state",
+              "leftValue": "={{ $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_state || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "consent-customer-id",
+              "leftValue": "={{ $('Validate & Normalize').item.json.event.customer.id == null ? '' : String($('Validate & Normalize').item.json.event.customer.id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "consent-email",
+              "leftValue": "={{ $('Validate & Normalize').item.json.event.customer.email || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "df66b8ce-4672-4d4c-a8b0-cc6cc862e5ae",
+      "name": "Upsert Customer Consent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2000,
+        480
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/apply_shopify_email_consent_update",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"p_tenant_id\": $('Bind Tenant Context').item.json.ingest.tenant_id, \"p_shopify_customer_id\": $('Validate & Normalize').item.json.event.customer.id == null ? null : String($('Validate & Normalize').item.json.event.customer.id), \"p_email\": $('Validate & Normalize').item.json.event.customer.email, \"p_email_consent\": $('Validate & Normalize').item.json.event.customer.email_consent, \"p_metadata\": { \"source\": \"shopify_email_marketing_consent_webhook\", \"shop_domain\": $('Validate & Normalize').item.json.ingest.metadata.shop_domain, \"consent_state\": $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_state, \"consent_updated_at\": $('Validate & Normalize').item.json.event.metadata.email_marketing_consent_updated_at, \"correlation_id\": $('Validate & Normalize').item.json.correlation_id } } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      }
+    },
+    {
+      "id": "9696095f-2965-4d53-96b9-8623e4020c02",
+      "name": "Score Recovery Intent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2368,
+        928
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/score_recovery_intent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_tenant_id: $('Bind Tenant Context').item.json.ingest.tenant_id, p_checkout_id: String($('Upsert Checkout').item.json.data || '').trim().replace(/^\\\"|\\\"$/g, '') } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "ef9f2fae-90dc-42e8-80cb-7c2f2b91c91a",
+      "name": "High Intent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2592,
+        928
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "high-intent",
+              "leftValue": "={{ Boolean([].concat($('Score Recovery Intent').item.json.body)[0]?.is_high_intent) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "3e6db9cd-af99-4f07-99ba-b9c225ff22a7",
+      "name": "Is Order Cancelled?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2144,
+        1360
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cancelled-topic",
+              "leftValue": "={{ String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'orders/cancelled' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "97ad5a13-65fc-4d22-875c-19923ef1a861",
+      "name": "Is Refund Event?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        1456
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "refund-topic",
+              "leftValue": "={{ String($('Validate & Normalize').item.json.ingest.topic || '').toLowerCase() === 'refunds/create' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "7dfc8848-e704-4fe5-8b23-9191ba0784a0",
+      "name": "Process Shopify Revenue Adjustment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        2368,
+        1456
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/process_shopify_revenue_adjustment",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_event_id: [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": false,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "notes": "Only successful Shopify refund transactions are reversed; cancellations reverse the remaining confirmed billable recovery amount. RPC is idempotent by canonical event.",
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "6ef5215e-b86f-4d30-adf5-bd7ffbd0dc39",
+      "name": "Resolve Recovery Delay",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        3712,
+        448
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/get_recovery_flow_delay",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_tenant_id: $('Bind Tenant Context').item.json.ingest.tenant_id, p_opportunity_type: $('Engine Config').item.json.opportunity_type } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "id": "6bf91d13-c991-4b96-910c-b7c231433b9b",
+      "name": "Payment Consent Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        584,
+        420
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "payment-consent-valid",
+              "leftValue": "={{ (() => { const b=$('Lookup Payment Order').item.json.body; const r=Array.isArray(b)?b[0]:b; const c=r && r.customers; const customer=Array.isArray(c)?c[0]:c; return !!(r && !r.cancelled_at && customer && customer.email && customer.email_consent === true); })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0c94f0a0-a994-4043-8262-d634b4182bdc",
+      "name": "Defer Payment Reconciliation",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -384,
+        1008
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/defer_payment_webhook_reconciliation",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Content-Profile",
+              "value": "henvalt"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_webhook_id: $('Classify Result').item.json.__webhook_id, p_error: 'payment_order_not_projected_or_not_linkable_yet; durable reconciliation queued' } }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "onError": "continueErrorOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "521205a7-2ada-43cc-97e3-bd519e908df5",
+      "name": "Build Deferred Payment Response",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -112,
+        1008
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "deferred-body",
+              "name": "__body",
+              "value": "={{ { status: 'deferred_for_reconciliation', message: 'Payment event safely queued while order data finishes syncing.', webhook_id: $('Classify Result').item.json.__webhook_id, correlation_id: $('Validate & Normalize').item.json.correlation_id } }}",
+              "type": "object"
+            },
+            {
+              "id": "deferred-http",
+              "name": "__http",
+              "value": 202,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Event Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate & Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Valid": {
+      "main": [
+        [
+          {
+            "node": "Supabase Ingest RPC",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Reject Invalid Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Ingest RPC": {
+      "main": [
+        [
+          {
+            "node": "Classify Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Classify Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Result": {
+      "main": [
+        [
+          {
+            "node": "Should Process?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Process?": {
+      "main": [
+        [
+          {
+            "node": "Upsert Canonical Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Upsert Canonical Event": {
+      "main": [
+        [
+          {
+            "node": "Is Shopify Uninstall?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Identity": {
+      "main": [
+        [
+          {
+            "node": "Is Consent Update?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Checkout Event?": {
+      "main": [
+        [
+          {
+            "node": "Has Checkout Data?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Failed Payment?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Checkout Data?": {
+      "main": [
+        [
+          {
+            "node": "Upsert Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Customer": {
+      "main": [
+        [
+          {
+            "node": "Upsert Checkout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Checkout": {
+      "main": [
+        [
+          {
+            "node": "Score Recovery Intent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Opportunity": {
+      "main": [
+        [
+          {
+            "node": "Opportunity Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Apply Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Eligibility": {
+      "main": [
+        [
+          {
+            "node": "Is Eligible?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Eligible?": {
+      "main": [
+        [
+          {
+            "node": "Create Recovery Sequence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Recovery Sequence": {
+      "main": [
+        [
+          {
+            "node": "Resolve Recovery Delay",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Intervention": {
+      "main": [
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Webhook Processed": {
+      "main": [
+        [
+          {
+            "node": "Build Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Capture Error": {
+      "main": [
+        [
+          {
+            "node": "Mark Webhook Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Shopify Tenant": {
+      "main": [
+        [
+          {
+            "node": "Bind Tenant Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bind Tenant Context": {
+      "main": [
+        [
+          {
+            "node": "Is Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Normalize": {
+      "main": [
+        [
+          {
+            "node": "Engine Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine Config": {
+      "main": [
+        [
+          {
+            "node": "Verify Shopify HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Shopify HMAC": {
+      "main": [
+        [
+          {
+            "node": "HMAC Verified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HMAC Verified?": {
+      "main": [
+        [
+          {
+            "node": "Resolve Shopify Tenant",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Is Order Event?": {
+      "main": [
+        [
+          {
+            "node": "Project Order From Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Refund Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Order From Event": {
+      "main": [
+        [
+          {
+            "node": "Is Order Cancelled?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluate Order Attribution": {
+      "main": [
+        [
+          {
+            "node": "Stop Recovery After Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stop Recovery After Order": {
+      "main": [
+        [
+          {
+            "node": "Post Recovery To Ledger",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Recovery To Ledger": {
+      "main": [
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Opportunity Exists?": {
+      "main": [
+        [
+          {
+            "node": "Evaluate Eligibility",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Shopify Uninstall?": {
+      "main": [
+        [
+          {
+            "node": "Deactivate Shopify Connection",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolve Identity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deactivate Shopify Connection": {
+      "main": [
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Failed Payment?": {
+      "main": [
+        [
+          {
+            "node": "Lookup Payment Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Order Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lookup Payment Order": {
+      "main": [
+        [
+          {
+            "node": "Payment Order Usable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Consent Update?": {
+      "main": [
+        [
+          {
+            "node": "Upsert Customer Consent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Checkout Event?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Customer Consent": {
+      "main": [
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Recovery Intent": {
+      "main": [
+        [
+          {
+            "node": "High Intent?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Intent?": {
+      "main": [
+        [
+          {
+            "node": "Create Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Order Cancelled?": {
+      "main": [
+        [
+          {
+            "node": "Process Shopify Revenue Adjustment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Evaluate Order Attribution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Refund Event?": {
+      "main": [
+        [
+          {
+            "node": "Process Shopify Revenue Adjustment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Shopify Revenue Adjustment": {
+      "main": [
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Recovery Delay": {
+      "main": [
+        [
+          {
+            "node": "Create Intervention",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Order Usable?": {
+      "main": [
+        [
+          {
+            "node": "Payment Consent Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Defer Payment Reconciliation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Payment Consent Valid?": {
+      "main": [
+        [
+          {
+            "node": "Create Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Webhook Processed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Defer Payment Reconciliation": {
+      "main": [
+        [
+          {
+            "node": "Build Deferred Payment Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Webhook Failed": {
+      "main": [
+        [
+          {
+            "node": "Fail Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "meta": {
+    "henvalt_source_snapshot": true,
+    "source_active_version": "6368d539-708f-494a-8be8-b9601d0e8607"
+  },
+  "tags": [],
+  "nodeGroups": [
+    {
+      "id": "25088f3d-df04-46c6-b194-8c251f008db3",
+      "name": "Reject incomplete event",
+      "nodeNames": [
+        "Reject Invalid Event"
+      ],
+      "description": "Answers 400 listing missing fields such as the tenant mapping, then fails the run so it is visible"
+    }
+  ]
+}
