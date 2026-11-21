@@ -118,3 +118,44 @@ A passing database trigger test alone is insufficient. The test must exercise bo
 The live n8n delivery workflow contains a real ordinary send route and a real manual one-off send route. Both converge on the same provider Edge Function, but production does not yet have the candidate global interlock. The historical execution proves sensitive email content remained available in execution history for at least seven days, while effective retention/redaction settings remain unknown.
 
 **Current decision: NO-GO for production release.** Keep production workflows, database, Worker, Edge Functions, Shopify app version and provider credentials unchanged until isolated staging passes the complete acceptance matrix and the owner explicitly approves the cutover.
+
+## 8. Fresh operational snapshot — 2026-11-21 06:11 UTC
+
+A read-only inspection of recovery execution `40663` confirmed that the every-minute schedule completed successfully in about two seconds, but performed no recovery work:
+
+- Deferred payment reconciliation: retried 0, skipped 0, processed 0, dead-lettered 0.
+- Stale-work repair: requeued 0 jobs and recovered 0 interventions.
+- Shopify token due query: returned no items.
+- Browse discovery: queued 0 and created 0; 60-minute inactivity threshold; 0 explicitly counted as suppressed/ineligible.
+- Worker claim returned no job (`has_job=false`).
+- Abandoned-cart discovery: queued 0, created 0, refreshed 0.
+- Abandoned-checkout discovery: queued 0, created 0, refreshed 0.
+
+This is a successful **idle/no-op scheduler run**, not evidence of a functioning end-to-end recovery. In particular, it does not prove that Shopify events are arriving, opportunities are being created, delivery requests are being claimed, or emails are being sent.
+
+The latest delivery-workflow execution returned by the connected execution search was `31277` on 2026-11-14. Inspecting it showed the **MailerSend Events Webhook** route: a signed `activity.opened` provider event was verified and matched to a delivery request. It was not an outbound send execution. No outbound-send execution was evidenced in the returned recent delivery history; do not interpret this limited query as proof that no provider sends occurred outside the returned history.
+
+The latest returned ingest webhook executions were also dated 2026-11-14. Therefore fresh Shopify-to-ingest traffic has not been evidenced in this read-only sample.
+
+### Immediate staging diagnosis gates
+
+Before attempting to enable any staging sender, prove each boundary independently:
+
+1. Shopify webhook/pixel request reaches the intended staging ingress and passes signature/consent validation.
+2. Ingest workflow creates exactly one tenant-scoped canonical event (and duplicate replay creates none).
+3. Recovery discovery creates the expected opportunity/intervention from a synthetic eligible event.
+4. Recovery worker claims the expected job and produces a delivery request with stable idempotency/correlation IDs.
+5. Delivery authorization independently checks tenant, order suppression, communication permissions and unsubscribe state.
+6. With global interlock closed, both normal and manual routes stop before credential release; provider stub request count remains zero.
+7. With staging-only interlock explicitly opened for one positive test, the stub receives exactly one request and no real MailerSend egress occurs.
+8. A synthetic Shopify paid-order webhook confirms attribution and revenue ledger exactly once; dashboard then reflects the confirmed order, not value-at-risk.
+
+Until these are demonstrated, the observed recovery scheduler heartbeat must remain classified as **operational but not commercially verified**.
+
+## 9. Updated candidate CI and preview evidence
+
+After this runbook commit, GitHub Actions run `44873237209` completed successfully: static safety/consent checks, all four candidate migrations against disposable PostgreSQL 17, and the deny/allow/audit/fail-closed acceptance SQL all passed. The Shopify configuration workflow `44873237133` also passed static validation; its Shopify deployment job was skipped.
+
+Cloudflare Pages generated branch-preview deployments for commit `3d72b9e` on both dashboard Pages projects. These are preview builds only; no production Worker, Edge Function or Shopify app version was deployed.
+
+These CI and preview results strengthen candidate evidence but do not replace the missing full-schema isolated staging and real Shopify event chain.
