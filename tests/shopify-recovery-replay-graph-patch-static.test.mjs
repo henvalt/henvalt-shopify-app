@@ -92,7 +92,7 @@ test("replay claim, load, complete and retry use dedicated lease-fenced RPCs", (
   );
   assert.deepEqual(
     nodes.get("Retry Shopify Replay Job").parameters.slice(3),
-    ["bounded sanitized failure reason", 300],
+    ["SHOPIFY_REPLAY_PROCESSING_FAILED", 300],
   );
   assert.equal(nodes.get("Retry Shopify Replay Job").retry_delay_seconds_default, 300);
   assert.equal(nodes.get("Retry Shopify Replay Job").retry_delay_seconds_max, 3600);
@@ -175,4 +175,12 @@ test("empty claim loops while a present malformed claim stops fail-closed", () =
   assert.ok(manifest.required_connections.some((x) =>
     x[0] === "Replay Claim Valid?#false" && x[1] === "Stop Replay Lease Lost"
   ));
+});
+
+test("replay retries persist only a constant non-PII failure code", () => {
+  const retry = manifest.nodes_to_add.find((x) => x.name === "Retry Shopify Replay Job");
+  assert.equal(retry.error_reason_policy.reason, "SHOPIFY_REPLAY_PROCESSING_FAILED");
+  assert.match(retry.error_reason_policy.source, /constant/);
+  assert.match(retry.error_reason_policy.source, /never copy raw error message/);
+  assert.equal(retry.error_reason_policy.max_delay_seconds, 3600);
 });
