@@ -84,7 +84,7 @@ test("malformed JSON payload and blank worker identity are rejected", () => {
 test("normalizer does not expose raw payload or unrelated claim columns", () => {
   const result = normalizeShopifyReplayClaim(row({
     tenant_id: "tenant-raw",
-    locked_by: "raw-locked-by",
+    locked_by: WORKER,
     attempts: 9,
     payload: { webhook_id: WEBHOOK_ID, customer_email: "private@example.test" },
   }), WORKER);
