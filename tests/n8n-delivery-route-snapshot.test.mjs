@@ -52,3 +52,32 @@ test("snapshot explicitly avoids representing read-only topology as send-block p
   assert.ok(workflow.safety_notes.some((note) => note.includes("not proof")));
   assert.ok(workflow.safety_notes.some((note) => note.includes("provider egress denied")));
 });
+
+test("snapshot contains no customer payload, recipient, provider credential, or message content", () => {
+  const serialized = JSON.stringify(snapshot).toLowerCase();
+  for (const forbidden of [
+    "recipient",
+    "customer_email",
+    "to_email",
+    "access_token",
+    "api_key",
+    "authorization",
+    "html_body",
+    "text_body",
+    "subject",
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, `snapshot must not contain ${forbidden}`);
+  }
+});
+
+test("manual one-off route remains explicitly isolated and must be denied in staging", () => {
+  const route = workflow.routes.find((item) => item.id === "manual-one-off");
+  assert.equal(route.trigger, "One-Off Test Email Trigger");
+  assert.equal(route.provider_node, "MailerSend One-Off Test Email");
+  assert.ok(workflow.safety_notes.some((note) =>
+    note.includes("Both routes must be independently tested")
+  ));
+  assert.ok(workflow.safety_notes.some((note) =>
+    note.includes("network-denied provider stub")
+  ));
+});
