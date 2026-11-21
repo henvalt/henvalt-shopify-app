@@ -22,7 +22,9 @@ CREATE TABLE henvalt.delivery_requests (
   provider_claimed_at timestamptz
 );
 
-CREATE TYPE henvalt.event_class AS ENUM ('OTHER');
+CREATE TYPE henvalt.event_class AS ENUM ('RECOVERABLE', 'CONVERSION', 'ADJUSTMENT', 'OTHER');
+CREATE TYPE henvalt.opportunity_type AS ENUM ('ABANDONED_CART', 'ABANDONED_CHECKOUT', 'PAYMENT_FAILURE', 'PAYMENT_DECLINED', 'BROWSE_ABANDONMENT');
+CREATE TYPE henvalt.channel_type AS ENUM ('EMAIL', 'WHATSAPP', 'SMS', 'RCS', 'PUSH', 'OTHER');
 
 CREATE TABLE henvalt.tenants (
   id uuid PRIMARY KEY,
