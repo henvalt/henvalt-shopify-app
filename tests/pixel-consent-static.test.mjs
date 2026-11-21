@@ -46,10 +46,14 @@ test("database event allowlist includes product removal", () => {
 });
 
 test("Shopify Pixel and Cloudflare collector event allowlists stay identical", () => {
-  const workerBlock = worker.match(/const ALLOWED_EVENTS = new Set\\(\\[([\\s\\S]*?)\\]\\);/)?.[1];
-  const pixelBlock = pixel.match(/const ALLOWED_EVENTS = \\[([\\s\\S]*?)\\];/)?.[1];
-  assert.ok(workerBlock, "worker allowlist must be present");
-  assert.ok(pixelBlock, "pixel extension allowlist must be present");
-  const values = (block) => [...block.matchAll(/"([^"]+)"/g)].map((match) => match[1]).sort();
+  const workerStart = worker.indexOf("const ALLOWED_EVENTS = new Set([");
+  const workerEnd = worker.indexOf("]);", workerStart);
+  const pixelStart = pixel.indexOf("const ALLOWED_EVENTS = [");
+  const pixelEnd = pixel.indexOf("];", pixelStart);
+  assert.ok(workerStart >= 0 && workerEnd > workerStart, "worker allowlist must be present");
+  assert.ok(pixelStart >= 0 && pixelEnd > pixelStart, "pixel extension allowlist must be present");
+  const workerBlock = worker.slice(workerStart, workerEnd);
+  const pixelBlock = pixel.slice(pixelStart, pixelEnd);
+  const values = (source) => [...source.matchAll(/"([^"]+)"/g)].map((match) => match[1]).sort();
   assert.deepEqual(values(workerBlock), values(pixelBlock));
 });
