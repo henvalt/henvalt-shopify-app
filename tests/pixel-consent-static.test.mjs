@@ -79,11 +79,12 @@ test("dashboard recovered activity uses confirmed order attribution, not opportu
   assert.match(dashboardMigration, /oa\.attribution_confidence = 'CONFIRMED'/);
   assert.match(dashboardMigration, /count\(DISTINCT oa\.order_id\)/);
   assert.match(dashboardMigration, /Awaiting confirmed attribution/);
-  assert.match(dashboardMigration, /ri\.confirmed_amount IS NOT NULL/);
+  assert.match(dashboardMigration, /ri\.has_confirmed_attribution IS TRUE/);
 });
 
 test("dashboard revenue chart uses the confirmed revenue series", () => {
   const dashboard = readFileSync(new URL("../dashboard/index.html", import.meta.url), "utf8");
   assert.match(dashboard, /data\.revenueSeries\|\|\[\]/);
+  assert.match(dashboard, /good&&x\.amount!=null\?money\(x\.amount,currency\):"—"/);
   assert.doesNotMatch(dashboard, /a\.filter\(x=>x\.outcome==="recovered"&&x\.amount!=null\)/);
 });
