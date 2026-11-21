@@ -50,7 +50,7 @@ BEGIN
       p_topic,
       p_idempotency_key,
       p_payload,
-      COALESCE(p_metadata, '{}'::jsonb)
+      COALESCE(p_metadata, '{}'::jsonb) || jsonb_build_object('ingress_hmac_verified', true)
     );
 
   IF NOT FOUND
