@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 globalThis.crypto ??= webcrypto;
 const workerSource = readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
 const workerModuleUrl = "data:text/javascript;base64," + Buffer.from(workerSource).toString("base64");
-const { handleRequest } = await import(workerModuleUrl);
+const { handleRequest, SHOPIFY_WEBHOOK_UPSTREAM_TIMEOUT_MS } = await import(workerModuleUrl);
 
 const secret = "synthetic-shopify-secret";
 const env = { SHOPIFY_API_SECRET: secret, N8N_INGEST_URL: "https://ingest.example.test/webhook" };
@@ -90,6 +90,10 @@ test("oversized webhook bodies are rejected before upstream forwarding", async (
   assert.equal(response.status, 413);
   assert.equal((await response.json()).error, "body_too_large");
   assert.equal(calls, 0);
+});
+
+test("n8n upstream timeout is bounded below Shopify's five-second response deadline", () => {
+  assert.equal(SHOPIFY_WEBHOOK_UPSTREAM_TIMEOUT_MS, 3500);
 });
 
 test("n8n upstream failure returns retryable 503 to Shopify", async () => {
