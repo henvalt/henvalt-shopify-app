@@ -38,6 +38,33 @@ CREATE TABLE henvalt.shopify_connections (
 );
 
 
+
+CREATE SCHEMA auth;
+CREATE FUNCTION auth.jwt()
+RETURNS jsonb
+LANGUAGE sql
+STABLE
+AS $function$
+  SELECT jsonb_build_object('role', 'service_role');
+$function$;
+
+CREATE SCHEMA vault;
+CREATE TABLE vault.decrypted_secrets (
+  id uuid PRIMARY KEY,
+  decrypted_secret text NOT NULL
+);
+
+ALTER TABLE henvalt.shopify_connections
+  ADD COLUMN token_type text,
+  ADD COLUMN refresh_token_secret_ref text,
+  ADD COLUMN access_token_expires_at timestamptz,
+  ADD COLUMN refresh_token_expires_at timestamptz,
+  ADD COLUMN token_refresh_lease_until timestamptz,
+  ADD COLUMN token_refresh_started_at timestamptz,
+  ADD COLUMN token_refresh_last_error text,
+  ADD COLUMN reauth_required_at timestamptz,
+  ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
+
 CREATE TABLE henvalt.opportunities (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
