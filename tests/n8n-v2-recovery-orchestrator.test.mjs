@@ -121,6 +121,7 @@ test("service RPC client uses isolated service-role headers and rejects malforme
     },
   });
   await rpc("claim_shopify_recovery_work_v2", { p_worker_id: "worker-v2-01" });
+  await rpc("reconcile_unmatched_shopify_pixel_provider_events_v2", { p_limit: 100 });
   assert.match(requests[0].url, /\/rest\/v1\/rpc\/claim_shopify_recovery_work_v2$/);
   assert.equal(requests[0].init.headers["content-profile"], "henvalt");
   assert.equal(requests[0].init.headers.authorization, "Bearer " + "s".repeat(40));
