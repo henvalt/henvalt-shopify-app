@@ -12,7 +12,7 @@ CREATE OR REPLACE FUNCTION henvalt.ingest_pixel_event(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'henvalt', 'public'
+SET search_path TO pg_catalog, henvalt, pg_temp
 AS $function$
 DECLARE
   v_tenant_id uuid;
@@ -168,7 +168,9 @@ BEGIN
 END;
 $function$;
 
-CREATE OR REPLACE FUNCTION henvalt.get_browse_abandonment_candidates(
+DROP FUNCTION IF EXISTS henvalt.get_browse_abandonment_candidates(integer, integer, integer);
+
+CREATE FUNCTION henvalt.get_browse_abandonment_candidates(
   p_inactivity_minutes integer DEFAULT 60,
   p_max_age_hours integer DEFAULT 24,
   p_limit integer DEFAULT 100
@@ -181,7 +183,7 @@ RETURNS TABLE(
   product_title text,
   variant_id text,
   price_amount numeric,
-  currency character,
+  currency character(3),
   destination_url text,
   source_event_id uuid,
   last_activity_at timestamptz,
@@ -321,6 +323,8 @@ AS $function$
   ORDER BY r.last_activity_at ASC
   LIMIT greatest(1, least(coalesce(p_limit, 100), 500));
 $function$;
+
+GRANT EXECUTE ON FUNCTION henvalt.get_browse_abandonment_candidates(integer, integer, integer) TO service_role;
 
 
 CREATE OR REPLACE FUNCTION henvalt.browse_opportunity_advanced(
