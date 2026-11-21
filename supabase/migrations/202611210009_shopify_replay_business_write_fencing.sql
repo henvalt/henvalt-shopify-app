@@ -296,7 +296,12 @@ RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $function$
 BEGIN
   PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
-  RETURN henvalt.mark_webhook_processed(p_webhook_id);
+  UPDATE henvalt.webhook_events
+     SET processing_status = 'PROCESSED',
+         processed_at = clock_timestamp()
+   WHERE id = p_webhook_id
+     AND processing_status <> 'PROCESSED';
+  RETURN FOUND;
 END;
 $function$;
 
@@ -307,7 +312,13 @@ RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $function$
 BEGIN
   PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
-  RETURN henvalt.mark_webhook_failed(p_webhook_id,p_error);
+  UPDATE henvalt.webhook_events
+     SET processing_status = 'FAILED',
+         processed_at = clock_timestamp(),
+         metadata = COALESCE(metadata, '{}'::jsonb)
+           || jsonb_build_object('processing_error', p_error)
+   WHERE id = p_webhook_id;
+  RETURN FOUND;
 END;
 $function$;
 
