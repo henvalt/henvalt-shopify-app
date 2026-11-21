@@ -23,7 +23,7 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   const shop = (request.headers.get("x-shopify-shop-domain") || "").toLowerCase();
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
-  const webhookId = request.headers.get("x-shopify-webhook-id") || request.headers.get("x-shopify-event-id") || "";
+  const webhookId = request.headers.get("x-shopify-webhook-id") || "";
   if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) || !topic || !hmac || !webhookId) return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
 
   const contentLength = Number(request.headers.get("content-length") || "0");
