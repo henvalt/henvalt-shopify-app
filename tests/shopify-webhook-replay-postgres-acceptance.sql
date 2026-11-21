@@ -11,6 +11,7 @@ DECLARE
   v_processed record;
   v_repaired record;
   v_count integer;
+  v_metadata jsonb;
   v_failed boolean := false;
   v_function text := 'henvalt.ingest_shopify_webhook_with_replay_job(uuid,text,text,text,text,jsonb,jsonb)';
 BEGIN
@@ -32,6 +33,14 @@ BEGIN
      OR v_first.replay_job_id IS NULL
      OR v_first.replay_job_status IS DISTINCT FROM 'QUEUED' THEN
     RAISE EXCEPTION 'NEW_WEBHOOK_DID_NOT_ATOMICALLY_ENQUEUE_REPLAY_JOB';
+  END IF;
+
+  SELECT metadata INTO v_metadata
+    FROM henvalt.webhook_events
+   WHERE id = v_first.webhook_id;
+
+  IF v_metadata->>'ingress_hmac_verified' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'DURABLE_WEBHOOK_MISSING_TRUSTED_HMAC_VERIFICATION_MARKER';
   END IF;
 
   SELECT count(*) INTO v_count
