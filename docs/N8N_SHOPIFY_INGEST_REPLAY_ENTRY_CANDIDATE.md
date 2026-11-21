@@ -66,12 +66,19 @@ Missing IDs, an unknown result, a terminal job, an old generic 409, or a transpo
 
 `n8n/shopify-ingest-ack-classifier-candidate.mjs` implements this fail-closed decision. It is a pure classifier, not a live n8n node.
 
-## Unresolved payment reconciliation branch
+## Deferred payment reconciliation handoff
 
-The current ingest graph has a payment path that calls `defer_payment_webhook_reconciliation` and returns a deferred response. Migration 010 adds a fenced wrapper, but the replay worker completion contract currently expects `mark_webhook_processed === true`. Do not report replay success after merely queuing a deferred reconciliation unless the final design proves the webhook reaches an appropriate terminal state and the follow-up reconciliation is durable. This branch is intentionally a hard staging blocker until its lifecycle semantics are specified and tested.
+The candidate routes this operation through `defer_payment_webhook_reconciliation_fenced` and requires an explicit true result before exposing top-level `deferred_payment_handoff=true`. The recovery worker completes the replay job on either `mark_webhook_processed=true` or `deferred_payment_handoff=true`. The webhook itself remains FAILED pending the already-active every-minute reconciler, which claims the durable pending row and processes, reschedules or dead-letters it. This is a durable handoff, not a claim that the webhook is already PROCESSED.
 
 ## Acceptance and release boundary
 
 Static checks cover the envelope, durable acknowledgement classifier, loader signature, write-map inventory, and no-provider route. They do not prove an n8n graph has been authored, imported, or executed. Before staging, build a complete isolated workflow JSON candidate, audit every mutation node, resolve the deferred-payment branch, and run the full replay matrix against disposable PostgreSQL with provider egress denied.
 
 Production remains NO-GO until isolated staging proves durable ingress, replay, lease replacement, all fenced writes, terminal status, and end-to-end event-to-ledger behavior. Provider sending stays disabled.
+
+
+## Candidate graph builder and additional guards
+
+`n8n/shopify-ingest-candidate-builder.mjs` transforms a version-pinned workflow export into an offline candidate. It rewrites all 18 audited mutation nodes to select their corresponding `*_fenced` RPC when replay context exists, adds the internal replay trigger and lease-bound loader, adds tenant equality and lease-renewal guards, switches public ingress to `receive_shopify_webhook_v1`, and requires explicit processed/deferred terminal booleans. It also forces Shopify delivery identity to `X-Shopify-Webhook-Id`.
+
+The builder removes credential references from the offline candidate. The Supabase service-role credential must be rebound only in an isolated n8n draft. The fixture-driven regression suite is `tests/shopify-ingest-candidate-builder.test.mjs`. The generated graph has not been imported, executed or validated against a live n8n draft.
