@@ -186,3 +186,18 @@ test("replay retries persist only a constant non-PII failure code", () => {
   assert.match(retry.error_reason_policy.source, /never copy raw error message/);
   assert.equal(retry.error_reason_policy.max_delay_seconds, 3600);
 });
+
+
+test("candidate node versions are pinned to installed n8n definitions", () => {
+  assert.deepEqual(manifest.node_type_versions, {
+    "n8n-nodes-base.postgres": 2.7,
+    "n8n-nodes-base.code": 2,
+    "n8n-nodes-base.if": 2.3,
+    "n8n-nodes-base.executeWorkflow": 1.4,
+    "n8n-nodes-base.executeWorkflowTrigger": 1.1,
+    "n8n-nodes-base.noOp": 1,
+  });
+  assert.equal(manifest.node_type_version_evidence.versions_are_exact, true);
+  assert.equal(manifest.node_type_version_evidence.credentials_rebound_only_in_isolated_draft, true);
+  assert.equal(manifest.node_type_version_evidence.production_workflow_unchanged, true);
+});
