@@ -1,10 +1,12 @@
-name: HENVALT provider-send interlock static tests
+name: HENVALT provider-send interlock tests
 
 on:
   pull_request:
     paths:
       - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "tests/provider-send-interlock-static.test.mjs"
+      - "tests/provider-send-interlock-postgres-bootstrap.sql"
+      - "tests/provider-send-interlock-postgres-acceptance.sql"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
 
@@ -12,13 +14,48 @@ permissions:
   contents: read
 
 jobs:
-  interlock-static:
+  interlock-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify deny-by-default interlock invariants
+      - name: Verify deny-by-default static invariants
         run: node --test tests/provider-send-interlock-static.test.mjs
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap disposable PostgreSQL 17 fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-bootstrap.sql
+      - name: Apply candidate interlock migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
+      - name: Exercise deny, allow, audit and fail-closed paths
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-acceptance.sql
