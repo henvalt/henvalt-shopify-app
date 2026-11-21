@@ -44,3 +44,12 @@ test("browse recovery requires analytics, marketing privacy permission and email
 test("database event allowlist includes product removal", () => {
   assert.match(migration, /'product_removed_from_cart'/);
 });
+
+test("Shopify Pixel and Cloudflare collector event allowlists stay identical", () => {
+  const workerBlock = worker.match(/const ALLOWED_EVENTS = new Set\\(\\[([\\s\\S]*?)\\]\\);/)?.[1];
+  const pixelBlock = pixel.match(/const ALLOWED_EVENTS = \\[([\\s\\S]*?)\\];/)?.[1];
+  assert.ok(workerBlock, "worker allowlist must be present");
+  assert.ok(pixelBlock, "pixel extension allowlist must be present");
+  const values = (block) => [...block.matchAll(/"([^"]+)"/g)].map((match) => match[1]).sort();
+  assert.deepEqual(values(workerBlock), values(pixelBlock));
+});
