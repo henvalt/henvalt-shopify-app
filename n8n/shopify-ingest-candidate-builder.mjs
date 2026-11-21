@@ -25,8 +25,8 @@ function connect(workflow, from, to, output = 0) {
   workflow.connections[from].main[output] ||= [];
   workflow.connections[from].main[output].push({ node: to, type: "main", index: 0 });
 }
-function id(n) {
-  return "henvalt-candidate-" + n;
+let candidateNodeCounter = 1;
+function id() { return "00000000-0000-4000-8000-" + String(candidateNodeCounter++).padStart(12,"0"); }
 }
 function fencedBody(source, nodeName) {
   const original = expressionBody(source);
@@ -226,6 +226,9 @@ return {
     respondWith:"json",responseBody:"={{ $json.__body || { status: 'temporarily_unavailable' } }}",
     options:{responseCode:"={{ $json.__http || 503 }}"}
   },[672,-200],1.4);
+  const invalidReplayContext = createNode("Is Rejected Replay?","n8n-nodes-base.if",{
+    conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"invalid-is-replay",leftValue:"={{ !!$json.replay_context }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
+  },[224,320],2.2);
   const invalidResponse = createNode("Build Invalid Ingress Response","n8n-nodes-base.set",{
     mode:"manual",assignments:{assignments:[
       {id:"invalid-http",name:"__http",type:"number",value:"={{ $json.__http || ($json.__tenant_mapping_missing ? 404 : 422) }}"},
@@ -257,7 +260,7 @@ return {
   workflow.connections["HMAC Verified?"].main[1] = [{node:"Build HMAC Rejection Response",type:"main",index:0}];
   workflow.connections["Bind Tenant Context"].main = [[{node:"Is Valid",type:"main",index:0}]];
   workflow.connections["Is Valid"].main[0] = [{node:"Is Replay Entry?",type:"main",index:0}];
-  workflow.connections["Is Valid"].main[1] = [{node:"Build Invalid Ingress Response",type:"main",index:0}];
+  workflow.connections["Is Valid"].main[1] = [{node:"Is Rejected Replay?",type:"main",index:0}];
   workflow.connections["Is Replay Entry?"] = {main:[
     [{node:"Classify Result",type:"main",index:0}],
     [{node:"Supabase Ingest RPC",type:"main",index:0}]
@@ -273,6 +276,7 @@ return {
   workflow.connections["Defer Payment Reconciliation"].main = [[{node:"Deferred Handoff Confirmed?",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
   workflow.connections["Deferred Handoff Confirmed?"] = {main:[[{node:"Build Deferred Payment Response",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
   workflow.connections["Should Process?"].main[1] = [{node:"Respond to Shopify",type:"main",index:0}];
+  workflow.connections["Is Rejected Replay?"] = {main:[[{node:"Stop Invalid Replay Envelope",type:"main",index:0}],[{node:"Build Invalid Ingress Response",type:"main",index:0}]]};
   workflow.connections["Build Invalid Ingress Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Build HMAC Rejection Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Replay Envelope Valid?"] = {main:[
@@ -290,6 +294,7 @@ return {
 
   addNode(workflow,trigger); addNode(workflow,loader); addNode(workflow,envelope); addNode(workflow,envelopeValid);
   addNode(workflow,invalidReplay); addNode(workflow,trustedReplay); addNode(workflow,replayOrIngress);
+  addNode(workflow,invalidReplayContext);
   addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse); addNode(workflow,hmacResponse);
   addNode(workflow,processedGate); addNode(workflow,deferredGate); addNode(workflow,stopMarker);
 
@@ -300,7 +305,7 @@ return {
     [{node:"Validate & Normalize",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
   ]};
-  return {trigger,loader,envelope,envelopeValid,invalidReplay,trustedReplay,replayOrIngress,replayPipeline,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker};
+  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker};
 }
 
 function buildCandidate(input, map, activeVersionId) {
