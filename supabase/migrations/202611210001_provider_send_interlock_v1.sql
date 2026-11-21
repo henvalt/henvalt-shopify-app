@@ -117,6 +117,35 @@ $function$;
 REVOKE ALL ON FUNCTION henvalt.provider_sending_is_enabled()
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- Serialize credential release against an operator closing the global gate.
+-- The shared row lock is held until the credential-release transaction ends;
+-- the operator setter takes FOR UPDATE and therefore waits for in-flight claims.
+CREATE OR REPLACE FUNCTION henvalt.assert_provider_sending_enabled()
+RETURNS void
+LANGUAGE plpgsql
+VOLATILE
+SECURITY DEFINER
+SET search_path = pg_catalog, henvalt, pg_temp
+AS $function$
+DECLARE
+  v_enabled boolean;
+BEGIN
+  SELECT c.provider_sending_enabled
+    INTO v_enabled
+    FROM henvalt.provider_send_control c
+   WHERE c.control_key = 'global'
+   FOR SHARE;
+
+  IF NOT FOUND OR v_enabled IS NOT TRUE THEN
+    RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED'
+      USING ERRCODE = '42501';
+  END IF;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.assert_provider_sending_enabled()
+  FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION henvalt.enforce_provider_send_interlock()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -137,9 +166,8 @@ BEGIN
 
   -- Guard both authorization claim and one-time provider credential claim.
   -- This covers ordinary recovery and manual one-off test-send request paths.
-  IF v_send_claim AND NOT henvalt.provider_sending_is_enabled() THEN
-    RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED'
-      USING ERRCODE = '42501';
+  IF v_send_claim THEN
+    PERFORM henvalt.assert_provider_sending_enabled();
   END IF;
 
   RETURN NEW;
@@ -226,10 +254,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, henvalt, vault, pg_temp
 AS $function$
 BEGIN
-  IF COALESCE(henvalt.provider_sending_is_enabled(), false) IS NOT TRUE THEN
-    RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED'
-      USING ERRCODE = '42501';
-  END IF;
+  PERFORM henvalt.assert_provider_sending_enabled();
 
   -- The historical manual one-off path is never a production send exemption,
   -- even if an operator opens the global gate for normal recovery traffic.
