@@ -1,0 +1,287 @@
+name: HENVALT exact-store identity V2 validation
+
+on:
+  push:
+    branches: [prep/public-app-hardening-2026-11-15]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  identity-v2-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run complete repository Node regression suite
+        run: npm test
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Run exact-store uninstall and checkout provider gate and ambiguous reconciliation contract tests
+        run: node --test tests/shopify-exact-store-uninstall-processor-v2.test.mjs tests/shopify-checkout-provider-submission-gate-v2.test.mjs tests/shopify-checkout-ambiguous-provider-reconciliation-v2.test.mjs
+      - name: Run identity, cost reservation, and privacy contract tests
+        run: node --test tests/customer-session-checkout-writer-audit.test.mjs tests/shopify-exact-store-identity-graph-v2.test.mjs tests/shopify-checkout-webhook-projection-v2.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs tests/shopify-order-conversion-projection-v2.test.mjs tests/shopify-checkout-recovery-eligibility-v2.test.mjs tests/shopify-recovery-opportunity-v2.test.mjs tests/shopify-email-consent-evidence-v2.test.mjs tests/shopify-checkout-jurisdiction-projection-v2.test.mjs tests/v2-recipient-resolution-and-delivery-authorization-contract.test.mjs tests/shopify-mailer-provider-events-suppression-v2.test.mjs tests/shopify-single-use-delivery-authorization-v2.test.mjs tests/shopify-contact-resolution-delivery-v2.test.mjs tests/shopify-delivery-cost-reservations-v2.test.mjs tests/shopify-privacy-order-scope-v2.test.mjs tests/shopify-privacy-order-scope-report-v2.test.mjs tests/shopify-privacy-deadline-monitor-v2.test.mjs tests/shopify-privacy-processing-queue-v2.test.mjs tests/shopify-privacy-completion-evidence-gate-v2.test.mjs tests/shopify-privacy-export-artifact-registry-v2.test.mjs tests/shopify-privacy-export-download-v2.test.mjs tests/shopify-privacy-export-purge-lifecycle-v2.test.mjs tests/shopify-privacy-export-processor-v2.test.mjs tests/shopify-customer-privacy-export-v2.test.mjs tests/shopify-customer-redaction-impact-preview-v2.test.mjs tests/shopify-customer-redaction-fk-inventory-v2.test.mjs tests/shopify-customer-redaction-send-guard-v2.test.mjs tests/shopify-exact-store-shop-redact-stop-v2.test.mjs tests/privacy-export-schema-catalog-safety.test.mjs tests/dashboard-single-store-scope.test.mjs tests/shopify-pixel-recovery-candidates-v2.test.mjs tests/shopify-pixel-contact-jurisdiction-delivery-gate-v2.test.mjs tests/shopify-customer-contact-evidence-v2.test.mjs tests/shopify-contact-evidence-resolver-v2.test.mjs tests/shopify-contact-evidence-region-v2.test.mjs tests/shopify-pixel-delivery-boundary-v2.test.mjs tests/shopify-pixel-delivery-eligibility-v2.test.mjs tests/shopify-admin-marketing-consent-lookup-v2.test.mjs tests/shopify-pixel-delivery-permits-v2.test.mjs tests/shopify-pixel-delivery-context-v2.test.mjs tests/shopify-pixel-provider-submission-v2.test.mjs tests/shopify-pixel-attempt-outcome-v2.test.mjs tests/shopify-pixel-stale-reconciler-v2.test.mjs tests/shopify-recovery-work-claims-v2.test.mjs tests/shopify-request-body-hardening-v2.test.mjs tests/dashboard-date-range-v2.test.mjs tests/dashboard-request-race-v2.test.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run repository Edge Function type checks
+        run: npm run check
+      - name: Exercise checkout and pixel delivery auth/readiness interlocks in Deno runtime with outbound network blocked
+        run: deno test --allow-env --allow-net --allow-read=. tests/edge-delivery-no-send-runtime-v2.test.ts
+      - name: Exercise checkout and pixel exact-store rejection in Deno runtime with provider network blocked
+        run: deno test --allow-env --allow-net --allow-read=. tests/edge-delivery-store-lineage-runtime-v2.test.ts
+      - name: Prove legacy V1 MailerSend sender fails closed by default
+        run: deno test --no-check --allow-env --allow-net --allow-read=. tests/edge-legacy-mailersend-no-send-runtime.test.ts
+      - name: Type-check legacy V1 MailerSend Edge Function
+        run: deno check --no-config supabase/functions/henvalt-mailersend-delivery/index.ts
+      - name: Type-check pixel delivery Edge Function
+        run: deno check --no-config supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts
+      - name: Type-check checkout delivery Edge Function and shared request reader
+        run: deno check --no-config supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts
+      - name: Type-check authenticated dashboard Edge Functions
+        run: deno check --no-config supabase/functions/henvalt-merchant-dashboard/index.ts supabase/functions/henvalt-dashboard/index.ts
+      - name: Type-check MailerSend webhook Edge Function
+        run: deno check --no-config supabase/functions/henvalt-mailersend-webhook-v2/index.ts
+      - name: Create disposable database baseline
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
+      - name: Apply candidate migrations 001 through 062
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for migration in \
+            supabase/migrations/202611160001_shopify_webhook_identity_foundation.sql \
+            supabase/migrations/202611160002_shopify_webhook_verified_inbox_rpc.sql \
+            supabase/migrations/202611160003_shopify_oauth_state_app_identity.sql \
+            supabase/migrations/202611160004_shopify_oauth_app_aware_finalizer.sql \
+            supabase/migrations/202611160005_shopify_app_oauth_secret_resolver.sql \
+            supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \
+            supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql \
+            supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql \
+            supabase/migrations/202611160009_shopify_pixel_identity_graph_v2.sql \
+            supabase/migrations/202611160010_shopify_checkout_webhook_projection_v2.sql \
+            supabase/migrations/202611160011_shopify_order_conversion_projection_v2.sql \
+            supabase/migrations/202611170001_shopify_checkout_recovery_eligibility_v2.sql \
+            supabase/migrations/202611170002_shopify_recovery_opportunity_foundation_v2.sql \
+            supabase/migrations/202611170003_shopify_email_consent_evidence_v2.sql \
+            supabase/migrations/202611170004_shopify_checkout_jurisdiction_projection_v2.sql \
+            supabase/migrations/202611170005_shopify_mailer_provider_events_suppression_v2.sql \
+            supabase/migrations/202611170006_shopify_single_use_delivery_authorization_v2.sql \
+            supabase/migrations/202611170007_shopify_contact_resolution_and_delivery_v2.sql \
+            supabase/migrations/202611170008_shopify_delivery_cost_reservations_v2.sql \
+            supabase/migrations/202611170009_shopify_exact_store_uninstall_processor_v2.sql \
+            supabase/migrations/202611170010_shopify_order_lifecycle_projection_v2.sql \
+            supabase/migrations/202611170011_shopify_refund_adjustments_v2.sql \
+            supabase/migrations/202611170012_shopify_recovery_attribution_fee_ledger_v2.sql \
+            supabase/migrations/202611170013_shopify_ambiguous_delivery_reconciliation_v2.sql \
+            supabase/migrations/202611170014_shopify_privacy_processing_queue_v2.sql \
+            supabase/migrations/202611170015_shopify_customer_privacy_export_v2.sql \
+            supabase/migrations/202611170016_shopify_customer_redaction_impact_preview_v2.sql \
+            supabase/migrations/202611170017_shopify_customer_redaction_fk_inventory_v2.sql \
+            supabase/migrations/202611170018_shopify_customer_redaction_send_guard_v2.sql \
+            supabase/migrations/202611170019_shopify_exact_store_shop_redact_stop_v2.sql \
+            supabase/migrations/202611170020_shopify_redacted_store_oauth_tombstone_v2.sql \
+            supabase/migrations/202611170021_shopify_privacy_order_scope_v2.sql \
+            supabase/migrations/202611170022_shopify_privacy_order_scope_report_v2.sql \
+            supabase/migrations/202611170023_shopify_privacy_deadline_monitor_v2.sql \
+            supabase/migrations/202611180024_shopify_privacy_completion_evidence_gate_v2.sql \
+            supabase/migrations/202611180025_shopify_privacy_export_artifact_registry_v2.sql \
+            supabase/migrations/202611180026_shopify_privacy_export_purge_lifecycle_v2.sql \
+            supabase/migrations/202611180027_shopify_pixel_recovery_candidates_v2.sql \
+            supabase/migrations/202611180028_shopify_general_recovery_opportunities_v2.sql \
+            supabase/migrations/202611180029_shopify_customer_contact_evidence_v2.sql \
+            supabase/migrations/202611180030_shopify_contact_lookup_context_v2.sql \
+            supabase/migrations/202611180031_shopify_contact_jurisdiction_region_v2.sql \
+            supabase/migrations/202611180032_shopify_pixel_delivery_eligibility_v2.sql \
+            supabase/migrations/202611180033_shopify_admin_marketing_consent_lookup_v2.sql \
+            supabase/migrations/202611180034_shopify_pixel_delivery_permits_v2.sql \
+            supabase/migrations/202611180035_shopify_pixel_delivery_context_v2.sql \
+            supabase/migrations/202611180036_shopify_pixel_provider_submission_gate_v2.sql \
+            supabase/migrations/202611180037_shopify_pixel_attempt_outcome_reconciliation_v2.sql \
+            supabase/migrations/202611180038_shopify_pixel_stale_attempt_reconciler_v2.sql \
+            supabase/migrations/202611180039_shopify_pixel_provider_event_reconciliation_v2.sql \
+            supabase/migrations/202611180040_shopify_pixel_recovery_attribution_v2.sql \
+            supabase/migrations/202611180041_shopify_v2_dashboard_read_model.sql \
+            supabase/migrations/202611180042_shopify_recovery_work_claims_v2.sql \
+            supabase/migrations/202611180043_shopify_checkout_intervention_materializer_v2.sql \
+            supabase/migrations/202611190001_shopify_recovery_message_context_v2.sql \
+            supabase/migrations/202611190002_shopify_sender_profile_preflight_v2.sql \
+            supabase/migrations/202611190003_mailersend_webhook_test_signature_v2.sql \
+            supabase/migrations/202611190004_shopify_checkout_candidate_terminal_state_v2.sql \
+            supabase/migrations/202611190005_shopify_checkout_provider_submission_gate_v2.sql \
+            supabase/migrations/202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2.sql \
+            supabase/migrations/202611200001_shopify_recovery_work_retry_ceiling_v2.sql \
+            supabase/migrations/202611210001_shopify_pixel_provider_event_batch_reconciliation_v2.sql; do
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Exercise two-store pixel cart/browse candidates and opportunity promotion
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-recovery-candidates-v2.test.sql
+      - name: Execute read-only privacy export schema catalog against disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f docs/sql/privacy-export-schema-catalog-read-only.sql
+      - name: Exercise existing Shopify V2 database contracts
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
+      - name: Exercise seeded V2 dashboard read model and store isolation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-dashboard-read-model.test.sql
+      - name: Exercise exact-store privacy processing queue and lease safety
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-processing-queue-v2.test.sql
+      - name: Exercise exact-store privacy export artifact registry
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-export-artifact-registry-v2.test.sql
+      - name: Exercise privacy export purge lifecycle
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-export-purge-lifecycle-v2.test.sql
+      - name: Exercise Shopify privacy order-scope preservation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-privacy-order-scope-v2.test.sql
+      - name: Exercise two-store customer session and alias isolation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-exact-store-identity-graph-v2.test.sql
+      - name: Exercise verified token-first checkout webhook projection
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-webhook-projection-v2.test.sql
+      - name: Exercise exact-store order conversion suppression
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-order-conversion-projection-v2.test.sql
+      - name: Verify exact-store attribution and fee-ledger uniqueness constraints
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-integrity-v2.test.sql
+      - name: Exercise exact-store checkout recovery eligibility
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-recovery-eligibility-v2.test.sql
+      - name: Exercise exact-store recovery opportunity promotion
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-opportunity-v2.test.sql
+      - name: Exercise checkout attribution first/last touch and consumed-opportunity exclusion
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-touch-selection-v2.test.sql
+
+      - name: Prepare deterministic competing-order attribution race
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-attribution-concurrency-setup-v2.test.sql
+
+      - name: Exercise two-session exact-store attribution race
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/sql/shopify-recovery-attribution-concurrency-v2.test.sh
+      - name: Exercise exact-store email consent evidence and replay safety
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-email-consent-evidence-v2.test.sql
+      - name: Exercise checkout jurisdiction projection
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-jurisdiction-projection-v2.test.sql
+      - name: Exercise exact-store MailerSend provider events and suppression
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-mailer-provider-events-suppression-v2.test.sql
+      - name: Exercise exact-store customer redaction send guard and authorization race boundary
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-customer-redaction-send-guard-v2.test.sql
+      - name: Exercise pixel delivery permit, cost and reconciliation safety boundary
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-delivery-lifecycle-v2.test.sql
+
+      - name: Prepare concurrent merchant-wide cost reservation test
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-delivery-cost-reservation-concurrency-setup-v2.test.sql
+      - name: Exercise parallel two-store merchant-wide cost cap
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/sql/shopify-delivery-cost-reservation-concurrency-v2.test.sh
+
+      - name: Prepare concurrent exact-store recovery work-claim fixture
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-recovery-work-claims-concurrency-setup-v2.test.sql
+      - name: Exercise concurrent n8n recovery work claims
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/sql/shopify-recovery-work-claims-concurrency-v2.test.sh
+
+      - name: Exercise final checkout provider submission authorization gate
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-provider-submission-gate-v2.test.sql
+      - name: Verify pixel provider submission gate
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-submission-gate-v2.test.sql
+
+      - name: Exercise bounded pixel provider-event batch reconciliation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-provider-event-batch-reconciliation-v2.test.sql
+
+      - name: Exercise checkout ambiguous provider event reconciliation
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-checkout-ambiguous-provider-reconciliation-v2.test.sql
+
+      - name: Exercise pixel delivery outcome, attribution and cost lifecycle
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-pixel-attempt-outcome-lifecycle-v2.test.sql
+
+      - name: Exercise exact-store app uninstall stop boundary
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-exact-store-uninstall-processor-v2.test.sql
+
+      - name: Exercise exact-store shop/redact stop boundary
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-exact-store-shop-redact-stop-v2.test.sql
+

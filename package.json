@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "HENVALT Shopify OAuth and webhook integration",
   "scripts": {
-    "check": "deno check supabase/functions/henvalt-shopify-oauth/index.ts"
+    "test": "node --test tests/*.test.mjs",
+    "check": "deno check --no-config supabase/functions/henvalt-shopify-oauth/index.ts supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts supabase/functions/henvalt-shopify-pixel-delivery-v2/index.ts supabase/functions/henvalt-mailersend-webhook-v2/index.ts supabase/functions/henvalt-merchant-dashboard/index.ts supabase/functions/henvalt-dashboard/index.ts"
   }
 }

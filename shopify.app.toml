@@ -12,8 +12,12 @@ use_legacy_install_flow = true
 
 [auth]
 redirect_urls = [
-  "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth/callback"
+  "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth-v2/callback"
 ]
 
 [webhooks]
 api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy-v2"

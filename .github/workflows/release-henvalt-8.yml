@@ -1,22 +1,32 @@
 name: Release approved HENVALT Shopify app version
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/release-henvalt-8.yml"
   workflow_dispatch:
-
-permissions:
-  contents: read
+    inputs:
+      confirm_release:
+        description: "Confirm release of the reviewed HENVALT Shopify app version to production"
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   release:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_release == true && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     env:
       SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require reviewed main-branch release confirmation
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Shopify release is permitted only from main."
+            exit 1
+          fi
+          if [ "${{ inputs.confirm_release }}" != "true" ]; then
+            echo "::error::Explicit release confirmation is required."
+            exit 1
+          fi
       - name: Require Shopify service account token
         run: |
           if [ -z "$SHOPIFY_SERVICE_ACCOUNT_TOKEN" ]; then

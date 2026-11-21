@@ -1,0 +1,169 @@
+# HENVALT exact-store privacy lifecycle V2
+
+**Status:** a service-role-only exact-store customer export draft now exists in migration 026 and passed Identity V2 CI run #393. It does not deliver exports or complete requests; historical tenant-scoped records remain unresolved and force manual review. Customer redaction and shop redaction remain design-only pending retention rules and FK-safe anonymization. Migration 025 provides the verified receipt queue. A separate candidate migration 020 adds an exact-store `app/uninstalled` stop processor after verified webhook receipt insertion. All work remains branch-only.
+
+## 1. Non-negotiable scope
+
+- Resolve every request from the verified privacy receipt's immutable `connection_id`, `app_key` and `tenant_id`; never route by shop-domain text alone after receipt.
+- A customer request applies to that exact Shopify customer ID in that exact connection. A shop-redact request applies to that exact connection, not the tenant or its other stores.
+- Rows with `shopify_connection_id IS NULL`, missing connection lineage, or ambiguous legacy provenance are unresolved. Do not infer ownership from email, matching IDs across stores, checkout token, or JSON metadata.
+- A 200 from the privacy ingress currently means only that a verified receipt was durably recorded. It does not mean export or deletion completed.
+- Uninstall must immediately stop new processing and delivery for that connection; it is not a substitute for the separate privacy redaction request. Candidate migration 020 implements the stop-only path after a verified `app/uninstalled` receipt, without deleting historical customer or accounting data.
+
+## 2. Exact-store data inventory
+
+| Area | V2 records | Customer-linked fields / dependencies |
+|---|---|---|
+| Identity | `shopify_customer_identity_v2` | `external_customer_reference` is the Shopify customer ID; root customer identity |
+| Sessions | `shopify_session_identity_v2`, `shopify_session_alias_identity_v2` | Session has nullable customer FK; aliases cascade from exact-store session |
+| Storefront events | `shopify_pixel_event_inbox_v2` | Exact connection plus customer/client/checkout references and consent-filtered payload |
+| Checkout/order | `shopify_checkout_identity_v2`, `shopify_order_identity_v2` | Customer FK is nullable on delete; checkout token, order/checkout IDs and financial facts need an explicit retention rule |
+| Recovery | `shopify_checkout_recovery_candidate_v2`, `shopify_recovery_opportunity_v2` | Candidate references checkout and source receipt; opportunity references candidate, checkout, source receipt and nullable customer |
+| Consent | `shopify_customer_email_consent_v2` | Exact-store customer consent evidence; delete or retain only under an explicit lawful-evidence policy |
+| Delivery | `shopify_recovery_intervention_v2`, `shopify_delivery_permits_v2`, `shopify_recovery_send_attempt_v2` | Intervention and attempt currently require customer identity; permits store a keyed recipient fingerprint |
+| Suppression/provider | `shopify_delivery_suppressions_v2`, `shopify_mailer_provider_events_v2` | Suppression stores a keyed recipient fingerprint and restrictive references to customer, attempt and provider event |
+| Cost ledger | `shopify_delivery_cost_reservations_v2` | Merchant cost amount/currency is useful accounting data but currently references a send attempt with a restrictive FK |
+| Compliance receipt | `shopify_privacy_webhook_deliveries` | Stores exact connection, customer ID, request ID and body digest; customer ID must be cleared after processing where retention permits |
+| Legacy core | `customers`, `sessions`, `session_aliases`, `checkouts`, `canonical_events` | May contain direct email or customer references; only rows with proven exact connection lineage can be processed automatically |
+
+## 3. Referential-integrity implications
+
+The current V2 foreign keys deliberately prevent naive deletion:
+
+1. Session aliases cascade from their exact-store session; sessions set their customer reference to NULL when the customer identity is deleted.
+2. Checkout and order identities set their customer reference to NULL, but checkout tokens, IDs and financial facts remain and need an explicit policy.
+3. Candidates restrict checkout and source-receipt deletion. Opportunities restrict candidate, checkout and source-receipt deletion; their customer reference is nullable.
+4. Interventions and send attempts currently require customer identity and have restrictive references. Provider events and suppressions also restrict deletion of their source attempts/events.
+5. Delivery permits reference the customer, intervention, sender, provider and optional send attempt. They should be deleted before their parent delivery graph.
+6. Cost reservations restrict send-attempt deletion. Removing attempts without an accounting-preserving anonymization change would also remove or strand cost history.
+7. The privacy receipt is a durable compliance audit row and should normally remain, but its raw Shopify customer ID must not remain indefinitely after successful processing.
+
+Therefore a customer delete cannot safely be implemented as a single `DELETE FROM shopify_customer_identity_v2`. The schema needs a deliberate anonymization/retention migration before a processor can execute.
+
+## 4. Proposed request behavior
+
+### `customers/data_request`
+
+- Claim the receipt idempotently with a short processing lease.
+- Resolve exact connection and customer identity using the verified receipt's customer ID and exact connection.
+- Build an export from exact-store V2 rows plus legacy rows whose connection lineage is proven.
+- Exclude other stores in the same tenant and all unresolved legacy rows; record their count and route them to manual review rather than silently including or deleting them.
+- Deliver the export through a secure, Shopify-compliant response path; do not return customer data to the webhook caller or browser.
+- Mark COMPLETED only after export delivery is confirmed. A durable internal export artifact alone is not completion.
+
+### `customers/redact`
+
+- Claim and process only the exact customer ID + exact connection.
+- Remove direct identifiers and customer-linked event/session/checkout data for that connection.
+- Delete delivery permits and transient recipient-resolution material.
+- Retain a recipient fingerprint suppression only if the merchant's lawful retention basis and Shopify policy permit it; otherwise remove it. If retained, detach it from the customer identity and preserve only the minimum keyed fingerprint needed to honor unsubscribe/spam/hard-bounce state.
+- Preserve cost/accounting facts only after schema changes detach them from the customer and send-attempt identity. Do not silently delete financial usage rows.
+- Clear the customer ID from the privacy receipt after processing, retain the body digest, topic, request ID, exact connection, timestamps and outcome.
+- Mark COMPLETED only after all exact-store processors succeed; partial work remains retryable and auditable.
+
+### `shop/redact`
+
+- Stop processing for the exact connection, revoke its route token(s), and disable its delivery path.
+- Delete exact-store identity, session, pixel, checkout, candidate, opportunity, intervention, permit and customer-linked delivery data in a dependency-aware order.
+- Retain only minimum non-personal merchant billing/accounting aggregates if legally permitted.
+- Do not delete tenant billing, provider configuration, or any other store's data merely because the shop shares a tenant.
+- Keep the compliance receipt as a minimal audit record with no customer ID.
+
+### `app/uninstalled`
+
+- Immediately mark only the matching connection inactive, revoke its webhook route token(s), stop new recovery work, and cancel pending permits.
+- Keep historical data until the corresponding privacy redaction request is processed; do not equate uninstall with a verified `shop/redact`.
+- A connection with missing or ambiguous app identity must fail closed and be reviewed.
+
+## 5. Required schema changes before implementation
+
+- Add a server-only privacy processing ledger/lease keyed by the verified receipt ID, with bounded retries, idempotent completion and explicit failure codes.
+- Define a retention contract for order identifiers, checkout tokens, consent evidence, send attempts, provider event IDs, keyed suppression fingerprints and monetary reservations.
+- If suppression fingerprints are retained, make the customer FK nullable and detach source-attempt/event references safely; preserve exact-store scope and uniqueness semantics.
+- Make customer references in retained audit/attempt rows nullable or replace them with non-reversible, purpose-limited tombstones. Do not weaken composite exact-store constraints.
+- Make cost reservations independently retainable from a send attempt (nullable attempt reference or a separate immutable accounting key) before customer-linked attempts can be removed.
+- Add explicit scrub/delete operations for exact-store legacy `customers`, `checkouts`, `canonical_events` and pixel inbox data. Null-lineage legacy rows remain unresolved.
+- Keep all processor functions SECURITY DEFINER with empty/fixed search_path, service-role-only execution, exact connection predicates, bounded batches and audit logging.
+
+## 6. Acceptance tests
+
+1. A customer-redact request for Store A deletes/anonymizes only that customer in Store A; Store B's same Shopify customer ID remains untouched.
+2. A request with a valid HMAC but unknown app/store connection is durably review-gated and cannot fall back to tenant-wide deletion.
+3. Duplicate webhook IDs are idempotent; same ID with changed body digest is rejected.
+4. A null-lineage legacy customer/checkout/event is not deleted by a guessed store mapping.
+5. Session aliases and exact-store dependent rows are removed in the intended order without violating FKs.
+6. Suppression fingerprints survive only under the approved retention policy and remain exact-store scoped.
+7. Cost ledger totals remain unchanged after customer anonymization.
+8. Shop-redact removes one connection's data while another store in the tenant remains intact.
+9. Uninstall disables only one connection and prevents further permit issuance/delivery.
+10. Failed/partial processing remains retryable; COMPLETED is written only after the full required operation is confirmed.
+11. Export contains only the requested customer and exact store, is delivered through the approved secure channel, and is not exposed in ingress logs or caller responses.
+
+## 7. Explicit non-actions
+
+A customer export draft is implemented in candidate migration 026, but no export delivery, customer-redaction or shop-redaction processor is implemented here. The uninstall stop processor is candidate migration 020 only. No production change is made. Legal retention decisions and Shopify policy review are required before any destructive processor is enabled.
+
+## 8. Processing queue added (migration 025)
+
+The queue is deliberately an orchestration boundary, not a privacy processor:
+
+- Each verified receipt gets one job keyed by the immutable receipt UUID. The queue does not duplicate the customer ID.
+- Only receipts with a non-null exact connection/tenant link and the required topic fields become READY. Missing/ambiguous lineage stays REVIEW_REQUIRED.
+- Claims join the receipt to the exact connection on connection ID, tenant ID, app key and shop domain; there is no tenant-wide or shop-domain-only fallback.
+- Claims use `FOR UPDATE SKIP LOCKED`, a bounded 60–900 second lease, a one-time random claim token, and SHA-256-only token storage. Expired claims can be reclaimed; attempts are capped at ten.
+- Completion requires an explicit processor-confirmed boolean, a current unexpired claim and matching token. The receipt's raw customer ID is cleared only after confirmed completion; the body digest and routing audit remain.
+- Retryable failures return to READY; non-retryable failures remain FAILED. Unlinked receipts cannot be claimed.
+- Queue table and RPCs are inaccessible to browser roles; only service_role can execute claim/complete/fail functions.
+
+The queue does **not** prove an export was delivered or a redaction was performed. The future processor must perform and verify the relevant operation before calling completion. Export delivery, customer anonymization, suppression-retention decisions, shop-redact deletion ordering and the associated end-to-end tests remain open.
+
+## 9. Exact-store customer export draft (migration 026)
+
+Migration 026 adds `henvalt.build_shopify_customer_privacy_export_v2(receipt_id, claim_token)`:
+
+- It accepts only a live, unexpired claim for a verified `customers/data_request` receipt.
+- It re-binds receipt → connection using immutable connection ID, tenant ID, app key and shop domain, then resolves the customer identity by exact connection + Shopify customer reference.
+- It exports the V2 records positively linked to that customer: sessions and aliases, pixel activity, checkouts, recovery candidates/opportunities, consent state/history, interventions, delivery attempts/permits/suppressions, provider events, orders/refunds, recovered-revenue attribution and associated fee measurements.
+- It does not export recipient fingerprint bytes, permit-token hashes, provider credentials, Vault references or unrelated merchant/store data.
+- A customer reference existing in another store in the same tenant is not included.
+- The export is a JSON draft returned only to `service_role`. It is not emailed, downloaded by a customer, or marked complete by this function.
+- It deliberately sets `legacy_scope_review_required=true` and `completion_eligible=false`. Historical tenant-scoped records without immutable store lineage remain unresolved and must be reviewed before HENVALT can claim the request is complete.
+- No delete or completion operation is called.
+
+Identity V2 CI run #393 passed migrations 001–026 and the full disposable PostgreSQL suite, including the two-store export test where both stores use the same Shopify customer ID but have distinct sessions and aliases. The export for Store A did not contain Store B's session or alias, and a Store B claim token could not access Store A's export.
+
+Open before launch: reconcile legacy tenant-scoped customer/session/checkout/event records, review the exported field list with applicable privacy requirements, implement secure export delivery/retention, and only then permit completion.
+
+## 10. Customer redaction impact preview (migration 027)
+
+Migration 027 adds `henvalt.preview_shopify_customer_redaction_v2(receipt_id, claim_token)` as a read-only planning step:
+
+- It requires a current, unexpired claim for a verified `customers/redact` or `customers/data_request` receipt and re-binds receipt → exact connection → customer identity.
+- It returns counts only for the requested customer's V2 graph in that exact connection: sessions/aliases, pixel events, checkouts/candidates/opportunities, consent, interventions, permits, attempts, suppressions, provider events, cost reservations, orders/refunds, attributions and fee measurements.
+- It returns no customer identifier, email, recipient fingerprint, provider secret, or row payload.
+- It explicitly identifies accounting, provider audit and suppression-retention dependencies.
+- It always blocks execution while legacy tenant-scoped data, retention policy, suppression policy, cost-ledger detachment and provider-audit FK detachment remain unresolved.
+- It is service-role-only and contains no DELETE/UPDATE statements. It does not complete or mutate a privacy request.
+
+The disposable PostgreSQL test exercises the preview using two stores with the same Shopify customer ID. Store A's preview must count only Store A's session/alias, and the customer identity must still exist after the preview. CI runs the full migration chain through 027 and static security contracts.
+
+This is not a redaction processor. It is a safe inventory that informs the required FK/retention migration before any destructive operation is designed.
+
+## 11. Recursive foreign-key dependency inventory (migration 028)
+
+Migration 028 adds the service-role-only read-only catalog function `henvalt.shopify_customer_redaction_fk_dependency_map_v2()`. Starting at `shopify_customer_identity_v2`, it recursively follows every referencing foreign key (bounded to 12 levels) and reports:
+
+- referencing and referenced table names
+- exact referencing and referenced column lists
+- PostgreSQL `ON DELETE` behavior (NO ACTION, RESTRICT, CASCADE, SET NULL or SET DEFAULT)
+- constraint validation/deferrability metadata and graph depth
+
+It reads PostgreSQL catalog metadata only; it does not inspect customer rows, return identifiers, or mutate anything.
+
+### Findings that prevent a naive DELETE
+
+The current graph is deliberately not a simple cascade. Customer identity references include nullable links that can be detached (for example sessions/checkouts/opportunities use targeted SET NULL), alongside restrictive consent, intervention and suppression links. Session aliases cascade from their session. The downstream graph also reaches provider events, delivery-cost reservations, order/refund records, attributions and fee measurements.
+
+This means deleting a customer identity could either be blocked by restrictive audit/consent/suppression links or cascade away session aliases; deleting deeper recovery/send/order records risks destroying provider evidence and financial history. The FK inventory is now exercised in the two-store SQL privacy test, including assertions for SET NULL, CASCADE and RESTRICT semantics and the downstream fee-measurement link.
+
+No retention rule has been chosen. The next redaction design must separate (1) direct personal identifiers and checkout/session/pixel payload data, (2) durable unsubscribe/complaint/hard-bounce suppression evidence, (3) provider delivery/cost audit, and (4) order/refund/attribution/fee accounting. No delete/anonymize executor is included in migration 028.

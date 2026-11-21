@@ -1,10 +1,149 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-const URL = Deno.env.get("SUPABASE_URL") ?? "";
+import { isDateOnly, isValidDateRange } from "../_shared/date-range-v2.mjs";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const APP_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
-const headers = {"content-type":"application/json","cache-control":"no-store","access-control-allow-origin":"*","access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"GET,OPTIONS"};
-const out=(status:number,body:unknown)=>new Response(JSON.stringify(body),{status,headers});
-function decode(s:string){s=s.replace(/-/g,"+").replace(/_/g,"/");return Uint8Array.from(atob(s+"=".repeat((4-s.length%4)%4)),c=>c.charCodeAt(0))}
-async function shopFromToken(token:string){if(!APP_KEY||!SECRET)throw Error("CONFIG_MISSING");const p=token.split(".");if(p.length!==3)throw Error("INVALID_TOKEN");const h=JSON.parse(new TextDecoder().decode(decode(p[0]))),c=JSON.parse(new TextDecoder().decode(decode(p[1])));if(h.alg!=="HS256")throw Error("INVALID_ALGORITHM");const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(SECRET),{name:"HMAC",hash:"SHA-256"},false,["sign"]);const sig=new Uint8Array(await crypto.subtle.sign("HMAC",k,new TextEncoder().encode(p[0]+"."+p[1]))),got=decode(p[2]);if(sig.length!==got.length||sig.some((v,i)=>v!==got[i]))throw Error("INVALID_SIGNATURE");const shop=typeof c.dest==="string"?new URL(c.dest).hostname.toLowerCase():"",now=Math.floor(Date.now()/1000);if(!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)||c.aud!==APP_KEY||c.iss!=="https://"+shop+"/admin"||c.dest!=="https://"+shop||typeof c.exp!=="number"||c.exp<=now||(typeof c.nbf==="number"&&c.nbf>now+10))throw Error("INVALID_SESSION");return shop}
-Deno.serve(async(req:Request)=>{if(req.method==="OPTIONS")return new Response(null,{status:204,headers});if(req.method!=="GET")return out(405,{error:"method_not_allowed"});try{const token=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"").trim();if(!token)return out(401,{error:"shopify_session_required"});const shop=await shopFromToken(token),u=new URL(req.url),valid=(s:string|null)=>s&&/^\d{4}-\d{2}-\d{2}$/.test(s)?s:null,today=new Date().toISOString().slice(0,10),from=valid(u.searchParams.get("from"))||new Date(Date.now()-29*86400000).toISOString().slice(0,10),to=valid(u.searchParams.get("to"))||today;if(to<from||Date.parse(to)-Date.parse(from)>366*86400000)return out(400,{error:"invalid_date_range"});const res=await fetch(URL+"/rest/v1/rpc/control_plane_dashboard_summary",{method:"POST",headers:{apikey:KEY,authorization:"Bearer "+KEY,"content-type":"application/json","accept-profile":"henvalt","content-profile":"henvalt"},body:JSON.stringify({p_shop_domain:shop,p_from:from+"T00:00:00.000Z",p_to:to+"T00:00:00.000Z"})});if(!res.ok)throw Error("SUMMARY_QUERY_FAILED");const summary=await res.json();if(summary.linked!==true)return out(409,{error:"shop_not_connected"});return out(200,{...summary,shop,range:{from,to},generatedAt:new Date().toISOString()})}catch(e){const m=e instanceof Error?e.message:"error",status=m.includes("CONFIG_MISSING")?503:m.startsWith("INVALID_")?401:500;return out(status,{error:status===401?"invalid_shopify_session":status===503?"dashboard_auth_not_configured":"dashboard_unavailable"})}});
+const headers = {
+  "content-type": "application/json",
+  "cache-control": "no-store",
+  "access-control-allow-origin": "*",
+  "access-control-allow-headers": "authorization,content-type",
+  "access-control-allow-methods": "GET,OPTIONS",
+};
+const out = (status: number, body: unknown) =>
+  new Response(JSON.stringify(body), { status, headers });
+
+function decode(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(
+    atob(normalized + "=".repeat((4 - normalized.length % 4) % 4)),
+    (character) => character.charCodeAt(0),
+  );
+}
+
+async function shopFromToken(token: string): Promise<string> {
+  if (!APP_KEY || !SECRET) throw new Error("CONFIG_MISSING");
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("INVALID_TOKEN");
+  const header = JSON.parse(new TextDecoder().decode(decode(parts[0])));
+  const claims = JSON.parse(new TextDecoder().decode(decode(parts[1])));
+  if (header.alg !== "HS256") throw new Error("INVALID_ALGORITHM");
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(parts[0] + "." + parts[1]),
+  ));
+  const supplied = decode(parts[2]);
+  if (signature.length !== supplied.length ||
+      signature.some((value, index) => value !== supplied[index])) {
+    throw new Error("INVALID_SIGNATURE");
+  }
+
+  const shop = typeof claims.dest === "string"
+    ? new URL(claims.dest).hostname.toLowerCase()
+    : "";
+  const now = Math.floor(Date.now() / 1000);
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ||
+      claims.aud !== APP_KEY ||
+      claims.iss !== "https://" + shop + "/admin" ||
+      claims.dest !== "https://" + shop ||
+      typeof claims.exp !== "number" ||
+      claims.exp <= now ||
+      (typeof claims.nbf === "number" && claims.nbf > now + 10)) {
+    throw new Error("INVALID_SESSION");
+  }
+  return shop;
+}
+
+async function rpc(name: string, body: Record<string, unknown>): Promise<any> {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
+    method: "POST",
+    headers: {
+      apikey: KEY,
+      authorization: "Bearer " + KEY,
+      "content-type": "application/json",
+      "accept-profile": "henvalt",
+      "content-profile": "henvalt",
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(12000),
+  });
+  if (!response.ok) throw new Error("DATABASE_LOOKUP_FAILED");
+  const payload = await response.json().catch(() => null);
+  return Array.isArray(payload) ? payload[0] ?? null : payload;
+}
+
+async function rest(path: string): Promise<any> {
+  const response = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
+    headers: {
+      apikey: KEY,
+      authorization: "Bearer " + KEY,
+      "accept-profile": "henvalt",
+      "content-profile": "henvalt",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw new Error("DATABASE_LOOKUP_FAILED");
+  return await response.json();
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
+  if (req.method !== "GET") return out(405, { error: "method_not_allowed" });
+
+  try {
+    const token = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+    if (!token) return out(401, { error: "shopify_session_required" });
+    if (!SUPABASE_URL || !KEY) return out(503, { error: "dashboard_not_configured" });
+
+    const shop = await shopFromToken(token);
+    const connection = await rpc("control_plane_shop_connection", { p_shop_domain: shop });
+    if (!connection ||
+        typeof connection.connection_id !== "string" ||
+        typeof connection.tenant_id !== "string" ||
+        connection.active !== true ||
+        connection.tenant_status !== "ACTIVE") {
+      return out(409, { error: "shop_not_connected" });
+    }
+
+    const url = new URL(req.url);
+    const today = new Date().toISOString().slice(0, 10);
+    const from = (isDateOnly(url.searchParams.get("from")) ? url.searchParams.get("from") : null) ||
+      new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const to = (isDateOnly(url.searchParams.get("to")) ? url.searchParams.get("to") : null) || today;
+    if (!isValidDateRange(from, to, 366)) {
+      return out(400, { error: "invalid_date_range" });
+    }
+
+    const summary = await rpc("control_plane_dashboard_summary_v2", {
+      p_shopify_connection_id: connection.connection_id,
+      p_from: from + "T00:00:00.000Z",
+      p_to: to + "T00:00:00.000Z",
+    });
+    if (!summary || summary.linked !== true) return out(409, { error: "shop_not_connected" });
+    return out(200, {
+      ...summary,
+      shop,
+      range: { from, to },
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "error";
+    const status = message.includes("CONFIG_MISSING") ? 503 :
+      message.startsWith("INVALID_") ? 401 : 500;
+    return out(status, {
+      error: status === 401 ? "invalid_shopify_session" :
+        status === 503 ? "dashboard_auth_not_configured" : "dashboard_unavailable",
+    });
+  }
+});

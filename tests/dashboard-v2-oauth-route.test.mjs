@@ -1,0 +1,32 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const dashboard = readFileSync(new URL("../dashboard/index.html", import.meta.url), "utf8");
+const oauthFunction = readFileSync(new URL("../supabase/functions/henvalt-shopify-oauth-v2/index.ts", import.meta.url), "utf8");
+const mailerSetupFunction = readFileSync(new URL("../supabase/functions/henvalt-mailersend-setup/index.ts", import.meta.url), "utf8");
+
+test("dashboard Shopify connection uses the V2 owner-authenticated install route", () => {
+  assert.match(dashboard, /functions\/v1\/henvalt-shopify-oauth-v2\/install/);
+  assert.doesNotMatch(dashboard, /functions\/v1\/henvalt-shopify-oauth\/auth/);
+  assert.match(dashboard, /Authorization:\s*"Bearer "\+session\.access_token/);
+  assert.match(dashboard, /JSON\.stringify\(\{shop\}\)/);
+  assert.match(dashboard, /canonical \*\.myshopify\.com domain/);
+  assert.match(dashboard, /app registry, Vault secret, and owner-controlled endpoints must be ready first/);
+  assert.match(dashboard, /owner_controlled_shop_connection_required/);
+  assert.match(dashboard, /No owner-controlled Shopify connection yet/);
+});
+
+test("all dashboard Edge Function requests include the publishable API key and owner bearer", () => {
+  assert.match(dashboard, /fetch\(API\+params,\{headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+token\}/);
+  assert.match(dashboard, /henvalt-shopify-oauth-v2\/install",\{method:"POST",headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+session\.access_token/);
+  assert.match(dashboard, /fetch\(SETUP,\{method:"POST",headers:\{apikey:SUPABASE_KEY,Authorization:"Bearer "\+ownerSession\.access_token/);
+  assert.equal((dashboard.match(/apikey:SUPABASE_KEY/g) || []).length, 3);
+  assert.match(oauthFunction, /access-control-allow-headers[^\n]*authorization, apikey, content-type/);
+  assert.match(mailerSetupFunction, /access-control-allow-headers[^\n]*authorization, apikey, content-type/);
+});
+
+test("dashboard connection UI does not claim to reinstall or authorize a legacy app", () => {
+  assert.match(dashboard, /Connect the configured HENVALT Shopify app/);
+  assert.doesNotMatch(dashboard, /existing HENVALT OAuth Connection app/);
+});

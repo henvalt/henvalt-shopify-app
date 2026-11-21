@@ -1,0 +1,10 @@
+title = "HENVALT secret scanning allowlist"
+
+[allowlist]
+description = "The dashboard contains this exact Supabase publishable browser key. Publishable keys are designed for client-side use; server authorization remains enforced by Supabase policies. Never allowlist service-role, secret, OAuth, MailerSend, or Worker credentials."
+regexes = [
+  '''sb_publishable_C_Noi9Wp1FfXIQPK67dbuA_mI5bd-1W''',
+]
+paths = [
+  '''dashboard/index\.html''',
+]

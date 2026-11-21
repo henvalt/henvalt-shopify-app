@@ -3,6 +3,7 @@ const ALLOWED_EVENTS = new Set([
   "page_viewed",
   "product_viewed",
   "product_added_to_cart",
+  "product_removed_from_cart",
   "checkout_started",
 ]);
 
@@ -156,10 +157,32 @@ export default {
       } : null,
       cart_line: payload.cart_line ? {
         quantity: Number.isInteger(payload.cart_line.quantity) && Number(payload.cart_line.quantity) >= 0
+          && Number(payload.cart_line.quantity) <= 999
           ? Number(payload.cart_line.quantity)
           : null,
         merchandise_id: validId(payload.cart_line.merchandise_id, 200)
           ? payload.cart_line.merchandise_id
+          : null,
+        product_id: validId(payload.cart_line.product_id, 200)
+          ? payload.cart_line.product_id
+          : null,
+        product_title: typeof payload.cart_line.product_title === "string"
+          ? payload.cart_line.product_title.slice(0, 200)
+          : null,
+        variant_title: typeof payload.cart_line.variant_title === "string"
+          ? payload.cart_line.variant_title.slice(0, 200)
+          : null,
+        unit_price_amount: typeof payload.cart_line.unit_price_amount === "string"
+          && /^[0-9]{1,12}(\\.[0-9]{1,4})?$/.test(payload.cart_line.unit_price_amount)
+          ? payload.cart_line.unit_price_amount
+          : null,
+        line_total_amount: typeof payload.cart_line.line_total_amount === "string"
+          && /^[0-9]{1,12}(\\.[0-9]{1,4})?$/.test(payload.cart_line.line_total_amount)
+          ? payload.cart_line.line_total_amount
+          : null,
+        currency: typeof payload.cart_line.currency === "string"
+          && /^[A-Z]{3}$/.test(payload.cart_line.currency)
+          ? payload.cart_line.currency
           : null,
       } : null,
       checkout_reference: checkoutReference,

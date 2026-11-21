@@ -1,0 +1,23 @@
+[functions.henvalt-shopify-oauth-v2]
+# OAuth callback is browser/Shopify redirected; install initiation validates the merchant JWT in-handler.
+verify_jwt = false
+
+[functions.henvalt-shopify-privacy-v2]
+# Shopify compliance webhooks are authenticated by raw-body HMAC in the database RPC.
+verify_jwt = false
+
+[functions.henvalt-shopify-webhook-ingress]
+# Cloudflare Worker authenticates with the dedicated ingress bearer; SQL verifies Shopify HMAC.
+verify_jwt = false
+
+[functions.henvalt-mailersend-webhook-v2]
+verify_jwt = false
+
+[functions.henvalt-shopify-contact-delivery-v2]
+verify_jwt = false
+
+[functions.henvalt-shopify-contact-evidence-v2]
+verify_jwt = false
+
+[functions.henvalt-shopify-pixel-delivery-v2]
+verify_jwt = false

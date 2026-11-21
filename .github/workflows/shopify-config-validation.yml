@@ -1,3 +1,4 @@
+
 name: Shopify app configuration checks and deployment
 
 on:
@@ -5,55 +6,144 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      confirm_shopify_prepare:
+        description: "Confirm creation of an unreleased Shopify app version after reviewing the app owner, scopes, URLs and Pixel extension"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   static-validation:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Parse candidate Edge Functions and Worker source
+        run: |
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-oauth-v2/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-privacy-v2/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-webhook-ingress/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-mailersend-webhook-v2/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-shopify-contact-delivery-v2/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-dashboard/index.ts
+          node --experimental-strip-types --check supabase/functions/henvalt-merchant-dashboard/index.ts
+          node --check cloudflare/worker.js
+      - name: Test Shopify webhook security boundaries
+        run: node --test tests/webhook-forwarding.test.mjs tests/shopify-hmac.test.mjs tests/worker-to-n8n-forwarding.test.mjs tests/n8n-receiver-contract.test.mjs
+      - name: Test fail-closed dashboard store scope
+        run: node --test tests/dashboard-single-store-scope.test.mjs
+      - name: Test pixel event, store identity and privacy contracts
+        run: node --test tests/pixel-event-contract.test.mjs tests/store-identity-preflight-safety.test.mjs tests/privacy-source-recovery.test.mjs tests/candidate-cross-store-ambiguity-safety.test.mjs tests/secondary-function-lineage-audit.test.mjs tests/multi-store-migration-blueprint-safety.test.mjs tests/store-isolation-regression-matrix.test.mjs tests/recovery-identity-consent-audit.test.mjs tests/supabase-privileged-function-access-audit.test.mjs tests/live-identity-and-rls-audit.test.mjs tests/app-aware-shopify-identity-contract.test.mjs tests/app-aware-identity-migration-design.test.mjs tests/live-writer-function-source-lineage-audit.test.mjs tests/live-shopify-edge-function-app-identity-audit.test.mjs tests/app-aware-source-lineage-preflight-safety.test.mjs tests/app-aware-identity-additive-blueprint.test.mjs tests/two-store-isolation-contract.test.mjs tests/stage-0-shopify-app-identity-migration.test.mjs tests/shopify-identity-validator.test.mjs tests/exact-store-privacy-consent-recovery-remediation-plan.test.mjs tests/exact-store-historical-lineage-preflight.test.mjs tests/pixel-ingestion-exact-store-lineage-contract.test.mjs tests/shopify-webhook-app-store-identity-binding-security-gate.test.mjs tests/shopify-webhook-identity-foundation.test.mjs tests/shopify-webhook-verified-inbox-rpc.test.mjs tests/shopify-webhook-v2-worker.test.mjs tests/shopify-webhook-v2-edge-ingress.test.mjs tests/shopify-webhook-v2-worker-ack.test.mjs tests/shopify-webhook-v2-edge-ack.test.mjs tests/shopify-oauth-state-app-identity.test.mjs tests/shopify-oauth-app-aware-finalizer.test.mjs tests/shopify-app-oauth-secret-resolver.test.mjs tests/shopify-oauth-v2-app-identity.test.mjs tests/shopify-oauth-v2-infrastructure-endpoints.test.mjs tests/shopify-app-config-oauth-v2-callback.test.mjs tests/shopify-privacy-webhook-v2.test.mjs tests/exact-store-privacy-lineage-preflight.test.mjs tests/store-aware-shopify-pixel-writer-v2-contract.test.mjs tests/exact-store-core-lineage-foundation.test.mjs tests/shopify-pixel-event-inbox-v2.test.mjs tests/shopify-pixel-recovery-candidates-v2.test.mjs tests/customer-session-checkout-writer-audit.test.mjs
       - name: Validate Shopify TOML and extension source
         run: |
           python3 - <<'PY'
           import json
           import pathlib
           import tomllib
-
           app = tomllib.loads(pathlib.Path("shopify.app.toml").read_text())
           ext = tomllib.loads(pathlib.Path("extensions/henvalt-pixel/shopify.extension.toml").read_text())
           package = json.loads(pathlib.Path("extensions/henvalt-pixel/package.json").read_text())
-
           assert app["client_id"], "Missing Shopify Client ID"
           assert app["application_url"].startswith("https://"), "Application URL must use HTTPS"
           assert "read_orders" in app["access_scopes"]["scopes"].split(","), "Missing read_orders scope"
           assert "write_pixels" in app["access_scopes"]["scopes"].split(","), "Missing write_pixels scope"
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
           assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
+          required_compliance_topics = {"customers/data_request", "customers/redact", "shop/redact"}
+          subscriptions = app["webhooks"].get("subscriptions", [])
+          compliance_subscriptions = [item for item in subscriptions if set(item.get("compliance_topics", [])) == required_compliance_topics]
+          assert len(compliance_subscriptions) == 1, "Missing or duplicate mandatory Shopify privacy subscription"
+          assert compliance_subscriptions[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy-v2", "Privacy webhook must use the app-registry-bound V2 endpoint"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
-          assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Shopify Web Pixels API dependency"
+          assert package["dependencies"]["@shopify/web-pixels-extension"], "Missing Web Pixels API dependency"
+          expected_events = {"page_viewed","product_viewed","product_added_to_cart","product_removed_from_cart","checkout_started"}
           source = pathlib.Path("extensions/henvalt-pixel/src/index.js").read_text()
-          for event in ("page_viewed", "product_viewed", "product_added_to_cart", "checkout_started"):
+          collector = pathlib.Path("cloudflare/pixel-collector.js").read_text()
+          for event in expected_events:
               assert event in source, f"Missing pixel subscription: {event}"
+              assert f'"{event}"' in collector, f"Pixel collector rejects subscribed event: {event}"
           assert "fetch(" in source, "Missing collector delivery"
-          print("HENVALT Shopify app configuration and Pixel source checks passed.")
+          print("HENVALT Shopify app configuration and Pixel event contract checks passed.")
           PY
 
+  shopify-database-migration-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Create synthetic baseline
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-test-baseline.sql
+      - name: Apply candidate migrations in order
+        env:
+          PGPASSWORD: postgres
+        run: |
+          for migration in \
+            supabase/migrations/202611160001_shopify_webhook_identity_foundation.sql \
+            supabase/migrations/202611160002_shopify_webhook_verified_inbox_rpc.sql \
+            supabase/migrations/202611160003_shopify_oauth_state_app_identity.sql \
+            supabase/migrations/202611160004_shopify_oauth_app_aware_finalizer.sql \
+            supabase/migrations/202611160005_shopify_app_oauth_secret_resolver.sql \
+            supabase/migrations/202611160006_shopify_privacy_webhook_inbox_v2.sql \
+            supabase/migrations/202611160007_exact_store_core_lineage_foundation.sql \
+            supabase/migrations/202611160008_shopify_pixel_event_inbox_v2.sql; do
+            psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Exercise OAuth, webhook and privacy RPCs
+        env:
+          PGPASSWORD: postgres
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/sql/shopify-v2-database-integration.test.sql
+
   deploy-shopify-version:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' && inputs.confirm_shopify_prepare == true && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     env:
       SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Require reviewed main-branch preparation confirmation
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Shopify app preparation is permitted only from main."
+            exit 1
+          fi
+          if [ "${{ inputs.confirm_shopify_prepare }}" != "true" ]; then
+            echo "::error::Explicit Shopify preparation confirmation is required."
+            exit 1
+          fi
       - name: Skip deployment until Shopify token is configured
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN == ''
         run: echo "Deployment skipped. Add SHOPIFY_SERVICE_ACCOUNT_TOKEN in GitHub repository Actions secrets."
-      - uses: actions/setup-node@v4
+      - name: Setup Node
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
+        uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Install Web Pixel extension dependencies

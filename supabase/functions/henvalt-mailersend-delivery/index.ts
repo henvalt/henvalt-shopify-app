@@ -55,6 +55,11 @@ Deno.serve(async (req: Request) => {
     return json(401, { error: "service_role_required" });
   }
 
+  // Fail closed: the legacy V1 sender requires an explicit operator-controlled enable flag.
+  if (Deno.env.get("HENVALT_V1_MAILERSEND_SEND_READY") !== "true") {
+    return json(503, { error: "delivery_send_disabled" });
+  }
+
   let apiToken = "";
   try {
     const body = await req.json().catch(() => ({}));

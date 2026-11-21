@@ -212,19 +212,19 @@ BEGIN
           'id', CASE WHEN length(p_payload #>> '{product,id}') BETWEEN 1 AND 200 THEN p_payload #>> '{product,id}' END,
           'title', CASE WHEN length(p_payload #>> '{product,title}') BETWEEN 1 AND 200 THEN p_payload #>> '{product,title}' END,
           'variant_id', CASE WHEN length(p_payload #>> '{product,variant_id}') BETWEEN 1 AND 200 THEN p_payload #>> '{product,variant_id}' END,
-          'price_amount', CASE WHEN length(coalesce(p_payload #>> '{product,price_amount}','')) BETWEEN 1 AND 17 AND translate(p_payload #>> '{product,price_amount}', '0123456789.', '') = '' AND length(p_payload #>> '{product,price_amount}') - length(replace(p_payload #>> '{product,price_amount}', '.', '')) <= 1 AND left(p_payload #>> '{product,price_amount}', 1) <> '.' AND right(p_payload #>> '{product,price_amount}', 1) <> '.' THEN p_payload #>> '{product,price_amount}' END,
-          'price_currency', CASE WHEN length(coalesce(p_payload #>> '{product,price_currency}','')) = 3 AND translate(upper(p_payload #>> '{product,price_currency}'), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '') = '' THEN upper(p_payload #>> '{product,price_currency}') END
+          'price_amount', CASE WHEN coalesce(p_payload #>> '{product,price_amount}','') ~ '^[0-9]{1,12}([.][0-9]{1,4})?' THEN p_payload #>> '{product,price_amount}' END,
+          'price_currency', CASE WHEN upper(coalesce(p_payload #>> '{product,price_currency}','')) ~ '^[A-Z]{3}' THEN upper(p_payload #>> '{product,price_currency}') END
         )) ELSE '{}'::jsonb END,
       'cart_line', CASE WHEN jsonb_typeof(p_payload->'cart_line') = 'object' THEN
         jsonb_strip_nulls(jsonb_build_object(
-          'quantity', CASE WHEN length(coalesce(p_payload #>> '{cart_line,quantity}','')) BETWEEN 1 AND 3 AND translate(p_payload #>> '{cart_line,quantity}', '0123456789', '') = '' AND (p_payload #>> '{cart_line,quantity}')::integer BETWEEN 0 AND 999 THEN (p_payload #>> '{cart_line,quantity}')::integer END,
+          'quantity', CASE WHEN coalesce(p_payload #>> '{cart_line,quantity}','') ~ '^[0-9]{1,3}' AND (p_payload #>> '{cart_line,quantity}')::integer BETWEEN 0 AND 999 THEN (p_payload #>> '{cart_line,quantity}')::integer END,
           'merchandise_id', CASE WHEN length(p_payload #>> '{cart_line,merchandise_id}') BETWEEN 1 AND 200 THEN p_payload #>> '{cart_line,merchandise_id}' END,
           'product_id', CASE WHEN length(p_payload #>> '{cart_line,product_id}') BETWEEN 1 AND 200 THEN p_payload #>> '{cart_line,product_id}' END,
           'product_title', CASE WHEN length(p_payload #>> '{cart_line,product_title}') BETWEEN 1 AND 200 THEN p_payload #>> '{cart_line,product_title}' END,
           'variant_title', CASE WHEN length(p_payload #>> '{cart_line,variant_title}') BETWEEN 1 AND 200 THEN p_payload #>> '{cart_line,variant_title}' END,
-          'unit_price_amount', CASE WHEN length(coalesce(p_payload #>> '{cart_line,unit_price_amount}','')) BETWEEN 1 AND 17 AND translate(p_payload #>> '{cart_line,unit_price_amount}', '0123456789.', '') = '' AND length(p_payload #>> '{cart_line,unit_price_amount}') - length(replace(p_payload #>> '{cart_line,unit_price_amount}', '.', '')) <= 1 AND left(p_payload #>> '{cart_line,unit_price_amount}', 1) <> '.' AND right(p_payload #>> '{cart_line,unit_price_amount}', 1) <> '.' THEN p_payload #>> '{cart_line,unit_price_amount}' END,
-          'line_total_amount', CASE WHEN length(coalesce(p_payload #>> '{cart_line,line_total_amount}','')) BETWEEN 1 AND 17 AND translate(p_payload #>> '{cart_line,line_total_amount}', '0123456789.', '') = '' AND length(p_payload #>> '{cart_line,line_total_amount}') - length(replace(p_payload #>> '{cart_line,line_total_amount}', '.', '')) <= 1 AND left(p_payload #>> '{cart_line,line_total_amount}', 1) <> '.' AND right(p_payload #>> '{cart_line,line_total_amount}', 1) <> '.' THEN p_payload #>> '{cart_line,line_total_amount}' END,
-          'currency', CASE WHEN length(coalesce(p_payload #>> '{cart_line,currency}','')) = 3 AND translate(upper(p_payload #>> '{cart_line,currency}'), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '') = '' THEN upper(p_payload #>> '{cart_line,currency}') END
+          'unit_price_amount', CASE WHEN coalesce(p_payload #>> '{cart_line,unit_price_amount}','') ~ '^[0-9]{1,12}([.][0-9]{1,4})?' THEN p_payload #>> '{cart_line,unit_price_amount}' END,
+          'line_total_amount', CASE WHEN coalesce(p_payload #>> '{cart_line,line_total_amount}','') ~ '^[0-9]{1,12}([.][0-9]{1,4})?' THEN p_payload #>> '{cart_line,line_total_amount}' END,
+          'currency', CASE WHEN upper(coalesce(p_payload #>> '{cart_line,currency}','')) ~ '^[A-Z]{3}' THEN upper(p_payload #>> '{cart_line,currency}') END
         )) ELSE '{}'::jsonb END
     );
   END IF;

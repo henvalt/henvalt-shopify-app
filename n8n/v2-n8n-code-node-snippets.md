@@ -1,0 +1,377 @@
+# HENVALT V2 native n8n Code-node snippets
+
+**Status: candidate implementation material only.** These snippets are not imported into n8n and do not change the three active V1 workflows. They are designed for the existing three-workflow topology; do not create a fourth workflow.
+
+## HTTP Request node contract
+
+For Supabase RPC and V2 Edge Function HTTP Request nodes:
+
+- Response format: JSON.
+- Include full response so the Code node receives `statusCode` and `body`.
+- Do not include request headers or credentials in the output item.
+- Use the dedicated n8n credential for each server-side bearer; never put a token in an expression, Code node, item JSON or workflow static data.
+- Disable automatic retries on provider-boundary requests.
+- Route network/timeout errors to a sanitized `DEFERRED` result. Never retry the provider call from n8n.
+- Use the Recovery service-role credential only on Recovery's Supabase RPC nodes. Delivery receives only the per-function delivery bearer.
+
+The Recovery setup/claim snippets run once for all items. Delivery's per-claim validation/classification and Recovery's per-claim finish/acknowledgement snippets must be configured as **Run Once for Each Item** and return one item (not an array). Every Code node that creates a replacement item includes `pairedItem: { item: 0 }` so n8n can preserve the original work-item lineage through HTTP Request and Execute Sub-workflow nodes.
+
+## HENVALT_RECOVERY
+
+### 1. Init V2 Worker
+
+Immediately after the Schedule Trigger:
+
+```javascript
+const executionId = String($execution.id ?? "");
+const workerId = `henvalt_recovery_v2:${executionId}`;
+
+if (!/^[A-Za-z0-9._:-]{3,80}$/.test(workerId)) {
+  throw new Error("v2_worker_id_invalid");
+}
+
+return [{ json: { worker_id: workerId } }];
+```
+
+### 2. Assert Stage Accepted
+
+Place after each candidate refresh, promotion, and intervention materializer RPC. A failed stage must stop the tick before claim.
+
+```javascript
+const response = $input.first().json ?? {};
+const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
+  ? response.body
+  : response;
+const status = Number(response.statusCode ?? 200);
+
+if (!Number.isInteger(status) || status < 200 || status >= 300 || body.accepted !== true) {
+  throw new Error("v2_stage_rejected");
+}
+
+return [{ json: { accepted: true } }];
+```
+
+Do not pass the full RPC response into the next stage. Only the acceptance signal is needed.
+
+### 3. Validate Claim Batch
+
+After `claim_shopify_recovery_work_v2`. The database claim response must contain exactly three fields per item. This Code node adds only the worker ID and correlation ID required for the Delivery handoff.
+
+```javascript
+const response = $input.first().json ?? {};
+const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
+  ? response.body
+  : response;
+const status = Number(response.statusCode ?? 200);
+const items = body.items;
+const workerId = $("Init V2 Worker").first().json.worker_id;
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const allowedTypes = new Set(["CHECKOUT_INTERVENTION", "PIXEL_OPPORTUNITY"]);
+
+if (!Number.isInteger(status) || status < 200 || status >= 300 ||
+    body.accepted !== true || !Array.isArray(items) ||
+    !Number.isInteger(body.claimed) || body.claimed !== items.length ||
+    items.length > 25 || !/^[A-Za-z0-9._:-]{3,80}$/.test(workerId)) {
+  throw new Error("v2_claim_batch_invalid");
+}
+
+const seenWork = new Set();
+const seenLeases = new Set();
+
+for (const item of items) {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    throw new Error("v2_claim_item_invalid");
+  }
+  const keys = Object.keys(item).sort().join(",");
+  if (keys !== "lease_id,work_id,work_type" ||
+      !allowedTypes.has(item.work_type) ||
+      !uuid.test(item.work_id ?? "") ||
+      !uuid.test(item.lease_id ?? "")) {
+    throw new Error("v2_claim_item_invalid");
+  }
+  const workKey = `${item.work_type}:${item.work_id}`;
+  if (seenWork.has(workKey) || seenLeases.has(item.lease_id)) {
+    throw new Error("v2_duplicate_claim_identity");
+  }
+  seenWork.add(workKey);
+  seenLeases.add(item.lease_id);
+}
+
+return items.map(item => ({
+  json: {
+    work_type: item.work_type,
+    work_id: item.work_id,
+    lease_id: item.lease_id,
+    worker_id: workerId,
+    correlation_id: `v2:${item.work_id}`,
+  },
+  pairedItem: { item: 0 },
+}));
+```
+
+An empty claim returns zero items. Do not manufacture a placeholder item.
+
+### 4. Execute Delivery
+
+Use an Execute Sub-workflow node to call the existing `HENVALT_DELIVERY` synchronously for each validated item. Wait for the sub-workflow result. Pass only the five fields emitted by `Validate Claim Batch`. Recovery remains responsible for lease completion.
+
+### 5. Validate Delivery Result and Build Finish RPC Body
+
+After the Delivery sub-workflow returns. Configure this Code node as **Run Once for Each Item**:
+
+```javascript
+const claim = $("Validate Claim Batch").item.json;
+const result = $input.item.json ?? {};
+const allowedOutcomes = new Set(["HANDOFF_ACCEPTED", "TERMINAL", "DEFERRED"]);
+
+let outcome = result.outcome;
+let retryAfter = Number(result.retry_after_seconds ?? 3600);
+
+if (result.work_type !== claim.work_type || result.work_id !== claim.work_id ||
+    !allowedOutcomes.has(outcome)) {
+  outcome = "DEFERRED";
+  retryAfter = 3600;
+} else if (outcome !== "DEFERRED") {
+  retryAfter = 0;
+} else if (!Number.isInteger(retryAfter) || retryAfter < 0 || retryAfter > 86400) {
+  retryAfter = 3600;
+}
+
+return {
+  json: {
+    p_lease_id: claim.lease_id,
+    p_worker_id: claim.worker_id,
+    p_outcome: outcome,
+    p_retry_after: `${retryAfter} seconds`,
+    expected_outcome: outcome,
+  },
+  pairedItem: { item: 0 },
+};
+```
+
+Configure the finish HTTP Request body with explicit field mapping for only `p_lease_id`, `p_worker_id`, `p_outcome`, and `p_retry_after`; do not pass the entire input item. Keep `expected_outcome` in the local execution item for the acknowledgement check; do not send it to the RPC.
+
+### 6. Verify Finish Acknowledgement
+
+After the finish RPC. Configure this Code node as **Run Once for Each Item**:
+
+```javascript
+const response = $input.item.json ?? {};
+const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
+  ? response.body
+  : response;
+const requested = $("Validate Delivery Result and Build Finish RPC Body").item.json;
+
+if (body.finished !== true || body.outcome !== requested.expected_outcome) {
+  throw new Error("v2_finish_ack_unconfirmed");
+}
+
+return { json: { finished: true, outcome: requested.expected_outcome }, pairedItem: { item: 0 } };
+```
+
+A missing or mismatched acknowledgement is not success. Alert and stop; do not immediately re-handoff the provider request. The database lease and provider-attempt reconciliation determine when work is safe to claim again.
+
+## HENVALT_DELIVERY
+
+### 1. Validate Opaque Claim
+
+Configure as **Run Once for Each Item**. This rejects extra fields and prevents PII or provider data from entering the workflow.
+
+```javascript
+const input = $input.item.json ?? {};
+const expected = ["correlation_id", "lease_id", "work_id", "work_type", "worker_id"];
+const keys = Object.keys(input).sort();
+
+const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const types = new Set(["CHECKOUT_INTERVENTION", "PIXEL_OPPORTUNITY"]);
+
+if (keys.length !== expected.length || keys.some((key, i) => key !== expected[i]) ||
+    !types.has(input.work_type) ||
+    !uuid.test(input.work_id ?? "") ||
+    !uuid.test(input.lease_id ?? "") ||
+    !/^[A-Za-z0-9._:-]{3,80}$/.test(input.worker_id ?? "") ||
+    input.correlation_id !== `v2:${input.work_id}`) {
+  throw new Error("v2_delivery_claim_invalid");
+}
+
+return {
+  json: {
+    work_type: input.work_type,
+    work_id: input.work_id,
+    lease_id: input.lease_id,
+    worker_id: input.worker_id,
+    correlation_id: input.correlation_id,
+  },
+  pairedItem: { item: 0 },
+};
+```
+
+### 2. Switch and Build Opaque Edge Request
+
+Use a Switch on `work_type`. The two HTTP Request bodies must be separate. Configure each small Code node as **Run Once for Each Item**:
+
+Checkout branch:
+
+```javascript
+return { json: { intervention_id: $input.item.json.work_id }, pairedItem: { item: 0 } };
+```
+
+Pixel branch:
+
+```javascript
+return { json: { opportunity_id: $input.item.json.work_id }, pairedItem: { item: 0 } };
+```
+
+Route checkout only to `/functions/v1/henvalt-shopify-contact-delivery-v2` and pixel only to `/functions/v1/henvalt-shopify-pixel-delivery-v2`. Use the corresponding server-held delivery bearer credential. Do not call MailerSend from n8n.
+
+### 3. Classify Handoff Result
+
+Configure as **Run Once for Each Item** after the corresponding HTTP Request. Configure the HTTP node to expose status and JSON body; its error output for network/timeout failures must produce the same deferred shape without exposing the error body.
+
+```javascript
+const response = $input.item.json ?? {};
+const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
+  ? response.body
+  : response;
+const status = Number(response.statusCode ?? 0);
+const state = typeof body.status === "string" ? body.status : "";
+
+const accepted = new Set(["submitted", "accepted", "handed_off"]);
+const ambiguous = new Set([
+  "ambiguous_provider_submission",
+  "provider_accepted_record_pending",
+  "provider_outcome_requires_reconciliation",
+]);
+
+let outcome = "DEFERRED";
+let reason = "handoff_not_confirmed";
+let retry = 3600;
+
+if (status >= 200 && status < 300 && body.accepted === true && accepted.has(state)) {
+  outcome = "HANDOFF_ACCEPTED";
+  reason = "explicit_handoff_accepted";
+  retry = 0;
+} else if (status >= 200 && status < 300 && body.accepted === true && ambiguous.has(state)) {
+  outcome = "HANDOFF_ACCEPTED";
+  reason = "accepted_provider_reconciliation_pending";
+  retry = 0;
+} else if (status === 502 && body.accepted === false && body.error === "provider_submission_rejected") {
+  outcome = "TERMINAL";
+  reason = "provider_rejection_recorded";
+  retry = 0;
+} else if (status === 400 || status === 422) {
+  outcome = "TERMINAL";
+  reason = "permanent_request_rejection";
+  retry = 0;
+} else if (status === 401 || status === 403) {
+  reason = "delivery_auth_incident";
+} else if (status === 409) {
+  reason = "delivery_preflight_or_eligibility_review";
+} else if (status === 429) {
+  reason = "handoff_rate_limited";
+} else if (status === 404 || status === 410 || status === 408 || status >= 500) {
+  reason = "edge_or_provider_unavailable";
+}
+
+const claim = $("Validate Opaque Claim").item.json;
+
+return {
+  json: {
+    work_type: claim.work_type,
+    work_id: claim.work_id,
+    outcome,
+    reason,
+    retry_after_seconds: retry,
+  },
+  pairedItem: { item: 0 },
+};
+```
+
+A 404/410 can be a gateway-level missing/retired function route. It must defer, never terminalize the opportunity. A 202 ambiguous response means the Edge Function owns provider reconciliation; Recovery may complete the handoff lease but must not submit again.
+
+### 4. Periodic checkout provider-event reconciliation (same Delivery workflow)
+
+Add a Schedule Trigger branch **inside the existing `HENVALT_DELIVERY` workflow** (for example, every minute); do not create another workflow. It calls the bounded database RPC to match signed MailerSend events that arrived before the checkout attempt's provider message ID was durably recorded.
+
+HTTP Request node:
+
+- Method: `POST`
+- URL: `https://<project>.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_checkout_provider_events_v2`
+- Authentication: existing server-held Supabase service-role credential for Delivery's verified provider-event processing; never use a browser credential or the per-function delivery bearer.
+- Headers: `Content-Type: application/json`, `Content-Profile: henvalt`, `Accept-Profile: henvalt`
+- Body: `{ "p_limit": 100 }`
+- Timeout: 15 seconds; do not fan out per event.
+
+After the RPC, use a Code node (Run Once for Each Item) to validate and reduce the acknowledgement:
+
+```javascript
+const response = $input.item.json ?? {};
+const body = response.body && typeof response.body === "object" && !Array.isArray(response.body)
+  ? response.body
+  : response;
+const status = Number(response.statusCode ?? 200);
+
+if (!Number.isInteger(status) || status < 200 || status >= 300 ||
+    body.accepted !== true || !Number.isInteger(body.reconciled) ||
+    body.reconciled < 0 || body.reconciled > 100 ||
+    body.automatic_resend_performed !== false ||
+    body.ambiguous_cost_reservation_released !== false) {
+  throw new Error("provider_event_reconciliation_unconfirmed");
+}
+
+return {
+  json: {
+    accepted: true,
+    reconciled: body.reconciled,
+    automatic_resend_performed: false,
+    ambiguous_cost_reservation_released: false,
+  },
+  pairedItem: { item: 0 },
+};
+```
+
+This sweep is idempotent: it claims the matching attempt before locking the event, maps only the exact provider account + message ID, applies late bounce/unsubscribe/complaint suppression from the original permit fingerprint, and never submits another provider request. If the RPC response is lost, the next scheduled tick is safe; never route this branch to a send node. If an exact 32-byte fingerprint from the original permit cannot be found, the suppression event stays `UNMATCHED`; do not fall back to recipient email from the webhook or n8n item.
+
+### 4b. Periodic pixel provider-event reconciliation (same Delivery workflow)
+
+After checkout reconciliation, call the pixel-event batch reconciler in the same scheduled Delivery branch:
+
+- URL: `https://<project>.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_pixel_provider_events_v2`
+- Same Delivery-held Supabase service-role credential and profile headers.
+- Body: `{ "p_limit": 100 }`
+- Timeout: 15 seconds; never fan out one request per event.
+
+Validate `accepted === true`, `reconciled` and `deferred` are integers from 0 to 100 whose sum is no greater than 100, and all of `automatic_resend_performed`, `ambiguous_cost_reservation_released`, and `provider_called` are exactly `false`; `recipient_pii_returned` must also be exactly `false`. Any missing or contradictory acknowledgement fails the branch closed.
+
+The database RPC selects only verified UNMATCHED events whose exact provider-account/message-reference pair now exists on a pixel attempt, then delegates each event to the existing idempotent per-event reconciler. It preserves tenant/store lineage and suppression evidence, makes no provider call, never resends, and never releases an ambiguous reservation. Events still lacking a matching attempt remain eligible for a later tick.
+
+After the event sweep, call the second bounded RPC in the same scheduled branch:
+
+- URL: `https://<project>.supabase.co/rest/v1/rpc/mark_stale_shopify_checkout_send_attempts_ambiguous_v2`
+- Same Delivery-held Supabase service-role credential and profile headers.
+- Body: `{ "p_limit": 100 }`
+- The database's default cutoff is two minutes old; do not supply a caller-controlled future cutoff.
+- Validate `accepted === true`, `marked_ambiguous` is an integer from 0 to 100, `automatic_retry_performed === false`, and `provider_cost_reservation_released === false`.
+
+This converts stale checkout attempts left `AUTHORIZED` by a process crash into `AMBIGUOUS`, updates the intervention state, and keeps the provider-cost reservation held. It does not retry. If a delayed response or signed provider event later proves acceptance, the exact message-ID reconciliation can settle it. A definitive result cannot downgrade an already ambiguous attempt to `FAILED`.
+
+After the checkout stale-attempt sweep, call the pixel stale-attempt RPC in the same scheduled Delivery branch:
+
+- URL: `https://<project>.supabase.co/rest/v1/rpc/mark_stale_shopify_pixel_send_attempts_ambiguous_v2`
+- Same Delivery-held Supabase service-role credential and profile headers.
+- Body: `{ "p_limit": 100 }`
+- Use the database's default two-minute cutoff; do not supply a caller-controlled future cutoff.
+- Validate `accepted === true`, `marked_ambiguous` is an integer from 0 to 100, `automatic_retry_performed === false`, and `provider_cost_reservation_released === false`.
+
+This converts pixel attempts stranded in `AUTHORIZED` by a process crash into `AMBIGUOUS`. It is bounded and service-role-only, retains the reserved provider cost, and never retries or calls MailerSend. The runtime must fail closed if this acknowledgement is missing or contradictory.
+
+## Mandatory node-level safeguards
+
+- Use only the three existing workflow IDs. This document is not a fourth workflow.
+- No manual test-email trigger or one-off sender branch in the V2 graph.
+- No recipient, customer, store, message, access token, provider token, raw response body or webhook secret in any n8n item.
+- Recovery owns lease completion; Delivery never calls the finish RPC.
+- Provider submission and retry logic remain inside the trusted Edge Functions.
+- Set instance-wide execution retention/redaction only after reviewing the n8n instance controls. Workflow-level settings alone do not prove that payloads are not persisted.
+- Import as inactive drafts only after explicit approval. Do not publish, activate, execute, change credentials or modify the live V1 workflows under this specification.
