@@ -23,6 +23,7 @@ on:
       - "tests/n8n-shopify-ingest-route-snapshot.test.mjs"
       - "tests/n8n-recovery-route-snapshot.test.mjs"
       - "tests/fixtures/n8n-recovery-route-snapshot.json"
+      - "tests/fixtures/n8n-recovery-route-snapshot.json"
       - "tests/fixtures/n8n-shopify-ingest-route-snapshot.json"
       - "tests/shopify-oauth-completion-url.test.mjs"
       - "tests/shopify-oauth-infrastructure-config.test.mjs"
