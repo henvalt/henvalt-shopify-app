@@ -182,7 +182,7 @@ ambiguous reservations or reactivate unsafe tenant-scoped cart/browse paths.
 
 ## 6. Current deployment state
 
-- Candidate migrations 001–062: CI fixture only; not production-applied. Exact PR head `8e3e39f434c5f95d2ca140f23ca6d10ac1be2f43` passed identity V2 run [44864314508](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44864314508): Node **481/481**, focused uninstall/provider **15/15**, identity/cost/privacy **232/232**, Gitleaks, Deno checks, all 62 migrations on disposable PostgreSQL 17, the pixel event-before-attempt batch reconciliation lifecycle test, and the two-session attribution race. The same head passed Shopify static/configuration validation in [44864314563](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44864314563); the app-preparation/deployment job was skipped. This is candidate validation only.
+- Candidate migrations 001–062: CI fixture only; not production-applied. Exact PR head `9a64f6806d6137b7f6ce70a7d58e5118bba04707` passed identity V2 run [44864506289](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44864506289): Node **481/481**, focused uninstall/provider **15/15**, identity/cost/privacy **232/232**, Gitleaks, Deno checks, all 62 migrations on disposable PostgreSQL 17, the pixel event-before-attempt batch reconciliation lifecycle test, and the two-session attribution race. The same head passed Shopify static/configuration validation in [44864506274](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44864506274); the app-preparation/deployment job was skipped. This is candidate validation only.
 - Candidate V2 Edge Functions: branch only; not production-deployed.
 - Candidate Worker changes: not deployed.
 - Active n8n workflows: three legacy workflows, unchanged.
