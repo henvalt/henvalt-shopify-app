@@ -97,7 +97,7 @@ const replay = norm.replay_context || null;
 
 // The replay path enters only after the lease-fenced loader and tenant equality guard.
 if (replay) {
-  if (norm.__replay_tenant_mismatch || norm.ingest?.tenant_id !== replay.tenant_id) {
+  const bound = $("Bind Tenant Context").item.json;\n  if (bound.__replay_tenant_mismatch || bound.ingest?.tenant_id !== replay.tenant_id) {
     return { __proceed: false, __replay: true, __http: 503, __body: { status: "replay_tenant_mismatch" } };
   }
   return {
@@ -181,7 +181,7 @@ const rowValue = response.body;
 const row = Array.isArray(rowValue) ? rowValue[0] : rowValue;
 const uuid = (v) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 const errors = [];
-if (response.error || !row || typeof row !== "object") errors.push("LOAD_FAILED");
+if (response.error || response.statusCode < 200 || response.statusCode >= 300 || !row || typeof row !== "object") errors.push("LOAD_FAILED");
 if (!uuid(claim.job_id) || claim.job_id !== row?.job_id) errors.push("JOB_ID_MISMATCH");
 if (typeof claim.worker_id !== "string" || !claim.worker_id.trim()) errors.push("WORKER_MISSING");
 if (!uuid(claim.lease_id) || !uuid(row?.webhook_id) || !uuid(row?.tenant_id)) errors.push("IDENTITY_INVALID");
@@ -191,7 +191,7 @@ const shop = String(row?.metadata?.shop_domain || "").toLowerCase();
 if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop)) errors.push("SHOP_INVALID");
 if (row?.metadata?.shopify_webhook_id !== row?.source_event_id || !row?.source_event_id) errors.push("DELIVERY_ID_INVALID");
 if (!row?.lease_expires_at || Date.parse(row.lease_expires_at) <= Date.now()) errors.push("LEASE_EXPIRED");
-if (row?.webhook_processed === true) errors.push("ALREADY_PROCESSED");
+if (row?.webhook_processed === true) errors.push("ALREADY_PROCESSED");\nif (!["PROCESSING","FAILED"].includes(String(row?.processing_status || "").toUpperCase())) errors.push("WEBHOOK_STATE_NOT_REPLAYABLE");
 if (errors.length) return { __replay_invalid: true, __replay_reason: errors.join(",") };
 const body = { ...row.payload, event_id: row.source_event_id };
 const headers = {
