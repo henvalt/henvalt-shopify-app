@@ -25,7 +25,7 @@ on:
       - "tests/shopify-oauth-completion-url.test.mjs"
       - "tests/shopify-oauth-infrastructure-config.test.mjs"
       - "tests/shopify-oauth-webhook-contract.test.mjs"
-      - "tests/shopify-ingest-ack-contract.test.mjs"
+      - "tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs"
       - "tests/shopify-replay-worker-spec-static.test.mjs"
       - "tests/shopify-ingest-delivery-identity.test.mjs"
       - "tests/shopify-ingest-classifier-candidate.test.mjs"
