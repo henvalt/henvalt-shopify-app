@@ -337,7 +337,7 @@ RETURNS boolean
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'henvalt', 'pg_temp'
+SET search_path TO pg_catalog, henvalt, pg_temp
 AS $function$
   WITH source_event AS (
     SELECT e.occurred_at, e.payload, e.metadata
