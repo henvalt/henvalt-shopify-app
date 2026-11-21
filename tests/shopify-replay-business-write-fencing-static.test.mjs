@@ -91,16 +91,15 @@ test("audited active-ingest replay mutation map is complete and points only to f
 });
 
 test("fenced wrapper signatures put the lease tuple first and guard before mutation", () => {
-  const allMigrations = migration + "\\n" + completionMigration;
+  const allMigrations = migration + "\n" + completionMigration;
   for (const item of writeMap.replay_mutations) {
-    const escapedName = item.fenced_rpc.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&");
     const definition = new RegExp(
-      "CREATE OR REPLACE FUNCTION henvalt\\\\." + escapedName +
-      "\\\\(([\\\\s\\\\S]*?)\\\\)\\\\s*RETURNS[\\\\s\\\\S]*?AS \\\\$function\\\\$([\\\\s\\\\S]*?)\\\\$function\\\\$",
+      "CREATE OR REPLACE FUNCTION henvalt\\." + item.fenced_rpc +
+      "\\(([\\s\\S]*?)\\)\\s*RETURNS[\\s\\S]*?AS \\$function\\$([\\s\\S]*?)\\$function\\$",
       "i",
     ).exec(allMigrations);
     assert.ok(definition, "missing complete wrapper definition: " + item.fenced_rpc);
-    const args = definition[1].replace(/\\\\s+/g, " ").trim();
+    const args = definition[1].replace(/\s+/g, " ").trim();
     assert.ok(
       args.startsWith("p_job_id uuid, p_worker_id text, p_lease_id uuid"),
       item.fenced_rpc + " must take the exact lease tuple first",
