@@ -17,7 +17,7 @@ test("delivery candidate is an inactive sanitized export with no credentials or 
   assert.equal(result.audit.credentials_removed, true);
   assert.equal(result.audit.webhook_ids_removed, true);
   assert.ok(w.nodes.every((n) => !n.credentials && !n.webhookId));
-  assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i));
+  assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i));
 });
 
 test("both provider-send entry points are blocked and one-off test branch is removed", () => {
