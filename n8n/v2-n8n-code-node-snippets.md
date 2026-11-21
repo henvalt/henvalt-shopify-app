@@ -356,6 +356,16 @@ After the event sweep, call the second bounded RPC in the same scheduled branch:
 
 This converts stale checkout attempts left `AUTHORIZED` by a process crash into `AMBIGUOUS`, updates the intervention state, and keeps the provider-cost reservation held. It does not retry. If a delayed response or signed provider event later proves acceptance, the exact message-ID reconciliation can settle it. A definitive result cannot downgrade an already ambiguous attempt to `FAILED`.
 
+After the checkout stale-attempt sweep, call the pixel stale-attempt RPC in the same scheduled Delivery branch:
+
+- URL: `https://<project>.supabase.co/rest/v1/rpc/mark_stale_shopify_pixel_send_attempts_ambiguous_v2`
+- Same Delivery-held Supabase service-role credential and profile headers.
+- Body: `{ "p_limit": 100 }`
+- Use the database's default two-minute cutoff; do not supply a caller-controlled future cutoff.
+- Validate `accepted === true`, `marked_ambiguous` is an integer from 0 to 100, `automatic_retry_performed === false`, and `provider_cost_reservation_released === false`.
+
+This converts pixel attempts stranded in `AUTHORIZED` by a process crash into `AMBIGUOUS`. It is bounded and service-role-only, retains the reserved provider cost, and never retries or calls MailerSend. The runtime must fail closed if this acknowledgement is missing or contradictory.
+
 ## Mandatory node-level safeguards
 
 - Use only the three existing workflow IDs. This document is not a fourth workflow.
