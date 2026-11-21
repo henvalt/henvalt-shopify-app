@@ -121,7 +121,7 @@ test("generic 409 and transient backend failures are never acknowledged as dupli
   ]) {
     const result = classifyIngestResponse(input, context);
     assert.equal(result.http, 503);
-    assert.equal(result.proceed, false);
+    assert.equal(result.asyncProcessingGuaranteed, false);
   }
 });
 
