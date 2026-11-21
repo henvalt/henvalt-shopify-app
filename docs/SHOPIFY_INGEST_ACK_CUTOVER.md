@@ -34,6 +34,16 @@ A candidate replacement Code-node script is stored at `n8n/shopify-ingest-normal
 
 The test `tests/shopify-ingest-delivery-identity.test.mjs` executes this candidate code in an isolated Node VM and covers differing body/event IDs, shared correlation IDs across separate deliveries, missing delivery ID, and internal event compatibility. It is wired into the safety CI. This candidate script is not written to the active n8n workflow.
 
+## Worker-bound replay payload loading
+
+Candidate migration `202611210006_shopify_webhook_replay_load.sql` adds `henvalt.load_shopify_webhook_replay_job(job_id, worker_id)`. It returns the stored Shopify event only when:
+- The job is a `process_shopify_webhook` job in `CLAIMED` state.
+- The supplied worker ID owns the active job lease.
+- The job's tenant and webhook ID match the persisted webhook row.
+- The webhook source is Shopify and the durable metadata carries `ingress_hmac_verified=true`.
+
+The function returns `webhook_processed=true` for already completed rows so the recovery worker can safely complete the redundant queue job without reprocessing. Wrong-worker, wrong-tenant, missing-row, and unverified-ingress reads fail closed. Execute is restricted to `service_role`. A disposable PostgreSQL acceptance test covers claim ownership, tenant/payload identity, HMAC marker enforcement, processed-row behavior, and grants.
+
 ## Critical post-ack recovery finding
 
 A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if durable asynchronous processing is guaranteed:
