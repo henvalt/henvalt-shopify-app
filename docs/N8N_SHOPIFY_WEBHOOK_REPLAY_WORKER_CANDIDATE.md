@@ -133,7 +133,7 @@ Migration `202611210009_shopify_replay_business_write_fencing.sql` adds a servic
 4. The guard selects the job row `FOR UPDATE`. That row lock remains held until the wrapper transaction commits or rolls back, so another worker cannot reclaim the job while the wrapped write is in flight—even if wall-clock lease expiry passes during that transaction.
 5. A stale, expired, mismatched, or superseded lease raises SQLSTATE `42501` before the underlying mutation is invoked.
 
-Candidate fenced entry points cover customer/consent/session identity, canonical event, checkout, opportunity, intervention enqueue, order projection, attribution, revenue adjustment, uninstall handling, and recovery-stop writes. The replay subflow must call these wrappers for every corresponding mutation; it must not call their unfenced counterparts from a Shopify replay job. The ordinary intervention scheduler and non-replay flows keep their existing RPC contract.
+Candidate fenced entry points cover customer/consent/session identity, including `resolve_identity` because it creates or updates sessions and aliases, canonical event, checkout, opportunity, intervention enqueue, order projection, attribution, revenue adjustment, uninstall handling, and recovery-stop writes. The replay subflow must call these wrappers for every corresponding mutation; it must not call their unfenced counterparts from a Shopify replay job. The ordinary intervention scheduler and non-replay flows keep their existing RPC contract.
 
 Acceptance test: `tests/shopify-replay-business-write-fencing-postgres-acceptance.sql` forces lease expiry and reclaim, proves the stale worker cannot insert a canonical event through the fenced RPC, then proves the current lease can. CI applies migration 009 only to disposable PostgreSQL 17 and runs that test.
 
@@ -144,6 +144,7 @@ The current fenced RPC names are:
 - `upsert_customer_fenced`
 - `apply_shopify_email_consent_update_fenced`
 - `bind_session_alias_fenced`
+- `resolve_identity_fenced`
 - `upsert_canonical_event_fenced`
 - `upsert_checkout_fenced`
 - `create_opportunity_idempotent_fenced`
