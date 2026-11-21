@@ -109,3 +109,24 @@ Candidate migration `202611210010_shopify_replay_complete_ingest_write_fencing.s
 Read-only functions observed in the same graph include `evaluate_eligibility`, `score_recovery_intent`, and `get_recovery_flow_delay`; these were not classified as writes. The final replay graph must still be re-audited node by node before staging.
 
 **Release state remains NO-GO.** The active workflow continues to call its original unfenced RPC names. Migration 010 and the new acceptance test are candidate-only; no production migration or n8n workflow was changed.
+
+
+## Replay-entry contract audit — 2026-11-21
+
+A further read-only inspection of the active `HENVALT_INGEST` graph and candidate migrations corrected the replay-entry design against the exact SQL return contracts:
+
+- Migration 008 replaces the earlier two-argument loader with `load_shopify_webhook_replay_job(job_id, worker_id, lease_id)`; the two-argument signature is revoked from `service_role`. The replay subflow must preserve the lease ID from the recovery claim row and pass all three values.
+- The loader returns the stored tenant ID, webhook ID, delivery ID, topic, payload, ingress metadata, processing state, correlation ID, and lease expiry. It does not return the lease ID.
+- The stored delivery ID is the webhook's source event ID. Replay normalization must set the canonical event ID from that delivery ID, not from the Shopify event-correlation header or payload entity ID.
+- The active tenant lookup must still run, and the resolved tenant must equal the tenant ID returned by the lease-fenced loader before any replay mutation.
+- The replay path can bypass a second HMAC call only after the trusted loader verifies the stored ingress HMAC attestation. Public Shopify ingress must use the atomic `receive_shopify_webhook_v1` RPC.
+- A successful HTTP 200 for new/in-flight ingress requires both a durable webhook UUID and an active replay-job UUID/state. A legacy HTTP 409, missing ID, unknown result, or terminal queue state is not an accepted duplicate.
+- The current payment-defer path has no proven replay completion terminal contract. It remains blocked: do not report replay completion until the deferred follow-up is durable and the webhook state is explicitly terminal.
+
+Candidate-only helpers and checks now exist:
+- `n8n/shopify-ingest-replay-envelope-candidate.mjs` and `tests/shopify-ingest-replay-envelope.test.mjs`.
+- `n8n/shopify-ingest-ack-classifier-candidate.mjs` and `tests/shopify-ingest-ack-classifier-candidate.test.mjs`.
+- `n8n/shopify-ingest-replay-entry-candidate.json` and `tests/shopify-ingest-replay-entry-static.test.mjs`.
+- Full design notes: `docs/N8N_SHOPIFY_INGEST_REPLAY_ENTRY_CANDIDATE.md`.
+
+These are specifications and pure helpers, not a constructed/importable n8n graph. No active workflow was edited or published, no production database changed, and no provider send was enabled. **Release remains NO-GO pending the complete isolated graph, deferred-payment resolution, and staging acceptance.**
