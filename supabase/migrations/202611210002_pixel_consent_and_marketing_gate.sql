@@ -192,7 +192,7 @@ RETURNS TABLE(
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path TO 'henvalt', 'public'
+SET search_path TO pg_catalog, henvalt, pg_temp
 AS $function$
   WITH product_events AS (
     SELECT
