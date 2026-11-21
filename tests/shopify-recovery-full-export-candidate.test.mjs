@@ -33,6 +33,8 @@ test("recovery replay can call only the isolated INGEST candidate", () => {
   const call = w.nodes.find((n) => n.name === "Call HENVALT_INGEST Replay Entry");
   assert.equal(call.typeVersion, 1.4);
   assert.equal(call.parameters.workflowId.value, ingestCandidateId);
+  const deliveryCall = w.nodes.find((n) => n.name === "Call HENVALT_DELIVERY");
+  assert.equal(deliveryCall.parameters.workflowId.value, "00000000-0000-4000-8000-999999999996");
   assert.deepEqual(Object.keys(call.parameters.workflowInputs.value), ["job_id", "worker_id", "lease_id"]);
   assert.equal(call.parameters.options.waitForSubWorkflow, true);
   assert.equal(call.onError, "continueErrorOutput");
