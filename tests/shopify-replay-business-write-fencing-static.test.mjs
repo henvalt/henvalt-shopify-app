@@ -159,3 +159,24 @@ test("the live active-ingest mutation inventory is exactly covered by the replay
   }
   assert.equal(mapByRpc.size, active.length, "replay map must not contain duplicate or unobserved RPCs");
 });
+
+test("fenced write wrappers are SECURITY DEFINER with a pinned empty search path and service-role-only ACL", () => {
+  const allMigrations = migration + "\\n" + completionMigration;
+  for (const item of writeMap.replay_mutations) {
+    const definition = extractFencedFunction(allMigrations, item.fenced_rpc);
+    assert.ok(definition, "missing wrapper " + item.fenced_rpc);
+    const marker = "CREATE OR REPLACE FUNCTION henvalt." + item.fenced_rpc + "(";
+    const start = allMigrations.indexOf(marker);
+    const header = allMigrations.slice(start, allMigrations.indexOf("AS $function$", start));
+    assert.match(header, /SECURITY DEFINER/i, item.fenced_rpc);
+    assert.match(header, /SET search_path = ''/i, item.fenced_rpc);
+    assert.ok(allMigrations.includes("REVOKE ALL ON FUNCTION henvalt." + item.fenced_rpc + "("),
+      item.fenced_rpc + " must revoke PUBLIC");
+    assert.ok(allMigrations.includes("REVOKE EXECUTE ON FUNCTION henvalt." + item.fenced_rpc + "(") &&
+      allMigrations.includes(" FROM anon,authenticated;"),
+      item.fenced_rpc + " must revoke anon/authenticated");
+    assert.ok(allMigrations.includes("GRANT EXECUTE ON FUNCTION henvalt." + item.fenced_rpc + "(") &&
+      allMigrations.includes(" TO service_role;"),
+      item.fenced_rpc + " must grant service_role");
+  }
+});
