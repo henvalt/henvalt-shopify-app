@@ -10,6 +10,7 @@ on:
       - "supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql"
       - "supabase/migrations/202611210006_shopify_webhook_replay_load.sql"
       - "supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql"
+      - "supabase/migrations/202611210008_shopify_replay_lease_fencing.sql"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -43,6 +44,7 @@ on:
       - "tests/shopify-webhook-replay-postgres-acceptance.sql"
       - "tests/shopify-webhook-replay-loader-postgres-acceptance.sql"
       - "tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
 
@@ -150,6 +152,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql
+      - name: Apply candidate Shopify replay lease fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210008_shopify_replay_lease_fencing.sql
+      - name: Exercise Shopify replay lease expiry and stale-worker fencing
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
