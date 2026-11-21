@@ -31,6 +31,7 @@ DECLARE
   v_tenant_id uuid;
   v_correlation_id uuid;
   v_secret_available boolean;
+  v_raw_payload jsonb;
   v_ingest record;
 BEGIN
   v_shop_domain := lower(btrim(COALESCE(p_shop_domain, '')));
@@ -74,6 +75,25 @@ BEGIN
   IF henvalt.verify_shopify_webhook_hmac(p_hmac, p_raw_body_base64) IS NOT TRUE THEN
     RETURN QUERY SELECT
       401, 'invalid_hmac', NULL::uuid, NULL::uuid, NULL::uuid,
+      NULL::henvalt.job_status, NULL::boolean, NULL::boolean, NULL::text,
+      NULL::uuid;
+    RETURN;
+  END IF;
+
+  BEGIN
+    v_raw_payload := convert_from(decode(p_raw_body_base64, 'base64'), 'UTF8')::jsonb;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN QUERY SELECT
+      422, 'malformed_event', NULL::uuid, NULL::uuid, NULL::uuid,
+      NULL::henvalt.job_status, NULL::boolean, NULL::boolean, NULL::text,
+      NULL::uuid;
+    RETURN;
+  END;
+
+  IF jsonb_typeof(v_raw_payload) IS DISTINCT FROM 'object'
+     OR v_raw_payload IS DISTINCT FROM p_payload THEN
+    RETURN QUERY SELECT
+      422, 'malformed_event', NULL::uuid, NULL::uuid, NULL::uuid,
       NULL::henvalt.job_status, NULL::boolean, NULL::boolean, NULL::text,
       NULL::uuid;
     RETURN;
