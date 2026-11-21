@@ -249,7 +249,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   },[224,320],2.2);
   const invalidResponse = createNode("Build Invalid Ingress Response","n8n-nodes-base.set",{
     mode:"manual",assignments:{assignments:[
-      {id:"invalid-http",name:"__http",type:"number",value:"={{ $json.__http || ($json.__tenant_mapping_missing ? 404 : 422) }}"},
+      {id:"invalid-http",name:"__http",type:"number",value:"={{ $json.__tenant_lookup_error ? 503 : ($json.__tenant_mapping_missing ? 404 : 422) }}"},
       {id:"invalid-body",name:"__body",type:"object",value:"={{ { status: $json.__tenant_lookup_error ? 'temporarily_unavailable' : 'malformed_event', correlation_id: $json.correlation_id } }}"}
     ]},includeOtherFields:true,options:{}
   },[448,320],3.4);
