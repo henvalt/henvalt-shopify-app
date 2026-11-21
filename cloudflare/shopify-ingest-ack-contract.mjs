@@ -31,6 +31,7 @@ export const SHOPIFY_INGEST_ACK_CONTRACT = Object.freeze({
   }),
   preIngestFailureStatuses: Object.freeze({
     invalidHmac: 401,
+    hmacVerifierUnavailable: 503,
     unknownTenant: 404,
     malformedEvent: 422,
     tenantLookupUnavailable: 503,
@@ -152,6 +153,8 @@ export function buildPreIngestRejection(kind, context = {}) {
   switch (kind) {
     case "invalidHmac":
       return failure(401, "unauthorized", "Webhook authentication failed.", correlationId);
+    case "hmacVerifierUnavailable":
+      return failure(503, "temporarily_unavailable", "Webhook signature verifier unavailable; retry.", correlationId);
     case "unknownTenant":
       return failure(404, "unknown_tenant", "No active integration matches this shop.", correlationId);
     case "malformedEvent":
