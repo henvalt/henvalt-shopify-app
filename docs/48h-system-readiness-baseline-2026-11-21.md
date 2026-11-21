@@ -294,3 +294,16 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 ### Billing boundary
 - The live billing summary RPC is service-role-only and reads current billing measurements and provider email-cost measurements.
 - The live database currently has no orders, order attributions or revenue-ledger entries in the audit snapshot, so no verified recovered revenue is currently recorded. Billing must remain non-chargeable until confirmed attribution and ledger entries exist.
+
+
+### Dashboard hosting configuration reconciliation
+- Cloudflare Pages API confirms the production project is `henvalt-dashboard`, with the custom project domain `henvalt-dashboard.pages.dev`, production branch `main`, and a successful production deployment from 2026-11-18.
+- The current repository's Shopify TOML pointed at the old Lovable URL despite the dashboard being hosted on Cloudflare Pages.
+- Candidate branch now changes `application_url` to the verified Pages production domain and adds a CI assertion so this drift cannot silently recur.
+- This config change is only in the draft branch; the deployed Shopify app configuration remains unchanged until an approved release.
+
+### Billing and email-cost snapshot
+- Live billing account: one `STARTER` account, status `PENDING`, test mode enabled, zero recurring amount and zero HENVALT percentage, with a five-email monthly limit.
+- Live billing measurements: 0; billing periods: 0; billing usage charges: 0.
+- Email usage measurements: 4 rows, all 4 currently have unknown provider cost (NULL), so the billing summary correctly returns provider email cost as unavailable rather than reporting zero spend.
+- Billing pipeline checks the Shopify billing account is ACTIVE before creating a performance-fee measurement. The current PENDING account therefore does not authorize a charge.
