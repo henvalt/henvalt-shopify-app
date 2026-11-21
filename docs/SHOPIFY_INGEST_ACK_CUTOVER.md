@@ -1,6 +1,6 @@
 # Shopify ingress acknowledgement cutover
 
-Status: **release blocker identified by read-only inspection**. This document is a candidate-only cutover specification; it does not change the active n8n workflow.
+Status: **release blocker identified by read-only inspection**. This is a candidate-only cutover specification; it does not change the active n8n workflow.
 
 ## Observed active configuration
 
@@ -10,7 +10,9 @@ Read-only inspection of active workflow `HENVALT_INGEST` (workflow ID `VTpfGKNtu
 - `rawBody: true`
 - `responseMode: onReceived`
 - No `Respond to Webhook` node in the active workflow.
-- The first processing nodes after the webhook are normalization, configuration, HMAC verification, tenant resolution, and the durable Supabase ingest RPC.
+- The current path is normalization → HMAC verification → Shopify tenant resolution → tenant binding/validation → `ingest_raw_webhook_v2` → `Classify Result` → `Should Process?`.
+- The current `HMAC Verified?` false output has no connected response node.
+- The current `Is Valid` false output reaches `Reject Invalid Event` (`stopAndError`), not an HTTP response node.
 
 The Cloudflare ingress worker waits for the n8n HTTP response. With `onReceived`, n8n can acknowledge the HTTP request before HMAC verification and before `ingest_raw_webhook_v2` has durably accepted the event. A later n8n failure therefore cannot be communicated to Shopify as a retryable HTTP failure. This is an event-loss/retryability risk, even though the worker's HMAC check has already succeeded.
 
@@ -18,32 +20,45 @@ The Cloudflare ingress worker waits for the n8n HTTP response. With `onReceived`
 
 Do not edit the active workflow without explicit approval and a controlled change window.
 
-1. Export and preserve the active workflow version and its current webhook configuration.
-2. In an isolated staging workflow, change the webhook response mode to `responseNode`.
-3. Add one `Respond to Webhook` node immediately after `Classify Result` and before `Should Process?`.
-4. Respond using the classifier's `__http` and `__body` values. The classifier already distinguishes:
-   - accepted new durable webhook row: HTTP 200;
-   - already-processed / currently-processing duplicate: HTTP 200;
-   - missing webhook ID or missing processing decision: HTTP 503;
-   - invalid tenant/authentication: HTTP 401/404;
-   - transient Supabase / RPC failure: HTTP 503.
-5. Continue the workflow from the Respond node to `Should Process?`. A newly accepted row continues through canonical event processing; a duplicate exits without reprocessing.
-6. Confirm the raw webhook row is durably committed before the response node can run. If the RPC returns an error or no webhook ID, return 503 so Shopify retries.
-7. Exercise all response branches with synthetic signed requests in isolated staging. Confirm a 200 is never sent before durable acceptance, and that a retry of the same webhook ID is idempotent.
-8. Preserve the existing failure marking and stale-work repair path. Confirm a post-ack processing failure remains recoverable from the durable webhook row.
+Build and validate this topology in an isolated staging workflow first:
+
+1. Preserve the active workflow export/version and current webhook configuration.
+2. Change the staging webhook response mode to `responseNode`.
+3. Add one shared `Respond to Webhook` node named `Acknowledge Ingress Request`.
+4. Successful ingest path: keep `Classify Result` as the success-envelope builder, then route `Classify Result` → `Acknowledge Ingress Request` → `Should Process?`. The response node must send the classifier's `__http` and `__body`, then allow execution to continue.
+5. Add a rejection-envelope builder for pre-ingest failures. Route the false output of `HMAC Verified?` into it with HTTP 401. Route the false output of `Is Valid` into it and classify the failure:
+   - tenant lookup infrastructure/RPC error (`__tenant_lookup_error`): HTTP 503;
+   - verified Shopify shop with no tenant mapping (`__tenant_mapping_missing`): HTTP 404;
+   - malformed or incomplete event: HTTP 422.
+6. Connect the rejection-envelope builder to the same `Acknowledge Ingress Request` node. Replace the current `Reject Invalid Event` stop/error response path in staging; do not leave any webhook-triggered branch without a response path.
+7. For accepted events, return HTTP 200 only when `ingest_raw_webhook_v2` returns a successful HTTP status, a non-empty `webhook_id`, and an explicit boolean `should_process` decision. Missing ID/decision, RPC timeout, network error, or Supabase 5xx must return HTTP 503.
+8. Preserve duplicate semantics: already-processed and currently-processing duplicates return HTTP 200 without re-running canonical processing. A durable newly accepted row returns HTTP 200, after which execution continues through `Should Process?` and downstream processing.
+9. Preserve existing post-ack failure marking and stale-work repair. Verify that an error after durable acceptance can be recovered from the persisted webhook row; a post-ack error cannot be converted into a Shopify retry because the HTTP response has already been sent.
+10. Verify exactly one response is sent for every path. Test valid HMAC, invalid HMAC, unknown shop, tenant lookup timeout, malformed event, ingest RPC 5xx/timeout, missing webhook ID, missing processing decision, new accepted event, processed duplicate, processing duplicate, and post-ack processing failure.
 
 ## Acceptance matrix
 
-| Scenario | Expected response | Must be durable first? |
+| Scenario | Expected response | Requirement |
 |---|---:|---|
-| New webhook accepted by ingest RPC | 200 | Yes |
-| Duplicate already processed | 200 | Existing row |
-| Duplicate currently processing | 200 | Existing row |
-| HMAC invalid | 401 | No |
-| Tenant mapping missing | 404 | No |
-| Ingest RPC unavailable / timeout | 503 | No |
-| Ingest RPC omits webhook ID or decision | 503 | No |
+| New webhook accepted by ingest RPC | 200 | Durable row + webhook ID + explicit decision first |
+| Duplicate already processed | 200 | Existing durable row |
+| Duplicate currently processing | 200 | Existing durable row |
+| Invalid HMAC | 401 | Reject before tenant lookup/ingest |
+| Tenant mapping missing | 404 | HMAC verified; no tenant guessed |
+| Tenant lookup infrastructure failure | 503 | Retryable; do not mislabel as unknown tenant |
+| Malformed/incomplete event | 422 | Explicit rejection response |
+| Ingest RPC unavailable / timeout / 5xx | 503 | No success acknowledgement |
+| Ingest RPC omits webhook ID or decision | 503 | Fail closed |
+| Downstream processing fails after 200 | Already acknowledged | Durable row must be repairable/replayable |
+
+## Implementation cautions
+
+- Do not put the shared response node only after `Classify Result`: that misses the current HMAC-false and validation-false branches.
+- Do not use `stopAndError` for a webhook branch that must return a defined HTTP status.
+- Do not return 200 for an RPC response that lacks the durable webhook ID or explicit processing decision.
+- Confirm the n8n version's Respond to Webhook continuation behavior in staging; the intended topology is response first, then continue downstream processing.
+- Confirm a single HTTP response per execution when success and rejection routes converge.
 
 ## Safety boundary
 
-This is documentation and a proposed staging acceptance contract only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed.
+This is documentation, contract code, and candidate regression tests only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed.
