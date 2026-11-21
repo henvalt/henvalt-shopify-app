@@ -34,6 +34,7 @@ on:
       - "cloudflare/shopify-ingest-ack-contract.mjs"
       - "n8n/shopify-ingest-normalizer-candidate.js"
       - "n8n/shopify-ingest-classifier-candidate.js"
+      - "n8n/shopify-ingest-replay-write-map.json"
       - "supabase/functions/henvalt-shopify-oauth/infrastructure-config.mjs"
       - "supabase/functions/henvalt-shopify-oauth/index.ts"
       - "supabase/functions/henvalt-shopify-oauth/completion-url.mjs"
