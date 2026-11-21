@@ -55,6 +55,7 @@ BEGIN
 
   IF NOT FOUND
      OR v_ingest.webhook_id IS NULL
+     OR v_ingest.is_duplicate IS NULL
      OR v_ingest.should_process IS NULL
      OR v_ingest.processing_status IS NULL THEN
     RAISE EXCEPTION 'SHOPIFY_WEBHOOK_INGEST_RETURNED_INCOMPLETE_RESULT'
@@ -110,7 +111,7 @@ BEGIN
 
     IF v_job_id IS NULL
        OR v_job_type <> 'process_shopify_webhook'
-       OR v_job_payload->>'webhook_id' <> v_ingest.webhook_id::text THEN
+       OR (v_job_payload->>'webhook_id') IS DISTINCT FROM v_ingest.webhook_id::text THEN
       RAISE EXCEPTION 'SHOPIFY_WEBHOOK_REPLAY_JOB_IDENTITY_MISMATCH'
         USING ERRCODE = '55000';
     END IF;
