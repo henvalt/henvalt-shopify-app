@@ -59,12 +59,15 @@
       "type": "n8n-nodes-base.code",
       "mode": "runOnceForEachItem",
       "output_fields": [
+        "claim_row_present",
+        "guard_valid",
+        "has_replay_job",
         "job_id",
         "worker_id",
         "lease_id",
         "lease_expires_at",
         "webhook_id",
-        "has_replay_job"
+        "guard_reason"
       ],
       "normalization": {
         "job_id": "raw claim row id",
@@ -73,12 +76,13 @@
         "lease_expires_at": "raw claim row lease_expires_at",
         "webhook_id": "UUID parsed from raw claim row payload.webhook_id"
       },
-      "guard": "Only job_type process_shopify_webhook, UUID job_id/webhook_id/lease_id, nonblank worker_id and payload.webhook_id are accepted; malformed/unknown rows fail closed."
+      "guard": "Strictly validates the raw claim row and emits only the lease tuple and webhook UUID; raw payload and unrelated columns are dropped.",
+      "code_ref": "n8n/shopify-replay-claim-normalizer-candidate.mjs"
     },
     {
       "name": "Replay Job Claimed?",
       "type": "n8n-nodes-base.if",
-      "condition": "={{ $json.has_replay_job }}"
+      "condition": "={{ $json.claim_row_present === true }}"
     },
     {
       "name": "Load Shopify Replay Job",
@@ -95,6 +99,11 @@
         "onError": "continueErrorOutput"
       },
       "purpose": "Reload trusted durable payload under the exact current lease; never accept payload from claim input."
+    },
+    {
+      "name": "Replay Claim Valid?",
+      "type": "n8n-nodes-base.if",
+      "condition": "={{ $json.guard_valid === true }}"
     },
     {
       "name": "Replay Load Valid?",
@@ -183,14 +192,6 @@
       "Replay Job Claimed?"
     ],
     [
-      "Replay Job Claimed?#true",
-      "Load Shopify Replay Job"
-    ],
-    [
-      "Replay Job Claimed?#false",
-      "Loop Interventions"
-    ],
-    [
       "Replay Already Processed?#true",
       "Complete Shopify Replay Job"
     ],
@@ -261,6 +262,22 @@
     [
       "Replay Load Valid?#false",
       "Retry Shopify Replay Job"
+    ],
+    [
+      "Replay Job Claimed?#true",
+      "Replay Claim Valid?"
+    ],
+    [
+      "Replay Job Claimed?#false",
+      "Loop Interventions"
+    ],
+    [
+      "Replay Claim Valid?#true",
+      "Load Shopify Replay Job"
+    ],
+    [
+      "Replay Claim Valid?#false",
+      "Stop Replay Lease Lost"
     ]
   ],
   "invariants": [
@@ -279,7 +296,8 @@
     "The existing intervention business branch remains unchanged.",
     "A claim RPC failure stops the scheduler execution; it must not be treated as an empty queue.",
     "A load failure may retry only with the exact lease tuple; complete/retry RPC errors terminate fail-closed.",
-    "An empty or incomplete lease-bound load is retried with the exact lease tuple; it is never mistaken for an already-processed event."
+    "An empty or incomplete lease-bound load is retried with the exact lease tuple; it is never mistaken for an already-processed event.",
+    "An empty claim is a normal queue miss and returns to Loop Interventions; a present but malformed claim is terminal fail-closed."
   ],
   "dependencies_before_staging": [
     "Add a dedicated Execute Workflow Trigger and isolated replay entry in HENVALT_INGEST candidate; reload payload with load_shopify_webhook_replay_job(job_id, worker_id, lease_id).",
