@@ -1,0 +1,59 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { buildDeliveryCandidate } from "../n8n/shopify-delivery-candidate-builder.mjs";
+
+const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json", "utf8"));
+const candidateId = "00000000-0000-4000-8000-999999999996";
+
+test("delivery candidate is an inactive sanitized export with no credentials or webhook IDs", () => {
+  const result = buildDeliveryCandidate(fixture.workflow);
+  const w = result.workflow;
+  assert.equal(w.id, candidateId);
+  assert.equal(w.name, "HENVALT_DELIVERY_CANDIDATE_NO_SEND");
+  assert.equal(w.active, false);
+  assert.equal(w.settings.availableInMCP, false);
+  assert.equal(w.nodes.length, 54);
+  assert.equal(result.audit.credentials_removed, true);
+  assert.equal(result.audit.webhook_ids_removed, true);
+  assert.ok(w.nodes.every((n) => !n.credentials && !n.webhookId));
+  assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i));
+});
+
+test("both provider-send entry points are blocked and one-off test branch is removed", () => {
+  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const names = new Set(w.nodes.map((n) => n.name));
+  for (const removed of [
+    "One-Off Test Email Trigger","Prepare One-Off Test Delivery","One-Off Test Authorized?",
+    "MailerSend One-Off Test Email","Classify One-Off Provider Result","Record One-Off Test Result",
+    "One-Off Test Send Result","One-Off Test Send Rejected"
+  ]) assert.equal(names.has(removed), false, removed);
+  assert.equal(names.has("MailerSend Send"), false);
+  const stub = w.nodes.find((n) => n.name === "No-Send Provider Stub");
+  assert.equal(stub.type, "n8n-nodes-base.code");
+  assert.match(stub.parameters.jsCode, /no_send_candidate: true/);
+  assert.equal(w.connections["Build Reply-To Address"].main[0][0].node, "No-Send Provider Stub");
+  assert.equal(w.connections["No-Send Provider Stub"].main[0][0].node, "Classify Result");
+  assert.ok(!w.nodes.some((n) => n.parameters?.url && String(n.parameters.url).includes("/functions/v1/henvalt-mailersend-delivery")));
+});
+
+test("no-send response is rejected and is never persisted as a provider result", () => {
+  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
+  assert.match(classifier, /send = \$\("No-Send Provider Stub"\)\.item\.json/);
+  assert.match(classifier, /NO_SEND_CANDIDATE/);
+  assert.match(classifier, /should_record_result: authorized && !\(send && send\.body && send\.body\.no_send_candidate === true\)/);
+  assert.equal(w.connections["Should Record Provider Result?"].main[1][0].node, "Build Delivery Response");
+});
+
+test("candidate webhooks use isolated path prefixes and graph connections resolve", () => {
+  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const names = new Set(w.nodes.map((n) => n.name));
+  const webhookPaths = w.nodes.filter((n) => n.type === "n8n-nodes-base.webhook").map((n) => n.parameters.path);
+  assert.ok(webhookPaths.length > 0);
+  assert.ok(webhookPaths.every((path) => path.startsWith("henvalt/candidate-no-send/")));
+  for (const [source, outputs] of Object.entries(w.connections)) {
+    assert.ok(names.has(source), "unknown source " + source);
+    for (const output of outputs.main || []) for (const edge of output || []) assert.ok(names.has(edge.node), "unknown target " + edge.node);
+  }
+});
