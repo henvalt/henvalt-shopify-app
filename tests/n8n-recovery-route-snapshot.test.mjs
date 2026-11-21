@@ -40,3 +40,21 @@ test("replay jobs cannot pass the current intervention-only worker guard", () =>
   assert.equal(snapshot.normalizeGuard.replayJobsPassCurrentGuard, false);
   assert.equal(snapshot.normalizeGuard.requiresJobTypeRouter, true);
 });
+
+test("deferred payment reconciliation is a separate active every-minute handoff", () => {
+  assert.deepEqual(snapshot.deferredPaymentReconciler, {
+    node: "Reconcile Deferred Payment Webhooks",
+    trigger: "Every Minute",
+    rpc: "henvalt.reconcile_deferred_payment_webhooks(10)",
+    connectedFrom: "Every Minute",
+    onError: "continueErrorOutput",
+    observedActive: true,
+    selection: "FAILED + payment_reconciliation_pending=true + payment_reconciliation_next_at<=now()",
+    rowLock: "FOR UPDATE SKIP LOCKED",
+    terminalStates: [
+      "PROCESSED",
+      "FAILED with next retry timestamp",
+      "FAILED dead-letter after 60 attempts",
+    ],
+  });
+});
