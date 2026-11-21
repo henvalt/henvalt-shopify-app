@@ -315,3 +315,47 @@ BEGIN
 END
 $dashboard_acceptance$;
 
+
+
+DO $token_refresh_acceptance$
+DECLARE
+  v_tenant uuid := gen_random_uuid();
+  v_due_connection uuid := gen_random_uuid();
+  v_not_due_connection uuid := gen_random_uuid();
+  v_due_secret uuid := gen_random_uuid();
+  v_not_due_secret uuid := gen_random_uuid();
+  v_claim jsonb;
+  v_lease timestamptz;
+BEGIN
+  INSERT INTO henvalt.tenants(id, status) VALUES (v_tenant, 'ACTIVE');
+  INSERT INTO vault.decrypted_secrets(id, decrypted_secret) VALUES
+    (v_due_secret, 'synthetic-refresh-token-due'),
+    (v_not_due_secret, 'synthetic-refresh-token-not-due');
+
+  INSERT INTO henvalt.shopify_connections(
+    id, tenant_id, active, shop_domain, token_type, refresh_token_secret_ref,
+    access_token_expires_at, refresh_token_expires_at
+  ) VALUES
+    (v_due_connection, v_tenant, true, 'refresh-due.myshopify.com', 'offline_expiring',
+     v_due_secret::text, now() + interval '9 minutes', now() + interval '90 days'),
+    (v_not_due_connection, v_tenant, true, 'refresh-not-due.myshopify.com', 'offline_expiring',
+     v_not_due_secret::text, now() + interval '11 minutes', now() + interval '90 days');
+
+  v_claim := henvalt.claim_shopify_token_refresh('refresh-due.myshopify.com', false);
+  IF v_claim->>'claimed' <> 'true' THEN
+    RAISE EXCEPTION 'ten-minute scheduler window failed to claim token with nine minutes remaining: %', v_claim;
+  END IF;
+
+  SELECT token_refresh_lease_until INTO v_lease
+  FROM henvalt.shopify_connections WHERE id = v_due_connection;
+  IF v_lease IS NULL OR v_lease <= now() THEN
+    RAISE EXCEPTION 'token refresh claim did not establish a future lease';
+  END IF;
+
+  v_claim := henvalt.claim_shopify_token_refresh('refresh-not-due.myshopify.com', false);
+  IF v_claim->>'claimed' <> 'false' OR v_claim->>'reason' <> 'TOKEN_STILL_VALID' THEN
+    RAISE EXCEPTION 'ten-minute scheduler window claimed a token with eleven minutes remaining: %', v_claim;
+  END IF;
+END
+$token_refresh_acceptance$;
+
