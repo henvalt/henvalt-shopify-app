@@ -118,3 +118,23 @@ test("all replay error exits fail closed and no delivery provider node is introd
     "A false completion/retry result is terminal lease-lost; do not attempt a generic fallback."
   ));
 });
+
+test("manifest matches the observed graph: only two terminals are currently looped", () => {
+  assert.equal(active.schedulerGraph.loopInterventions.done, "Tick Complete");
+  assert.equal(active.schedulerGraph.loopInterventions.loop, "Claim Due Job");
+  assert.equal(active.schedulerGraph.jobClaimedTrue, "Atomic Claim Intervention");
+  assert.equal(active.schedulerGraph.jobClaimedFalse, null);
+  assert.deepEqual(active.schedulerGraph.terminalEdges, {
+    "Complete Job": "Loop Interventions",
+    "Retry Job": "Loop Interventions",
+    "Retry Preflight Job": null,
+    "Retry Delivery Job": null,
+    "Retry Pipeline Job": null,
+  });
+  assert.deepEqual(
+    manifest.connections_to_add
+      .filter((edge) => branch.recovery_workflow.intervention_terminal_nodes.includes(edge.from))
+      .map((edge) => edge.from).sort(),
+    branch.recovery_workflow.intervention_terminal_nodes.slice().sort(),
+  );
+});
