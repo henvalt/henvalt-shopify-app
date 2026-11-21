@@ -208,7 +208,7 @@ AS $function$
       NULLIF(e.payload #>> '{product,title}', '') AS product_title,
       NULLIF(e.payload #>> '{product,variant_id}', '') AS variant_id,
       CASE
-        WHEN coalesce(e.payload #>> '{product,price_amount}', '') ~ '^[0-9]+(\\.[0-9]+)?$'
+        WHEN coalesce(e.payload #>> '{product,price_amount}', '') ~ '^[0-9]+(\.[0-9]+)?$'
           THEN (e.payload #>> '{product,price_amount}')::numeric
         ELSE NULL
       END AS price_amount,
