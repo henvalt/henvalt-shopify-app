@@ -91,6 +91,7 @@ DECLARE
   v_result jsonb;
   v_candidates integer;
   v_source_event_id uuid;
+  v_currency character(3);
 BEGIN
   INSERT INTO henvalt.tenants(id, status) VALUES (v_tenant, 'ACTIVE');
   INSERT INTO henvalt.shopify_connections(id, tenant_id, active, shop_domain)
@@ -193,6 +194,13 @@ BEGIN
   WHERE tenant_id = v_tenant AND session_reference = 'session-marketing-true';
   IF v_candidates <> 1 THEN
     RAISE EXCEPTION 'expected one consent-eligible browse candidate, got %', v_candidates;
+  END IF;
+
+  SELECT currency INTO v_currency
+  FROM henvalt.get_browse_abandonment_candidates(60, 24, 100)
+  WHERE tenant_id = v_tenant AND session_reference = 'session-marketing-true';
+  IF v_currency IS DISTINCT FROM 'USD'::character(3) OR length(v_currency) <> 3 THEN
+    RAISE EXCEPTION 'browse candidate currency was truncated: %', v_currency;
   END IF;
 
   SELECT id INTO v_source_event_id
