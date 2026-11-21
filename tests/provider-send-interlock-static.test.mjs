@@ -23,12 +23,20 @@ test("interlock guards initial UNKNOWN inserts and both send-claim updates", () 
   assert.match(migration, /BEFORE INSERT OR UPDATE OF status, provider_claimed_at/i);
   assert.match(migration, /TG_OP = 'INSERT'[\s\S]*?NEW\.status = 'UNKNOWN'[\s\S]*?NEW\.provider_claimed_at IS NOT NULL/i);
   assert.match(migration, /TG_OP = 'UPDATE'[\s\S]*?NEW\.status = 'UNKNOWN'[\s\S]*?OLD\.provider_claimed_at IS NULL[\s\S]*?NEW\.provider_claimed_at IS NOT NULL/i);
-  assert.match(migration, /IF v_send_claim AND NOT henvalt\.provider_sending_is_enabled\(\) THEN/i);
+  assert.match(migration, /IF v_send_claim THEN\s+PERFORM henvalt\.assert_provider_sending_enabled\(\);/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\.assert_provider_sending_enabled\(\)[\s\S]*?FOR SHARE/i);
   assert.match(migration, /USING ERRCODE = '42501'/i);
 });
 
 test("interlock trigger is installed on delivery requests", () => {
   assert.match(migration, /CREATE TRIGGER delivery_requests_provider_send_interlock[\s\S]*?ON henvalt\.delivery_requests[\s\S]*?EXECUTE FUNCTION henvalt\.enforce_provider_send_interlock\(\)/i);
+});
+
+test("credential release is gated before the legacy token reader and one-off test messages stay blocked", () => {
+  assert.match(migration, /ALTER FUNCTION henvalt\.get_mailersend_token_for_delivery\(uuid, uuid\)\s+RENAME TO get_mailersend_token_for_delivery_legacy_v1/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\.get_mailersend_token_for_delivery\([\s\S]*?PERFORM henvalt\.assert_provider_sending_enabled\(\)/i);
+  assert.match(migration, /m\.metadata->>'test_only' = 'true'[\s\S]*?HENVALT_ONE_OFF_TEST_SEND_DISABLED/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.get_mailersend_token_for_delivery_legacy_v1\(uuid, uuid\)[\s\S]*?service_role/i);
 });
 
 test("trigger implementation is not callable as a client-facing RPC", () => {
