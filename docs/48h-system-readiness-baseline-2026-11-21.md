@@ -326,3 +326,10 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - This is not token loss; the token remained valid and the refresh token expiry was in February 2027. It is unnecessary polling and a mismatch between scheduler and claim policy.
 - Candidate migration `202611210004_align_shopify_token_refresh_window.sql` aligns the claim threshold to 10 minutes. Disposable PostgreSQL tests cover a token with 9 minutes remaining (claim) and one with 11 minutes remaining (do not claim), plus the existing advisory lock, service-role check and refresh lease.
 - No live token or refresh RPC was changed.
+
+
+### Final live orchestration refresh — 2026-11-21 05:49 UTC
+- Recovery scheduler execution `40639` succeeded at 05:47 UTC; browse, cart and checkout discovery each returned zero queued/created items, and the worker claim returned no job.
+- The active `HENVALT_DELIVERY` workflow's newest recorded execution is `31277` at 2026-11-14 17:52 UTC. No later execution was returned by the connected n8n execution search. This is not evidence about provider activity outside this workflow.
+- All three n8n workflows remain active. No workflow activation state was changed.
+- The active expiring Shopify token remains valid through 05:58:28 UTC and its refresh token expires 2027-02-19. The scheduled worker is polling the 10-minute window; its Edge Function returns `TOKEN_STILL_VALID` until the live database's five-minute claim threshold. Candidate migration 0004 aligns the threshold, but no production refresh policy was changed.
