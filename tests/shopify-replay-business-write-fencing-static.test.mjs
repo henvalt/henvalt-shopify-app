@@ -36,6 +36,8 @@ test("replay write wrappers cover each declared business mutation family", () =>
     "process_shopify_revenue_adjustment_fenced",
     "deactivate_shopify_connection_on_uninstall_fenced",
     "stop_recovery_after_order_fenced",
+    "mark_webhook_processed_fenced",
+    "mark_webhook_failed_fenced",
   ]) {
     assert.match(migration, new RegExp(`FUNCTION henvalt\\.${name}\\(`), name);
     assert.match(workerSpec, new RegExp(name), `worker spec must document ${name}`);
