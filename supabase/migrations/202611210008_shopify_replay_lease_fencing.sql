@@ -220,3 +220,37 @@ COMMENT ON FUNCTION henvalt.claim_shopify_replay_job(text, integer) IS
   'Claims one Shopify replay job with a fresh fencing lease; expired claims are atomically reclaimable.';
 COMMENT ON FUNCTION henvalt.load_shopify_webhook_replay_job(uuid, text, uuid) IS
   'Loads a replay payload only for the current unexpired per-claim lease.';
+
+CREATE OR REPLACE FUNCTION henvalt.renew_shopify_replay_lease(
+  p_job_id uuid, p_worker_id text, p_lease_id uuid,
+  p_lease_seconds integer DEFAULT 180
+)
+RETURNS timestamptz
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_expires timestamptz;
+  v_seconds integer := LEAST(GREATEST(COALESCE(p_lease_seconds, 180), 30), 900);
+BEGIN
+  UPDATE henvalt.background_jobs
+     SET lease_expires_at = now() + make_interval(secs => v_seconds),
+         updated_at = now()
+   WHERE id = p_job_id
+     AND job_type = 'process_shopify_webhook'
+     AND status = 'CLAIMED'::henvalt.job_status
+     AND locked_by = p_worker_id
+     AND lease_id = p_lease_id
+     AND lease_expires_at > now()
+  RETURNING lease_expires_at INTO v_expires;
+  RETURN v_expires;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.renew_shopify_replay_lease(uuid, text, uuid, integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION henvalt.renew_shopify_replay_lease(uuid, text, uuid, integer) FROM anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.renew_shopify_replay_lease(uuid, text, uuid, integer) TO service_role;
+
+COMMENT ON FUNCTION henvalt.renew_shopify_replay_lease(uuid, text, uuid, integer) IS
+  'Extends only the current unexpired Shopify replay lease; cannot revive an expired or superseded lease.';
