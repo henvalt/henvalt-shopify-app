@@ -41,10 +41,10 @@ export const SHOPIFY_INGEST_ACK_CONTRACT = Object.freeze({
   duplicateStatuses: Object.freeze([200]),
 });
 
-const response = (http, body, proceed = false, webhookId = null) => ({
+const response = (http, body, asyncProcessingGuaranteed = false, webhookId = null) => ({
   http,
   body,
-  proceed,
+  asyncProcessingGuaranteed,
   webhookId,
 });
 
