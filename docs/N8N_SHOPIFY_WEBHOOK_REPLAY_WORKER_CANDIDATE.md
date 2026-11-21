@@ -156,3 +156,8 @@ The current fenced RPC names are:
 - `stop_recovery_after_order_fenced`
 
 These names are the allowed mutation boundary for the replay path; any additional write RPC discovered in the final workflow graph must receive the same lease-checked wrapper before staging.
+
+- `mark_webhook_processed_fenced`
+- `mark_webhook_failed_fenced`
+
+Webhook lifecycle state transitions are fenced too; the replay worker must not call the original unfenced status functions.
