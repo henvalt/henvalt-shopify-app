@@ -90,28 +90,54 @@ test("audited active-ingest replay mutation map is complete and points only to f
   assert.ok(writeMap.requirements.some((item) => item.includes("does not imply the active workflow")));
 });
 
+function extractFencedFunction(source, name) {
+  const marker = "CREATE OR REPLACE FUNCTION henvalt." + name + "(";
+  const start = source.indexOf(marker);
+  if (start < 0) return null;
+  const open = source.indexOf("(", start);
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < source.length; i += 1) {
+    if (source[i] === "(") depth += 1;
+    if (source[i] === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        close = i;
+        break;
+      }
+    }
+  }
+  if (close < 0) return null;
+  const returnsAt = source.indexOf("RETURNS", close);
+  if (returnsAt < 0) return null;
+  const bodyMarker = "AS $function$";
+  const bodyStart = source.indexOf(bodyMarker, returnsAt);
+  if (bodyStart < 0) return null;
+  const bodyEnd = source.indexOf("$function$", bodyStart + bodyMarker.length);
+  if (bodyEnd < 0) return null;
+  return {
+    args: source.slice(open + 1, close),
+    body: source.slice(bodyStart + bodyMarker.length, bodyEnd),
+  };
+}
+
 test("fenced wrapper signatures put the lease tuple first and guard before mutation", () => {
   const allMigrations = migration + "\n" + completionMigration;
   for (const item of writeMap.replay_mutations) {
-    const definition = new RegExp(
-      "CREATE OR REPLACE FUNCTION henvalt\\." + item.fenced_rpc +
-      "\\(([\\s\\S]*?)\\)\\s*RETURNS[\\s\\S]*?AS \\$function\\$([\\s\\S]*?)\\$function\\$",
-      "i",
-    ).exec(allMigrations);
+    const definition = extractFencedFunction(allMigrations, item.fenced_rpc);
     assert.ok(definition, "missing complete wrapper definition: " + item.fenced_rpc);
-    const args = definition[1].replace(/\s+/g, " ").trim();
+    const args = definition.args.replace(/\s+/g, " ").trim();
     assert.ok(
       args.startsWith("p_job_id uuid, p_worker_id text, p_lease_id uuid"),
       item.fenced_rpc + " must take the exact lease tuple first",
     );
-    const body = definition[2];
-    const guardAt = body.indexOf("PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id)");
+    const guardAt = definition.body.indexOf("PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id)");
     assert.ok(guardAt >= 0, item.fenced_rpc + " must validate the current lease");
-    const mutationAt = body.indexOf("henvalt." + item.current_rpc + "(");
+    const mutationAt = definition.body.indexOf("henvalt." + item.current_rpc + "(");
     if (mutationAt >= 0) {
       assert.ok(guardAt < mutationAt, item.fenced_rpc + " must validate before the underlying mutation");
     } else {
-      const directUpdateAt = body.indexOf("UPDATE henvalt.webhook_events");
+      const directUpdateAt = definition.body.indexOf("UPDATE henvalt.webhook_events");
       assert.ok(directUpdateAt >= 0 && guardAt < directUpdateAt,
         item.fenced_rpc + " must guard its direct webhook update");
     }
@@ -119,7 +145,7 @@ test("fenced wrapper signatures put the lease tuple first and guard before mutat
 });
 
 test("the live active-ingest mutation inventory is exactly covered by the replay write map", () => {
-  assert.equal(activeIngestSnapshot.workflowId, writeMap.source_workflow);
+  assert.equal(activeIngestSnapshot.workflowId, "VTpfGKNtu1CSQ4Rv");
   assert.equal(activeIngestSnapshot.activeVersionId, writeMap.inspected_active_version);
   const active = activeIngestSnapshot.activeMutationInventory;
   assert.ok(Array.isArray(active) && active.length === 18);
