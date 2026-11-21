@@ -292,6 +292,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   ]};
   workflow.connections["Renew Replay Lease Before Writes"] = {main:[[{node:"Confirm Replay Lease Renewal",type:"main",index:0}]]};
   workflow.connections["Confirm Replay Lease Renewal"] = {main:[[{node:"Should Process?",type:"main",index:0}]]};
+  workflow.connections["Should Process?"].main[1] = [{node:"Stop Replay Not Proceedable",type:"main",index:0}];
   workflow.connections["Mark Webhook Processed"].main = [[{node:"Processed Marker Confirmed?",type:"main",index:0}]];
   workflow.connections["Processed Marker Confirmed?"] = {main:[[{node:"Build Success Response",type:"main",index:0}],[{node:"Stop Unconfirmed Processed Marker",type:"main",index:0}]]};
   workflow.connections["Defer Payment Reconciliation"].main = [[{node:"Deferred Handoff Confirmed?",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]];
