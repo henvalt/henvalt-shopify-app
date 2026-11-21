@@ -32,3 +32,11 @@ test("stale repair and payment reconciliation are not general webhook replay", (
   assert.equal(snapshot.generalWebhookReplayRpcPresent, false);
   assert.equal(snapshot.generalWebhookReplayLaunchBlocker, true);
 });
+
+test("replay jobs cannot pass the current intervention-only worker guard", () => {
+  assert.equal(snapshot.normalizeGuard.currentHasJobExpression, "jobId != null && interventionId != null");
+  assert.equal(snapshot.normalizeGuard.requiresInterventionId, true);
+  assert.equal(snapshot.normalizeGuard.replayPayloadHasInterventionId, false);
+  assert.equal(snapshot.normalizeGuard.replayJobsPassCurrentGuard, false);
+  assert.equal(snapshot.normalizeGuard.requiresJobTypeRouter, true);
+});
