@@ -8,6 +8,8 @@ DECLARE
   v_status record;
   v_token text;
   v_secret_reads bigint;
+  v_test_message uuid;
+  v_test_request uuid;
 BEGIN
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'default interlock is not closed';
@@ -90,6 +92,24 @@ BEGIN
     RAISE EXCEPTION 'enabled credential-release wrapper did not reach synthetic Vault fixture';
   END IF;
   SELECT last_value INTO v_secret_reads FROM henvalt.mailersend_secret_read_counter;
+
+  -- The legacy manual one-off test route remains denied even when the global
+  -- gate is open for normal, otherwise-eligible recovery delivery.
+  INSERT INTO henvalt.messages(tenant_id, metadata)
+  VALUES (gen_random_uuid(), '{"test_only":"true"}'::jsonb)
+  RETURNING id, tenant_id INTO v_test_message, v_id;
+  INSERT INTO henvalt.delivery_requests(tenant_id, message_reference, status)
+  VALUES (v_id, v_test_message, 'UNKNOWN')
+  RETURNING id INTO v_test_request;
+  BEGIN
+    PERFORM henvalt.get_mailersend_token_for_delivery(v_id, v_test_request);
+    RAISE EXCEPTION 'legacy one-off test route was not blocked';
+  EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM <> 'HENVALT_ONE_OFF_TEST_SEND_DISABLED' THEN RAISE; END IF;
+  END;
+  IF (SELECT last_value FROM henvalt.mailersend_secret_read_counter) IS DISTINCT FROM v_secret_reads THEN
+    RAISE EXCEPTION 'one-off test route reached the synthetic Vault read boundary';
+  END IF;
 
   PERFORM henvalt.set_provider_sending_enabled(false, 'close after synthetic staging integration test');
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
