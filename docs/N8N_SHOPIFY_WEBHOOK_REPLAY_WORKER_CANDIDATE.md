@@ -35,7 +35,7 @@ The installed n8n node type definitions were checked before specifying these par
 3. Add a Switch on `job_type`; the existing intervention output must connect to the current `Atomic Claim Intervention` node without behavior changes.
 4. The replay output calls `henvalt.load_shopify_webhook_replay_job(job_id, worker_id, lease_id)` using the exact lease returned by the replay claim RPC. If `webhook_processed=true`, complete the claimed job and stop.
 5. Otherwise call the dedicated replay-processing entry in `HENVALT_INGEST` with only `job_id`, `worker_id`, and the exact `lease_id` returned by the claim. The lease token is required for the subflow's second fenced load; do not pass an untrusted tenant ID or raw payload from the worker itself.
-6. Complete the replay job only after the ingest subflow confirms `mark_webhook_processed=true`, using `complete_shopify_replay_job(job_id, worker_id, lease_id)`. On transient failures call `retry_shopify_replay_job(job_id, worker_id, lease_id, error, bounded_delay)`; on exhausted retries the RPC sets DEAD_LETTER. Keep the existing `complete_job` / `retry_job` calls for the intervention branch only.
+6. Complete the replay job only after the ingest subflow confirms `mark_webhook_processed=true` OR `deferred_payment_handoff=true` from the fenced payment-reconciliation handoff, using `complete_shopify_replay_job(job_id, worker_id, lease_id)`. On transient failures call `retry_shopify_replay_job(job_id, worker_id, lease_id, error, bounded_delay)`; on exhausted retries the RPC sets DEAD_LETTER. Keep the existing `complete_job` / `retry_job` calls for the intervention branch only.
 
 ## HENVALT_INGEST replay entry
 
@@ -208,7 +208,7 @@ The replay branch is a separate contract:
 - Validate `job_id`, `worker_id`, `lease_id`, and `payload.webhook_id`; reject unknown job types.
 - Load, complete, and retry only with the exact `job_id + worker_id + lease_id` tuple.
 - Call the dedicated `HENVALT_INGEST` replay entry with only that tuple. The ingest subflow reloads the trusted stored payload and executes sequential transaction-local fenced writes from the audited write map.
-- Complete only when the subflow confirms `mark_webhook_processed === true`; otherwise use bounded retry and allow the database RPC to dead-letter exhausted attempts.
+- Complete only when the subflow confirms `mark_webhook_processed === true` OR `deferred_payment_handoff === true`. The latter is valid only after `defer_payment_webhook_reconciliation_fenced` has durably accepted responsibility for the follow-up; otherwise use bounded retry and allow the database RPC to dead-letter exhausted attempts.
 - Never route replay work through `Atomic Claim Intervention` or the generic `complete_job` / `retry_job` functions.
 
 This is a tested design contract, **not a constructed n8n graph**. It does not alter or publish the live workflow, and passing static CI does not establish that the n8n nodes have been wired. The exact active version remains the read-only baseline until a separate candidate graph can be authored and accepted in isolated staging.
