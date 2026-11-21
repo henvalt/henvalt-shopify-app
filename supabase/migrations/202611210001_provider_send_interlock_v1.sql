@@ -158,4 +158,55 @@ EXECUTE FUNCTION henvalt.enforce_provider_send_interlock();
 REVOKE ALL ON FUNCTION henvalt.enforce_provider_send_interlock()
   FROM PUBLIC, anon, authenticated, service_role;
 
+-- A narrowly scoped, non-secret status surface for the server-side control plane.
+-- service_role may observe the gate but cannot change it.
+CREATE OR REPLACE FUNCTION henvalt.provider_sending_status()
+RETURNS TABLE (
+  enabled boolean,
+  control_present boolean,
+  changed_at timestamptz,
+  change_reason text
+)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, henvalt, pg_temp
+AS $function$
+  SELECT COALESCE(c.provider_sending_enabled, false),
+         c.control_key IS NOT NULL,
+         c.changed_at,
+         COALESCE(c.change_reason, 'default_deny')
+    FROM (SELECT 'global'::text AS control_key) expected
+    LEFT JOIN henvalt.provider_send_control c
+      ON c.control_key = expected.control_key;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.provider_sending_status()
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.provider_sending_status()
+  TO service_role;
+
+-- Enforce the documented append-only audit contract at the database boundary.
+CREATE OR REPLACE FUNCTION henvalt.reject_provider_send_control_event_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = pg_catalog, henvalt, pg_temp
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'PROVIDER_SEND_CONTROL_AUDIT_IS_APPEND_ONLY'
+    USING ERRCODE = '55000';
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.reject_provider_send_control_event_mutation()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS provider_send_control_events_append_only
+  ON henvalt.provider_send_control_events;
+
+CREATE TRIGGER provider_send_control_events_append_only
+BEFORE UPDATE OR DELETE ON henvalt.provider_send_control_events
+FOR EACH ROW
+EXECUTE FUNCTION henvalt.reject_provider_send_control_event_mutation();
+
 COMMIT;
