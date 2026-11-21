@@ -1,0 +1,71 @@
+{
+  "captured_at_utc": "2026-11-21",
+  "source": "Read-only active-version inspection of the connected n8n instance",
+  "workflow": {
+    "name": "HENVALT_DELIVERY",
+    "id": "CvVyybGJZSnklxiZ",
+    "active_version_id": "621ae6ce-a006-4fed-a70e-acf774c360fb",
+    "provider_function_slug": "henvalt-mailersend-delivery",
+    "routes": [
+      {
+        "id": "ordinary",
+        "trigger": "Internal Delivery Webhook",
+        "edges": [
+          [
+            "Internal Delivery Webhook",
+            "Validate & Normalize"
+          ],
+          [
+            "Validate & Normalize",
+            "Precheck Valid?"
+          ],
+          [
+            "Precheck Valid?",
+            "Authorize & Context"
+          ],
+          [
+            "Authorize & Context",
+            "Cleared to Send?"
+          ],
+          [
+            "Cleared to Send?",
+            "Build Reply-To Address"
+          ],
+          [
+            "Build Reply-To Address",
+            "MailerSend Send"
+          ]
+        ],
+        "provider_node": "MailerSend Send",
+        "provider_method": "POST",
+        "provider_function_slug": "henvalt-mailersend-delivery"
+      },
+      {
+        "id": "manual-one-off",
+        "trigger": "One-Off Test Email Trigger",
+        "edges": [
+          [
+            "One-Off Test Email Trigger",
+            "Prepare One-Off Test Delivery"
+          ],
+          [
+            "Prepare One-Off Test Delivery",
+            "One-Off Test Authorized?"
+          ],
+          [
+            "One-Off Test Authorized?",
+            "MailerSend One-Off Test Email"
+          ]
+        ],
+        "provider_node": "MailerSend One-Off Test Email",
+        "provider_method": "POST",
+        "provider_function_slug": "henvalt-mailersend-delivery"
+      }
+    ],
+    "safety_notes": [
+      "Snapshot records route topology and provider function slug only; credentials, URLs, payloads and customer data are intentionally excluded.",
+      "This is a read-only snapshot, not a staging test and not proof that a provider request was blocked.",
+      "Both routes must be independently tested with provider egress denied before staging can be accepted."
+    ]
+  }
+}
