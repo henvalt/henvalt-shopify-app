@@ -77,3 +77,12 @@ test("every graph connection in all three candidates resolves within its own wor
     }
   }
 });
+
+
+test("candidate endpoints cannot call the live Supabase project or reply-AI Worker", () => {
+  const serialized = JSON.stringify(workflows);
+  assert.equal(serialized.includes("ocyplckdojdubyrsxcxa.supabase.co"), false);
+  assert.equal(serialized.includes("henvalt-reply-ai.chmuhammadrehan18.workers.dev"), false);
+  assert.ok(serialized.includes("https://supabase-staging.invalid"));
+  assert.ok(serialized.includes("https://reply-ai-staging.invalid"));
+});
