@@ -232,3 +232,10 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - This proves that sensitive delivery content remained in execution history for at least seven days. It does not establish the configured maximum retention period.
 - The connected n8n toolset exposes workflow and execution reads but not instance-level execution-pruning/redaction settings. Those settings remain unverified and require owner/admin evidence.
 - Do not bulk-delete or alter execution history without an approved retention policy and evidence-preservation decision.
+
+
+### Shopify webhook ingress binding
+- Live Cloudflare Worker `henvalt-clean-ingress-v1` has the required `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET` and `N8N_INGEST_URL` bindings configured.
+- The configured upstream target is `n8n.henvalt.com` at `/webhook/henvalt/ingest`.
+- This matches the active `HENVALT_INGEST` workflow's POST webhook path `henvalt/ingest`.
+- The Worker source validates Shopify HMAC before forwarding the raw request. This confirms the configured ingress path aligns with n8n, but does not prove that a live Shopify webhook was delivered end-to-end today.
