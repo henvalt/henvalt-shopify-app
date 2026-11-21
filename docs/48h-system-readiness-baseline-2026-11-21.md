@@ -269,3 +269,5 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - Filtering only new browse candidates is insufficient because previously created opportunities could still reach delivery authorization.
 - Candidate pixel migration now makes this shared helper fail closed when the source event is missing or lacks analytics-processing and marketing permission, so existing browse opportunities are rechecked again at context/authorization/token-claim time.
 - PostgreSQL acceptance tests cover marketing-denied suppression, marketing-allowed eligibility and missing-source fail-closed behavior.
+
+- The `webhook_events` table contains 130 `PROCESSED` records (latest 2026-11-14 15:44 UTC) and 2 `FAILED` records (latest receipt 2026-11-02). No later receipt was present in the snapshot.
