@@ -194,7 +194,7 @@ if (row?.metadata?.shopify_webhook_id !== row?.source_event_id || !row?.source_e
 if (!row?.lease_expires_at || Date.parse(row.lease_expires_at) <= Date.now()) errors.push("LEASE_EXPIRED");
 if (row?.webhook_processed === true) errors.push("ALREADY_PROCESSED");\nif (!["PROCESSING","FAILED"].includes(String(row?.processing_status || "").toUpperCase())) errors.push("WEBHOOK_STATE_NOT_REPLAYABLE");
 if (errors.length) return { __replay_invalid: true, __replay_reason: errors.join(",") };
-const body = { ...row.payload, event_id: row.source_event_id };
+const body = { ...row.payload, event_id: row.source_event_id, correlation_id: row.correlation_id || undefined };
 const headers = {
   "x-shopify-shop-domain": shop,
   "x-shopify-topic": row.topic,
@@ -260,6 +260,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"deferred-handoff-true",leftValue:"={{ $json.body === true || $json.body === 'true' }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
   },[-336,1008],2.2);
   const stopMarker = createNode("Stop Unconfirmed Processed Marker","n8n-nodes-base.stopAndError",{errorMessage:"HENVALT replay processed marker was not confirmed; lease must be retried."},[4384,992],1);
+  const stopNotProceedable = createNode("Stop Replay Not Proceedable","n8n-nodes-base.stopAndError",{errorMessage:"HENVALT replay did not pass the proceed guard; retry through the lease worker."},[1120,1120],1);
   const hmacResponse = createNode("Build HMAC Rejection Response","n8n-nodes-base.set",{
     mode:"manual",assignments:{assignments:[
       {id:"hmac-http",name:"__http",type:"number",value:401},
@@ -314,6 +315,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse); addNode(workflow,hmacResponse);
   addNode(workflow,renewLease); addNode(workflow,confirmRenewal);
   addNode(workflow,processedGate); addNode(workflow,deferredGate); addNode(workflow,stopMarker);
+  addNode(workflow,stopNotProceedable);
 
   // n8n graph connections support multiple upstream nodes. Append replay envelope
   // as an additional source for the existing normalizer.
@@ -322,7 +324,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
     [{node:"Validate & Normalize",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
   ]};
-  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker};
+  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
 }
 
 function buildCandidate(input, map, activeVersionId) {
@@ -333,7 +335,11 @@ function buildCandidate(input, map, activeVersionId) {
   addReplayAndIngressNodes(workflow);
   // Credential references are deliberately removed from the candidate export.
   // Rebind the existing Supabase service-role credential in an isolated n8n draft.
-  for (const node of workflow.nodes) delete node.credentials;
+  for (const node of workflow.nodes) { delete node.credentials; if (node.name === "Event Webhook") { node.parameters.path = "henvalt/ingest-candidate-no-send"; delete node.webhookId; } }
+  workflow.id = "00000000-0000-4000-8000-000000000001";
+  delete workflow.versionId; delete workflow.activeVersionId; delete workflow.activeVersion;
+  delete workflow.createdAt; delete workflow.updatedAt; delete workflow.nodeCount; delete workflow.triggerCount;
+  delete workflow.scopes; delete workflow.canExecute; delete workflow.parentFolderId; delete workflow.isArchived;
   workflow.name = "HENVALT_INGEST_CANDIDATE_NO_SEND";
   workflow.active = false;
   workflow.meta = { ...(workflow.meta || {}), henvalt_candidate: true, source_workflow_id: REQUIRED_WORKFLOW_ID, source_active_version: REQUIRED_ACTIVE_VERSION, credential_rebinding_required: true, provider_sending_enabled: false };
