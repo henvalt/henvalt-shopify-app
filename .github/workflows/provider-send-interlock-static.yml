@@ -43,6 +43,8 @@ on:
       - "n8n/shopify-ingest-ack-classifier-candidate.mjs"
       - "n8n/shopify-ingest-replay-entry-candidate.json"
       - "n8n/shopify-ingest-candidate-builder.mjs"
+      - "n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json"
+      - "tests/shopify-ingest-full-export-candidate.test.mjs"
       - "tests/shopify-ingest-candidate-builder.test.mjs"
       - "tests/shopify-replay-claim-normalizer.test.mjs"
       - "tests/shopify-ingest-replay-envelope.test.mjs"
@@ -105,7 +107,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify static safety and pixel consent invariants
-        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/n8n-shopify-ingest-route-snapshot.test.mjs tests/n8n-recovery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-webhook-contract.test.mjs tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs tests/shopify-replay-business-write-fencing-static.test.mjs tests/shopify-recovery-replay-branch-contract.test.mjs tests/shopify-recovery-replay-graph-patch-static.test.mjs tests/shopify-replay-claim-normalizer.test.mjs tests/shopify-ingest-replay-envelope.test.mjs tests/shopify-ingest-ack-classifier-candidate.test.mjs tests/shopify-ingest-replay-entry-static.test.mjs tests/shopify-ingest-candidate-builder.test.mjs tests/active-workflow-cutover-contract-static.test.mjs
+        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/n8n-shopify-ingest-route-snapshot.test.mjs tests/n8n-recovery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-webhook-contract.test.mjs tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs tests/shopify-replay-business-write-fencing-static.test.mjs tests/shopify-recovery-replay-branch-contract.test.mjs tests/shopify-recovery-replay-graph-patch-static.test.mjs tests/shopify-replay-claim-normalizer.test.mjs tests/shopify-ingest-replay-envelope.test.mjs tests/shopify-ingest-ack-classifier-candidate.test.mjs tests/shopify-ingest-replay-entry-static.test.mjs tests/shopify-ingest-candidate-builder.test.mjs tests/shopify-ingest-full-export-candidate.test.mjs tests/active-workflow-cutover-contract-static.test.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
