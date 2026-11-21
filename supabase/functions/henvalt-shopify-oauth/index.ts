@@ -1,9 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { buildShopifyCompletionUrl } from "./completion-url.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
+const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "https://henvalt-dashboard.pages.dev";
 const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
 
@@ -372,15 +374,13 @@ Deno.serve(async (req: Request) => {
     const webhookAuditPersisted = webhookAudit.ok;
     if (!webhookAuditPersisted) console.error("Webhook registration audit persistence failed", webhookAudit.status);
     const pixelActivated = pixelActivation.activated === true;
-    const completionUrl = new URL("https://henvalt-dashboard.lovable.app/settings");
-    completionUrl.searchParams.set("shopify_status", "connected");
-    completionUrl.searchParams.set("shop", shop);
-    completionUrl.searchParams.set("pixel_status", pixelActivated ? "active" : "attention");
-    completionUrl.searchParams.set("webhooks_status", allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention");
-    if (!pixelActivated && typeof pixelActivation.error === "string") {
-      completionUrl.searchParams.set("pixel_issue", pixelActivation.error);
-    }
-    return redirect(completionUrl.toString());
+    const completionUrl = buildShopifyCompletionUrl(HENVALT_DASHBOARD_URL, {
+      shop,
+      pixelStatus: pixelActivated ? "active" : "attention",
+      webhooksStatus: allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention",
+      pixelIssue: !pixelActivated && typeof pixelActivation.error === "string" ? pixelActivation.error : undefined,
+    });
+    return redirect(completionUrl);
   }
   return json(404, { error: "not_found" });
 });
