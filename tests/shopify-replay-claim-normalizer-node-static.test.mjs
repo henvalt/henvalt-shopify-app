@@ -57,6 +57,7 @@ test("inline node validation remains aligned with the pure tested helper", () =>
     "MISSING_WORKER_ID",
     "INVALID_WEBHOOK_ID",
     "INVALID_LEASE_EXPIRY",
+    "WORKER_MISMATCH",
     "EMPTY_CLAIM",
   ]) {
     assert.ok(source.includes(token), "inline source missing " + token);
@@ -78,7 +79,7 @@ test("inline Code node executes against actual background_jobs claim-row shape",
     job_type: "process_shopify_webhook",
     payload: { webhook_id: "22222222-2222-4222-8222-222222222222" },
     lease_id: "33333333-3333-4333-8333-333333333333",
-    lease_expires_at: "2026-11-21T18:00:00.000Z",
+    lease_expires_at: "2026-11-21T23:00:00.000Z",
     tenant_id: "44444444-4444-4444-8444-444444444444",
     locked_by: "replay-worker-1",
     customer_email: "must-not-escape@example.invalid"
@@ -115,4 +116,25 @@ test("inline Code node treats empty claims normally and malformed present claims
   assert.match(malformed.guard_reason, /INVALID_LEASE_ID/);
   assert.match(malformed.guard_reason, /INVALID_WEBHOOK_ID/);
   assert.match(malformed.guard_reason, /INVALID_LEASE_EXPIRY/);
+});
+
+
+test("inline Code node rejects a mismatched database owner and expired lease", () => {
+  const runNode = (row) => new Function(
+    "$", "$json", source
+  )((name) => ({ first: () => ({ json: { worker_id: "replay-worker-1" } }) }), row).json;
+  const base = {
+    id: "11111111-1111-4111-8111-111111111111",
+    job_type: "process_shopify_webhook",
+    payload: { webhook_id: "22222222-2222-4222-8222-222222222222" },
+    lease_id: "33333333-3333-4333-8333-333333333333",
+    lease_expires_at: "2026-11-21T23:00:00.000Z",
+    locked_by: "replay-worker-1"
+  };
+  const wrongOwner = runNode({ ...base, locked_by: "another-worker" });
+  assert.equal(wrongOwner.guard_valid, false);
+  assert.match(wrongOwner.guard_reason, /WORKER_MISMATCH/);
+  const expired = runNode({ ...base, lease_expires_at: "2020-01-01T00:00:00.000Z" });
+  assert.equal(expired.guard_valid, false);
+  assert.match(expired.guard_reason, /INVALID_LEASE_EXPIRY/);
 });
