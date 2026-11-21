@@ -48,11 +48,9 @@
       "parameters": [
         "worker_id from Init Worker"
       ],
-      "settings": {
-        "alwaysOutputData": true
-      },
       "onError": "stopWorkflow",
-      "purpose": "Claim at most one process_shopify_webhook job using its own lease."
+      "purpose": "Claim at most one process_shopify_webhook job using its own lease.",
+      "alwaysOutputData": true
     },
     {
       "name": "Normalize Shopify Replay Claim",
@@ -95,11 +93,9 @@
         "worker_id",
         "lease_id"
       ],
-      "settings": {
-        "alwaysOutputData": true,
-        "onError": "continueErrorOutput"
-      },
-      "purpose": "Reload trusted durable payload under the exact current lease; never accept payload from claim input."
+      "purpose": "Reload trusted durable payload under the exact current lease; never accept payload from claim input.",
+      "alwaysOutputData": true,
+      "onError": "continueErrorOutput"
     },
     {
       "name": "Replay Claim Valid?",
@@ -145,9 +141,7 @@
         "worker_id",
         "lease_id"
       ],
-      "settings": {
-        "onError": "continueErrorOutput"
-      }
+      "onError": "continueErrorOutput"
     },
     {
       "name": "Replay Completion Accepted?",
@@ -168,14 +162,12 @@
       ],
       "retry_delay_seconds_default": 300,
       "retry_delay_seconds_max": 3600,
-      "settings": {
-        "onError": "continueErrorOutput"
-      },
       "error_reason_policy": {
         "reason": "SHOPIFY_REPLAY_PROCESSING_FAILED",
         "source": "constant; never copy raw error message, stack, webhook payload, email, URL or customer fields into background_jobs.last_error",
         "max_delay_seconds": 3600
-      }
+      },
+      "onError": "continueErrorOutput"
     },
     {
       "name": "Replay Retry Accepted?",
@@ -306,7 +298,8 @@
     "An empty claim is a normal queue miss and returns to Loop Interventions; a present but malformed claim is terminal fail-closed.",
     "Replay retry stores only the constant SHOPIFY_REPLAY_PROCESSING_FAILED reason; never persist raw exception text or customer data.",
     "A deferred-payment replay completes only after defer_payment_webhook_reconciliation_fenced returns true and the existing recovery reconciler owns the durable follow-up.",
-    "All lease-fenced SQL parameter expressions reference the normalized claim node directly, so load/complete/retry error outputs cannot erase the job/worker/lease tuple."
+    "All lease-fenced SQL parameter expressions reference the normalized claim node directly, so load/complete/retry error outputs cannot erase the job/worker/lease tuple.",
+    "n8n node execution flags use native top-level node properties (alwaysOutputData and onError), never nested under a synthetic settings object."
   ],
   "dependencies_before_staging": [
     "Add a dedicated Execute Workflow Trigger and isolated replay entry in HENVALT_INGEST candidate; reload payload with load_shopify_webhook_replay_job(job_id, worker_id, lease_id).",
