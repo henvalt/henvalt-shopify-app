@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "status": "candidate-only; graph patch manifest, not an n8n export",
+  "target": {
+    "name": "HENVALT_RECOVERY",
+    "workflow_id": "3GEDoeCA4paXTaDF",
+    "inspected_active_version": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+    "baseline_node_count": 46,
+    "keep_total_workflows": 3
+  },
+  "safety": {
+    "active_workflows_modified": false,
+    "workflow_published": false,
+    "workflow_executed": false,
+    "production_database_changed": false,
+    "provider_sending_enabled": false,
+    "delivery_workflow_changed": false,
+    "create_fourth_workflow": false,
+    "no_credentials_or_customer_payload_in_manifest": true
+  },
+  "existing_node_settings": [
+    {
+      "node": "Claim Due Job",
+      "settings": {
+        "alwaysOutputData": true
+      },
+      "reason": "An empty intervention queue must still produce one guard item so the replay queue is checked."
+    }
+  ],
+  "existing_connections_to_replace": [
+    {
+      "from": "Job Claimed?",
+      "output": 1,
+      "to": "Claim Shopify Replay Job",
+      "reason": "No intervention claimed must hand off to replay."
+    },
+    {
+      "from": "Complete Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    },
+    {
+      "from": "Retry Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    },
+    {
+      "from": "Retry Preflight Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    },
+    {
+      "from": "Retry Delivery Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    },
+    {
+      "from": "Retry Pipeline Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    }
+  ],
+  "nodes_to_add": [
+    {
+      "name": "Claim Shopify Replay Job",
+      "type": "n8n-nodes-base.postgres",
+      "operation": "executeQuery",
+      "sql": "SELECT * FROM henvalt.claim_shopify_replay_job($1, 180)",
+      "parameters": [
+        "worker_id from Init Worker"
+      ],
+      "settings": {
+        "alwaysOutputData": true
+      },
+      "onError": "continueErrorOutput",
+      "purpose": "Claim at most one process_shopify_webhook job using its own lease."
+    },
+    {
+      "name": "Normalize Shopify Replay Claim",
+      "type": "n8n-nodes-base.code",
+      "mode": "runOnceForEachItem",
+      "output_fields": [
+        "job_id",
+        "worker_id",
+        "lease_id",
+        "lease_expires_at",
+        "webhook_id",
+        "has_replay_job"
+      ],
+      "normalization": {
+        "job_id": "raw claim row id",
+        "worker_id": "worker_id from Init Worker",
+        "lease_id": "raw claim row lease_id unchanged",
+        "lease_expires_at": "raw claim row lease_expires_at",
+        "webhook_id": "UUID parsed from raw claim row payload.webhook_id"
+      },
+      "guard": "Only job_type process_shopify_webhook, UUID job_id/webhook_id/lease_id, nonblank worker_id and payload.webhook_id are accepted; malformed/unknown rows fail closed."
+    },
+    {
+      "name": "Replay Job Claimed?",
+      "type": "n8n-nodes-base.if",
+      "condition": "={{ $json.has_replay_job }}"
+    },
+    {
+      "name": "Load Shopify Replay Job",
+      "type": "n8n-nodes-base.postgres",
+      "operation": "executeQuery",
+      "sql": "SELECT * FROM henvalt.load_shopify_webhook_replay_job($1, $2, $3)",
+      "parameters": [
+        "job_id",
+        "worker_id",
+        "lease_id"
+      ],
+      "settings": {
+        "onError": "continueErrorOutput"
+      },
+      "purpose": "Reload trusted durable payload under the exact current lease; never accept payload from claim input."
+    },
+    {
+      "name": "Replay Already Processed?",
+      "type": "n8n-nodes-base.if",
+      "condition": "={{ $json.webhook_processed === true }}"
+    },
+    {
+      "name": "Call HENVALT_INGEST Replay Entry",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "target_workflow_id": "VTpfGKNtu1CSQ4Rv",
+      "target_trigger": "dedicated Execute Workflow Trigger to be added to HENVALT_INGEST candidate",
+      "input_allowlist": [
+        "job_id",
+        "worker_id",
+        "lease_id"
+      ],
+      "wait_for_completion": true,
+      "onError": "continueErrorOutput",
+      "expected_result": "mark_webhook_processed === true"
+    },
+    {
+      "name": "Replay Ingest Processed?",
+      "type": "n8n-nodes-base.if",
+      "condition": "={{ $json.mark_webhook_processed === true }}"
+    },
+    {
+      "name": "Complete Shopify Replay Job",
+      "type": "n8n-nodes-base.postgres",
+      "operation": "executeQuery",
+      "sql": "SELECT henvalt.complete_shopify_replay_job($1, $2, $3) AS result",
+      "parameters": [
+        "job_id",
+        "worker_id",
+        "lease_id"
+      ],
+      "settings": {
+        "onError": "continueErrorOutput"
+      }
+    },
+    {
+      "name": "Replay Completion Accepted?",
+      "type": "n8n-nodes-base.if",
+      "condition": "={{ $json.result === true }}"
+    },
+    {
+      "name": "Retry Shopify Replay Job",
+      "type": "n8n-nodes-base.postgres",
+      "operation": "executeQuery",
+      "sql": "SELECT henvalt.retry_shopify_replay_job($1, $2, $3, $4, $5) AS result",
+      "parameters": [
+        "job_id",
+        "worker_id",
+        "lease_id",
+        "bounded sanitized failure reason",
+        300
+      ],
+      "retry_delay_seconds_default": 300,
+      "retry_delay_seconds_max": 3600,
+      "settings": {
+        "onError": "continueErrorOutput"
+      }
+    },
+    {
+      "name": "Replay Retry Accepted?",
+      "type": "n8n-nodes-base.if",
+      "condition": "={{ $json.result === true }}"
+    },
+    {
+      "name": "Stop Replay Lease Lost",
+      "type": "n8n-nodes-base.noOp",
+      "purpose": "Terminal fail-closed branch when complete/retry returns false or its lease-bound RPC errors."
+    }
+  ],
+  "required_connections": [
+    [
+      "Claim Shopify Replay Job",
+      "Normalize Shopify Replay Claim"
+    ],
+    [
+      "Normalize Shopify Replay Claim",
+      "Replay Job Claimed?"
+    ],
+    [
+      "Replay Job Claimed?#true",
+      "Load Shopify Replay Job"
+    ],
+    [
+      "Replay Job Claimed?#false",
+      "Loop Interventions"
+    ],
+    [
+      "Load Shopify Replay Job",
+      "Replay Already Processed?"
+    ],
+    [
+      "Replay Already Processed?#true",
+      "Complete Shopify Replay Job"
+    ],
+    [
+      "Replay Already Processed?#false",
+      "Call HENVALT_INGEST Replay Entry"
+    ],
+    [
+      "Call HENVALT_INGEST Replay Entry#success",
+      "Replay Ingest Processed?"
+    ],
+    [
+      "Call HENVALT_INGEST Replay Entry#error",
+      "Retry Shopify Replay Job"
+    ],
+    [
+      "Replay Ingest Processed?#true",
+      "Complete Shopify Replay Job"
+    ],
+    [
+      "Replay Ingest Processed?#false",
+      "Retry Shopify Replay Job"
+    ],
+    [
+      "Complete Shopify Replay Job",
+      "Replay Completion Accepted?"
+    ],
+    [
+      "Replay Completion Accepted?#true",
+      "Loop Interventions"
+    ],
+    [
+      "Replay Completion Accepted?#false",
+      "Stop Replay Lease Lost"
+    ],
+    [
+      "Retry Shopify Replay Job",
+      "Replay Retry Accepted?"
+    ],
+    [
+      "Replay Retry Accepted?#true",
+      "Loop Interventions"
+    ],
+    [
+      "Replay Retry Accepted?#false",
+      "Stop Replay Lease Lost"
+    ]
+  ],
+  "invariants": [
+    "At most one intervention claim and one replay claim per scheduler iteration.",
+    "Every intervention terminal node routes to replay claim before Loop Interventions.",
+    "An empty intervention claim still routes to replay claim.",
+    "An empty replay claim routes to Loop Interventions.",
+    "Replay jobs never enter Atomic Claim Intervention.",
+    "Replay jobs never use claim_next_job, complete_job, retry_job or dead_letter_job.",
+    "Load, complete and retry carry the exact job_id, worker_id, lease_id tuple.",
+    "The ingest subflow receives only job_id, worker_id and lease_id and reloads trusted stored payload.",
+    "Only mark_webhook_processed === true permits replay completion.",
+    "A false completion/retry result is terminal lease-lost; do not attempt a generic fallback.",
+    "All replay business mutations remain sequential and use the 18 transaction-local fenced wrappers in shopify-ingest-replay-write-map.json.",
+    "No replay branch connects to HENVALT_DELIVERY or a provider send node.",
+    "The existing intervention business branch remains unchanged."
+  ],
+  "dependencies_before_staging": [
+    "Add a dedicated Execute Workflow Trigger and isolated replay entry in HENVALT_INGEST candidate; reload payload with load_shopify_webhook_replay_job(job_id, worker_id, lease_id).",
+    "Reconstruct normalized event only from the trusted loaded webhook row and tenant-bound metadata.",
+    "Route the live ingress to durable enqueue and explicit HTTP response before downstream processing; prevent dual ownership between ingress and replay worker.",
+    "Apply migrations 001-010 only to isolated disposable/staging PostgreSQL and verify actual n8n credentials and RPC grants.",
+    "Test empty queues, intervention success/retry/failure, replay already processed, replay success, replay retry, lease expiry/reclaim, and all terminal loop paths.",
+    "Keep provider sending disabled during every staging acceptance test."
+  ]
+}
