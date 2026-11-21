@@ -30,6 +30,98 @@ CREATE TABLE henvalt.tenants (
   default_currency character(3) NOT NULL DEFAULT 'USD'
 );
 
+CREATE TYPE henvalt.job_status AS ENUM ('QUEUED', 'CLAIMED', 'RUNNING', 'RETRY_WAIT', 'SUCCEEDED', 'DEAD_LETTER');
+
+CREATE TABLE henvalt.webhook_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES henvalt.tenants(id) ON DELETE CASCADE,
+  source text NOT NULL DEFAULT 'shopify',
+  source_event_id text NOT NULL,
+  topic text NOT NULL,
+  idempotency_key text NOT NULL,
+  payload jsonb NOT NULL,
+  received_at timestamptz NOT NULL DEFAULT now(),
+  processed_at timestamptz,
+  processing_status text NOT NULL DEFAULT 'RECEIVED',
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  UNIQUE (tenant_id, idempotency_key),
+  UNIQUE (tenant_id, source, source_event_id)
+);
+
+CREATE TABLE henvalt.background_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES henvalt.tenants(id) ON DELETE CASCADE,
+  job_type text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status henvalt.job_status NOT NULL DEFAULT 'QUEUED',
+  priority integer NOT NULL DEFAULT 100,
+  attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
+  max_attempts integer NOT NULL DEFAULT 5 CHECK (max_attempts > 0),
+  run_at timestamptz NOT NULL DEFAULT now(),
+  next_run_at timestamptz,
+  locked_at timestamptz,
+  locked_by text,
+  last_error text,
+  completed_at timestamptz,
+  correlation_id uuid,
+  idempotency_key text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, idempotency_key)
+);
+
+CREATE OR REPLACE FUNCTION henvalt.ingest_raw_webhook_v2(
+  p_tenant_id uuid,
+  p_source text,
+  p_source_event_id text,
+  p_topic text,
+  p_idempotency_key text,
+  p_payload jsonb,
+  p_metadata jsonb DEFAULT '{}'::jsonb
+)
+RETURNS TABLE(webhook_id uuid, is_duplicate boolean, should_process boolean, processing_status text)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_row henvalt.webhook_events%ROWTYPE;
+BEGIN
+  SELECT * INTO v_row
+    FROM henvalt.webhook_events
+   WHERE tenant_id = p_tenant_id
+     AND source = p_source
+     AND source_event_id = p_source_event_id
+   FOR UPDATE;
+
+  IF FOUND THEN
+    IF v_row.processing_status = 'PROCESSED' THEN
+      RETURN QUERY SELECT v_row.id, true, false, v_row.processing_status;
+      RETURN;
+    END IF;
+    IF v_row.processing_status = 'PROCESSING' THEN
+      RETURN QUERY SELECT v_row.id, true, false, v_row.processing_status;
+      RETURN;
+    END IF;
+    UPDATE henvalt.webhook_events
+       SET processing_status = 'PROCESSING', processed_at = NULL
+     WHERE id = v_row.id
+     RETURNING * INTO v_row;
+    RETURN QUERY SELECT v_row.id, true, true, v_row.processing_status;
+    RETURN;
+  END IF;
+
+  INSERT INTO henvalt.webhook_events (
+    tenant_id, source, source_event_id, topic, idempotency_key, payload, metadata, processing_status
+  ) VALUES (
+    p_tenant_id, p_source, p_source_event_id, p_topic, p_idempotency_key, p_payload,
+    COALESCE(p_metadata, '{}'::jsonb), 'PROCESSING'
+  ) RETURNING * INTO v_row;
+
+  RETURN QUERY SELECT v_row.id, false, true, v_row.processing_status;
+END;
+$function$;
+
 CREATE TABLE henvalt.shopify_connections (
   id uuid PRIMARY KEY,
   tenant_id uuid NOT NULL,
