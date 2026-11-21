@@ -13,6 +13,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   const w = result.workflow;
   assert.equal(source.nodes.length,51);
   assert.equal(w.active,false);
+  assert.equal(w.settings.availableInMCP,false);
   assert.equal(w.id,"00000000-0000-4000-8000-999999999999");
   assert.equal(w.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
   assert.equal(w.nodes.length,68);
