@@ -143,8 +143,41 @@ $function$;
 CREATE SCHEMA vault;
 CREATE TABLE vault.decrypted_secrets (
   id uuid PRIMARY KEY,
+  name text NOT NULL,
   decrypted_secret text NOT NULL
 );
+
+CREATE OR REPLACE FUNCTION henvalt.verify_shopify_webhook_hmac(p_hmac text, p_raw_body_base64 text)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT COALESCE(p_hmac = 'valid-test-hmac', false)
+     AND COALESCE(NULLIF(p_raw_body_base64, ''), '') <> ''
+     AND EXISTS (
+       SELECT 1 FROM vault.decrypted_secrets
+        WHERE name = 'henvalt_shopify_app_secret'
+          AND decrypted_secret <> ''
+     );
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.resolve_shopify_tenant(p_shop_domain text)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+  SELECT sc.tenant_id
+    FROM henvalt.shopify_connections sc
+    JOIN henvalt.tenants t ON t.id = sc.tenant_id
+   WHERE lower(sc.shop_domain) = lower(p_shop_domain)
+     AND sc.active IS TRUE
+     AND t.status = 'ACTIVE'
+   LIMIT 1;
+$function$;
 
 ALTER TABLE henvalt.shopify_connections
   ADD COLUMN token_type text,
