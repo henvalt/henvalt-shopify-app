@@ -50,6 +50,31 @@ CREATE TABLE henvalt.webhook_events (
   UNIQUE (tenant_id, source, source_event_id)
 );
 
+CREATE OR REPLACE FUNCTION henvalt.mark_webhook_processed(p_webhook_id uuid)
+RETURNS boolean LANGUAGE plpgsql AS $function$
+DECLARE v_updated integer;
+BEGIN
+  UPDATE henvalt.webhook_events
+     SET processing_status='PROCESSED', processed_at=now()
+   WHERE id=p_webhook_id AND processing_status <> 'PROCESSED';
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.mark_webhook_failed(p_webhook_id uuid,p_error text)
+RETURNS boolean LANGUAGE plpgsql AS $function$
+DECLARE v_updated integer;
+BEGIN
+  UPDATE henvalt.webhook_events
+     SET processing_status='FAILED', processed_at=now(),
+         metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object('processing_error',p_error)
+   WHERE id=p_webhook_id;
+  GET DIAGNOSTICS v_updated = ROW_COUNT;
+  RETURN v_updated = 1;
+END;
+$function$;
+
 CREATE TABLE henvalt.background_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid REFERENCES henvalt.tenants(id) ON DELETE CASCADE,
