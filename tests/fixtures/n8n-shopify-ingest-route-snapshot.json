@@ -63,7 +63,10 @@
   "resultContract": {
     "processDecisionField": "should_process",
     "duplicateStatus": "PROCESSED",
-    "missingDecisionFailsClosed": true
+    "missingDecisionFailsClosed": true,
+    "generic409WithoutWebhookIdCurrentlyAcknowledged": true,
+    "candidateMustRequireWebhookIdForEvery200": true,
+    "generic409MustBeRetryableWithoutDurableRow": true
   },
   "acknowledgement": {
     "webhookResponseMode": "onReceived",
