@@ -121,3 +121,20 @@ The following node contracts were re-read from the active n8n workflows before w
 - Do not modify or publish this workflow as part of replay-worker wiring. The global no-send interlock and provider-egress-denied acceptance must be proven separately before any send path is enabled.
 
 All three active workflow IDs, versions, and node counts were verified read-only. No active workflow or draft was changed during this inspection.
+
+
+## Transactional business-write fencing (candidate migration 009)
+
+Migration `202611210009_shopify_replay_business_write_fencing.sql` adds a service-role-only write guard and fenced entry points for the current Shopify mutating RPC families. Each wrapper:
+
+1. Receives `job_id`, `worker_id`, and the exact `lease_id` issued by `claim_shopify_replay_job`.
+2. Calls `assert_shopify_replay_lease_for_write` inside the same PostgreSQL transaction as the underlying business mutation.
+3. The guard validates job type, CLAIMED status, worker, lease UUID, and unexpired lease using `clock_timestamp()`.
+4. The guard selects the job row `FOR UPDATE`. That row lock remains held until the wrapper transaction commits or rolls back, so another worker cannot reclaim the job while the wrapped write is in flight—even if wall-clock lease expiry passes during that transaction.
+5. A stale, expired, mismatched, or superseded lease raises SQLSTATE `42501` before the underlying mutation is invoked.
+
+Candidate fenced entry points cover customer/consent/session identity, canonical event, checkout, opportunity, intervention enqueue, order projection, attribution, revenue adjustment, uninstall handling, and recovery-stop writes. The replay subflow must call these wrappers for every corresponding mutation; it must not call their unfenced counterparts from a Shopify replay job. The ordinary intervention scheduler and non-replay flows keep their existing RPC contract.
+
+Acceptance test: `tests/shopify-replay-business-write-fencing-postgres-acceptance.sql` forces lease expiry and reclaim, proves the stale worker cannot insert a canonical event through the fenced RPC, then proves the current lease can. CI applies migration 009 only to disposable PostgreSQL 17 and runs that test.
+
+**Scope limitation remains:** this is a fenced set of entry points, not proof that the entire replay subflow has been rewired. Before claiming end-to-end strict fencing, inventory every mutating node in the final replay subflow, map it to one of these wrappers (or add a wrapper for the missing RPC), and verify no legacy direct write remains. The live database remains on its earlier migration; migration 009 is candidate-only and has not been applied to production. No active n8n workflow was edited.
