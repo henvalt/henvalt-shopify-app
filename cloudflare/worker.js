@@ -1,4 +1,6 @@
-export const SHOPIFY_WEBHOOK_UPSTREAM_TIMEOUT_MS = 3500;\n\nexport async function handleRequest(request, env, fetchImpl = fetch) {
+export const SHOPIFY_WEBHOOK_UPSTREAM_TIMEOUT_MS = 3500;
+
+export async function handleRequest(request, env, fetchImpl = fetch) {
   const url = new URL(request.url);
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
     return Response.json({ service: "henvalt-clean-ingress-v1", configured: Boolean(env.SHOPIFY_API_SECRET && env.N8N_INGEST_URL) }, { headers: { "cache-control": "no-store" } });
