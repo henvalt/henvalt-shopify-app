@@ -55,7 +55,7 @@ BEGIN
       'orders/paid',
       'single-roundtrip-delivery-001',
       'valid-test-hmac',
-      'e30=',
+      'eyJpZCI6Im9yZGVyLTAwMSIsInRlc3QiOnRydWV9',
       '{"id":"order-001","test":true}'::jsonb,
       '{"shopify_event_id":"correlation-001","correlation_id":"22222222-2222-4222-8222-222222222222"}'::jsonb
     );
