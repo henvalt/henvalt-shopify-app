@@ -32,8 +32,8 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(w.connections["Is Trusted Replay?"].main[0][0].node,"Resolve Shopify Tenant");
   assert.equal(w.connections["Is Trusted Replay?"].main[1][0].node,"Supabase Ingest RPC");
   assert.equal(findNode(w,"Verify Shopify HMAC"),undefined);
-  assert.equal(byName(w,"HMAC Verified?"),undefined);
-  assert.match(byName(w,"Supabase Ingest RPC").parameters.jsonBody,/p_raw_body_base64/);
+  assert.equal(findNode(w,"HMAC Verified?"),undefined);
+  assert.match(findNode(w,"Supabase Ingest RPC").parameters.jsonBody,/p_raw_body_base64/);
   assert.match(byName(w,"Supabase Ingest RPC").parameters.jsonBody,/p_hmac/);
   assert.ok(w.nodes.every(n=>!/(MailerSend|send email|provider send)/i.test(n.name)));
 });
@@ -67,5 +67,5 @@ test("all 18 write paths are lease-fenced and every connection resolves", () => 
   assert.equal(w.connections["Replay Envelope Valid?"].main[0][0].node,"Replay Already Processed?");
   assert.equal(w.connections["Replay Already Processed?"].main[0][0].node,"Build Already Processed Replay Result");
   assert.equal(w.connections["Replay Already Processed?"].main[1][0].node,"Validate & Normalize");
-  assert.match(byName(w,"Build Shopify Replay Envelope").parameters.jsCode,/__replay_already_processed/);
+  assert.match(findNode(w,"Build Shopify Replay Envelope").parameters.jsCode,/__replay_already_processed/);
 });
