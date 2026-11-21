@@ -149,8 +149,10 @@ END;
 $function$;
 
 CREATE OR REPLACE FUNCTION henvalt.resolve_identity(p_event_id uuid)
-RETURNS void LANGUAGE sql AS $function$
-  SELECT;
+RETURNS void LANGUAGE plpgsql AS $function$
+BEGIN
+  RETURN;
+END;
 $function$;
 
 CREATE OR REPLACE FUNCTION henvalt.bind_session_alias(
