@@ -161,7 +161,7 @@ test("the live active-ingest mutation inventory is exactly covered by the replay
 });
 
 test("fenced write wrappers are SECURITY DEFINER with a pinned empty search path and service-role-only ACL", () => {
-  const allMigrations = migration + "\\n" + completionMigration;
+  const allMigrations = migration + "\n" + completionMigration;
   for (const item of writeMap.replay_mutations) {
     const definition = extractFencedFunction(allMigrations, item.fenced_rpc);
     assert.ok(definition, "missing wrapper " + item.fenced_rpc);
@@ -173,10 +173,10 @@ test("fenced write wrappers are SECURITY DEFINER with a pinned empty search path
     assert.ok(allMigrations.includes("REVOKE ALL ON FUNCTION henvalt." + item.fenced_rpc + "("),
       item.fenced_rpc + " must revoke PUBLIC");
     assert.match(allMigrations,
-      new RegExp("REVOKE EXECUTE ON FUNCTION henvalt\\\\." + item.fenced_rpc + "\\\\([^;]* FROM anon,authenticated;"),
+      new RegExp("REVOKE EXECUTE ON FUNCTION henvalt\\." + item.fenced_rpc + "\\([^;]* FROM anon,authenticated;"),
       item.fenced_rpc + " must revoke anon/authenticated");
     assert.match(allMigrations,
-      new RegExp("GRANT EXECUTE ON FUNCTION henvalt\\\\." + item.fenced_rpc + "\\\\([^;]* TO service_role;"),
+      new RegExp("GRANT EXECUTE ON FUNCTION henvalt\\." + item.fenced_rpc + "\\([^;]* TO service_role;"),
       item.fenced_rpc + " must grant service_role");
   }
 });
