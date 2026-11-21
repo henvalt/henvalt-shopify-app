@@ -55,8 +55,14 @@ BEGIN
   -- Guard both transitions so the ordinary and manual test-send paths cannot
   -- bypass the interlock by calling the credential RPC directly.
   IF (
-    (OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'UNKNOWN')
-    OR (OLD.provider_claimed_at IS NULL AND NEW.provider_claimed_at IS NOT NULL)
+    (TG_OP = 'INSERT' AND (
+      NEW.status = 'UNKNOWN'
+      OR NEW.provider_claimed_at IS NOT NULL
+    ))
+    OR (TG_OP = 'UPDATE' AND (
+      (OLD.status IS DISTINCT FROM NEW.status AND NEW.status = 'UNKNOWN')
+      OR (OLD.provider_claimed_at IS NULL AND NEW.provider_claimed_at IS NOT NULL)
+    ))
   ) AND NOT henvalt.provider_sending_is_enabled() THEN
     RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED'
       USING ERRCODE = '42501';
@@ -70,7 +76,7 @@ DROP TRIGGER IF EXISTS delivery_requests_provider_send_interlock
   ON henvalt.delivery_requests;
 
 CREATE TRIGGER delivery_requests_provider_send_interlock
-BEFORE UPDATE OF status, provider_claimed_at
+BEFORE INSERT OR UPDATE OF status, provider_claimed_at
 ON henvalt.delivery_requests
 FOR EACH ROW
 EXECUTE FUNCTION henvalt.enforce_provider_send_interlock();
