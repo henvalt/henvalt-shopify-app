@@ -165,7 +165,16 @@ function addReplayAndIngressNodes(workflow) {
 
   // Only the internal replay trigger can reach this path. It never accepts a body
   // or tenant ID from the public webhook request.
-  const trigger = createNode("Shopify Replay Entry Trigger","n8n-nodes-base.executeWorkflowTrigger",{inputSource:"passthrough"},[-1100,900],1.1);
+  const trigger = createNode("Shopify Replay Entry Trigger","n8n-nodes-base.executeWorkflowTrigger",{
+    inputSource:"workflowInputs",
+    workflowInputs:{values:[
+      {name:"job_id",type:"string"},
+      {name:"worker_id",type:"string"},
+      {name:"lease_id",type:"string"}
+    ]},
+    returnOutput:"lastRunOnly"
+  },[-1100,900],1.1);
+  trigger.isTrigger = true;
   const loader = createNode("Load Shopify Replay Row","n8n-nodes-base.httpRequest",{
     method:"POST",url:"https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/load_shopify_webhook_replay_job",
     authentication:"predefinedCredentialType",nodeCredentialType:"supabaseApi",sendHeaders:true,
