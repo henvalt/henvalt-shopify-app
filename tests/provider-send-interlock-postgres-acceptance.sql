@@ -90,6 +90,7 @@ DECLARE
   v_origin text := 'https://store.example.com';
   v_result jsonb;
   v_candidates integer;
+  v_source_event_id uuid;
 BEGIN
   INSERT INTO henvalt.tenants(id, status) VALUES (v_tenant, 'ACTIVE');
   INSERT INTO henvalt.shopify_connections(id, tenant_id, active, shop_domain)
@@ -160,6 +161,15 @@ BEGIN
     RAISE EXCEPTION 'browse recovery candidate created without marketing privacy permission';
   END IF;
 
+  SELECT id INTO v_source_event_id
+  FROM henvalt.canonical_events
+  WHERE tenant_id = v_tenant AND source_event_id = 'marketing-false-2';
+  IF NOT henvalt.browse_opportunity_advanced(
+    v_tenant, 'session-marketing-false', v_source_event_id, NULL
+  ) THEN
+    RAISE EXCEPTION 'send-time browse guard did not suppress marketing-denied source event';
+  END IF;
+
   -- With both analytics and marketing permission, repeat product views may
   -- become a browse-recovery candidate if customer email consent is also true.
   PERFORM henvalt.ingest_pixel_event(v_digest, v_origin, jsonb_build_object(
@@ -183,6 +193,21 @@ BEGIN
   WHERE tenant_id = v_tenant AND session_reference = 'session-marketing-true';
   IF v_candidates <> 1 THEN
     RAISE EXCEPTION 'expected one consent-eligible browse candidate, got %', v_candidates;
+  END IF;
+
+  SELECT id INTO v_source_event_id
+  FROM henvalt.canonical_events
+  WHERE tenant_id = v_tenant AND source_event_id = 'marketing-true-2';
+  IF henvalt.browse_opportunity_advanced(
+    v_tenant, 'session-marketing-true', v_source_event_id, NULL
+  ) THEN
+    RAISE EXCEPTION 'send-time browse guard incorrectly suppressed consent-eligible source event';
+  END IF;
+
+  IF NOT henvalt.browse_opportunity_advanced(
+    v_tenant, 'session-missing', gen_random_uuid(), now()
+  ) THEN
+    RAISE EXCEPTION 'missing source event did not fail closed';
   END IF;
 
   -- Product removal must pass the database event-type allowlist.
