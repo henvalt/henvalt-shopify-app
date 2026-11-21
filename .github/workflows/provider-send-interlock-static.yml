@@ -6,6 +6,7 @@ on:
       - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
       - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
+      - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
       - "extensions/henvalt-pixel/src/index.js"
@@ -65,6 +66,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql
+      - name: Apply candidate dashboard metrics migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+            -f supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
