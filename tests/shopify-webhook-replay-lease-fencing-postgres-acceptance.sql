@@ -11,6 +11,7 @@ DECLARE
   v_first record;
   v_second record;
   v_loaded record;
+  v_renewed timestamptz;
   v_rejected boolean;
 BEGIN
   UPDATE henvalt.background_jobs
@@ -58,6 +59,11 @@ BEGIN
     RAISE EXCEPTION 'CURRENT_LEASE_COULD_NOT_LOAD_PAYLOAD';
   END IF;
 
+  v_renewed := henvalt.renew_shopify_replay_lease(v_job, 'worker-old', v_first.lease_id, 300);
+  IF v_renewed IS NULL OR v_renewed <= v_first.lease_expires_at THEN
+    RAISE EXCEPTION 'CURRENT_LEASE_COULD_NOT_BE_RENEWED';
+  END IF;
+
   UPDATE henvalt.background_jobs
      SET lease_expires_at = now() - interval '1 second'
    WHERE id = v_job;
@@ -80,6 +86,10 @@ BEGIN
   END;
   IF NOT v_rejected THEN
     RAISE EXCEPTION 'STALE_WORKER_LOADED_PAYLOAD_AFTER_RECLAIM';
+  END IF;
+
+  IF henvalt.renew_shopify_replay_lease(v_job, 'worker-old', v_first.lease_id, 300) IS NOT NULL THEN
+    RAISE EXCEPTION 'STALE_WORKER_RENEWED_SUPERSEDED_LEASE';
   END IF;
 
   IF henvalt.complete_shopify_replay_job(v_job, 'worker-old', v_first.lease_id) IS DISTINCT FROM false THEN
