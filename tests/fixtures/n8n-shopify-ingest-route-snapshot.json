@@ -1,0 +1,41 @@
+{
+  "workflowId": "VTpfGKNtu1CSQ4Rv",
+  "activeVersionId": "6368d539-708f-494a-8be8-b9601d0e8607",
+  "webhook": {
+    "name": "Event Webhook",
+    "method": "POST",
+    "path": "henvalt/ingest",
+    "rawBody": true
+  },
+  "nodes": {
+    "normalizer": "Validate & Normalize",
+    "hmacRpc": "Verify Shopify HMAC",
+    "hmacGate": "HMAC Verified?",
+    "tenantRpc": "Resolve Shopify Tenant",
+    "tenantBinder": "Bind Tenant Context",
+    "validityGate": "Is Valid",
+    "ingestRpc": "Supabase Ingest RPC",
+    "resultClassifier": "Classify Result"
+  },
+  "rpcs": {
+    "hmac": "verify_shopify_webhook_hmac",
+    "tenant": "resolve_shopify_tenant",
+    "ingest": "ingest_raw_webhook_v2"
+  },
+  "orderedEdges": [
+    ["Event Webhook", "Validate & Normalize"],
+    ["Validate & Normalize", "Engine Config"],
+    ["Engine Config", "Verify Shopify HMAC"],
+    ["Verify Shopify HMAC", "HMAC Verified?"],
+    ["HMAC Verified?", "Resolve Shopify Tenant"],
+    ["Resolve Shopify Tenant", "Bind Tenant Context"],
+    ["Bind Tenant Context", "Is Valid"],
+    ["Is Valid", "Supabase Ingest RPC"],
+    ["Supabase Ingest RPC", "Classify Result"]
+  ],
+  "resultContract": {
+    "processDecisionField": "should_process",
+    "duplicateStatus": "PROCESSED",
+    "missingDecisionFailsClosed": true
+  }
+}
