@@ -152,3 +152,16 @@ Additional read-only checks were completed after the initial baseline.
 6. Finish delivery no-send negative tests, including manual one-off test send, and preserve non-send compliance endpoints.
 
 **Current go/no-go:** NO-GO for production release. The interlock is candidate code only; the V2 pixel inbox is unapplied; no fresh webhook-to-revenue acceptance exists; and staging runtime tests are not yet evidenced.
+
+
+### Dashboard and merchant-control plane
+- The live `henvalt-merchant-dashboard` Edge Function validates the bearer token through Supabase Auth; it does not trust decoded JWT claims.
+- It requires exactly one tenant membership and exactly one active Shopify connection belonging to an ACTIVE tenant.
+- Dashboard revenue rows are read only from `revenue_ledger` with `entry_type = RECOVERY` and `attribution_confidence = CONFIRMED`; this is the correct source of truth for recovered revenue.
+- The UI explicitly renders empty states and does not substitute sample metrics. Current live data has zero orders, zero confirmed attributions and zero revenue-ledger entries, so there is no verified recovered revenue to display.
+- `henvalt-merchant-recovery-settings` turns global recovery off before applying flow changes, then turns it back on only when requested. This is a useful tenant-level control but is not a replacement for the global provider-send interlock.
+
+### Delivery-route coverage confirmation
+- Both ordinary `MailerSend Send` and manual `MailerSend One-Off Test Email` nodes call the same `henvalt-mailersend-delivery` Edge Function.
+- The manual test path first calls `reauthorize_one_off_test_delivery`; the original test path calls `prepare_one_off_test_delivery`. Both ultimately pass through the delivery request authorization and the same provider-token RPC.
+- The candidate database trigger therefore guards the two observed n8n send routes at the database claim/credential-release boundary. The staging test must still exercise both exact routes, and all future send paths must use the same protected Edge Function/RPC.
