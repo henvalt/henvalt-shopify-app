@@ -14,6 +14,10 @@ const workerSpec = readFileSync(
   "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md",
   "utf8",
 );
+const writeMap = JSON.parse(readFileSync(
+  "n8n/shopify-ingest-replay-write-map.json",
+  "utf8",
+));
 
 test("replay business-write guard locks and validates the current lease in-transaction", () => {
   assert.match(migration, /assert_shopify_replay_lease_for_write/);
@@ -63,4 +67,21 @@ test("worker specification forbids unfenced writes and records scope limitation"
   assert.match(workerSpec, /must call these wrappers/);
   assert.match(workerSpec, /must not call their unfenced counterparts/);
   assert.match(workerSpec, /not proof that the entire replay subflow has been rewired/);
+});
+
+test("audited active-ingest replay mutation map is complete and points only to fenced wrappers", () => {
+  assert.equal(writeMap.source_workflow, "HENVALT_INGEST");
+  assert.equal(writeMap.inspected_active_version, "6368d539-708f-494a-8be8-b9601d0e8607");
+  assert.ok(writeMap.replay_mutations.length >= 18);
+  const names = writeMap.replay_mutations.map((item) => item.fenced_rpc);
+  assert.equal(new Set(names).size, names.length, "fenced RPC names must be unique");
+  const allMigrations = migration + "\n" + completionMigration;
+  for (const item of writeMap.replay_mutations) {
+    assert.ok(item.node && item.current_rpc && item.fenced_rpc, "mapping entries must be complete");
+    assert.ok(allMigrations.includes("FUNCTION henvalt." + item.fenced_rpc + "("),
+      "missing fenced wrapper for " + item.node + ": " + item.fenced_rpc);
+    assert.ok(workerSpec.includes(item.fenced_rpc),
+      "worker contract omits " + item.fenced_rpc);
+  }
+  assert.ok(writeMap.requirements.some((item) => item.includes("does not imply the active workflow")));
 });
