@@ -75,3 +75,17 @@ Add an `Execute Workflow Trigger` dedicated to replay jobs. It must:
 ## Why this is not a quick one-node patch
 
 The active recovery worker assumes every job has an intervention ID, while the existing ingest workflow's downstream nodes depend on its webhook-trigger context. Simply adding a second job type or a new trigger would either drop the job at the guard or bypass context/tenant/idempotency controls. The single-round-trip ingress RPC is validated in disposable PostgreSQL, but its n8n node wiring, explicit response node, queue-only processing cutover, and replay subflow are not yet implemented. The patch must be applied and tested as one isolated workflow graph before staging.
+
+
+## Per-claim lease fencing (migration 008)
+
+The replay worker must use the fenced RPC contract, not the generic job claim/completion functions:
+
+1. Claim with `henvalt.claim_shopify_replay_job(worker_id, 180)`. The result includes `lease_id` and `lease_expires_at`. Lease duration is clamped to 30–900 seconds.
+2. Load the webhook with `henvalt.load_shopify_webhook_replay_job(job_id, worker_id, lease_id)`. The former two-argument loader is revoked from service_role; a worker-id-only claim is no longer sufficient.
+3. Complete only with `henvalt.complete_shopify_replay_job(job_id, worker_id, lease_id)`.
+4. Retry only with `henvalt.retry_shopify_replay_job(job_id, worker_id, lease_id, error, delay_seconds)`. The function caps delay at one hour and moves exhausted jobs to DEAD_LETTER.
+5. If a lease expires, another worker may atomically reclaim the row and receives a new random lease_id. Every payload-load and state-transition operation from the old lease then fails. Do not attempt to reuse a previous lease ID.
+6. Do not use `claim_next_job`, `complete_job`, `retry_job`, or `dead_letter_job` for `process_shopify_webhook` jobs. Those remain the existing contract for `execute_intervention` and are intentionally not changed by this migration.
+
+Acceptance is in `tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql`: it proves claim, payload load, forced expiry, atomic reclaim by a second worker, stale-worker load/complete/retry rejection, and successful completion by the current lease. CI applies migration 008 after the existing replay ingress migrations and runs this acceptance file against disposable PostgreSQL 17.
