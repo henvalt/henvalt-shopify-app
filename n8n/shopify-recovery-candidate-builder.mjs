@@ -116,7 +116,7 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     delete clean.webhookId;
     if (clean.name === "Claim Due Job") clean.alwaysOutputData = true;
     if (clean.name === "Return One-Off Email Preview" && clean.parameters?.jsCode) {
-      clean.parameters.jsCode = clean.parameters.jsCode.replace(/recipient:\\s*["'][^"']*["']/, "recipient: null");
+      clean.parameters.jsCode = clean.parameters.jsCode.replace(/recipient:\s*["'][^"']*["']/, "recipient: null");
     }
     return clean;
   });
