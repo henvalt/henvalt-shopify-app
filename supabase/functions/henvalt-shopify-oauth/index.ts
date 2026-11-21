@@ -1,9 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { buildShopifyCompletionUrl } from "./completion-url.mjs";
+import { resolveOAuthInfrastructure } from "./infrastructure-config.mjs";
+import { SHOPIFY_WEBHOOK_SPECS } from "./webhook-specs.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
+const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "https://henvalt-dashboard.pages.dev";
+const OAUTH_INFRASTRUCTURE = resolveOAuthInfrastructure({
+  ingressBaseUrl: Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "",
+  pixelCollectorUrl: Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "",
+});
 const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
 
@@ -45,7 +53,7 @@ async function db(path: string, init: RequestInit = {}, schema = "henvalt"): Pro
   });
 }
 function configOk(): boolean {
-  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && SHOPIFY_REDIRECT_URI);
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && SHOPIFY_REDIRECT_URI && OAUTH_INFRASTRUCTURE.valid);
 }
 async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
   const supplied = params.get("hmac");
@@ -116,7 +124,7 @@ async function activateShopifyPixel(shop: string, accessToken: string, tenantId:
   if (!keyId) return { activated: false, error: "PIXEL_KEY_ID_MISSING" };
 
   const settings = {
-    collectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    collectorUrl: OAUTH_INFRASTRUCTURE.pixelCollectorUrl,
     publicKey,
   };
   const isUpdate = typeof existing?.shopify_web_pixel_id === "string";
@@ -317,8 +325,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // Registration is intentionally explicit and checked; never silently mark it successful.
-    const webhookUri = "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks";
-    const specs = [{topic:"orders/create",gql:"ORDERS_CREATE"},{topic:"orders/updated",gql:"ORDERS_UPDATED"},{topic:"orders/paid",gql:"ORDERS_PAID"},{topic:"orders/cancelled",gql:"ORDERS_CANCELLED"},{topic:"refunds/create",gql:"REFUNDS_CREATE"},{topic:"order_transactions/create",gql:"ORDER_TRANSACTIONS_CREATE"},{topic:"checkouts/create",gql:"CHECKOUTS_CREATE"},{topic:"checkouts/update",gql:"CHECKOUTS_UPDATE"},{topic:"carts/create",gql:"CARTS_CREATE"},{topic:"carts/update",gql:"CARTS_UPDATE"},{topic:"customers_email_marketing_consent/update",gql:"CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE"},{topic:"app/uninstalled",gql:"APP_UNINSTALLED"}];
+    const webhookUri = OAUTH_INFRASTRUCTURE.webhookUri;
+    const specs = SHOPIFY_WEBHOOK_SPECS;
     const results: Array<Record<string, unknown>> = [];
     async function gql(query:string,variables:Record<string,unknown>={}) {
       const res=await fetch(`https://${shop}/admin/api/2026-10/graphql.json`,{method:"POST",headers:{"x-shopify-access-token":accessToken,"content-type":"application/json",accept:"application/json"},body:JSON.stringify({query,variables})});
@@ -372,15 +380,13 @@ Deno.serve(async (req: Request) => {
     const webhookAuditPersisted = webhookAudit.ok;
     if (!webhookAuditPersisted) console.error("Webhook registration audit persistence failed", webhookAudit.status);
     const pixelActivated = pixelActivation.activated === true;
-    const completionUrl = new URL("https://henvalt-dashboard.lovable.app/settings");
-    completionUrl.searchParams.set("shopify_status", "connected");
-    completionUrl.searchParams.set("shop", shop);
-    completionUrl.searchParams.set("pixel_status", pixelActivated ? "active" : "attention");
-    completionUrl.searchParams.set("webhooks_status", allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention");
-    if (!pixelActivated && typeof pixelActivation.error === "string") {
-      completionUrl.searchParams.set("pixel_issue", pixelActivation.error);
-    }
-    return redirect(completionUrl.toString());
+    const completionUrl = buildShopifyCompletionUrl(HENVALT_DASHBOARD_URL, {
+      shop,
+      pixelStatus: pixelActivated ? "active" : "attention",
+      webhooksStatus: allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention",
+      pixelIssue: !pixelActivated && typeof pixelActivation.error === "string" ? pixelActivation.error : undefined,
+    });
+    return redirect(completionUrl);
   }
   return json(404, { error: "not_found" });
 });

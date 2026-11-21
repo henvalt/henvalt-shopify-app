@@ -1,0 +1,121 @@
+{
+  "source_workflow": "HENVALT_INGEST",
+  "inspected_active_version": "6368d539-708f-494a-8be8-b9601d0e8607",
+  "status": "read-only audit; candidate contract only",
+  "replay_mutations": [
+    {
+      "node": "Resolve Identity",
+      "current_rpc": "resolve_identity",
+      "fenced_rpc": "resolve_identity_fenced"
+    },
+    {
+      "node": "Upsert Canonical Event",
+      "current_rpc": "upsert_canonical_event",
+      "fenced_rpc": "upsert_canonical_event_fenced"
+    },
+    {
+      "node": "Upsert Customer",
+      "current_rpc": "upsert_customer",
+      "fenced_rpc": "upsert_customer_fenced"
+    },
+    {
+      "node": "Upsert Checkout",
+      "current_rpc": "upsert_checkout",
+      "fenced_rpc": "upsert_checkout_fenced"
+    },
+    {
+      "node": "Create Opportunity",
+      "current_rpc": "create_opportunity_idempotent",
+      "fenced_rpc": "create_opportunity_idempotent_fenced"
+    },
+    {
+      "node": "Apply Eligibility",
+      "current_rpc": "apply_eligibility",
+      "fenced_rpc": "apply_eligibility_fenced"
+    },
+    {
+      "node": "Create Recovery Sequence",
+      "current_rpc": "create_recovery_sequence",
+      "fenced_rpc": "create_recovery_sequence_fenced"
+    },
+    {
+      "node": "Create Intervention",
+      "current_rpc": "create_intervention_and_enqueue",
+      "fenced_rpc": "create_intervention_and_enqueue_fenced"
+    },
+    {
+      "node": "Upsert Customer Consent",
+      "current_rpc": "apply_shopify_email_consent_update",
+      "fenced_rpc": "apply_shopify_email_consent_update_fenced"
+    },
+    {
+      "node": "Project Order From Event",
+      "current_rpc": "project_order_from_event",
+      "fenced_rpc": "project_order_from_event_fenced"
+    },
+    {
+      "node": "Evaluate Order Attribution",
+      "current_rpc": "evaluate_order_attribution",
+      "fenced_rpc": "evaluate_order_attribution_fenced"
+    },
+    {
+      "node": "Stop Recovery After Order",
+      "current_rpc": "stop_recovery_after_order",
+      "fenced_rpc": "stop_recovery_after_order_fenced"
+    },
+    {
+      "node": "Post Recovery To Ledger",
+      "current_rpc": "post_recovery_to_ledger_and_measure_billing",
+      "fenced_rpc": "post_recovery_to_ledger_and_measure_billing_fenced"
+    },
+    {
+      "node": "Process Shopify Revenue Adjustment",
+      "current_rpc": "process_shopify_revenue_adjustment",
+      "fenced_rpc": "process_shopify_revenue_adjustment_fenced"
+    },
+    {
+      "node": "Deactivate Shopify Connection",
+      "current_rpc": "deactivate_shopify_connection_on_uninstall",
+      "fenced_rpc": "deactivate_shopify_connection_on_uninstall_fenced"
+    },
+    {
+      "node": "Defer Payment Reconciliation",
+      "current_rpc": "defer_payment_webhook_reconciliation",
+      "fenced_rpc": "defer_payment_webhook_reconciliation_fenced"
+    },
+    {
+      "node": "Mark Webhook Processed",
+      "current_rpc": "mark_webhook_processed",
+      "fenced_rpc": "mark_webhook_processed_fenced"
+    },
+    {
+      "node": "Mark Webhook Failed",
+      "current_rpc": "mark_webhook_failed",
+      "fenced_rpc": "mark_webhook_failed_fenced"
+    }
+  ],
+  "read_only_operations": [
+    {
+      "node": "Evaluate Eligibility",
+      "rpc": "evaluate_eligibility"
+    },
+    {
+      "node": "Score Recovery Intent",
+      "rpc": "score_recovery_intent"
+    },
+    {
+      "node": "Resolve Recovery Delay",
+      "rpc": "get_recovery_flow_delay"
+    },
+    {
+      "node": "Lookup Payment Order",
+      "operation": "tenant-scoped SELECT"
+    }
+  ],
+  "requirements": [
+    "Replay branch must call only fenced_rpc for every replay_mutations entry.",
+    "All write calls must be sequential and carry the exact job_id, worker_id, lease_id.",
+    "This map does not imply the active workflow has been rewired.",
+    "Re-audit all SQL and HTTP nodes after the candidate graph is authored; add a fenced wrapper for every newly discovered mutation."
+  ]
+}

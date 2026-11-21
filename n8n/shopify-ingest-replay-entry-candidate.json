@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "status": "candidate-only replay-entry graph contract; not an executable n8n export",
+  "workflow": {
+    "name": "HENVALT_INGEST",
+    "id": "VTpfGKNtu1CSQ4Rv",
+    "inspected_active_version": "6368d539-708f-494a-8be8-b9601d0e8607",
+    "total_workflows": 3
+  },
+  "safety": {
+    "active_workflows_modified": false,
+    "active_workflow_published": false,
+    "workflow_executed": false,
+    "production_database_changed": false,
+    "provider_sending_enabled": false,
+    "delivery_workflow_changed": false,
+    "fourth_workflow_created": false,
+    "real_customer_payloads_or_credentials_in_fixture": false
+  },
+  "design": {
+    "trigger": {
+      "name": "Shopify Replay Entry Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "input_allowlist": [
+        "job_id",
+        "worker_id",
+        "lease_id"
+      ],
+      "publicly_reachable": false
+    },
+    "lease_load": {
+      "name": "Load Shopify Replay Row",
+      "rpc": "henvalt.load_shopify_webhook_replay_job(uuid,text,uuid)",
+      "arguments": [
+        "job_id",
+        "worker_id",
+        "lease_id"
+      ],
+      "source": "trusted stored webhook row",
+      "reject_empty_or_error": true
+    },
+    "envelope": {
+      "name": "Build Shopify Replay Envelope",
+      "module": "n8n/shopify-ingest-replay-envelope-candidate.mjs",
+      "requires": [
+        "claim.job_id === loaded.job_id",
+        "claim.worker_id nonblank",
+        "claim.lease_id UUID",
+        "loaded.webhook_id UUID",
+        "loaded.tenant_id UUID",
+        "loaded.metadata.ingress_hmac_verified === true",
+        "loaded.metadata.shop_domain valid *.myshopify.com",
+        "loaded.metadata.shopify_webhook_id === loaded.source_event_id",
+        "lease_expires_at future",
+        "processing_status PROCESSING or FAILED"
+      ],
+      "outputs": [
+        "body",
+        "headers",
+        "query",
+        "replay_context"
+      ],
+      "payload_event_id": "source_event_id (the delivery ID), never X-Shopify-Event-Id or body.id",
+      "does_not_emit": [
+        "HMAC header",
+        "raw body",
+        "tenant_id inside replay body",
+        "customer fields in replay_context"
+      ]
+    },
+    "shared_pipeline": {
+      "reuse_nodes": [
+        "Validate & Normalize",
+        "Engine Config",
+        "Resolve Shopify Tenant",
+        "Bind Tenant Context",
+        "Classify Result",
+        "Should Process?"
+      ],
+      "normalizer_change": "Copy only top-level $json.replay_context to normalized output. Public webhook payload is nested under $json.body and cannot set this top-level property.",
+      "tenant_binding": "After Bind Tenant Context, compare resolved tenant_id with replay_context.tenant_id; mismatch or lookup error stops before any mutation.",
+      "hmac": "Replay entry bypasses Verify Shopify HMAC only because loader proves ingress_hmac_verified=true on tenant-bound stored row. Public ingress always runs receive_shopify_webhook_v1 HMAC verification.",
+      "classify": "Classify Result accepts a second input from replay branch and emits __proceed=true, __webhook_id=loaded.webhook_id only after tenant equality succeeds; normal ingress branch still requires explicit durable acknowledgement classifier.",
+      "downstream": "All 18 mutation nodes use conditional dispatch: legacy RPC only for non-replay ingress; matching *_fenced RPC with job_id, worker_id, lease_id first for replay. Every replay mutation remains sequential."
+    },
+    "ingress_cutover": {
+      "public_shopify_path": "Validate required Shopify headers and raw body; call henvalt.receive_shopify_webhook_v1(text,text,text,text,text,jsonb,jsonb); classify only its explicit row; respond exactly once using Respond to Webhook; terminate the Shopify path.",
+      "required_headers": [
+        "x-shopify-shop-domain",
+        "x-shopify-topic",
+        "x-shopify-webhook-id",
+        "x-shopify-hmac-sha256"
+      ],
+      "identity": "X-Shopify-Webhook-Id is the unique delivery identity. Do not fall back to X-Shopify-Event-Id, body.id or correlation ID.",
+      "classifier_module": "n8n/shopify-ingest-ack-classifier-candidate.mjs",
+      "no_inline_processing_after_ack": true,
+      "explicit_response_codes": {
+        "accepted": 200,
+        "replay_accepted": 200,
+        "duplicate_processed": 200,
+        "invalid_hmac": 401,
+        "unknown_tenant": 404,
+        "malformed_event": 422,
+        "unavailable": 503
+      },
+      "legacy_409_is_not_duplicate": true
+    },
+    "lifecycle": {
+      "processed": "mark_webhook_processed_fenced(job_id,worker_id,lease_id,webhook_id) must return true before subflow returns mark_webhook_processed=true.",
+      "failed": "mark_webhook_failed_fenced receives a constant non-PII reason for replay; recovery worker owns bounded retry/dead-letter.",
+      "lease": "Renew only for early loss detection; transaction-local fenced wrappers remain mandatory.",
+      "deferred_payment": "Do not return successful replay completion until deferred-reconciliation semantics explicitly establish a terminal webhook state and durable follow-up job."
+    }
+  },
+  "fenced_mutations_file": "n8n/shopify-ingest-replay-write-map.json",
+  "acceptance": [
+    "Valid stored replay row creates canonical envelope with delivery ID as event_id.",
+    "Claim/load job, worker, lease tuple mismatch stops before any downstream node.",
+    "Expired lease, missing ingress HMAC attestation, wrong shop, wrong tenant, malformed payload stop before mutation.",
+    "Replay branch bypasses external HMAC call only after trusted DB load; public ingress always verifies raw-body HMAC.",
+    "Public ingress returns 200 only after durable webhook and active replay job IDs are confirmed.",
+    "A 409, missing webhook ID, missing replay job ID, or terminal replay state returns 503, never a false 200.",
+    "All replay business writes call only the mapped fenced wrappers with exact lease tuple and sequential ordering.",
+    "Already processed webhook completes without re-running projections.",
+    "Webhook processed marker returns true before replay subflow reports success.",
+    "Deferred payment branch remains blocked until terminal-state contract is resolved.",
+    "No replay branch reaches HENVALT_DELIVERY or a provider request node."
+  ],
+  "dependencies": [
+    "Author an isolated complete HENVALT_INGEST workflow JSON candidate; this manifest is not an importable workflow.",
+    "Rewire every mutation node to conditional fenced dispatch and audit all SQL/HTTP nodes for unlisted writes.",
+    "Resolve deferred-payment terminal semantics and add a dedicated acceptance case.",
+    "Use a disposable isolated database and isolated n8n draft only after cost approval; no paused project restore is implied.",
+    "Keep provider sending default-deny and use network-denied stubs."
+  ]
+}

@@ -1,0 +1,224 @@
+name: HENVALT safety and pixel consent tests
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
+      - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
+      - "supabase/migrations/202611210004_align_shopify_token_refresh_window.sql"
+      - "supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql"
+      - "supabase/migrations/202611210006_shopify_webhook_replay_load.sql"
+      - "supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql"
+      - "supabase/migrations/202611210008_shopify_replay_lease_fencing.sql"
+      - "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql"
+      - "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql"
+      - "tests/token-refresh-window-static.test.mjs"
+      - "dashboard/index.html"
+      - "cloudflare/pixel-collector.js"
+      - "cloudflare/worker.js"
+      - "extensions/henvalt-pixel/src/index.js"
+      - "tests/provider-send-interlock-static.test.mjs"
+      - "tests/n8n-delivery-route-snapshot.test.mjs"
+      - "tests/n8n-shopify-ingest-route-snapshot.test.mjs"
+      - "tests/n8n-recovery-route-snapshot.test.mjs"
+      - "tests/fixtures/n8n-recovery-route-snapshot.json"
+      - "tests/fixtures/n8n-shopify-ingest-route-snapshot.json"
+      - "tests/shopify-oauth-completion-url.test.mjs"
+      - "tests/shopify-oauth-infrastructure-config.test.mjs"
+      - "tests/shopify-oauth-webhook-contract.test.mjs"
+      - "tests/shopify-ingest-ack-contract.test.mjs"
+      - "tests/shopify-replay-worker-spec-static.test.mjs"
+      - "tests/shopify-ingest-delivery-identity.test.mjs"
+      - "tests/shopify-ingest-classifier-candidate.test.mjs"
+      - "cloudflare/shopify-ingest-ack-contract.mjs"
+      - "n8n/shopify-ingest-normalizer-candidate.js"
+      - "n8n/shopify-ingest-classifier-candidate.js"
+      - "n8n/shopify-ingest-replay-write-map.json"
+      - "n8n/shopify-recovery-replay-branch-contract.json"
+      - "n8n/shopify-recovery-replay-graph-patch.json"
+      - "n8n/shopify-replay-claim-normalizer-candidate.mjs"
+      - "n8n/shopify-ingest-replay-envelope-candidate.mjs"
+      - "n8n/shopify-ingest-ack-classifier-candidate.mjs"
+      - "n8n/shopify-ingest-replay-entry-candidate.json"
+      - "tests/shopify-replay-claim-normalizer.test.mjs"
+      - "tests/shopify-ingest-replay-envelope.test.mjs"
+      - "tests/shopify-ingest-ack-classifier-candidate.test.mjs"
+      - "tests/shopify-ingest-replay-entry-static.test.mjs"
+      - "tests/shopify-recovery-replay-graph-patch-static.test.mjs"
+      - "tests/shopify-recovery-replay-branch-contract.test.mjs"
+      - "supabase/functions/henvalt-shopify-oauth/infrastructure-config.mjs"
+      - "supabase/functions/henvalt-shopify-oauth/index.ts"
+      - "supabase/functions/henvalt-shopify-oauth/completion-url.mjs"
+      - "supabase/functions/henvalt-shopify-oauth/webhook-specs.mjs"
+      - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
+      - "supabase/functions/henvalt-mailersend-delivery/index.ts"
+      - "tests/fixtures/n8n-delivery-route-snapshot.json"
+      - "tests/pixel-consent-static.test.mjs"
+      - "tests/provider-send-interlock-postgres-bootstrap.sql"
+      - "tests/provider-send-interlock-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-loader-postgres-acceptance.sql"
+      - "tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-business-write-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-business-write-fencing-static.test.mjs"
+      - "tests/active-workflow-cutover-contract-static.test.mjs"
+      - "tests/shopify-replay-worker-spec-static.test.mjs"
+      - "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md"
+      - "docs/N8N_SHOPIFY_INGEST_REPLAY_ENTRY_CANDIDATE.md"
+      - "docs/ACTIVE_WORKFLOW_CUTOVER_BLOCKERS_2026-11-21.md"
+      - "tests/active-workflow-cutover-contract-static.test.mjs"
+      - ".github/workflows/provider-send-interlock-static.yml"
+  workflow_dispatch:
+  push:
+    branches:
+      - work/48h-system-readiness-2026-11-21
+
+permissions:
+  contents: read
+
+jobs:
+  interlock-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify static safety and pixel consent invariants
+        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/n8n-shopify-ingest-route-snapshot.test.mjs tests/n8n-recovery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-webhook-contract.test.mjs tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs tests/shopify-replay-business-write-fencing-static.test.mjs tests/shopify-recovery-replay-branch-contract.test.mjs tests/shopify-recovery-replay-graph-patch-static.test.mjs tests/shopify-replay-claim-normalizer.test.mjs tests/shopify-ingest-replay-envelope.test.mjs tests/shopify-ingest-ack-classifier-candidate.test.mjs tests/shopify-ingest-replay-entry-static.test.mjs tests/active-workflow-cutover-contract-static.test.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Shopify OAuth Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
+      - name: Type-check MailerSend delivery Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap disposable PostgreSQL 17 fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-bootstrap.sql
+      - name: Apply candidate interlock migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
+      - name: Apply candidate pixel consent migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql
+      - name: Apply candidate dashboard metrics migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql
+      - name: Apply candidate token refresh alignment migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210004_align_shopify_token_refresh_window.sql
+      - name: Apply candidate Shopify webhook replay enqueue migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql
+      - name: Exercise atomic Shopify webhook replay enqueue and rollback
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-postgres-acceptance.sql
+      - name: Apply candidate Shopify webhook replay loader migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210006_shopify_webhook_replay_load.sql
+      - name: Exercise worker-bound Shopify webhook replay loader
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-loader-postgres-acceptance.sql
+      - name: Apply candidate single-round-trip Shopify ingress migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql
+      - name: Exercise single-round-trip Shopify ingress acceptance
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql
+      - name: Apply candidate Shopify replay lease fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210008_shopify_replay_lease_fencing.sql
+      - name: Exercise Shopify replay lease expiry and stale-worker fencing
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql
+      - name: Apply candidate Shopify replay business-write fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql
+      - name: Exercise stale-worker rejection at a business write boundary
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-business-write-fencing-postgres-acceptance.sql
+      - name: Apply complete active-ingest mutation fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql
+      - name: Exercise complete active-ingest mutation fencing
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql
+      - name: Exercise deny, allow, audit, consent and fail-closed paths
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-acceptance.sql
