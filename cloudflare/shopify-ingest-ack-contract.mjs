@@ -4,14 +4,14 @@ export const SHOPIFY_INGEST_ACK_CONTRACT = Object.freeze({
   successEnvelopeNode: "Classify Result",
   rejectionEnvelopeNode: "Build Rejection Response",
   successResponseAfterNode: "Classify Result",
-  successResponseBeforeNode: "Should Process?",
+  successResponseBeforeNode: "Webhook execution ends after acknowledgement",
   preIngestFailureRoutes: Object.freeze([
     "HMAC Verified? false",
     "Is Valid false",
   ]),
   responseCodeExpression: "={{ $json.__http }}",
   responseBodyExpression: "={{ $json.__body }}",
-  continueExecutionAfterResponse: true,
+  continueExecutionAfterResponse: false,
   acceptedIngestRequires: Object.freeze([
     "ingest_raw_webhook_v2 returned HTTP 2xx",
     "webhook_id is present",
