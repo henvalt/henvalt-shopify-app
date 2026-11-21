@@ -114,6 +114,47 @@ BEGIN
     RAISE EXCEPTION 'COMPLETED_JOB_RETAINED_ACTIVE_LEASE';
   END IF;
 
+  -- A claim that expires on its final allowed attempt must be dead-lettered,
+  -- not left permanently CLAIMED and ineligible for another claim.
+  INSERT INTO henvalt.background_jobs(
+    tenant_id, job_type, payload, status, attempts, max_attempts, idempotency_key
+  ) VALUES (
+    'abababab-abab-4bab-8bab-abababababab',
+    'process_shopify_webhook',
+    jsonb_build_object('webhook_id', v_webhook),
+    'QUEUED', 0, 1, 'lease-fencing-final-attempt-001'
+  ) RETURNING id INTO v_job;
+
+  SELECT * INTO v_first
+    FROM henvalt.claim_shopify_replay_job('worker-final-attempt', 60);
+
+  IF v_first.id IS DISTINCT FROM v_job OR v_first.lease_id IS NULL THEN
+    RAISE EXCEPTION 'FINAL_ATTEMPT_JOB_NOT_CLAIMED';
+  END IF;
+
+  UPDATE henvalt.background_jobs
+     SET lease_expires_at = now() - interval '1 second'
+   WHERE id = v_job;
+
+  SELECT * INTO v_second
+    FROM henvalt.claim_shopify_replay_job('worker-after-final-attempt', 60);
+
+  IF v_second.id IS NOT NULL THEN
+    RAISE EXCEPTION 'EXHAUSTED_EXPIRED_JOB_WAS_RECLAIMED';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.background_jobs
+     WHERE id = v_job
+       AND status = 'DEAD_LETTER'::henvalt.job_status
+       AND lease_id IS NULL
+       AND lease_expires_at IS NULL
+       AND locked_by IS NULL
+       AND last_error = 'shopify_replay_lease_expired_after_max_attempts'
+  ) THEN
+    RAISE EXCEPTION 'EXPIRED_FINAL_ATTEMPT_NOT_DEAD_LETTERED';
+  END IF;
+
   RAISE NOTICE 'SHOPIFY_REPLAY_LEASE_FENCING_ACCEPTANCE_PASSED';
 END;
 $lease_fencing$;
