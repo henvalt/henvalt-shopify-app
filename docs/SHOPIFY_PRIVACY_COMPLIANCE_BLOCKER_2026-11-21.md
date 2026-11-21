@@ -61,3 +61,25 @@ The presence of a queue table and isolated redaction functions is not evidence t
 - [ ] Shopify app configuration validation and App Store security checks pass.
 
 **Current status: NOT IMPLEMENTED / NOT CONFIGURED / NO-GO.** Keep the current app configuration unchanged until the complete handler exists.
+
+## Additional production catalog evidence — 2026-11-21 22:xx PKT
+
+A second read-only catalog pass inspected the exact privacy queue columns, constraints, grants and full definitions of the three existing privacy functions.
+
+### Queue and retention findings
+
+- `shopify_privacy_requests.payload` is a required `jsonb` column. The row also stores `shop_domain`, `shopify_shop_id`, `customer_id`, `request_id`, `topic` and `webhook_id`.
+- The unique idempotency constraint is on `webhook_id`; `request_id` is nullable.
+- The queue's allowed states are `PENDING`, `PROCESSING`, `COMPLETED`, `FAILED` and `REVIEW_REQUIRED`.
+- Service role has INSERT/SELECT/UPDATE on the queue; the table has no client-role grants. The tenant foreign key uses `ON DELETE SET NULL`.
+- The 15-minute purge function clears only expired `result_payload` and `result_expires_at`. It does not purge or sanitize the required inbound `payload`.
+
+### Newly confirmed customer-redaction gap
+
+The current `redact_shopify_customer_data(p_tenant_id, p_shopify_customer_id, p_customer_email)` function performs broad tenant-scoped redaction across customer, event, checkout, order, session, message, delivery, provider-event, webhook, processing-error, background-job, opportunity and audit data. However, its inspected definition does **not** update `shopify_privacy_requests`. Therefore the original `customers/redact` webhook payload (including customer identifiers and potentially email) can remain in the privacy queue after the customer redaction function completes. The separate `shop/redact` function does sanitize its own queue receipt before deleting the tenant; that behavior does not cover customer-redact requests.
+
+This is a distinct privacy-retention defect, not just the missing webhook receiver. A future handler must sanitize the completed customer-request queue payload while retaining only the minimum non-identifying idempotency/audit receipt required for replay safety. It must also define safe treatment of `FAILED` and `REVIEW_REQUIRED` payloads, including bounded retention and operator review without indefinite raw PII storage.
+
+### Release-gate consequence
+
+Do not describe the existing customer-redaction RPC as end-to-end Shopify compliance. The function is a useful tenant-scoped primitive, but request ingestion, request lifecycle, durable worker orchestration, customer-data export, and post-redaction queue sanitization are still incomplete. Do not add `compliance_topics` to TOML until those paths have been implemented and tested in an isolated environment.
