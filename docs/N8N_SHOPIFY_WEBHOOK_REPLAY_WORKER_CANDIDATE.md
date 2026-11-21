@@ -91,3 +91,31 @@ The replay worker must use the fenced RPC contract, not the generic job claim/co
 6. Do not use `claim_next_job`, `complete_job`, `retry_job`, or `dead_letter_job` for `process_shopify_webhook` jobs. Those remain the existing contract for `execute_intervention` and are intentionally not changed by this migration.
 
 Acceptance is in `tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql`: it proves claim, payload load, forced expiry, atomic reclaim by a second worker, stale-worker load/complete/retry rejection, and successful completion by the current lease. CI applies migration 008 after the existing replay ingress migrations and runs this acceptance file against disposable PostgreSQL 17.
+
+
+## Read-only active-workflow baseline — 2026-11-21
+
+The following node contracts were re-read from the active n8n workflows before writing the replay patch specification. They are a baseline for a future isolated candidate graph, not permission to edit the published workflows.
+
+### `HENVALT_RECOVERY` — active version `32e50bf7-4cbd-4070-bbba-f259ed17b369`
+
+- `Claim Due Job` currently executes `SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention']::text[])`.
+- `Normalize & Guard` currently sets `has_job` only when both a job ID and `payload.intervention_id` exist. A Shopify replay job carrying `payload.webhook_id` is therefore rejected by the existing guard.
+- `Job Claimed?` currently routes its true output directly to `Atomic Claim Intervention`; this intervention branch must remain unchanged.
+- `Complete Job` and `Retry Job` call the generic job-control RPCs with job ID and worker ID. They must remain intervention-only.
+- `Init Worker` feeds `Loop Interventions`; the loop returns to `Claim Due Job`. Add the replay claim into this scheduler cycle without creating a fourth workflow or routing replay jobs through the generic claim RPC.
+
+### `HENVALT_INGEST` — active version `6368d539-708f-494a-8be8-b9601d0e8607`
+
+- `Event Webhook` is POST `/henvalt/ingest`, `responseMode: onReceived`, with `rawBody: true`.
+- `Verify Shopify HMAC` and `Resolve Shopify Tenant` are separate HTTP Request nodes; the latter has a 10-second timeout.
+- `Supabase Ingest RPC` is a separate HTTP Request node with a 15-second timeout.
+- `Classify Result` currently maps a generic HTTP 409 to HTTP 200 duplicate without requiring a durable webhook ID. This is unsafe for the candidate queue-ack contract; only the candidate classifier's explicit durable-ID/active-job rules may be used.
+- No explicit Respond to Webhook node is present in the active ingress graph. The future isolated graph must use one explicit response path for every outcome and terminate the Shopify branch after durable queue acknowledgement.
+
+### `HENVALT_DELIVERY` — active version `621ae6ce-a006-4fed-a70e-acf774c360fb`
+
+- Both `MailerSend Send` and `MailerSend One-Off Test Email` remain present and call the same delivery Edge Function.
+- Do not modify or publish this workflow as part of replay-worker wiring. The global no-send interlock and provider-egress-denied acceptance must be proven separately before any send path is enabled.
+
+All three active workflow IDs, versions, and node counts were verified read-only. No active workflow or draft was changed during this inspection.
