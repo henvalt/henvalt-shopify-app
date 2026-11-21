@@ -151,10 +151,12 @@ function addReplayAndIngressNodes(workflow) {
   replaceClassifier(classifier);
   const successAssignment = successResponse.parameters.assignments.assignments.find((a) => a.name === "__body");
   if (!successAssignment || typeof successAssignment.value !== "string") throw new Error("Success response body assignment missing");
-  successAssignment.value = successAssignment.value.replace("status: 'processed',", "status: 'processed', mark_webhook_processed: !!$('Validate & Normalize').item.json.replay_context,");
+  successAssignment.value = successAssignment.value.replace("status: 'processed',", "status: 'processed',");
+  if (!successResponse.parameters.assignments.assignments.some((a) => a.name === "mark_webhook_processed")) successResponse.parameters.assignments.assignments.push({id:"replay-processed-flag",name:"mark_webhook_processed",type:"boolean",value:"={{ !!$('Validate & Normalize').item.json.replay_context }}"});
   const deferredAssignment = deferredResponse.parameters.assignments.assignments.find((a) => a.name === "__body");
   if (!deferredAssignment || typeof deferredAssignment.value !== "string") throw new Error("Deferred response body assignment missing");
-  deferredAssignment.value = deferredAssignment.value.replace("status: 'deferred_for_reconciliation',", "status: 'deferred_for_reconciliation', deferred_payment_handoff: true,");
+  deferredAssignment.value = deferredAssignment.value.replace("status: 'deferred_for_reconciliation',", "status: 'deferred_for_reconciliation',");
+  if (!deferredResponse.parameters.assignments.assignments.some((a) => a.name === "deferred_payment_handoff")) deferredResponse.parameters.assignments.assignments.push({id:"deferred-handoff-flag",name:"deferred_payment_handoff",type:"boolean",value:true});
 
   // Atomic public ingress: verify + resolve again inside one database transaction,
   // then persist the webhook and replay job before responding to Shopify.
