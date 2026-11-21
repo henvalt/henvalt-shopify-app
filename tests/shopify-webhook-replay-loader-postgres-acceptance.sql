@@ -13,6 +13,11 @@ DECLARE
   v_function text := 'henvalt.load_shopify_webhook_replay_job(uuid,text)';
   v_worker text := 'henvalt_replay_acceptance_worker';
 BEGIN
+  UPDATE henvalt.background_jobs
+     SET status = 'SUCCEEDED'::henvalt.job_status, completed_at = now()
+   WHERE job_type = 'process_shopify_webhook'
+     AND status IN ('QUEUED'::henvalt.job_status, 'RETRY_WAIT'::henvalt.job_status);
+
   SELECT * INTO v_ingest
     FROM henvalt.ingest_shopify_webhook_with_replay_job(
       'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
