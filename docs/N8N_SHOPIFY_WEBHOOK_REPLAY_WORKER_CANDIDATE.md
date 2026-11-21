@@ -217,3 +217,8 @@ This is a tested design contract, **not a constructed n8n graph**. It does not a
 ### Exact replay-claim row normalization
 
 The migration 008 implementation returns `SETOF henvalt.background_jobs`, so the raw claim row exposes `id`, not a `job_id` column. The candidate recovery normalizer must map `id → job_id`, carry the worker ID used for the claim, preserve `lease_id` byte-for-byte, retain `lease_expires_at`, and parse `payload.webhook_id` as a UUID. It must not assume the RPC returns a pre-normalized `job_id` or a `worker_id` field. This exact return-shape check is pinned to migration 008 in the recovery branch static test.
+
+
+### Active mutation inventory and fenced-wrapper signature audit
+
+The sanitized active-ingest snapshot now records all 18 observed mutating RPC nodes from version `6368d539-708f-494a-8be8-b9601d0e8607`. CI requires an exact one-to-one match between that inventory and the replay write map. It also parses every mapped SQL wrapper definition and verifies that the exact `job_id, worker_id, lease_id` arguments are first, and that the transaction-local lease guard executes before the wrapped legacy mutation (or the direct webhook status update). This is still static source validation; it does not prove the live workflow has been rewired.
