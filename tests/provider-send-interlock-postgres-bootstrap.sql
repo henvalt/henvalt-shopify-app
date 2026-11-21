@@ -70,6 +70,41 @@ CREATE TABLE henvalt.background_jobs (
   UNIQUE (tenant_id, idempotency_key)
 );
 
+CREATE OR REPLACE FUNCTION henvalt.claim_next_job(
+  p_worker_id text,
+  p_job_types text[] DEFAULT NULL::text[]
+)
+RETURNS SETOF henvalt.background_jobs
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = 'henvalt', 'public'
+AS $function$
+BEGIN
+  RETURN QUERY
+  WITH candidate AS (
+    SELECT id
+      FROM henvalt.background_jobs
+     WHERE status IN ('QUEUED', 'RETRY_WAIT')
+       AND run_at <= now()
+       AND (next_run_at IS NULL OR next_run_at <= now())
+       AND attempts < max_attempts
+       AND (p_job_types IS NULL OR job_type = ANY(p_job_types))
+     ORDER BY priority ASC, created_at ASC
+     FOR UPDATE SKIP LOCKED
+     LIMIT 1
+  )
+  UPDATE henvalt.background_jobs j
+     SET status = 'CLAIMED',
+         attempts = attempts + 1,
+         locked_at = now(),
+         locked_by = p_worker_id,
+         updated_at = now()
+    FROM candidate c
+   WHERE j.id = c.id
+  RETURNING j.*;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION henvalt.ingest_raw_webhook_v2(
   p_tenant_id uuid,
   p_source text,
