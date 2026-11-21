@@ -29,8 +29,9 @@ function normalizeShopifyReplayClaim(row, workerId) {
   if (typeof jobId !== "string" || !UUID_RE.test(jobId)) errors.push("INVALID_JOB_ID");
   if (typeof leaseId !== "string" || !UUID_RE.test(leaseId)) errors.push("INVALID_LEASE_ID");
   if (!normalizedWorkerId) errors.push("MISSING_WORKER_ID");
+  if (typeof raw.locked_by !== "string" || raw.locked_by !== normalizedWorkerId) errors.push("WORKER_MISMATCH");
   if (typeof webhookId !== "string" || !UUID_RE.test(webhookId)) errors.push("INVALID_WEBHOOK_ID");
-  if (typeof expiry !== "string" || !Number.isFinite(Date.parse(expiry))) errors.push("INVALID_LEASE_EXPIRY");
+  if (typeof expiry !== "string" || !Number.isFinite(Date.parse(expiry)) || Date.parse(expiry) <= Date.now()) errors.push("INVALID_LEASE_EXPIRY");
   if (errors.length) {
     return { claim_row_present: true, guard_valid: false, has_replay_job: false, guard_reason: errors.join(",") };
   }
