@@ -158,6 +158,8 @@ $function$;
 CREATE OR REPLACE FUNCTION henvalt.bind_session_alias(
   p_tenant_id uuid, p_alias_reference text, p_session_reference text
 )
-RETURNS void LANGUAGE sql AS $function$
-  SELECT;
+RETURNS void LANGUAGE plpgsql AS $function$
+BEGIN
+  RETURN;
+END;
 $function$;
