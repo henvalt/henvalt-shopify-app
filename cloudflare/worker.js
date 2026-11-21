@@ -20,15 +20,15 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
 
   const contentLength = Number(request.headers.get("content-length") || "0");
   if (Number.isFinite(contentLength) && contentLength > 1_000_000) return Response.json({ error: "body_too_large" }, { status: 413 });
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).byteLength > 1_000_000) return Response.json({ error: "body_too_large" }, { status: 413 });
+  const rawBytes = await readBodyBytesLimited(request, 1_000_000);
+  if (rawBytes === null) return Response.json({ error: "body_too_large" }, { status: 413 });
 
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(env.SHOPIFY_API_SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw)));
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, rawBytes));
   const expected = btoa(String.fromCharCode(...sig));
   if (!constantTimeEqual(expected, hmac)) return Response.json({ error: "invalid_hmac" }, { status: 401 });
 
-  const upstream = await fetchImpl(env.N8N_INGEST_URL, { method: "POST", headers: request.headers, body: raw });
+  const upstream = await fetchImpl(env.N8N_INGEST_URL, { method: "POST", headers: request.headers, body: rawBytes });
   if (!upstream.ok) return Response.json({ error: "ingest_unavailable" }, { status: 503 });
   const text = await upstream.text();
   return new Response(text || JSON.stringify({ accepted: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
@@ -39,6 +39,34 @@ export default {
     return handleRequest(request, env);
   }
 };
+
+async function readBodyBytesLimited(request, maxBytes) {
+  const reader = request.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return body;
+}
 
 function constantTimeEqual(a, b) {
   if (a.length !== b.length) return false;
