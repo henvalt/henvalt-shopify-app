@@ -107,7 +107,7 @@ export function classifyIngestResponse(input, context = {}) {
           processing_status: processingStatus,
           correlation_id: correlationId,
         },
-        false,
+        true,
         row.webhook_id,
       );
     }
