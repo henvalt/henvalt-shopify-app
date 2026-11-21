@@ -18,8 +18,16 @@ CREATE SCHEMA henvalt;
 CREATE TYPE henvalt.delivery_state AS ENUM ('PENDING', 'UNKNOWN', 'ACCEPTED', 'DELIVERED', 'FAILED');
 CREATE TABLE henvalt.delivery_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid,
+  message_reference uuid,
   status henvalt.delivery_state NOT NULL,
   provider_claimed_at timestamptz
+);
+
+CREATE TABLE henvalt.messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
 CREATE TYPE henvalt.event_class AS ENUM ('RECOVERABLE', 'CONVERSION', 'ADJUSTMENT', 'OTHER');
