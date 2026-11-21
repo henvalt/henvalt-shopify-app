@@ -77,7 +77,8 @@
         "webhook_id": "UUID parsed from raw claim row payload.webhook_id"
       },
       "guard": "Strictly validates the raw claim row and emits only the lease tuple and webhook UUID; raw payload and unrelated columns are dropped.",
-      "code_ref": "n8n/shopify-replay-claim-normalizer-candidate.mjs"
+      "code_ref": "n8n/shopify-replay-claim-normalizer-node-candidate.js",
+      "code_execution": "inline self-contained Code node source; no module imports"
     },
     {
       "name": "Replay Job Claimed?",
@@ -314,7 +315,8 @@
     "Test empty queues, intervention success/retry/failure, replay already processed, replay success, replay retry, lease expiry/reclaim, and all terminal loop paths.",
     "Keep provider sending disabled during every staging acceptance test.",
     "Exercise the deferred_payment_handoff output through the Execute Workflow result and confirm the recovery worker completes the replay job only on that explicit boolean.",
-    "Use the exact Execute Workflow node v1.4 workflowInputs mapping and Execute Workflow Trigger v1.1 three-string input declaration in executable candidate; reject any extra input field."
+    "Use the exact Execute Workflow node v1.4 workflowInputs mapping and Execute Workflow Trigger v1.1 three-string input declaration in executable candidate; reject any extra input field.",
+    "Inline the self-contained n8n Code node source from n8n/shopify-replay-claim-normalizer-node-candidate.js; do not attempt a relative import from the repository."
   ],
   "connections_to_add": [
     {
