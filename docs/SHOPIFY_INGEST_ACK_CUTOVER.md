@@ -44,6 +44,20 @@ Candidate migration `202611210006_shopify_webhook_replay_load.sql` adds `henvalt
 
 The function returns `webhook_processed=true` for already completed rows so the recovery worker can safely complete the redundant queue job without reprocessing. Wrong-worker, wrong-tenant, missing-row, and unverified-ingress reads fail closed. Execute is restricted to `service_role`. A disposable PostgreSQL acceptance test covers claim ownership, tenant/payload identity, HMAC marker enforcement, processed-row behavior, and grants.
 
+## Recovery worker integration blocker
+
+A further read-only inspection found that simply adding `process_shopify_webhook` to the active `claim_next_job` filter would not make the worker process it. The current `Normalize & Guard` node sets `has_job` only when both `job_id` and `intervention_id` exist; replay jobs carry `webhook_id`, not `intervention_id`. The current `Job Claimed?` branch therefore rejects them.
+
+The isolated recovery snapshot/test now records this blocker. The candidate workflow change must:
+1. Claim both job types but immediately route by `job_type`.
+2. Preserve the existing intervention path unchanged.
+3. For webhook replay, call `load_shopify_webhook_replay_job(job_id, worker_id)` and validate its tenant/webhook/HMAC marker.
+4. Route an already-processed webhook to idempotent job completion.
+5. Route a pending webhook into a dedicated replay-processing entry in `HENVALT_INGEST` that consumes the persisted payload and does not re-run external HMAC verification.
+6. Complete the replay job only after the webhook is marked `PROCESSED`; on transient failure, use bounded `retry_job`; on exhausted retries, expose a dead-letter alert/reconciliation path.
+
+Do not broaden the existing guard or claim filter without adding this job-type-specific branch. The active recovery workflow remains unchanged.
+
 ## Critical post-ack recovery finding
 
 A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if durable asynchronous processing is guaranteed:
