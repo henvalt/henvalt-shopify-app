@@ -1,0 +1,2405 @@
+{
+  "schema_version": 1,
+  "source": {
+    "workflow_id": "CvVyybGJZSnklxiZ",
+    "workflow_name": "HENVALT_DELIVERY",
+    "active_version_id": "621ae6ce-a006-4fed-a70e-acf774c360fb",
+    "baseline_node_count": 62,
+    "exported_read_only": true,
+    "credentials_removed": true,
+    "all_email_literals_redacted": true,
+    "one_off_test_branch_contains_fixed_recipient": true
+  },
+  "workflow": {
+    "id": "CvVyybGJZSnklxiZ",
+    "name": "HENVALT_DELIVERY",
+    "active": false,
+    "isArchived": false,
+    "triggerCount": 7,
+    "nodeCount": 62,
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate",
+      "timeSavedMode": "fixed",
+      "callerPolicy": "workflowsFromSameOwner",
+      "availableInMCP": false
+    },
+    "tags": [],
+    "parentFolderId": null,
+    "scopes": [
+      "execution:delete",
+      "execution:list",
+      "execution:read",
+      "execution:reveal",
+      "workflow:create",
+      "workflow:delete",
+      "workflow:disableRedaction",
+      "workflow:enableRedaction",
+      "workflow:execute",
+      "workflow:execute-chat",
+      "workflow:export",
+      "workflow:import",
+      "workflow:list",
+      "workflow:move",
+      "workflow:publish",
+      "workflow:read",
+      "workflow:share",
+      "workflow:unpublish",
+      "workflow:unshare",
+      "workflow:update"
+    ],
+    "canExecute": true,
+    "connections": {
+      "Internal Delivery Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate & Normalize",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Authorize & Context": {
+        "main": [
+          [
+            {
+              "node": "Cleared to Send?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cleared to Send?": {
+        "main": [
+          [
+            {
+              "node": "Build Reply-To Address",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MailerSend Send": {
+        "main": [
+          [
+            {
+              "node": "Classify Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tracking Link Webhook": {
+        "main": [
+          [
+            {
+              "node": "Resolve Tracking Destination",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve Tracking Destination": {
+        "main": [
+          [
+            {
+              "node": "Tracking Token Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tracking Token Valid?": {
+        "main": [
+          [
+            {
+              "node": "Redirect to Checkout",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Tracking Link Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unsubscribe POST Webhook": {
+        "main": [
+          [
+            {
+              "node": "Resolve Unsubscribe Token",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve Unsubscribe Token": {
+        "main": [
+          [
+            {
+              "node": "Unsubscribe Succeeded?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unsubscribe Succeeded?": {
+        "main": [
+          [
+            {
+              "node": "Unsubscribed Response",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unsubscribe Token Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Classify Result": {
+        "main": [
+          [
+            {
+              "node": "Should Record Provider Result?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Should Record Provider Result?": {
+        "main": [
+          [
+            {
+              "node": "Record Delivery Result",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Build Delivery Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MailerSend Events Webhook": {
+        "main": [
+          [
+            {
+              "node": "Normalize MailerSend Event",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MailerSend Signature Valid?": {
+        "main": [
+          [
+            {
+              "node": "Process MailerSend Event",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Signature Rejected",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Process MailerSend Event": {
+        "main": [
+          [
+            {
+              "node": "MailerSend Event Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Event Processing Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate & Normalize": {
+        "main": [
+          [
+            {
+              "node": "Precheck Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Precheck Valid?": {
+        "main": [
+          [
+            {
+              "node": "Authorize & Context",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Record Delivery Result": {
+        "main": [
+          [
+            {
+              "node": "Schedule Next Recovery Step",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Reply-To Address": {
+        "main": [
+          [
+            {
+              "node": "MailerSend Send",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MailerSend Inbound Webhook": {
+        "main": [
+          [
+            {
+              "node": "Normalize MailerSend Inbound",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MailerSend Inbound Signature Valid?": {
+        "main": [
+          [
+            {
+              "node": "Process MailerSend Inbound Reply",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Inbound Signature Rejected",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Process MailerSend Inbound Reply": {
+        "main": [
+          [
+            {
+              "node": "Should Generate AI Reply Draft?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Inbound Processing Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Should Generate AI Reply Draft?": {
+        "main": [
+          [
+            {
+              "node": "Get AI Reply Context",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Inbound Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get AI Reply Context": {
+        "main": [
+          [
+            {
+              "node": "AI Reply Enabled?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark AI Reply Needs Human",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Reply Enabled?": {
+        "main": [
+          [
+            {
+              "node": "Call HENVALT Reply AI",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Inbound Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Call HENVALT Reply AI": {
+        "main": [
+          [
+            {
+              "node": "AI Reply Response Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark AI Reply Needs Human",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Reply Response Valid?": {
+        "main": [
+          [
+            {
+              "node": "Store AI Reply Draft",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark AI Reply Needs Human",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Store AI Reply Draft": {
+        "main": [
+          [
+            {
+              "node": "MailerSend Inbound Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Mark AI Reply Needs Human",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark AI Reply Needs Human": {
+        "main": [
+          [
+            {
+              "node": "MailerSend Inbound Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Execute Workflow Trigger": {
+        "main": [
+          [
+            {
+              "node": "Validate & Normalize",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Schedule Next Recovery Step": {
+        "main": [
+          [
+            {
+              "node": "Build Delivery Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize MailerSend Event": {
+        "main": [
+          [
+            {
+              "node": "Verify MailerSend Signature",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Verify MailerSend Signature": {
+        "main": [
+          [
+            {
+              "node": "MailerSend Signature Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Event Processing Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize MailerSend Inbound": {
+        "main": [
+          [
+            {
+              "node": "Verify MailerSend Inbound Signature",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Verify MailerSend Inbound Signature": {
+        "main": [
+          [
+            {
+              "node": "MailerSend Inbound Signature Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "MailerSend Inbound Processing Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tracking Click Confirm Webhook": {
+        "main": [
+          [
+            {
+              "node": "Confirm Tracking Click",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Confirm Tracking Click": {
+        "main": [
+          [
+            {
+              "node": "Tracking Click Confirmed?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tracking Click Confirmed?": {
+        "main": [
+          [
+            {
+              "node": "Redirect After Confirmed Click",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Tracking Link Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unsubscribe GET Webhook": {
+        "main": [
+          [
+            {
+              "node": "Validate Unsubscribe Token",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate Unsubscribe Token": {
+        "main": [
+          [
+            {
+              "node": "Unsubscribe Token Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unsubscribe Token Valid?": {
+        "main": [
+          [
+            {
+              "node": "Confirm Unsubscribe Page",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unsubscribe Token Not Found",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "One-Off Test Email Trigger": {
+        "main": [
+          [
+            {
+              "node": "Prepare One-Off Test Delivery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare One-Off Test Delivery": {
+        "main": [
+          [
+            {
+              "node": "One-Off Test Authorized?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "One-Off Test Authorized?": {
+        "main": [
+          [
+            {
+              "node": "MailerSend One-Off Test Email",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "One-Off Test Send Rejected",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "MailerSend One-Off Test Email": {
+        "main": [
+          [
+            {
+              "node": "Classify One-Off Provider Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Classify One-Off Provider Result": {
+        "main": [
+          [
+            {
+              "node": "Record One-Off Test Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Record One-Off Test Result": {
+        "main": [
+          [
+            {
+              "node": "One-Off Test Send Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "henvalt/delivery",
+          "authentication": "headerAuth",
+          "responseMode": "lastNode",
+          "options": {}
+        },
+        "id": "cdf79223-3d0c-46d2-9c5f-2c0125b80f79",
+        "name": "Internal Delivery Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const incoming = $input.item.json || {};\nconst b = (incoming.body && typeof incoming.body === \"object\") ? incoming.body : incoming;\nconst required = [\"tenant_id\",\"delivery_request_id\",\"recovery_id\",\"opportunity_id\",\"intervention_id\",\"to\",\"subject\",\"idempotency_key\",\"correlation_id\"];\nconst missing = required.filter(k => b[k] === undefined || b[k] === null || String(b[k]).trim() === \"\");\nconst channel = String(b.channel || \"\").toUpperCase();\nconst hasBody = (b.html_body && String(b.html_body).trim() !== \"\") || (b.text_body && String(b.text_body).trim() !== \"\");\nlet precheck_ok = true;\nlet precheck_error = null;\nif (missing.length > 0) { precheck_ok = false; precheck_error = \"MISSING_FIELDS:\" + missing.join(\",\"); }\nelse if (channel !== \"EMAIL\") { precheck_ok = false; precheck_error = \"UNSUPPORTED_CHANNEL\"; }\nelse if (!hasBody) { precheck_ok = false; precheck_error = \"MISSING_CONTENT\"; }\nreturn {\n  precheck_ok,\n  precheck_error,\n  tenant_id: b.tenant_id || null,\n  delivery_request_id: b.delivery_request_id || null,\n  message_id: b.message_id || null,\n  recovery_id: b.recovery_id || null,\n  opportunity_id: b.opportunity_id || null,\n  intervention_id: b.intervention_id || null,\n  channel: channel || null,\n  to: b.to || null,\n  subject: b.subject || null,\n  html_body: b.html_body || null,\n  text_body: b.text_body || null,\n  tracking_token: b.tracking_token || null,\n  correlation_id: b.correlation_id || null,\n  idempotency_key: b.idempotency_key || null,\n  metadata: b.metadata || {},\n};"
+        },
+        "id": "790e2e17-3a73-401e-ad03-8b3365a0adf7",
+        "name": "Validate & Normalize",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -672,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/authorize_delivery_request",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_tenant_id: $json.tenant_id, p_delivery_request_id: $json.delivery_request_id, p_intervention_id: $json.intervention_id, p_recovery_id: $json.recovery_id, p_opportunity_id: $json.opportunity_id, p_recipient: $json.to, p_idempotency_key: $json.idempotency_key } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true
+              }
+            },
+            "timeout": 15000
+          }
+        },
+        "id": "85c69d9e-497e-4404-9c5b-57a6f8859deb",
+        "name": "Authorize & Context",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -448,
+          80
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "cleared",
+                "leftValue": "={{ $('Validate & Normalize').item.json.precheck_ok === true && $json.statusCode >= 200 && $json.statusCode < 300 && !!$json.body && $json.body.can_send === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "54c71b83-ba72-4a0d-8454-7d18b59564d5",
+        "name": "Cleared to Send?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -224,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-mailersend-delivery",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { tenant_id: $('Validate & Normalize').item.json.tenant_id, delivery_request_id: $('Authorize & Context').item.json.body.delivery_request_id, intervention_id: $('Validate & Normalize').item.json.intervention_id, correlation_id: $('Validate & Normalize').item.json.correlation_id, from_email: $('Authorize & Context').item.json.body.from_email, from_name: $('Authorize & Context').item.json.body.from_name, reply_to: $('Build Reply-To Address').item.json.reply_to || $('Authorize & Context').item.json.body.reply_to, to: $('Authorize & Context').item.json.body.to, subject: $('Authorize & Context').item.json.body.subject, html_body: $('Authorize & Context').item.json.body.html_body, text_body: $('Authorize & Context').item.json.body.text_body } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 20000
+          }
+        },
+        "id": "120e0f55-178a-4160-b8b0-230d03409007",
+        "name": "MailerSend Send",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          0,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const v = $(\"Validate & Normalize\").item.json;\nlet auth = null; try { auth = $(\"Authorize & Context\").item.json; } catch (e) { auth = null; }\nlet send = null; try { send = $(\"MailerSend Send\").item.json; } catch (e) { send = null; }\nconst authBody = auth && auth.body && !Array.isArray(auth.body) ? auth.body : {};\nconst authStatus = auth ? auth.statusCode : null;\nconst authorized = v.precheck_ok === true && authStatus >= 200 && authStatus < 300 && authBody.can_send === true;\n\nlet state = \"REJECTED\";\nlet errorClass = null;\nlet retryable = false;\nlet http_status = 422;\nlet provider_message_id = null;\nlet provider_status_code = null;\nlet provider_response = {};\n\nif (v.precheck_ok !== true) {\n  state = \"REJECTED\"; errorClass = v.precheck_error || \"VALIDATION\"; http_status = 422;\n} else if (!(authStatus >= 200 && authStatus < 300)) {\n  state = \"UNKNOWN\"; errorClass = \"AUTH_CONTEXT_ERROR\"; retryable = true; http_status = 502;\n} else if (authBody.can_send !== true) {\n  const reason = String(authBody.reason || \"NOT_AUTHORIZED\").toUpperCase();\n  state = \"REJECTED\"; errorClass = reason; http_status = 409;\n  provider_response = { authorization_reason: reason };\n} else if (!send || send.statusCode === undefined || send.statusCode === null) {\n  state = \"UNKNOWN\"; errorClass = \"AMBIGUOUS_TRANSPORT\"; retryable = true; http_status = 502;\n} else {\n  const sc = Number(send.statusCode); provider_status_code = sc;\n  provider_response = send.body || {};\n  const headers = send.headers || {};\n  if (sc >= 200 && sc < 300) {\n    state = \"ACCEPTED\"; http_status = 202;\n    provider_message_id = headers[\"x-message-id\"] || (send.body && send.body.message_id) || null;\n  } else if (sc === 401 || sc === 403) {\n    state = \"FAILED\"; errorClass = \"PROVIDER_AUTH\"; http_status = 502;\n  } else if (sc === 429) {\n    state = \"UNKNOWN\"; errorClass = \"RATE_LIMITED\"; retryable = true; http_status = 429;\n  } else if (sc >= 400 && sc < 500) {\n    state = \"FAILED\"; errorClass = \"PROVIDER_VALIDATION\"; http_status = 502;\n  } else if (sc >= 500) {\n    state = \"UNKNOWN\"; errorClass = \"PROVIDER_TRANSIENT\"; retryable = true; http_status = 502;\n  } else {\n    state = \"UNKNOWN\"; errorClass = \"AMBIGUOUS_TRANSPORT\"; retryable = true; http_status = 502;\n  }\n}\nreturn {\n  tenant_id: v.tenant_id,\n  delivery_request_id: authorized ? authBody.delivery_request_id : null,\n  intervention_id: v.intervention_id,\n  recovery_id: v.recovery_id,\n  opportunity_id: v.opportunity_id,\n  correlation_id: v.correlation_id,\n  provider: authBody.provider || \"mailersend\",\n  provider_message_id,\n  provider_status_code,\n  state,\n  error_class: errorClass,\n  failure_category: errorClass,\n  retryable,\n  should_record_result: authorized,\n  provider_response,\n  http_status\n};"
+        },
+        "id": "e443c6e4-ad82-4d04-832b-f57ba46c4b44",
+        "name": "Classify Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/record_delivery_result",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_delivery_request_id: $json.delivery_request_id, p_provider: $json.provider, p_provider_message_id: $json.provider_message_id, p_provider_status_code: $json.provider_status_code, p_state: $json.state, p_error_class: $json.error_class, p_retryable: $json.retryable, p_provider_response: $json.provider_response } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            },
+            "timeout": 15000,
+            "queryReplacement": "={{ [ $('Validate & Normalize').item.json.precheck_ok === true && $('Authorize & Context').item.json.statusCode >= 200 && $('Authorize & Context').item.json.statusCode < 300 && $('Authorize & Context').item.json.body && $('Authorize & Context').item.json.body.can_send === true, $json.delivery_request_id, $json.provider, $json.provider_message_id, $json.provider_status_code, $json.state, $json.error_class, $json.retryable, JSON.stringify($json.provider_response || {}) ] }}"
+          },
+          "query": "SELECT CASE WHEN $1::boolean THEN henvalt.record_delivery_result($2::uuid,$3::text,$4::text,$5::integer,$6::henvalt.delivery_state,$7::text,$8::boolean,$9::jsonb) ELSE NULL END AS attempt_id"
+        },
+        "id": "1dfd538c-adb5-46b9-b757-ba8304fc3944",
+        "name": "Record Delivery Result",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          448,
+          80
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "id": "6f2f6ab0-9629-4c80-8854-4e992fafd751",
+        "name": "Tracking Link Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          448
+        ],
+        "parameters": {
+          "httpMethod": "GET",
+          "path": "henvalt/track/:token",
+          "responseMode": "responseNode",
+          "options": {
+            "ignoreBots": true
+          }
+        },
+        "notes": "Public short-lived token redirect endpoint; only 192-bit random tokens resolve."
+      },
+      {
+        "id": "09be2d86-0a0d-490b-a492-c7d63821b9dd",
+        "name": "Resolve Tracking Destination",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -672,
+          448
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/resolve_tracking_destination",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_token: $('Tracking Link Webhook').item.json.params?.token || $('Tracking Link Webhook').item.json.query?.token || '' } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "notes": "Validate token existence/expiry and active tenant, audit the click, and return the stored HTTPS destination."
+      },
+      {
+        "id": "85aec425-83f5-4e62-ba99-d59078660d28",
+        "name": "Tracking Token Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -448,
+          448
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "tracking-token-valid",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && typeof $json.data === 'string' && $json.data.toLowerCase().startsWith('https://') }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "de69a787-da6c-44fe-9132-ec9d08def33f",
+        "name": "Redirect to Checkout",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -224,
+          368
+        ],
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "={{ '<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"referrer\" content=\"no-referrer\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Continue to checkout · HENVALT</title><style>body{margin:0;background:#f7f7f7;color:#171717;font:16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px;box-sizing:border-box}main{width:100%;max-width:440px;background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:32px;box-sizing:border-box}.brand{font-size:12px;font-weight:700;letter-spacing:.16em;color:#666;margin:0 0 28px}h1{font-size:25px;line-height:1.2;letter-spacing:-.03em;margin:0 0 12px}.description{color:#666;margin:0 0 28px}button{width:100%;border:0;border-radius:9px;background:#171717;color:#fff;font:600 15px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:14px 18px;cursor:pointer}</style></head><body><main><p class=\"brand\">HENVALT</p><h1>Continue to your checkout</h1><p class=\"description\">Confirm to continue to your checkout. This extra step helps prevent automatic email security checks from recording a click.</p><form method=\"POST\" action=\"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-public-mail-actions/track/confirm/' + ($('Tracking Link Webhook').item.json.params?.token || $('Tracking Link Webhook').item.json.query?.token || '') + '\"><button type=\"submit\">Continue to checkout</button></form></main></body></html>' }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "text/html; charset=utf-8"
+                },
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store, max-age=0"
+                },
+                {
+                  "name": "Referrer-Policy",
+                  "value": "no-referrer"
+                },
+                {
+                  "name": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "name": "Content-Security-Policy",
+                  "value": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "responseBody": "={{ '<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"referrer\" content=\"no-referrer\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Continue to checkout · HENVALT</title><style>body{margin:0;background:#f7f7f7;color:#171717;font:16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px;box-sizing:border-box}main{width:100%;max-width:440px;background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:32px;box-sizing:border-box}.brand{font-size:12px;font-weight:700;letter-spacing:.16em;color:#666;margin:0 0 28px}h1{font-size:25px;line-height:1.2;letter-spacing:-.03em;margin:0 0 12px}.description{color:#666;margin:0 0 28px}button{width:100%;border:0;border-radius:9px;background:#171717;color:#fff;font:600 15px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:14px 18px;cursor:pointer}</style></head><body><main><p class=\"brand\">HENVALT</p><h1>Continue to your checkout</h1><p class=\"description\">Confirm to continue to your checkout. This extra step helps prevent automatic email security checks from recording a click.</p><form method=\"POST\" action=\"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-public-mail-actions/track/confirm/' + ($('Tracking Link Webhook').item.json.params?.token || $('Tracking Link Webhook').item.json.query?.token || '') + '\"><button type=\"submit\">Continue to checkout</button></form></main></body></html>' }}"
+          }
+        }
+      },
+      {
+        "id": "a9b3b1a0-2924-4eea-bf25-81c514841ee7",
+        "name": "Tracking Link Not Found",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -224,
+          528
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'not_found', error: 'This recovery link is invalid or expired.' } }}",
+          "options": {
+            "responseCode": 404
+          }
+        }
+      },
+      {
+        "id": "2c919567-4e9d-49b9-8d05-6b49d0952cc3",
+        "name": "Unsubscribe GET Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          768
+        ],
+        "parameters": {
+          "httpMethod": "GET",
+          "path": "henvalt/unsubscribe/:token",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "notes": "Public one-click unsubscribe link embedded in every recovery email."
+      },
+      {
+        "id": "ada56936-ddcb-4046-97d9-8f043f43bd83",
+        "name": "Unsubscribe POST Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          928
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "henvalt/unsubscribe/:token",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "notes": "RFC 8058 List-Unsubscribe-Post endpoint; only a valid unguessable token can revoke consent."
+      },
+      {
+        "id": "81e2dbaa-f2f3-4b95-9dba-45aa73d97b6c",
+        "name": "Resolve Unsubscribe Token",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -672,
+          848
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/unsubscribe_customer_by_token",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_token: ($json.params && $json.params.token) || ($json.body && $json.body.token) || ($json.query && $json.query.token) || '' } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "notes": "Hash the supplied token in Supabase, revoke customer email consent, and write an audit event."
+      },
+      {
+        "id": "4840cd72-8c6c-4ee9-ba7b-1b1e0a12524f",
+        "name": "Unsubscribe Succeeded?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -448,
+          848
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "unsubscribe-success",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && ($json.data === true || String($json.data).trim().toLowerCase() === 'true') }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "bfbd2e85-6b67-450a-ae0d-d051150485a5",
+        "name": "Unsubscribed Response",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -224,
+          768
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'unsubscribed', message: 'You have been unsubscribed from recovery emails.' } }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "aff2bb1d-8a63-4b93-9af6-c1d31ed2ecdf",
+        "name": "Unsubscribe Token Not Found",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -224,
+          928
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'not_found', error: 'This unsubscribe link is invalid.' } }}",
+          "options": {
+            "responseCode": 404
+          }
+        }
+      },
+      {
+        "id": "74071ec0-86b0-4ab1-a434-41dda676f4c9",
+        "name": "Should Record Provider Result?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          352,
+          160
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "record-result-authorized",
+                "leftValue": "={{ $json.should_record_result === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "notes": "Only persist a provider outcome when precheck passed and Supabase returned can_send=true."
+      },
+      {
+        "id": "0e47a513-92f9-498b-80b4-5399c132a0ea",
+        "name": "MailerSend Events Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          1248
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "henvalt/mailersend/events",
+          "responseMode": "responseNode",
+          "options": {
+            "rawBody": true
+          }
+        },
+        "notes": "Receives MailerSend V2 delivery, bounce, open, click, unsubscribe and complaint events. Raw request bytes are required for HMAC verification."
+      },
+      {
+        "id": "38ea3113-762b-411c-9899-bf82926a7bed",
+        "name": "Normalize MailerSend Event",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -672,
+          1248
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const headers = $json.headers || {};\nconst payload = $json.body || {};\nconst signatureEntry = Object.entries(headers).find(([key]) => key.toLowerCase() === \"signature\");\nconst signature = signatureEntry ? signatureEntry[1] : null;\nconst raw = ($input.item.binary && $input.item.binary.data && $input.item.binary.data.data) ? $input.item.binary.data.data : null;\nreturn { signature, raw_body_base64: raw, payload, is_test: payload.type === \"webhook.test\", valid_shape: !!raw && !!payload && typeof payload === \"object\" && typeof payload.type === \"string\" };"
+        }
+      },
+      {
+        "id": "62840149-bb47-4a65-b023-07a8a7f6cb70",
+        "name": "MailerSend Signature Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -224,
+          1248
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "mailersend-signature-valid",
+                "leftValue": "={{ $json.verified === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "e4118798-edb9-4c47-b794-63835297ef87",
+        "name": "Process MailerSend Event",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          0,
+          1168
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.process_mailersend_webhook_event($1::jsonb, $2) AS result",
+          "options": {
+            "queryReplacement": "={{ [JSON.stringify($('Normalize MailerSend Event').item.json.payload), $('Normalize MailerSend Event').item.json.raw_body_base64] }}"
+          }
+        },
+        "notes": "Deduplicates signed events, updates delivery state, records engagement, and creates suppression entries for hard bounces, unsubscribes and spam complaints.",
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 500
+      },
+      {
+        "id": "3be12501-7966-4bad-bfdf-a9173e5589b7",
+        "name": "MailerSend Event Accepted",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          224,
+          1168
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json.result }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "d0a50035-c562-41b2-af2e-da4836bea44f",
+        "name": "MailerSend Signature Rejected",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          0,
+          1360
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'unauthorized', error: 'Invalid MailerSend webhook signature' } }}",
+          "options": {
+            "responseCode": 401
+          }
+        }
+      },
+      {
+        "id": "1178d9d0-7f01-4ebb-9c9d-415061933c38",
+        "name": "MailerSend Event Processing Failed",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          224,
+          1360
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'retry', error: 'MailerSend event processing failed' } }}",
+          "options": {
+            "responseCode": 500
+          }
+        }
+      },
+      {
+        "id": "564a2fbb-944a-4358-a790-f451fae1270f",
+        "name": "Precheck Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -560,
+          256
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "delivery-precheck-ok",
+                "leftValue": "={{ $json.precheck_ok === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "b27c2dc0-d908-44fa-89dc-798472cab3e9",
+        "name": "Schedule Next Recovery Step",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          560,
+          80
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/schedule_next_recovery_intervention",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_delivery_request_id: $('Classify Result').item.json.delivery_request_id } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 15000
+          }
+        },
+        "notes": "Idempotently schedules step 2 or 3 only after a provider-accepted message. Supabase rechecks consent, suppression, paid order, store status, and verified sender.",
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 500
+      },
+      {
+        "id": "02af8fbc-8883-4602-a063-71337d8f2dd1",
+        "name": "Build Reply-To Address",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          0,
+          240
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.get_mailersend_reply_to_for_delivery($1::uuid, $2::uuid) AS reply_to",
+          "options": {
+            "queryReplacement": "={{ [ $('Validate & Normalize').item.json.tenant_id, $('Authorize & Context').item.json.body.delivery_request_id ] }}"
+          }
+        }
+      },
+      {
+        "id": "df2f0de8-a4de-49bf-b168-7efb3a2c0ef6",
+        "name": "MailerSend Inbound Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          1712
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "henvalt/mailersend/inbound",
+          "responseMode": "responseNode",
+          "options": {
+            "rawBody": true
+          }
+        }
+      },
+      {
+        "id": "6f5f77e2-4445-4bca-98d0-06f1fd698dc0",
+        "name": "Normalize MailerSend Inbound",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -672,
+          1712
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const headers = $json.headers || {};\nconst payload = $json.body || {};\nconst signatureEntry = Object.entries(headers).find(([key]) => key.toLowerCase() === \"signature\");\nconst signature = signatureEntry ? signatureEntry[1] : null;\nconst raw = ($input.item.binary && $input.item.binary.data && $input.item.binary.data.data) ? $input.item.binary.data.data : null;\nreturn { signature, raw_body_base64: raw, payload, is_test: payload.type === \"webhook.test\", valid_shape: !!raw && !!payload && typeof payload === \"object\" && typeof payload.type === \"string\" };"
+        }
+      },
+      {
+        "id": "ae509c51-989d-4a2d-9f94-fb5ba280998d",
+        "name": "MailerSend Inbound Signature Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -224,
+          1712
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "mailersend-inbound-signature-valid",
+                "leftValue": "={{ $json.verified === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "4de73e17-6efa-4cc3-9431-487bc72af468",
+        "name": "Process MailerSend Inbound Reply",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          0,
+          1632
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.process_mailersend_inbound_reply($1::jsonb, $2) AS result",
+          "options": {
+            "queryReplacement": "={{ [ JSON.stringify($('Normalize MailerSend Inbound').item.json.payload), $('Normalize MailerSend Inbound').item.json.raw_body_base64 ] }}"
+          }
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "dc4d9cc3-5570-4c6c-a42c-d4e986ffc6f8",
+        "name": "MailerSend Inbound Accepted",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          224,
+          1632
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ $json.result }}",
+          "options": {
+            "responseCode": 200
+          }
+        }
+      },
+      {
+        "id": "95539101-b39b-41fd-aacf-a64cafb62205",
+        "name": "MailerSend Inbound Signature Rejected",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          0,
+          1824
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'unauthorized', error: 'Invalid MailerSend inbound signature' } }}",
+          "options": {
+            "responseCode": 401
+          }
+        }
+      },
+      {
+        "id": "d9b01629-3c07-4367-ab74-956a9fac67f6",
+        "name": "MailerSend Inbound Processing Failed",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          224,
+          1824
+        ],
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ { status: 'retry', error: 'MailerSend inbound processing failed' } }}",
+          "options": {
+            "responseCode": 500
+          }
+        }
+      },
+      {
+        "id": "c63fff0d-ef45-4a5e-87fd-10535b9aca3b",
+        "name": "Should Generate AI Reply Draft?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          224,
+          1632
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "inbound-reply-matched-not-optout",
+                "leftValue": "={{ $json.result.matched === true && $json.result.opt_out !== true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "cb0df1d4-9fba-4ecd-9cde-f07b89c1e67b",
+        "name": "Get AI Reply Context",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          448,
+          1536
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT jsonb_build_object(\n  'tenant_id', cc.tenant_id,\n  'conversation_id', cc.id,\n  'message_id', cm.id,\n  'customer_message', cm.body_text,\n  'subject', cm.subject,\n  'customer_name', COALESCE(c.first_name,''),\n  'store_name', COALESCE(t.settings->>'store_name',''),\n  'reply_ai_enabled', COALESCE((t.settings->>'reply_ai_enabled')::boolean,false),\n  'verified_facts', COALESCE(t.settings->'reply_knowledge_base','{}'::jsonb),\n  'conversation_history', COALESCE((\n    SELECT jsonb_agg(jsonb_build_object('direction', h.direction, 'body_text', h.body_text) ORDER BY h.created_at)\n    FROM (\n      SELECT 'OUTBOUND'::text AS direction, m.body AS body_text, m.created_at\n      FROM henvalt.delivery_requests dr\n      JOIN henvalt.messages m ON m.id=dr.message_reference AND m.tenant_id=dr.tenant_id\n      WHERE dr.id=cc.delivery_request_id\n      UNION ALL\n      SELECT cm2.direction, cm2.body_text, cm2.received_at\n      FROM henvalt.conversation_messages cm2\n      WHERE cm2.conversation_id=cc.id AND cm2.tenant_id=cc.tenant_id\n    ) h\n  ), '[]'::jsonb)\n) AS context\nFROM henvalt.conversation_messages cm\nJOIN henvalt.customer_conversations cc ON cc.id=cm.conversation_id AND cc.tenant_id=cm.tenant_id\nJOIN henvalt.customers c ON c.id=cc.customer_id AND c.tenant_id=cc.tenant_id\nJOIN henvalt.tenants t ON t.id=cc.tenant_id\nWHERE cm.id=$1::uuid AND cc.id=$2::uuid AND cm.direction='INBOUND'",
+          "options": {
+            "queryReplacement": "={{ [ $('Process MailerSend Inbound Reply').item.json.result.message_id, $('Process MailerSend Inbound Reply').item.json.result.conversation_id ] }}"
+          }
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "d41a4ce0-9d2b-44f5-b1fe-d7e1eeae9979",
+        "name": "AI Reply Enabled?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          672,
+          1536
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "tenant-ai-reply-enabled",
+                "leftValue": "={{ $json.context.reply_ai_enabled === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "5d9e30e1-fb0b-45bb-b39d-a27db0e271d2",
+        "name": "Call HENVALT Reply AI",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          896,
+          1440
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://henvalt-reply-ai.chmuhammadrehan18.workers.dev/v1/reply-draft",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { customer_message: $('Get AI Reply Context').item.json.context.customer_message, subject: $('Get AI Reply Context').item.json.context.subject, customer_name: $('Get AI Reply Context').item.json.context.customer_name, store_name: $('Get AI Reply Context').item.json.context.store_name, verified_facts: $('Get AI Reply Context').item.json.context.verified_facts, conversation_history: $('Get AI Reply Context').item.json.context.conversation_history } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "3508ceb0-dd3c-4322-aa32-904fcd9887c5",
+        "name": "AI Reply Response Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1120,
+          1440
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "ai-response-valid",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && !!$json.body && typeof $json.body.intent === 'string' }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "ba072f08-0e06-4d3b-9d13-840302c84c21",
+        "name": "Store AI Reply Draft",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          1344,
+          1360
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH saved AS (\n  UPDATE henvalt.conversation_messages\n  SET intent=$4,\n      ai_status=CASE WHEN $5::boolean THEN 'NEEDS_HUMAN' ELSE 'DRAFTED' END,\n      ai_draft=NULLIF($6,'')\n  WHERE tenant_id=$1::uuid AND conversation_id=$2::uuid AND id=$3::uuid\n    AND direction='INBOUND'\n  RETURNING tenant_id,conversation_id,id\n)\nUPDATE henvalt.customer_conversations cc\nSET status=CASE WHEN $5::boolean THEN 'HUMAN_REQUIRED' ELSE 'OPEN' END,\n    updated_at=now()\nFROM saved\nWHERE cc.tenant_id=saved.tenant_id AND cc.id=saved.conversation_id\n  AND cc.status NOT IN ('OPTED_OUT','CLOSED')\nRETURNING saved.id AS message_id, cc.status AS conversation_status",
+          "options": {
+            "queryReplacement": "={{ [ $('Get AI Reply Context').item.json.context.tenant_id, $('Get AI Reply Context').item.json.context.conversation_id, $('Get AI Reply Context').item.json.context.message_id, $('Call HENVALT Reply AI').item.json.body.intent, $('Call HENVALT Reply AI').item.json.body.needs_human, $('Call HENVALT Reply AI').item.json.body.draft ] }}"
+          }
+        },
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "6dd3ce61-5658-4bf3-b386-e90a49c91798",
+        "name": "Mark AI Reply Needs Human",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          1344,
+          1616
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH failed AS (\n  UPDATE henvalt.conversation_messages\n  SET ai_status='FAILED', ai_draft=NULL\n  WHERE id=$1::uuid AND conversation_id=$2::uuid\n  RETURNING tenant_id,conversation_id\n)\nUPDATE henvalt.customer_conversations cc\nSET status='HUMAN_REQUIRED',updated_at=now()\nFROM failed\nWHERE cc.tenant_id=failed.tenant_id AND cc.id=failed.conversation_id\n  AND cc.status NOT IN ('OPTED_OUT','CLOSED')\nRETURNING cc.id AS conversation_id",
+          "options": {
+            "queryReplacement": "={{ [ $('Process MailerSend Inbound Reply').item.json.result.message_id, $('Process MailerSend Inbound Reply').item.json.result.conversation_id ] }}",
+            "query": "WITH failed AS (\n  UPDATE henvalt.conversation_messages\n  SET ai_status='FAILED', ai_draft=NULL\n  WHERE id=$1::uuid AND conversation_id=$2::uuid\n  RETURNING tenant_id,conversation_id\n)\nUPDATE henvalt.customer_conversations cc\nSET status='HUMAN_REQUIRED',updated_at=now()\nFROM failed\nWHERE cc.tenant_id=failed.tenant_id AND cc.id=failed.conversation_id\n  AND cc.status NOT IN ('OPTED_OUT','CLOSED')\nRETURNING cc.id AS conversation_id"
+          }
+        }
+      },
+      {
+        "id": "a7d57dc7-0d88-4d69-974a-d07acfc74969",
+        "name": "Execute Workflow Trigger",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          -896,
+          320
+        ],
+        "parameters": {
+          "inputSource": "passthrough"
+        }
+      },
+      {
+        "id": "7ec90c31-04a1-4c7d-924a-2f69d4af69cc",
+        "name": "Build Delivery Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          784,
+          80
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const c = $(\"Classify Result\").item.json || {};\nreturn { json: {\n  statusCode: Number(c.http_status || 500),\n  body: {\n    status: c.state === \"ACCEPTED\" ? \"accepted\" : \"not_sent\",\n    state: c.state || \"UNKNOWN\",\n    failure_category: c.failure_category || null,\n    delivery_request_id: c.delivery_request_id || null,\n    provider_message_id: c.provider_message_id || null,\n    correlation_id: c.correlation_id || null\n  }\n} };"
+        }
+      },
+      {
+        "id": "c966b1e8-b61a-4eba-ba9a-1c2fefe93006",
+        "name": "Verify MailerSend Signature",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -448,
+          1248
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/verify_mailersend_webhook_signature_api",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "specifyHeaders": "keypair",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_signature: $('Normalize MailerSend Event').item.json.signature, p_raw_body_base64: $('Normalize MailerSend Event').item.json.raw_body_base64, p_is_test: $('Normalize MailerSend Event').item.json.is_test } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": false,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 500
+      },
+      {
+        "id": "f98c458a-521e-43b5-944a-1d34ece86dbf",
+        "name": "Verify MailerSend Inbound Signature",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -448,
+          1792
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/verify_mailersend_inbound_signature_api",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "specifyHeaders": "keypair",
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "contentType": "json",
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_signature: $('Normalize MailerSend Inbound').item.json.signature, p_raw_body_base64: $('Normalize MailerSend Inbound').item.json.raw_body_base64, p_is_test: $('Normalize MailerSend Inbound').item.json.is_test } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": false,
+                "neverError": false,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 10000
+          }
+        },
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 500
+      },
+      {
+        "id": "412e2056-de14-4ced-bf4d-9bb700afcc28",
+        "name": "Tracking Click Confirm Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.1,
+        "position": [
+          -896,
+          1120
+        ],
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "henvalt/track-confirm/:token",
+          "responseMode": "responseNode",
+          "options": {}
+        }
+      },
+      {
+        "id": "367b8204-a592-4b66-bda6-e5a376111f20",
+        "name": "Confirm Tracking Click",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -672,
+          1120
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/confirm_tracking_click",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_token: $('Tracking Click Confirm Webhook').item.json.params?.token || $('Tracking Click Confirm Webhook').item.json.query?.token || '' } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            },
+            "timeout": 10000
+          }
+        }
+      },
+      {
+        "id": "975091a0-42d2-4c23-b56c-9e91ce4ec187",
+        "name": "Tracking Click Confirmed?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -448,
+          1120
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "tracking-click-confirmed",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && typeof $json.data === 'string' && $json.data.toLowerCase().startsWith('https://') }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "4ac1d324-d3eb-43df-a2e4-cd51512e004c",
+        "name": "Redirect After Confirmed Click",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -224,
+          1040
+        ],
+        "parameters": {
+          "respondWith": "redirect",
+          "redirectURL": "={{ $('Confirm Tracking Click').item.json.data }}",
+          "options": {
+            "responseCode": 302
+          }
+        }
+      },
+      {
+        "id": "7334d1b3-678c-4f7c-a8a8-c9e94ca30bcc",
+        "name": "Validate Unsubscribe Token",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          -1120,
+          1440
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/validate_unsubscribe_token",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_token: $('Unsubscribe GET Webhook').item.json.params?.token || $('Unsubscribe GET Webhook').item.json.query?.token || '' } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 10000
+          }
+        }
+      },
+      {
+        "id": "e44635c0-9362-442f-876b-cee1752545dd",
+        "name": "Unsubscribe Token Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          -896,
+          1440
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "unsubscribe-token-valid",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && ($json.body === true || $json.body?.validate_unsubscribe_token === true) }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "8813fc8d-7837-43c0-95af-db7c1003dafd",
+        "name": "Confirm Unsubscribe Page",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          -672,
+          1360
+        ],
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "={{ '<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"referrer\" content=\"no-referrer\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Confirm unsubscribe · HENVALT</title><style>body{margin:0;background:#f7f7f7;color:#171717;font:16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px;box-sizing:border-box}main{width:100%;max-width:440px;background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:32px;box-sizing:border-box}.brand{font-size:12px;font-weight:700;letter-spacing:.16em;color:#666;margin:0 0 28px}h1{font-size:25px;line-height:1.2;letter-spacing:-.03em;margin:0 0 12px}.description{color:#666;margin:0 0 28px}button{width:100%;border:0;border-radius:9px;background:#171717;color:#fff;font:600 15px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:14px 18px;cursor:pointer}</style></head><body><main><p class=\"brand\">HENVALT</p><h1>Unsubscribe from recovery emails</h1><p class=\"description\">Confirm below to stop future recovery emails for this address. Opening this page alone will not change your email preferences.</p><form method=\"POST\" action=\"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-public-mail-actions/unsubscribe/' + ($('Unsubscribe GET Webhook').item.json.params?.token || $('Unsubscribe GET Webhook').item.json.query?.token || '') + '\"><button type=\"submit\">Confirm unsubscribe</button></form></main></body></html>' }}",
+          "options": {
+            "responseCode": 200,
+            "responseHeaders": {
+              "entries": [
+                {
+                  "name": "Content-Type",
+                  "value": "text/html; charset=utf-8"
+                },
+                {
+                  "name": "Cache-Control",
+                  "value": "no-store, max-age=0"
+                },
+                {
+                  "name": "Referrer-Policy",
+                  "value": "no-referrer"
+                },
+                {
+                  "name": "X-Content-Type-Options",
+                  "value": "nosniff"
+                },
+                {
+                  "name": "Content-Security-Policy",
+                  "value": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "responseBody": "={{ '<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"referrer\" content=\"no-referrer\"><meta name=\"robots\" content=\"noindex,nofollow\"><title>Confirm unsubscribe · HENVALT</title><style>body{margin:0;background:#f7f7f7;color:#171717;font:16px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px;box-sizing:border-box}main{width:100%;max-width:440px;background:#fff;border:1px solid #e5e5e5;border-radius:16px;padding:32px;box-sizing:border-box}.brand{font-size:12px;font-weight:700;letter-spacing:.16em;color:#666;margin:0 0 28px}h1{font-size:25px;line-height:1.2;letter-spacing:-.03em;margin:0 0 12px}.description{color:#666;margin:0 0 28px}button{width:100%;border:0;border-radius:9px;background:#171717;color:#fff;font:600 15px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif;padding:14px 18px;cursor:pointer}</style></head><body><main><p class=\"brand\">HENVALT</p><h1>Unsubscribe from recovery emails</h1><p class=\"description\">Confirm below to stop future recovery emails for this address. Opening this page alone will not change your email preferences.</p><form method=\"POST\" action=\"https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-public-mail-actions/unsubscribe/' + ($('Unsubscribe GET Webhook').item.json.params?.token || $('Unsubscribe GET Webhook').item.json.query?.token || '') + '\"><button type=\"submit\">Confirm unsubscribe</button></form></main></body></html>' }}"
+          }
+        }
+      },
+      {
+        "id": "7a8f6a2c-2ab9-48e5-80e5-f7b40644043a",
+        "name": "One-Off Test Email Trigger",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -1200,
+          1200
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "6c540ee6-11d7-4bd2-aa03-b0af5683d0d3",
+        "name": "Prepare One-Off Test Delivery",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -950,
+          1200
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/reauthorize_one_off_test_delivery",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_delivery_request_id: '12460138-877e-46c6-a178-f67d060ba226', p_recipient: '[REDACTED_EMAIL]' } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 20000
+          }
+        }
+      },
+      {
+        "id": "9305ff5e-5014-41f0-96a1-2f127ac255fd",
+        "name": "One-Off Test Authorized?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [
+          -700,
+          1200
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "one-off-authorized",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && $json.body && $json.body.can_send === true && $json.body.test_only === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "697d5864-06f7-4e90-84ab-82f852883460",
+        "name": "MailerSend One-Off Test Email",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -430,
+          1100
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-mailersend-delivery",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { tenant_id: $('Prepare One-Off Test Delivery').item.json.body.tenant_id, delivery_request_id: $('Prepare One-Off Test Delivery').item.json.body.delivery_request_id, intervention_id: $('Prepare One-Off Test Delivery').item.json.body.intervention_id, correlation_id: $('Prepare One-Off Test Delivery').item.json.body.correlation_id, from_email: $('Prepare One-Off Test Delivery').item.json.body.from_email, from_name: $('Prepare One-Off Test Delivery').item.json.body.from_name, reply_to: $('Prepare One-Off Test Delivery').item.json.body.reply_to, to: $('Prepare One-Off Test Delivery').item.json.body.to, subject: $('Prepare One-Off Test Delivery').item.json.body.subject, html_body: $('Prepare One-Off Test Delivery').item.json.body.html_body, text_body: $('Prepare One-Off Test Delivery').item.json.body.text_body } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "c3bbffa0-f3b3-4058-bfac-0eb255c5bb5d",
+        "name": "Classify One-Off Provider Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -160,
+          1100
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const p = $('Prepare One-Off Test Delivery').item.json.body || {};\nconst r = $input.item.json || {};\nconst sc = Number(r.statusCode || 0);\nconst state = sc >= 200 && sc < 300 ? 'ACCEPTED' : (sc === 0 || sc >= 500 ? 'UNKNOWN' : 'FAILED');\nreturn { tenant_id:p.tenant_id, delivery_request_id:p.delivery_request_id, intervention_id:p.intervention_id, recovery_id:p.recovery_id, opportunity_id:p.opportunity_id, correlation_id:p.correlation_id, provider:'mailersend', provider_message_id:(r.headers && r.headers['x-message-id']) || (r.body && r.body.message_id) || null, provider_status_code:sc || null, state, error_class:state === 'ACCEPTED' ? null : (r.body && r.body.error) || 'ONE_OFF_PROVIDER_FAILURE', retryable:state === 'UNKNOWN', provider_response:r.body || {}, test_only:true };"
+        }
+      },
+      {
+        "id": "ecb8c9ef-96ba-49d3-a4d1-bef99d6d5f37",
+        "name": "Record One-Off Test Result",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          110,
+          1100
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/record_delivery_result",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Content-Profile",
+                "value": "henvalt"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { p_delivery_request_id: $json.delivery_request_id, p_provider: $json.provider, p_provider_message_id: $json.provider_message_id, p_provider_status_code: $json.provider_status_code, p_state: $json.state, p_error_class: $json.error_class, p_retryable: $json.retryable, p_provider_response: $json.provider_response } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            },
+            "timeout": 15000
+          }
+        }
+      },
+      {
+        "id": "11ba1669-c09e-4e15-b633-ac8686848948",
+        "name": "One-Off Test Send Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          370,
+          1100
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const c = $('Classify One-Off Provider Result').item.json || {};\nconst rec = $input.item.json || {};\nreturn { status:c.state === 'ACCEPTED' ? 'accepted_by_mailersend' : 'not_accepted', provider:'MailerSend', provider_status_code:c.provider_status_code, provider_message_id:c.provider_message_id, recipient:'[REDACTED_EMAIL]', subject:\"Your checkout, whenever you're ready\", delivery_request_id:c.delivery_request_id, recorded:rec.statusCode >= 200 && rec.statusCode < 300, note:c.state === 'ACCEPTED' ? 'MailerSend accepted the message; inbox delivery is not yet confirmed.' : 'The provider did not accept the message.' };"
+        }
+      },
+      {
+        "id": "218bd894-a239-4ceb-87b6-9732a3f5eecb",
+        "name": "One-Off Test Send Rejected",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -430,
+          1320
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const r = $input.item.json || {};\nconst b = r.body || {};\nreturn { status:'not_sent', reason:b.reason || 'ONE_OFF_TEST_AUTHORIZATION_FAILED', provider_called:false, http_status:r.statusCode || null };"
+        }
+      }
+    ],
+    "nodeGroups": [
+      {
+        "id": "c21aaf86-2ec5-43db-b3cc-8179ea2f364f",
+        "name": "Delivery and Recovery Scheduling",
+        "nodeNames": [
+          "Record Delivery Result",
+          "Schedule Next Recovery Step"
+        ],
+        "description": "Record the provider outcome and schedule the next eligible recovery step."
+      }
+    ],
+    "activeVersion": {
+      "sameAsDraft": true
+    },
+    "meta": {
+      "templateCredsSetupCompleted": true,
+      "instanceId": "2d287fe167ac2553afdbc0b12110ff76cf20b1815f88553bdd02c95b2b824b5e",
+      "aiBuilderAssisted": true,
+      "builderVariant": "mcp"
+    }
+  }
+}
