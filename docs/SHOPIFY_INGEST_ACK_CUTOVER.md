@@ -23,6 +23,17 @@ Read-only inspection of the live `Validate & Normalize` node found this current 
 
 The candidate Cloudflare worker now requires `x-shopify-webhook-id` and no longer accepts `x-shopify-event-id` as a substitute. A regression test verifies that an event ID alone is rejected before forwarding. The live n8n normalizer still needs the precedence correction before release.
 
+## Candidate n8n normalizer patch
+
+A candidate replacement Code-node script is stored at `n8n/shopify-ingest-normalizer-candidate.js`, copied from the inspected active `Validate & Normalize` node and changed only at the identity boundary:
+- For `source === "shopify"`, `event_id` and `source_event_id` now come only from `X-Shopify-Webhook-Id`.
+- `X-Shopify-Event-Id` remains metadata for cross-delivery correlation.
+- Shopify idempotency is `shopify:{shop_domain}:{webhook_id}`; it no longer uses the topic plus an event correlation ID or an arbitrary body field.
+- Missing Shopify delivery ID is an invalid event; it cannot fall back to `body.event_id`, `body.id`, or `X-Shopify-Event-Id`.
+- Non-Shopify internal event identity remains unchanged.
+
+The test `tests/shopify-ingest-delivery-identity.test.mjs` executes this candidate code in an isolated Node VM and covers differing body/event IDs, shared correlation IDs across separate deliveries, missing delivery ID, and internal event compatibility. It is wired into the safety CI. This candidate script is not written to the active n8n workflow.
+
 ## Critical post-ack recovery finding
 
 A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if durable asynchronous processing is guaranteed:
