@@ -74,9 +74,12 @@ BEGIN
   INSERT INTO vault.decrypted_secrets(id, name, decrypted_secret)
   VALUES (gen_random_uuid(), 'synthetic-mailersend-token', 'synthetic-mailersend-token-value');
 
-  -- Closed gate must deny the real credential-release RPC wrapper before its
-  -- private implementation can claim the row or reach the Vault read.
-  INSERT INTO henvalt.delivery_requests(status) VALUES ('UNKNOWN') RETURNING id INTO v_id;
+  -- Prepare a request while the gate is open, then close it before the
+  -- credential-release RPC. The wrapper must deny before its private legacy
+  -- implementation can claim the row or reach the Vault read.
+  PERFORM henvalt.set_provider_sending_enabled(true, 'prepare synthetic credential-release fixture');
+  UPDATE henvalt.delivery_requests SET status = 'UNKNOWN' WHERE id = v_id;
+  PERFORM henvalt.set_provider_sending_enabled(false, 'close before synthetic credential-release attempt');
   BEGIN
     PERFORM henvalt.get_mailersend_token_for_delivery(gen_random_uuid(), v_id);
     RAISE EXCEPTION 'expected credential release to be blocked while closed';
