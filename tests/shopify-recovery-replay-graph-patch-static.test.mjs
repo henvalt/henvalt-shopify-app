@@ -267,3 +267,20 @@ test("lease-fenced SQL keeps its claim tuple across success and error branches",
   assert.match(bindings["Retry Shopify Replay Job"].queryReplacement, /SHOPIFY_REPLAY_PROCESSING_FAILED/);
   assert.ok(manifest.invariants.some((x) => x.includes("error outputs cannot erase the job/worker/lease tuple")));
 });
+
+
+test("recovery candidate uses native n8n top-level node execution flags", () => {
+  const claim = manifest.nodes_to_add.find((x) => x.name === "Claim Shopify Replay Job");
+  const load = manifest.nodes_to_add.find((x) => x.name === "Load Shopify Replay Job");
+  const complete = manifest.nodes_to_add.find((x) => x.name === "Complete Shopify Replay Job");
+  const retry = manifest.nodes_to_add.find((x) => x.name === "Retry Shopify Replay Job");
+  assert.equal(claim.alwaysOutputData, true);
+  assert.equal(claim.onError, "stopWorkflow");
+  assert.equal(load.alwaysOutputData, true);
+  assert.equal(load.onError, "continueErrorOutput");
+  assert.equal(complete.onError, "continueErrorOutput");
+  assert.equal(retry.onError, "continueErrorOutput");
+  for (const node of [claim, load, complete, retry]) {
+    assert.equal(node.settings, undefined, node.name + " must not use synthetic settings wrapper");
+  }
+});
