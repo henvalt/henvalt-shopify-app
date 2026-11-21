@@ -101,6 +101,17 @@ Required candidate correction: add a bounded claim lease with a fresh per-claim 
 This is a candidate integration blocker. No live workflow or database object was changed.
 
 
+## 21 November — replay lease terminal-state and renewal review
+
+The candidate lease implementation was extended after review identified that a replay job expiring on its final permitted attempt would otherwise remain CLAIMED and never qualify for another claim.
+
+- The claim RPC now atomically moves expired CLAIMED replay jobs with attempts >= max_attempts to DEAD_LETTER, clears lock/lease fields, and records the terminal reason.
+- The acceptance SQL now covers this final-attempt expiry case in addition to lease issuance, renewal, reclaim, and stale-worker fencing.
+- The worker specification requires lease renewal before expiry for long-running work and requires the worker to stop before committing downstream effects if renewal returns NULL.
+- CI coverage is configured, but the updated test has not yet been observed passing on the resulting branch head.
+
+Legacy CLAIMED replay rows with a NULL lease expiry are deliberately not auto-recovered by this change: they predate the lease contract and require a separately reviewed, age-bounded reconciliation policy. Do not silently reset them as part of the claim path.
+
 ## 21 November — candidate replay lease-fencing implementation
 
 A candidate-only implementation has now been added in migration `202611210008_shopify_replay_lease_fencing.sql` with PostgreSQL acceptance coverage in `tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql`.
