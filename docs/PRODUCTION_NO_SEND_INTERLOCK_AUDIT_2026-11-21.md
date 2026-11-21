@@ -99,3 +99,17 @@ A further read-only comparison of the candidate replay-loader migration with the
 Required candidate correction: add a bounded claim lease with a fresh per-claim lease identifier (or equivalent non-reusable fencing token), reclaim expired claims atomically, and require the same current lease identifier for payload loading, completion, retry, and dead-letter operations. Add concurrent PostgreSQL tests proving that an expired worker cannot load or finish after another worker reclaims the job, and that a crashed worker's job becomes claimable without manual row edits. Keep the existing execute_intervention path behavior unchanged while adding the new job type.
 
 This is a candidate integration blocker. No live workflow or database object was changed.
+
+
+## 21 November — candidate replay lease-fencing implementation
+
+A candidate-only implementation has now been added in migration `202611210008_shopify_replay_lease_fencing.sql` with PostgreSQL acceptance coverage in `tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql`.
+
+- Shopify replay jobs receive a fresh random `lease_id` and bounded `lease_expires_at` on claim.
+- Expired claimed replay jobs are atomically reclaimable with a new lease ID.
+- The old worker-ID-only replay loader is revoked from `service_role`; payload loading now requires the current unexpired lease.
+- Dedicated completion and retry RPCs require the current lease. Retry delay is bounded and exhausted attempts transition to DEAD_LETTER.
+- The existing generic job claim/completion contract remains unchanged for `execute_intervention`; the recovery design now separates generic intervention claims from fenced replay claims.
+- CI workflow was updated to apply migration 008 and run the new stale-worker acceptance test on disposable PostgreSQL.
+
+This is candidate code only. It has not been applied to Supabase production, and the active n8n recovery workflow has not been modified. CI results for the final commit must be checked before treating the candidate as validated. Full isolated staging, n8n wiring, and end-to-end delivery/attribution acceptance remain outstanding.
