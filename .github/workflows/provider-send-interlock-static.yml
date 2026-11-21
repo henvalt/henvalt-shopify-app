@@ -18,6 +18,9 @@ on:
       - "tests/shopify-privacy-tenant-index-bootstrap.sql"
       - "tests/shopify-privacy-tenant-index-acceptance.sql"
       - "docs/SUPABASE_ADVISOR_REVIEW_2026-11-21.md"
+      - "docs/SHOPIFY_PRIVACY_COMPLIANCE_BLOCKER_2026-11-21.md"
+      - "tests/shopify-privacy-compliance-blocker.test.mjs"
+      - "shopify.app.toml"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -162,6 +165,8 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
+      - name: Assert mandatory Shopify privacy compliance remains a release gate
+        run: node --test tests/shopify-privacy-compliance-blocker.test.mjs
       - name: Type-check Shopify OAuth Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
       - name: Type-check MailerSend delivery Edge Function
