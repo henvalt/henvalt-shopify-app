@@ -41,5 +41,20 @@
       "Retry Delivery Job": null,
       "Retry Pipeline Job": null
     }
+  },
+  "deferredPaymentReconciler": {
+    "node": "Reconcile Deferred Payment Webhooks",
+    "trigger": "Every Minute",
+    "rpc": "henvalt.reconcile_deferred_payment_webhooks(10)",
+    "connectedFrom": "Every Minute",
+    "onError": "continueErrorOutput",
+    "observedActive": true,
+    "selection": "FAILED + payment_reconciliation_pending=true + payment_reconciliation_next_at<=now()",
+    "rowLock": "FOR UPDATE SKIP LOCKED",
+    "terminalStates": [
+      "PROCESSED",
+      "FAILED with next retry timestamp",
+      "FAILED dead-letter after 60 attempts"
+    ]
   }
 }
