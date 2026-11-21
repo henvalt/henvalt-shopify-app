@@ -27,6 +27,7 @@ jobs:
 
           assert app["client_id"], "Missing Shopify Client ID"
           assert app["application_url"].startswith("https://"), "Application URL must use HTTPS"
+          assert app["application_url"] == "https://henvalt-dashboard.pages.dev", "Application URL must match the verified Cloudflare Pages production domain"
           assert "read_orders" in app["access_scopes"]["scopes"].split(","), "Missing read_orders scope"
           assert "write_pixels" in app["access_scopes"]["scopes"].split(","), "Missing write_pixels scope"
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
