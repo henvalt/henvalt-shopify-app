@@ -50,3 +50,17 @@ test("active classifier's generic 409 duplicate shortcut is a launch blocker unt
   assert.equal(snapshot.resultContract.candidateMustRequireWebhookIdForEvery200, true);
   assert.equal(snapshot.resultContract.generic409MustBeRetryableWithoutDurableRow, true);
 });
+
+test("live normalizer must use Shopify delivery ID, not event correlation ID, for deduplication", () => {
+  assert.deepEqual(snapshot.shopifyIdentity.currentSourceEventIdPrecedence, [
+    "body.event_id",
+    "x-shopify-event-id",
+    "x-shopify-webhook-id",
+    "body.id",
+  ]);
+  assert.equal(snapshot.shopifyIdentity.requiredDeliveryIdHeader, "x-shopify-webhook-id");
+  assert.equal(snapshot.shopifyIdentity.eventCorrelationHeader, "x-shopify-event-id");
+  assert.equal(snapshot.shopifyIdentity.correctSourceEventId, "x-shopify-webhook-id");
+  assert.equal(snapshot.shopifyIdentity.eventCorrelationIsNotDeduplicationKey, true);
+  assert.equal(snapshot.shopifyIdentity.launchBlocker, true);
+});
