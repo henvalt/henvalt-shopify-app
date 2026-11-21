@@ -127,12 +127,12 @@
       ],
       "wait_for_completion": true,
       "onError": "continueErrorOutput",
-      "expected_result": "mark_webhook_processed === true"
+      "expected_result": "mark_webhook_processed === true OR deferred_payment_handoff === true"
     },
     {
       "name": "Replay Ingest Processed?",
       "type": "n8n-nodes-base.if",
-      "condition": "={{ $json.mark_webhook_processed === true }}"
+      "condition": "={{ $json.mark_webhook_processed === true || $json.deferred_payment_handoff === true }}"
     },
     {
       "name": "Complete Shopify Replay Job",
@@ -294,7 +294,7 @@
     "Replay jobs never use claim_next_job, complete_job, retry_job or dead_letter_job.",
     "Load, complete and retry carry the exact job_id, worker_id, lease_id tuple.",
     "The ingest subflow receives only job_id, worker_id and lease_id and reloads trusted stored payload.",
-    "Only mark_webhook_processed === true permits replay completion.",
+    "Only mark_webhook_processed === true or deferred_payment_handoff === true permits replay completion.",
     "A false completion/retry result is terminal lease-lost; do not attempt a generic fallback.",
     "All replay business mutations remain sequential and use the 18 transaction-local fenced wrappers in shopify-ingest-replay-write-map.json.",
     "No replay branch connects to HENVALT_DELIVERY or a provider send node.",
@@ -303,7 +303,8 @@
     "A load failure may retry only with the exact lease tuple; complete/retry RPC errors terminate fail-closed.",
     "An empty or incomplete lease-bound load is retried with the exact lease tuple; it is never mistaken for an already-processed event.",
     "An empty claim is a normal queue miss and returns to Loop Interventions; a present but malformed claim is terminal fail-closed.",
-    "Replay retry stores only the constant SHOPIFY_REPLAY_PROCESSING_FAILED reason; never persist raw exception text or customer data."
+    "Replay retry stores only the constant SHOPIFY_REPLAY_PROCESSING_FAILED reason; never persist raw exception text or customer data.",
+    "A deferred-payment replay completes only after defer_payment_webhook_reconciliation_fenced returns true and the existing recovery reconciler owns the durable follow-up."
   ],
   "dependencies_before_staging": [
     "Add a dedicated Execute Workflow Trigger and isolated replay entry in HENVALT_INGEST candidate; reload payload with load_shopify_webhook_replay_job(job_id, worker_id, lease_id).",
@@ -311,7 +312,8 @@
     "Route the live ingress to durable enqueue and explicit HTTP response before downstream processing; prevent dual ownership between ingress and replay worker.",
     "Apply migrations 001-010 only to isolated disposable/staging PostgreSQL and verify actual n8n credentials and RPC grants.",
     "Test empty queues, intervention success/retry/failure, replay already processed, replay success, replay retry, lease expiry/reclaim, and all terminal loop paths.",
-    "Keep provider sending disabled during every staging acceptance test."
+    "Keep provider sending disabled during every staging acceptance test.",
+    "Exercise the deferred_payment_handoff output through the Execute Workflow result and confirm the recovery worker completes the replay job only on that explicit boolean."
   ],
   "connections_to_add": [
     {
