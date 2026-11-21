@@ -271,3 +271,26 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - PostgreSQL acceptance tests cover marketing-denied suppression, marketing-allowed eligibility and missing-source fail-closed behavior.
 
 - The `webhook_events` table contains 130 `PROCESSED` records (latest 2026-11-14 15:44 UTC) and 2 `FAILED` records (latest receipt 2026-11-02). No later receipt was present in the snapshot.
+
+
+## Dashboard and verified-revenue audit — 2026-11-21
+
+### Live authentication and tenant scope
+- The published `dashboard/index.html` calls `henvalt-merchant-dashboard` and signs users in through Supabase Auth.
+- The live Edge Function validates the access token against Supabase Auth, resolves memberships server-side, requires exactly one membership, then requires exactly one active connection on an ACTIVE tenant before querying the dashboard RPCs.
+- The dashboard's read-only metrics are scoped to that resolved tenant; the function does not accept a caller-supplied tenant ID.
+- A separate active `henvalt-dashboard` Edge Function validates Shopify session tokens but is not the endpoint used by the current dashboard HTML. Keep this duplicate route documented and do not switch the UI to it without a deliberate auth-model decision.
+- The Shopify CLI config still has `application_url = https://henvalt-dashboard.lovable.app`, while the README says the dashboard is published at `https://henvalt-dashboard.pages.dev`. This is configuration drift that must be reconciled before a Shopify app release.
+
+### Metric consistency defect found and candidate correction
+- The live summary RPC's headline recovered-order count is based on CONFIRMED `order_attributions`, and headline recovered revenue is based on CONFIRMED, billable `revenue_ledger` rows.
+- However, the activity feed previously labelled an opportunity RECOVERED based only on `opportunities.status` and displayed `value_at_risk` as the recovered amount. The event breakdown's recovered count also used opportunity status. That could present an estimated abandoned value as recovered even before confirmed attribution.
+- The dashboard UI chart was built from those activity-feed amounts instead of the dedicated confirmed `revenueSeries` returned by the Edge Function.
+- Candidate migration `202611210003_dashboard_confirmed_revenue_metrics.sql` now uses confirmed order attribution for recovered activity and by-event recovered counts, uses attributed order value in the activity feed, and leaves recovered-revenue totals sourced from the confirmed billable ledger.
+- Candidate dashboard UI now plots the dedicated confirmed revenue series and shows the no-confirmed-recovery state when all series values are zero.
+- Added isolated PostgreSQL fixtures test an opportunity marked RECOVERED without attribution (must remain pending), one confirmed attribution (must count as recovered), and a confirmed billable ledger entry (must drive revenue totals). These tests run in the same disposable PostgreSQL 17 CI job.
+- No dashboard migration or HTML change has been deployed to production.
+
+### Billing boundary
+- The live billing summary RPC is service-role-only and reads current billing measurements and provider email-cost measurements.
+- The live database currently has no orders, order attributions or revenue-ledger entries in the audit snapshot, so no verified recovered revenue is currently recorded. Billing must remain non-chargeable until confirmed attribution and ledger entries exist.
