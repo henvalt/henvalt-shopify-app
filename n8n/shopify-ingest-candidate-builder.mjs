@@ -219,6 +219,23 @@ return {
   const replayOrIngress = createNode("Is Replay Entry?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"is-replay-entry",leftValue:"={{ !!$('Validate & Normalize').item.json.replay_context }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
   },[1120,600],2.2);
+  const renewLease = createNode("Renew Replay Lease Before Writes","n8n-nodes-base.httpRequest",{
+    method:"POST",url:"https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/renew_shopify_replay_lease",
+    authentication:"predefinedCredentialType",nodeCredentialType:"supabaseApi",sendHeaders:true,
+    headerParameters:{parameters:[{name:"Content-Type",value:"application/json"},{name:"Content-Profile",value:"henvalt"}]},
+    sendBody:true,specifyBody:"json",
+    jsonBody:"={{ { p_job_id: $('Validate & Normalize').item.json.replay_context.job_id, p_worker_id: $('Validate & Normalize').item.json.replay_context.worker_id, p_lease_id: $('Validate & Normalize').item.json.replay_context.lease_id, p_lease_seconds: 180 } }}",
+    options:{response:{response:{fullResponse:true,neverError:false,responseFormat:"json"}},timeout:15000}
+  },[672,880],4.2);
+  const confirmRenewal = createNode("Confirm Replay Lease Renewal","n8n-nodes-base.code",{
+    mode:"runOnceForEachItem",jsCode:`const response = $json || {};
+const prior = $("Classify Result").item.json;
+const context = $("Validate & Normalize").item.json.replay_context;
+if (response.error || response.statusCode < 200 || response.statusCode >= 300 || !response.body) {
+  throw new Error("SHOPIFY_REPLAY_LEASE_RENEWAL_NOT_CONFIRMED");
+}
+return { ...prior, replay_context: { ...context, lease_expires_at: response.body } };`
+  },[896,880],2);
   const replayPipeline = createNode("Replay Pipeline?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"replay-pipeline",leftValue:"={{ $json.__replay === true }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
   },[448,0],2.2);
@@ -268,6 +285,12 @@ return {
   workflow.connections["Supabase Ingest RPC"].main = [[{node:"Classify Result",type:"main",index:0}],[{node:"Classify Result",type:"main",index:0}]];
   workflow.connections["Classify Result"].main = [[{node:"Replay Pipeline?",type:"main",index:0}]];
   workflow.connections["Replay Pipeline?"] = {main:[
+    [{node:"Renew Replay Lease Before Writes",type:"main",index:0}],
+    [{node:"Respond to Shopify",type:"main",index:0}]
+  ]};
+  workflow.connections["Renew Replay Lease Before Writes"] = {main:[[{node:"Confirm Replay Lease Renewal",type:"main",index:0}]]};
+  workflow.connections["Confirm Replay Lease Renewal"] = {main:[[{node:"Should Process?",type:"main",index:0}]]};
+  workflow.connections["Replay Pipeline?"] = {main:[
     [{node:"Should Process?",type:"main",index:0}],
     [{node:"Respond to Shopify",type:"main",index:0}]
   ]};
@@ -275,7 +298,6 @@ return {
   workflow.connections["Processed Marker Confirmed?"] = {main:[[{node:"Build Success Response",type:"main",index:0}],[{node:"Stop Unconfirmed Processed Marker",type:"main",index:0}]]};
   workflow.connections["Defer Payment Reconciliation"].main = [[{node:"Deferred Handoff Confirmed?",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
   workflow.connections["Deferred Handoff Confirmed?"] = {main:[[{node:"Build Deferred Payment Response",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
-  workflow.connections["Should Process?"].main[1] = [{node:"Respond to Shopify",type:"main",index:0}];
   workflow.connections["Is Rejected Replay?"] = {main:[[{node:"Stop Invalid Replay Envelope",type:"main",index:0}],[{node:"Build Invalid Ingress Response",type:"main",index:0}]]};
   workflow.connections["Build Invalid Ingress Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Build HMAC Rejection Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
@@ -296,6 +318,7 @@ return {
   addNode(workflow,invalidReplay); addNode(workflow,trustedReplay); addNode(workflow,replayOrIngress);
   addNode(workflow,invalidReplayContext);
   addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse); addNode(workflow,hmacResponse);
+  addNode(workflow,renewLease); addNode(workflow,confirmRenewal);
   addNode(workflow,processedGate); addNode(workflow,deferredGate); addNode(workflow,stopMarker);
 
   // n8n graph connections support multiple upstream nodes. Append replay envelope
@@ -305,7 +328,7 @@ return {
     [{node:"Validate & Normalize",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
   ]};
-  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker};
+  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker};
 }
 
 function buildCandidate(input, map, activeVersionId) {
