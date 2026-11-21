@@ -99,3 +99,20 @@ test("forbidden shortcuts and production cutover are explicitly blocked", () => 
   assert.equal(contract.production_boundary.workflow_published, false);
   assert.equal(contract.production_boundary.provider_sending_enabled, false);
 });
+
+const activeSnapshot = JSON.parse(readFileSync(
+  "tests/fixtures/n8n-recovery-route-snapshot.json",
+  "utf8",
+));
+
+test("read-only active recovery snapshot proves replay support is not live yet", () => {
+  assert.equal(activeSnapshot.workflowId, contract.recovery_workflow.id);
+  assert.equal(
+    activeSnapshot.activeVersionId,
+    contract.recovery_workflow.inspected_active_version,
+  );
+  assert.deepEqual(activeSnapshot.activeClaimJobTypes, ["execute_intervention"]);
+  assert.equal(activeSnapshot.replayJobTypeCurrentlyClaimed, false);
+  assert.equal(activeSnapshot.generalWebhookReplayLaunchBlocker, true);
+  assert.equal(activeSnapshot.normalizeGuard.replayJobsPassCurrentGuard, false);
+});
