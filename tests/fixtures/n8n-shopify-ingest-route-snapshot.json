@@ -74,5 +74,18 @@
     "durableIngestRpc": "ingest_raw_webhook_v2",
     "durableIngestOccursAfterHttpAcknowledgement": true,
     "launchBlocker": true
+  },
+  "shopifyIdentity": {
+    "currentSourceEventIdPrecedence": [
+      "body.event_id",
+      "x-shopify-event-id",
+      "x-shopify-webhook-id",
+      "body.id"
+    ],
+    "requiredDeliveryIdHeader": "x-shopify-webhook-id",
+    "eventCorrelationHeader": "x-shopify-event-id",
+    "correctSourceEventId": "x-shopify-webhook-id",
+    "eventCorrelationIsNotDeduplicationKey": true,
+    "launchBlocker": true
   }
 }
