@@ -95,7 +95,7 @@ The connected production database was inspected with SELECT-only catalog/functio
 
 | Scenario | Expected response / outcome | Requirement |
 |---|---|---|
-| New event + atomic replay job | 200 | Durable webhook row and active replay job exist first |
+| New event + atomic replay job | 200 | Durable webhook row and active replay job exist first |\n| Missing `X-Shopify-Webhook-Id` | 400 | Do not substitute `X-Shopify-Event-Id` |\n| Multiple subscriptions share one event ID | Distinct delivery IDs | Deduplicate on `X-Shopify-Webhook-Id`, correlate with `X-Shopify-Event-Id` |
 | Duplicate already processed | 200 | Existing durable row |
 | Duplicate processing with active replay job | 200 | Existing durable job lease/state |
 | Duplicate processing without active replay job | 503 | Do not hide a stranded event |
