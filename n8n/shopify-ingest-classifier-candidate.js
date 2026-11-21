@@ -91,13 +91,14 @@ if (code === 409) {
     __body: { status: "temporarily_unavailable", message: "Webhook conflict could not be tied to a durable replay job.", correlation_id: corr },
   };
 }
-if (code === 401 || code === 403) {
-  return { __proceed: false, __http: 401, __body: { status: "unauthorized", message: "Webhook signature or service authorization failed.", correlation_id: corr } };
+if (code === 401 || code === 403 || code === 404 || code === 408 || code === 429) {
+  return {
+    __proceed: false,
+    __http: 503,
+    __body: { status: "temporarily_unavailable", message: "Ingest endpoint authorization or availability failure; retry.", correlation_id: corr },
+  };
 }
-if (code === 404) {
-  return { __proceed: false, __http: 404, __body: { status: "unknown_tenant", message: "No active integration matches this shop.", correlation_id: corr } };
-}
-if (code >= 400 && code < 500) {
+if (code === 400 || code === 422) {
   return { __proceed: false, __http: 422, __body: { status: "rejected", message: "Event was not accepted by business rules.", correlation_id: corr } };
 }
 return {
