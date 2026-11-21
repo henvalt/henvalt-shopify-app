@@ -333,6 +333,8 @@ return {
 
 This sweep is idempotent: it claims the matching attempt before locking the event, maps only the exact provider account + message ID, applies late bounce/unsubscribe/complaint suppression from the original permit fingerprint, and never submits another provider request. If the RPC response is lost, the next scheduled tick is safe; never route this branch to a send node. If an exact 32-byte fingerprint from the original permit cannot be found, the suppression event stays `UNMATCHED`; do not fall back to recipient email from the webhook or n8n item.
 
+### 4b. Periodic pixel provider-event reconciliation (same Delivery workflow)
+
 After checkout reconciliation, call the pixel-event batch reconciler in the same scheduled Delivery branch:
 
 - URL: `https://<project>.supabase.co/rest/v1/rpc/reconcile_unmatched_shopify_pixel_provider_events_v2`
