@@ -83,7 +83,7 @@ BEGIN
   IF v_tenant_id IS NULL THEN
     RETURN QUERY SELECT
       404, 'unknown_tenant', NULL::uuid, NULL::uuid, NULL::uuid,
-      NULL::henvalt.job_status, NULL::boolean, NULL::boolean, NULL::uuid,
+      NULL::henvalt.job_status, NULL::boolean, NULL::boolean, NULL::text,
       NULL::uuid;
     RETURN;
   END IF;
