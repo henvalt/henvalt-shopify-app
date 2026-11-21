@@ -19,6 +19,10 @@ This document is a release blocker record and implementation contract, not autho
 6. Live `henvalt.delivery_requests` currently contains 2 ACCEPTED and 1 DELIVERED rows (from the read-only status aggregation). These are historical states, not evidence of a current send in progress.
 7. No verified global no-send control was found in the live database function or published workflow graph.
 
+## Candidate implementation already present elsewhere
+
+The open draft PR `#6` (`[DRAFT] HENVALT public-app hardening preparation`) already describes candidate work for a default-deny provider interlock, append-only operator audit, database trigger protection, and coverage of the ordinary and manual delivery paths. That candidate is not the live production implementation. This audit adds a fresh read-only verification of the current live credential-release function and records the exact production gap. Do not duplicate or fork the PR #6 implementation without reconciling its migration and tests first.
+
 ## Required interlock contract
 
 The global stop must be enforced at the final credential-release boundary, not merely in the dashboard, n8n routing, or Edge Function UI.
