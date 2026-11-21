@@ -112,6 +112,8 @@ The candidate lease implementation was extended after review identified that a r
 
 Legacy CLAIMED replay rows with a NULL lease expiry are deliberately not auto-recovered by this change: they predate the lease contract and require a separately reviewed, age-bounded reconciliation policy. Do not silently reset them as part of the claim path.
 
+The exact candidate head `3b7e931b0341d2eba42e99fedfce8c1a5e440b07` passed the HENVALT safety workflow on run [44887721007](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44887721007), including application of migration 008 to disposable PostgreSQL 17 and execution of the lease expiry/stale-worker acceptance test. Shopify configuration static validation passed on run [44887721070](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44887721070); its deployment job was skipped. These results validate the candidate fixture only, not production or isolated Supabase staging.
+
 ## 21 November — candidate replay lease-fencing implementation
 
 A candidate-only implementation has now been added in migration `202611210008_shopify_replay_lease_fencing.sql` with PostgreSQL acceptance coverage in `tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql`.
