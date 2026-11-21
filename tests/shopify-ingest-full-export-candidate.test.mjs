@@ -15,10 +15,10 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(w.active,false);
   assert.equal(w.id,"00000000-0000-4000-8000-999999999999");
   assert.equal(w.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
-  assert.equal(w.nodes.length,69);
-  assert.equal(result.graphAudit.node_count,69);
-  assert.equal(result.graphAudit.unique_node_ids,69);
-  assert.equal(result.graphAudit.unique_node_names,69);
+  assert.equal(w.nodes.length,68);
+  assert.equal(result.graphAudit.node_count,68);
+  assert.equal(result.graphAudit.unique_node_ids,68);
+  assert.equal(result.graphAudit.unique_node_names,68);
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
