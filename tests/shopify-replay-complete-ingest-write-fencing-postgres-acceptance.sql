@@ -1,4 +1,3 @@
-\\set ON_ERROR_STOP on
 
 INSERT INTO henvalt.tenants(id, status)
 VALUES ('cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd', 'ACTIVE')
