@@ -328,6 +328,28 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
 }
 
+function validateGraph(workflow) {
+  const names = new Set();
+  const ids = new Set();
+  for (const node of workflow.nodes) {
+    if (!node.name || names.has(node.name)) throw new Error("Duplicate or missing candidate node name: " + node.name);
+    if (!node.id || ids.has(node.id)) throw new Error("Duplicate or missing candidate node ID: " + node.id);
+    names.add(node.name);
+    ids.add(node.id);
+  }
+  for (const [source, outputs] of Object.entries(workflow.connections || {})) {
+    if (!names.has(source)) throw new Error("Connection source node missing: " + source);
+    for (const output of outputs.main || []) {
+      for (const edge of output || []) {
+        if (!names.has(edge.node)) throw new Error("Connection target node missing: " + edge.node);
+      }
+    }
+  }
+  if (!workflow.nodes.some((node) => node.name === "Shopify Replay Entry Trigger")) throw new Error("Replay trigger missing");
+  if (!workflow.nodes.some((node) => node.name === "Respond to Shopify")) throw new Error("Explicit webhook response node missing");
+  return { node_count: workflow.nodes.length, unique_node_ids: ids.size, unique_node_names: names.size };
+}
+
 function buildCandidate(input, map, activeVersionId) {
   if (!input || input.id !== REQUIRED_WORKFLOW_ID) throw new Error("Wrong HENVALT_INGEST workflow ID");
   if (activeVersionId !== REQUIRED_ACTIVE_VERSION) throw new Error("Active workflow version drift; re-audit before building");
@@ -345,7 +367,8 @@ function buildCandidate(input, map, activeVersionId) {
   workflow.active = false;
   workflow.meta = { ...(workflow.meta || {}), henvalt_candidate: true, source_workflow_id: REQUIRED_WORKFLOW_ID, source_active_version: REQUIRED_ACTIVE_VERSION, credential_rebinding_required: true, provider_sending_enabled: false };
   workflow.tags = [];
-  return { workflow, audit: { fenced_mutation_nodes: changed, source_workflow_id: REQUIRED_WORKFLOW_ID, source_active_version: REQUIRED_ACTIVE_VERSION, expected_workflow_count: REQUIRED_WORKFLOWS, active_workflow_modified: false, credential_rebinding_required: true } };
+  const graphAudit = validateGraph(workflow);
+  return { workflow, graphAudit, audit: { fenced_mutation_nodes: changed, source_workflow_id: REQUIRED_WORKFLOW_ID, source_active_version: REQUIRED_ACTIVE_VERSION, expected_workflow_count: REQUIRED_WORKFLOWS, active_workflow_modified: false, credential_rebinding_required: true } };
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
