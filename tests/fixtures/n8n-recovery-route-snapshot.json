@@ -26,5 +26,20 @@
     "replayPayloadHasInterventionId": false,
     "replayJobsPassCurrentGuard": false,
     "requiresJobTypeRouter": true
+  },
+  "schedulerGraph": {
+    "loopInterventions": {
+      "done": "Tick Complete",
+      "loop": "Claim Due Job"
+    },
+    "jobClaimedTrue": "Atomic Claim Intervention",
+    "jobClaimedFalse": null,
+    "terminalEdges": {
+      "Complete Job": "Loop Interventions",
+      "Retry Job": "Loop Interventions",
+      "Retry Preflight Job": null,
+      "Retry Delivery Job": null,
+      "Retry Pipeline Job": null
+    }
   }
 }
