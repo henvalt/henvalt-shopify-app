@@ -9,6 +9,7 @@ on:
       - "supabase/migrations/202611210004_align_shopify_token_refresh_window.sql"
       - "supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql"
       - "supabase/migrations/202611210006_shopify_webhook_replay_load.sql"
+      - "supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -41,6 +42,7 @@ on:
       - "tests/provider-send-interlock-postgres-acceptance.sql"
       - "tests/shopify-webhook-replay-postgres-acceptance.sql"
       - "tests/shopify-webhook-replay-loader-postgres-acceptance.sql"
+      - "tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
 
@@ -136,6 +138,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-webhook-replay-loader-postgres-acceptance.sql
+      - name: Apply candidate single-round-trip Shopify ingress migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql
+      - name: Exercise single-round-trip Shopify ingress acceptance
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
