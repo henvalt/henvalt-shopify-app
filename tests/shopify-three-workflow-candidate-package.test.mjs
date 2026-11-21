@@ -25,7 +25,7 @@ test("the isolated package contains exactly three distinct inactive candidate wo
     assert.equal(w.active, false);
     assert.equal(w.settings.availableInMCP, false);
     assert.ok(w.nodes.every((n) => !n.credentials && !n.webhookId));
-    assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}/i));
+    assert.ok(!JSON.stringify(w).match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i));
   }
 });
 
