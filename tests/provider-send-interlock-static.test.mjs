@@ -32,5 +32,5 @@ test("interlock trigger is installed on delivery requests", () => {
 });
 
 test("trigger implementation is not callable as a client-facing RPC", () => {
-  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\\.enforce_provider_send_interlock\\(\\)[\\s\\S]*?FROM PUBLIC, anon, authenticated, service_role/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.enforce_provider_send_interlock\(\)[\s\S]*?FROM PUBLIC, anon, authenticated, service_role/i);
 });
