@@ -80,7 +80,7 @@ test("replay load, completion and retry always carry the exact lease tuple", () 
   assert.deepEqual(contract.recovery_workflow.ingest_subflow_input_allowlist, [
     "job_id", "worker_id", "lease_id",
   ]);
-  assert.equal(contract.recovery_workflow.replay_outcomes.ingest_success_requires, "mark_webhook_processed === true");
+  assert.equal(contract.recovery_workflow.replay_outcomes.ingest_success_requires, "mark_webhook_processed === true OR deferred_payment_handoff === true");
   assert.match(replay.retry_sql, /\$4, \$5/);
   assert.equal(replay.retry_delay_seconds_default, 300);
   assert.equal(replay.retry_delay_seconds_max, 3600);
