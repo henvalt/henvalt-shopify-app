@@ -58,6 +58,18 @@ The isolated recovery snapshot/test now records this blocker. The candidate work
 
 Do not broaden the existing guard or claim filter without adding this job-type-specific branch. The active recovery workflow remains unchanged.
 
+## Single-round-trip ingress candidate
+
+The prior candidate still made separate n8n-to-Supabase calls for HMAC verification, tenant resolution, and durable ingest. That is not a comfortable fit inside the Cloudflare worker's 3.5-second upstream budget. Candidate migration `202611210007_shopify_webhook_single_roundtrip_ingress.sql` adds `henvalt.receive_shopify_webhook_v1(...)`, a service-role-only RPC that performs those steps in one PostgREST round trip:
+1. Validates the Shopify shop domain, topic, delivery ID, raw body and parsed payload.
+2. Checks that the Vault app secret exists (missing secret → retryable 503).
+3. Verifies the HMAC over the exact base64-encoded raw bytes before tenant lookup (bad signature → 401).
+4. Parses the signed raw bytes as JSON and requires exact JSONB equality with the parsed payload supplied by n8n.
+5. Resolves the active tenant from the shop domain (unknown tenant → 404).
+6. Calls the atomic webhook + replay-job wrapper and returns explicit HTTP/result status plus durable IDs.
+
+The new disposable PostgreSQL acceptance test covers valid delivery, duplicate idempotency, invalid HMAC before tenant lookup, missing secret as 503, unknown tenant, missing delivery ID, and raw-body/payload mismatch. The candidate n8n ingress should replace the three separate HMAC/tenant/ingest calls with this one RPC; no live node has been changed.
+
 ## Candidate durable-ack classifier
 
 The candidate node script `n8n/shopify-ingest-classifier-candidate.js` replaces the current generic-409 shortcut. A 2xx is returned only when the RPC response contains a durable webhook ID and either:
@@ -166,4 +178,4 @@ The connected production database was inspected with SELECT-only catalog/functio
 
 ## Safety boundary
 
-This document, candidate n8n normalizer/classifier scripts, candidate contract code, migrations `202611210005_shopify_webhook_replay_enqueue.sql` and `202611210006_shopify_webhook_replay_load.sql`, disposable PostgreSQL fixture/acceptance tests and regression snapshots are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
+This document, candidate n8n normalizer/classifier scripts, candidate contract code, migrations `202611210005_shopify_webhook_replay_enqueue.sql`, `202611210006_shopify_webhook_replay_load.sql`, and `202611210007_shopify_webhook_single_roundtrip_ingress.sql`, disposable PostgreSQL fixture/acceptance tests and regression snapshots are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
