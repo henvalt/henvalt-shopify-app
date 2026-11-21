@@ -217,7 +217,6 @@ BEGIN
     'byEvent', v_by_event
   );
 END;
-$function$
-
+$function$;
 
 COMMIT;
