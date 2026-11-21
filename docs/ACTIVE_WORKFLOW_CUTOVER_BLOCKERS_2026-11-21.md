@@ -121,7 +121,7 @@ A further read-only inspection of the active `HENVALT_INGEST` graph and candidat
 - The active tenant lookup must still run, and the resolved tenant must equal the tenant ID returned by the lease-fenced loader before any replay mutation.
 - The replay path can bypass a second HMAC call only after the trusted loader verifies the stored ingress HMAC attestation. Public Shopify ingress must use the atomic `receive_shopify_webhook_v1` RPC.
 - A successful HTTP 200 for new/in-flight ingress requires both a durable webhook UUID and an active replay-job UUID/state. A legacy HTTP 409, missing ID, unknown result, or terminal queue state is not an accepted duplicate.
-- The current payment-defer path has no proven replay completion terminal contract. It remains blocked: do not report replay completion until the deferred follow-up is durable and the webhook state is explicitly terminal.
+- The candidate replay graph now defines `deferred_payment_handoff=true` as a second completion outcome only after `defer_payment_webhook_reconciliation_fenced` returns true. This is a candidate contract, not live runtime proof; isolated staging must verify the RPC response, durable follow-up ownership, and replay-job completion together. The active workflow remains unchanged.
 
 Candidate-only helpers and checks now exist:
 - `n8n/shopify-ingest-replay-envelope-candidate.mjs` and `tests/shopify-ingest-replay-envelope.test.mjs`.
@@ -130,3 +130,8 @@ Candidate-only helpers and checks now exist:
 - Full design notes: `docs/N8N_SHOPIFY_INGEST_REPLAY_ENTRY_CANDIDATE.md`.
 
 These are specifications and pure helpers, not a constructed/importable n8n graph. No active workflow was edited or published, no production database changed, and no provider send was enabled. **Release remains NO-GO pending the complete isolated graph, deferred-payment resolution, and staging acceptance.**
+
+
+## Recovery preview-data sanitization — 2026-11-21
+
+A read-only inspection of the active `HENVALT_RECOVERY` export found that the manual one-off email preview response includes a literal recipient value. The node is a preview path and is not itself a provider-send node, but the value is still personal data. Any public sanitized workflow fixture, generated candidate export, CI artifact, or isolated draft must redact that literal and must not treat it as a real merchant/customer destination. This does not authorize changing the active workflow; production execution-data retention and redaction remain separate owner-level blockers.
