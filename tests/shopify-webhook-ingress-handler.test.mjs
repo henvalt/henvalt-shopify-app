@@ -68,7 +68,7 @@ test("valid Shopify HMAC forwards the exact raw body and signed delivery headers
   assert.equal(forwarded.length, 1);
   assert.equal(forwarded[0].url, env.N8N_INGEST_URL);
   assert.equal(forwarded[0].init.method, "POST");
-  assert.equal(forwarded[0].init.body, rawBody);
+  assert.equal(new TextDecoder().decode(forwarded[0].init.body), rawBody);
   assert.equal(forwarded[0].init.headers.get("x-shopify-webhook-id"), "synthetic-delivery-001");
   assert.equal(forwarded[0].init.headers.get("x-shopify-topic"), "orders/paid");
 });
@@ -89,4 +89,16 @@ test("n8n upstream failure returns retryable 503 to Shopify", async () => {
   const response = await handleRequest(request(await sign(rawBody)), env, async () => new Response("down", { status: 502 }));
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error, "ingest_unavailable");
+});
+
+test("valid signatures cover exact UTF-8 bytes without text re-encoding", async () => {
+  const unicodeBody = JSON.stringify({ title: "Crème brûlée 🍮", test: true });
+  const forwarded = [];
+  const response = await handleRequest(request(await sign(unicodeBody), unicodeBody), env, async (url, init) => {
+    forwarded.push(init.body);
+    return Response.json({ accepted: true });
+  });
+  assert.equal(response.status, 200);
+  assert.equal(new TextDecoder().decode(forwarded[0]), unicodeBody);
+  assert.deepEqual([...forwarded[0]], [...new TextEncoder().encode(unicodeBody)]);
 });
