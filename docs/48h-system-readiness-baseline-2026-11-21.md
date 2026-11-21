@@ -262,3 +262,10 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - Its authorization predicate contains a narrowly hard-coded one-off test exception tied to a specific tenant, opportunity, test-only message marker and idempotency key. That exception bypasses the tenant `recoveryEnabled` flag for the test route.
 - The candidate interlock trigger blocks the `provider_claimed_at: NULL -> timestamp` update before the function can read/return the provider token. It therefore covers the observed one-off exception as well as the ordinary send path.
 - The exact one-off recipient address and secret references are intentionally omitted from repository evidence.
+
+
+### Browse send-time consent recheck
+- The live `browse_opportunity_advanced` helper is used by `authorize_delivery_request`, `get_mailersend_token_for_delivery` and `get_recovery_worker_context`.
+- Filtering only new browse candidates is insufficient because previously created opportunities could still reach delivery authorization.
+- Candidate pixel migration now makes this shared helper fail closed when the source event is missing or lacks analytics-processing and marketing permission, so existing browse opportunities are rechecked again at context/authorization/token-claim time.
+- PostgreSQL acceptance tests cover marketing-denied suppression, marketing-allowed eligibility and missing-source fail-closed behavior.
