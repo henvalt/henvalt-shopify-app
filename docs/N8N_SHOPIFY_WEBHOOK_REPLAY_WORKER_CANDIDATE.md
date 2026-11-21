@@ -283,7 +283,7 @@ An offline builder now assembles a complete inactive HENVALT_RECOVERY_CANDIDATE_
 - Credentials and webhook IDs are removed; candidate is inactive, hidden from MCP, and contains no provider-send node. The manual email preview recipient is redacted in the source fixture.
 - Candidate graph tests assert node/connection integrity, stable lease tuple bindings, explicit error exits, deferred-payment handoff gating, and no-send constraints.
 
-This export is still an offline candidate. It has not been imported into isolated n8n, credentials have not been rebound, and no workflow runtime test has been executed. The INGEST candidate must include its dedicated three-field replay trigger and both candidate workflows must be imported together into an isolated environment before acceptance testing. Production remains NO-GO.
+This export is still an offline candidate. It has not been imported into isolated n8n, credentials have not been rebound, and no workflow runtime test has been executed. The INGEST candidate now declares the exact three-field replay trigger (job_id, worker_id, lease_id); tests verify that the recovery subworkflow calls only the INGEST and DELIVERY candidate IDs. A cross-workflow package test checks the three IDs, inactive flags, no credentials, no webhook IDs, no PII literals, and the DELIVERY no-send stub. All three candidate workflows must still be imported together into an isolated environment before acceptance testing. Production remains NO-GO.
 
 
 ## Three-workflow no-send isolation boundary — 2026-11-21
