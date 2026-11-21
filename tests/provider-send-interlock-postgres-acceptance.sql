@@ -238,7 +238,9 @@ DECLARE
   v_connection uuid := gen_random_uuid();
   v_unconfirmed_opportunity uuid := gen_random_uuid();
   v_confirmed_opportunity uuid := gen_random_uuid();
+  v_null_value_opportunity uuid := gen_random_uuid();
   v_order uuid := gen_random_uuid();
+  v_null_value_order uuid := gen_random_uuid();
   v_summary jsonb;
 BEGIN
   INSERT INTO henvalt.tenants(id, status, default_currency)
@@ -250,37 +252,48 @@ BEGIN
     id, tenant_id, created_at, updated_at, opportunity_type, status, value_at_risk, currency
   ) VALUES
     (v_unconfirmed_opportunity, v_tenant, now() - interval '1 hour', now(), 'ABANDONED_CHECKOUT', 'RECOVERED', 99.99, 'USD'),
-    (v_confirmed_opportunity, v_tenant, now() - interval '2 hours', now(), 'ABANDONED_CHECKOUT', 'RECOVERED', 99.99, 'USD');
+    (v_confirmed_opportunity, v_tenant, now() - interval '2 hours', now(), 'ABANDONED_CHECKOUT', 'RECOVERED', 99.99, 'USD'),
+    (v_null_value_opportunity, v_tenant, now() - interval '30 minutes', now(), 'ABANDONED_CHECKOUT', 'RECOVERED', 99.99, 'USD');
 
   INSERT INTO henvalt.recovery_interventions(
     tenant_id, opportunity_id, status, created_at, updated_at, delivered_at
   ) VALUES
     (v_tenant, v_unconfirmed_opportunity, 'DELIVERED', now() - interval '1 hour', now(), now()),
-    (v_tenant, v_confirmed_opportunity, 'DELIVERED', now() - interval '2 hours', now(), now());
+    (v_tenant, v_confirmed_opportunity, 'DELIVERED', now() - interval '2 hours', now(), now()),
+    (v_tenant, v_null_value_opportunity, 'DELIVERED', now() - interval '30 minutes', now(), now());
 
   INSERT INTO henvalt.order_attributions(
     tenant_id, order_id, opportunity_id, attribution_confidence, attributed_value, evaluated_at
   ) VALUES (
     v_tenant, v_order, v_confirmed_opportunity, 'CONFIRMED', 45.67, now()
   );
+  INSERT INTO henvalt.order_attributions(
+    tenant_id, order_id, opportunity_id, attribution_confidence, attributed_value, evaluated_at
+  ) VALUES (
+    v_tenant, v_null_value_order, v_null_value_opportunity, 'CONFIRMED', NULL, now()
+  );
 
   v_summary := henvalt.control_plane_dashboard_summary(
     'dashboard-synthetic.myshopify.com', now() - interval '1 day', now()
   );
 
-  IF v_summary #>> '{metrics,recoveredOrders}' <> '1'
+  IF v_summary #>> '{metrics,recoveredOrders}' <> '2'
      OR v_summary #>> '{metrics,revenueRecovered}' <> '0' THEN
     RAISE EXCEPTION 'dashboard summary included unconfirmed revenue or lost confirmed attribution: %', v_summary;
   END IF;
-  IF v_summary #>> '{activity,0,outcome}' <> 'pending'
-     OR v_summary #>> '{activity,0,amount}' IS NOT NULL THEN
-    RAISE EXCEPTION 'unconfirmed recovered opportunity was shown as recovered: %', v_summary #> '{activity,0}';
+  IF v_summary #>> '{activity,0,outcome}' <> 'recovered'
+     OR v_summary #> '{activity,0,amount}' IS NOT NULL THEN
+    RAISE EXCEPTION 'confirmed attribution with nullable order value was not still shown as recovered: %', v_summary #> '{activity,0}';
   END IF;
-  IF v_summary #>> '{activity,1,outcome}' <> 'recovered'
-     OR v_summary #>> '{activity,1,amount}' <> '45.67' THEN
-    RAISE EXCEPTION 'confirmed attribution was not shown with attributed order value: %', v_summary #> '{activity,1}';
+  IF v_summary #>> '{activity,1,outcome}' <> 'pending'
+     OR v_summary #> '{activity,1,amount}' IS NOT NULL THEN
+    RAISE EXCEPTION 'unconfirmed recovered opportunity was shown as recovered: %', v_summary #> '{activity,1}';
   END IF;
-  IF v_summary #>> '{byEvent,0,recovered}' <> '1' THEN
+  IF v_summary #>> '{activity,2,outcome}' <> 'recovered'
+     OR v_summary #>> '{activity,2,amount}' <> '45.67' THEN
+    RAISE EXCEPTION 'confirmed attribution was not shown with attributed order value: %', v_summary #> '{activity,2}';
+  END IF;
+  IF v_summary #>> '{byEvent,0,recovered}' <> '2' THEN
     RAISE EXCEPTION 'by-event recovered count does not match confirmed attribution: %', v_summary #> '{byEvent,0}';
   END IF;
 
