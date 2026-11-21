@@ -6,6 +6,8 @@ on:
       - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
       - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
+      - "supabase/migrations/202611210004_align_shopify_token_refresh_window.sql"
+      - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
       - "extensions/henvalt-pixel/src/index.js"
@@ -42,7 +44,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify static safety and pixel consent invariants
-        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs
+        run: node --test tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
@@ -71,6 +73,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql
+      - name: Apply candidate token refresh alignment migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210004_align_shopify_token_refresh_window.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
