@@ -29,35 +29,14 @@
   ],
   "existing_connections_to_replace": [
     {
-      "from": "Job Claimed?",
-      "output": 1,
-      "to": "Claim Shopify Replay Job",
-      "reason": "No intervention claimed must hand off to replay."
-    },
-    {
       "from": "Complete Job",
       "output": 0,
-      "to": "Claim Shopify Replay Job"
+      "to": "Loop Interventions"
     },
     {
       "from": "Retry Job",
       "output": 0,
-      "to": "Claim Shopify Replay Job"
-    },
-    {
-      "from": "Retry Preflight Job",
-      "output": 0,
-      "to": "Claim Shopify Replay Job"
-    },
-    {
-      "from": "Retry Delivery Job",
-      "output": 0,
-      "to": "Claim Shopify Replay Job"
-    },
-    {
-      "from": "Retry Pipeline Job",
-      "output": 0,
-      "to": "Claim Shopify Replay Job"
+      "to": "Loop Interventions"
     }
   ],
   "nodes_to_add": [
@@ -294,5 +273,41 @@
     "Apply migrations 001-010 only to isolated disposable/staging PostgreSQL and verify actual n8n credentials and RPC grants.",
     "Test empty queues, intervention success/retry/failure, replay already processed, replay success, replay retry, lease expiry/reclaim, and all terminal loop paths.",
     "Keep provider sending disabled during every staging acceptance test."
+  ],
+  "connections_to_add": [
+    {
+      "from": "Job Claimed?",
+      "output": 1,
+      "to": "Claim Shopify Replay Job",
+      "reason": "No intervention claimed must hand off to replay."
+    },
+    {
+      "from": "Complete Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    },
+    {
+      "from": "Retry Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job"
+    },
+    {
+      "from": "Retry Preflight Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job",
+      "reason": "Currently has no outgoing edge; terminal must hand off to replay."
+    },
+    {
+      "from": "Retry Delivery Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job",
+      "reason": "Currently has no outgoing edge; terminal must hand off to replay."
+    },
+    {
+      "from": "Retry Pipeline Job",
+      "output": 0,
+      "to": "Claim Shopify Replay Job",
+      "reason": "Currently has no outgoing edge; terminal must hand off to replay."
+    }
   ]
 }
