@@ -1,6 +1,6 @@
 # HENVALT_INGEST replay entry — candidate contract
 
-Status: candidate-only engineering specification and pure helpers. This is not an importable n8n workflow, does not modify a live workflow, and is not staging evidence.
+Status: the full offline candidate export has now been generated from the exact pinned active workflow and retained as a CI artifact. It has not been imported into n8n, executed, or validated against an isolated n8n draft. No live workflow was modified.
 
 ## Fixed identities and safety
 
@@ -72,9 +72,9 @@ The candidate routes this operation through `defer_payment_webhook_reconciliatio
 
 ## Acceptance and release boundary
 
-Static checks cover the envelope, durable acknowledgement classifier, loader signature, write-map inventory, and no-provider route. They do not prove an n8n graph has been authored, imported, or executed. Before staging, build a complete isolated workflow JSON candidate, audit every mutation node, resolve the deferred-payment branch, and run the full replay matrix against disposable PostgreSQL with provider egress denied.
+Static checks cover the envelope, durable acknowledgement classifier, loader signature, write-map inventory, and no-provider route. The complete candidate was generated from `n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json`: 68 nodes, 68 unique IDs, 68 unique names, all 18 mutations fenced, no credential references, and no live webhook ID. The candidate artifact is `henvalt-ingest-candidate-no-send` from CI run [44923015914](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44923015914). That run passed all 136 Node tests, both Deno type checks, all disposable PostgreSQL migrations/acceptance tests, and the transactional lease-heartbeat acceptance. Migration `202611210011_shopify_replay_write_lease_heartbeat.sql` now renews the current lease inside every fenced business-write transaction; a stale or expired lease still fails before mutation. The public ingress branch now calls the atomic ingress RPC directly; tenant lookup is reserved for trusted internal replay. A processed event discovered at the second loader boundary returns an idempotent completion flag.
 
-Production remains NO-GO until isolated staging proves durable ingress, replay, lease replacement, all fenced writes, terminal status, and end-to-end event-to-ledger behavior. Provider sending stays disabled.
+The generated JSON is a raw inactive workflow export with credentials intentionally removed; it still requires credential rebinding and import/schema validation in an approved isolated n8n draft. The recovery graph patch is also still a candidate specification, not an imported workflow. Disposable PostgreSQL is not a substitute for isolated Supabase staging or full n8n runtime acceptance. Production remains NO-GO until staging proves durable ingress, replay, lease replacement, all fenced writes, terminal status, and end-to-end event-to-ledger behavior. Provider sending stays disabled.
 
 
 ## Candidate graph builder and additional guards
