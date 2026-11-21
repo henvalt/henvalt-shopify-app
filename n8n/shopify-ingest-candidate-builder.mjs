@@ -93,6 +93,7 @@ function replaceClassifier(node) {
 const corr = norm.correlation_id;
 const eventId = norm.event?.event_id || null;
 const replay = norm.replay_context || null;
+const isUuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 // The replay path enters only after the lease-fenced loader and tenant equality guard.
 if (replay) {
@@ -114,7 +115,7 @@ if (resp.error !== undefined || resp.statusCode === undefined) {
 }
 const raw = resp.body;
 const row = Array.isArray(raw) ? (raw[0] || {}) : (raw || {});
-if (Number(row.http_status) !== 200 || !row.webhook_id) {
+if (Number(row.http_status) !== 200 || !isUuid(row.webhook_id)) {
   const status = [401,404,422,503].includes(Number(row.http_status)) ? Number(row.http_status) : 503;
   return { __proceed: false, __replay: false, __http: status, __body: { status: row.result_status || "temporarily_unavailable", correlation_id: row.correlation_id || corr } };
 }
@@ -123,7 +124,7 @@ if (row.result_status === "duplicate" && state === "PROCESSED") {
   return { __proceed: false, __replay: false, __http: 200, __body: { status: "duplicate", webhook_id: row.webhook_id, correlation_id: row.correlation_id || corr } };
 }
 if (["accepted","replay_accepted"].includes(row.result_status) &&
-    row.replay_job_id && ["QUEUED","CLAIMED","RUNNING","RETRY_WAIT"].includes(String(row.replay_job_status || "").toUpperCase())) {
+    isUuid(row.replay_job_id) && ["QUEUED","CLAIMED","RUNNING","RETRY_WAIT"].includes(String(row.replay_job_status || "").toUpperCase())) {
   return { __proceed: false, __replay: false, __http: 200, __body: { status: row.result_status, webhook_id: row.webhook_id, replay_job_id: row.replay_job_id, correlation_id: row.correlation_id || corr } };
 }
 return { __proceed: false, __replay: false, __http: 503, __body: { status: "durable_replay_job_not_confirmed", correlation_id: corr } };`;
