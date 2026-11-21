@@ -762,6 +762,59 @@ BEGIN
   RAISE EXCEPTION 'Pixel batch sweep was not idempotent after event processing: %',v_result;
  END IF;
 
+ -- Simulate a worker crash after permit consumption but before the provider
+ -- response/attempt acknowledgement. The stale sweep must quarantine it.
+ INSERT INTO henvalt.shopify_pixel_event_inbox_v2(
+  tenant_id,shopify_connection_id,source_event_id,event_type,event_digest,
+  occurred_at,analytics_processing_allowed,marketing_allowed,client_reference,
+  customer_reference,payload,status,processed_at
+ ) VALUES(v_tenant,v_connection,'pixel-stale-inbox-'||gen_random_uuid()::text,
+  'product_added_to_cart',encode(extensions.digest(convert_to(gen_random_uuid()::text,'UTF8'),'sha256'),'hex'),
+  now()-interval '1 hour',true,false,'stale-browser','12345',
+  '{"product":{"id":"stale-product"}}'::jsonb,'PROCESSED',now())
+ RETURNING id INTO v_inbox;
+ INSERT INTO henvalt.shopify_session_identity_v2(
+  tenant_id,shopify_connection_id,session_reference,customer_identity_id
+ ) VALUES(v_tenant,v_connection,'pixel-stale-session-'||gen_random_uuid()::text,v_customer)
+ RETURNING id INTO v_session;
+ INSERT INTO henvalt.shopify_pixel_recovery_candidate_v2(
+  tenant_id,shopify_connection_id,candidate_type,session_identity_id,customer_identity_id,
+  source_inbox_event_id,product_key,product_context,last_activity_at,eligible_after,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,'ABANDONED_CART',v_session,v_customer,v_inbox,
+  'stale-product','{"product_id":"stale-product"}'::jsonb,now()-interval '1 hour',
+  now()-interval '30 minutes','PROMOTED','pixel-stale-candidate-'||gen_random_uuid()::text)
+ RETURNING id INTO v_candidate;
+ INSERT INTO henvalt.shopify_recovery_opportunity_v2(
+  tenant_id,shopify_connection_id,app_key,candidate_id,checkout_identity_id,customer_identity_id,
+  source_delivery_id,pixel_candidate_id,opportunity_type,status,idempotency_key
+ ) VALUES(v_tenant,v_connection,v_app_key,NULL,NULL,v_customer,NULL,v_candidate,
+  'ABANDONED_CART','REVIEW_REQUIRED','pixel-stale-opportunity-'||gen_random_uuid()::text)
+ RETURNING id INTO v_opportunity;
+ INSERT INTO henvalt.shopify_pixel_send_attempts_v2(
+  tenant_id,shopify_connection_id,opportunity_id,pixel_candidate_id,customer_identity_id,
+  provider_account_key,idempotency_key,status
+ ) VALUES(v_tenant,v_connection,v_opportunity,v_candidate,v_customer,v_provider,
+  'pixel-stale-attempt-'||gen_random_uuid()::text,'AUTHORIZED')
+ RETURNING id INTO v_attempt;
+ UPDATE henvalt.shopify_pixel_send_attempts_v2
+ SET created_at=now()-interval '3 minutes' WHERE id=v_attempt;
+ PERFORM pg_catalog.set_config('request.jwt.claim.role','service_role',true);
+ v_result:=henvalt.mark_stale_shopify_pixel_send_attempts_ambiguous_v2(
+  now()-interval '2 minutes',100
+ );
+ IF v_result->>'accepted'<>'true'
+   OR (v_result->>'marked_ambiguous')::integer<>1
+   OR v_result->>'automatic_retry_performed'<>'false'
+   OR v_result->>'provider_cost_reservation_released'<>'false' THEN
+  RAISE EXCEPTION 'Stale pixel attempt was not quarantined safely: %',v_result;
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_send_attempts_v2
+   WHERE id=v_attempt AND status='AMBIGUOUS')
+   OR NOT EXISTS(SELECT 1 FROM henvalt.shopify_pixel_delivery_cost_reservations_v2
+     WHERE pixel_send_attempt_id=v_attempt AND status='RESERVED') THEN
+  RAISE EXCEPTION 'Stale pixel attempt lost its ambiguous status or reserved cost';
+ END IF;
+
 END;
 $test$;
 ROLLBACK;
