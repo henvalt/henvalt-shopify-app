@@ -393,7 +393,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop()
   const input = JSON.parse(readFileSync(inputPath,"utf8"));
   const map = JSON.parse(readFileSync(MAP_PATH,"utf8"));
   const result = buildCandidate(input,map,activeVersionId);
-  writeFileSync(outputPath,JSON.stringify(result,null,2)+"\n");
-  process.stdout.write(JSON.stringify(result.audit)+"\n");
+  writeFileSync(outputPath,JSON.stringify(result.workflow,null,2)+"\n");
+  process.stdout.write(JSON.stringify({ ...result.audit, ...result.graphAudit })+"\n");
 }
 export { buildCandidate };
