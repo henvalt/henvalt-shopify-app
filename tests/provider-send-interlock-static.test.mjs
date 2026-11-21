@@ -30,3 +30,7 @@ test("interlock guards initial UNKNOWN inserts and both send-claim updates", () 
 test("interlock trigger is installed on delivery requests", () => {
   assert.match(migration, /CREATE TRIGGER delivery_requests_provider_send_interlock[\s\S]*?ON henvalt\.delivery_requests[\s\S]*?EXECUTE FUNCTION henvalt\.enforce_provider_send_interlock\(\)/i);
 });
+
+test("trigger implementation is not callable as a client-facing RPC", () => {
+  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\\.enforce_provider_send_interlock\\(\\)[\\s\\S]*?FROM PUBLIC, anon, authenticated, service_role/i);
+});
