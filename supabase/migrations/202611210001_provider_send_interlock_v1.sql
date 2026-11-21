@@ -231,6 +231,21 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  -- The historical manual one-off path is never a production send exemption,
+  -- even if an operator opens the global gate for normal recovery traffic.
+  IF EXISTS (
+    SELECT 1
+      FROM henvalt.delivery_requests dr
+      JOIN henvalt.messages m
+        ON m.id = dr.message_reference
+       AND m.tenant_id = dr.tenant_id
+     WHERE dr.id = p_delivery_request_id
+       AND m.metadata->>'test_only' = 'true'
+  ) THEN
+    RAISE EXCEPTION 'HENVALT_ONE_OFF_TEST_SEND_DISABLED'
+      USING ERRCODE = '42501';
+  END IF;
+
   RETURN henvalt.get_mailersend_token_for_delivery_legacy_v1(
     p_tenant_id, p_delivery_request_id
   );
