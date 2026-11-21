@@ -6,6 +6,10 @@ const contract = JSON.parse(readFileSync(
   "n8n/shopify-recovery-replay-branch-contract.json",
   "utf8",
 ));
+const leaseMigration = readFileSync(
+  "supabase/migrations/202611210008_shopify_replay_lease_fencing.sql",
+  "utf8",
+);
 const workerSpec = readFileSync(
   "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md",
   "utf8",
@@ -42,8 +46,15 @@ test("intervention and replay claims remain separate and type-restricted", () =>
   assert.ok(recovery.replay_guard.reject_unknown_job_types);
   assert.equal(recovery.replay_guard.required_payload_field, "payload.webhook_id");
   assert.deepEqual(recovery.replay_claim.required_claim_fields, [
-    "job_id", "worker_id", "lease_id", "lease_expires_at",
+    "id", "lease_id", "lease_expires_at", "payload",
   ]);
+  assert.match(leaseMigration, /RETURNS SETOF henvalt\.background_jobs/);
+  assert.deepEqual(recovery.replay_claim.normalized_claim_fields, [
+    "job_id", "worker_id", "lease_id", "lease_expires_at", "webhook_id",
+  ]);
+  assert.equal(recovery.replay_claim.normalization.job_id, "raw claim row id");
+  assert.equal(recovery.replay_claim.normalization.lease_id, "raw claim row lease_id, unchanged");
+  assert.equal(recovery.replay_claim.normalization.webhook_id, "UUID parsed from raw claim row payload.webhook_id");
 });
 
 test("scheduler contract bounds both queues so neither can starve", () => {
