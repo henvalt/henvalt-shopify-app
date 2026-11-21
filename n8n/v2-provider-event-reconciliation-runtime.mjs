@@ -22,6 +22,14 @@ export function createV2ProviderEventReconciliationRuntime({
         events.ambiguous_cost_reservation_released!==false) {
         throw new Error("provider_event_reconciliation_unconfirmed");
       }
+      const pixel=await rpc("reconcile_unmatched_shopify_pixel_provider_events_v2",{p_limit:limit});
+      if(pixel?.accepted!==true||!Number.isInteger(pixel.reconciled)||pixel.reconciled<0||pixel.reconciled>limit||
+        !Number.isInteger(pixel.deferred)||pixel.deferred<0||pixel.deferred>limit||
+        pixel.reconciled+pixel.deferred>limit||pixel.automatic_resend_performed!==false||
+        pixel.ambiguous_cost_reservation_released!==false||pixel.provider_called!==false||
+        pixel.recipient_pii_returned!==false) {
+        throw new Error("pixel_provider_event_reconciliation_unconfirmed");
+      }
       const stale=await rpc("mark_stale_shopify_checkout_send_attempts_ambiguous_v2",{
         p_limit:limit,
       });
@@ -34,6 +42,8 @@ export function createV2ProviderEventReconciliationRuntime({
       return Object.freeze({
         accepted:true,
         events_reconciled:events.reconciled,
+        pixel_events_reconciled:pixel.reconciled,
+        pixel_events_deferred:pixel.deferred,
         stale_attempts_marked_ambiguous:stale.marked_ambiguous,
         automatic_resend_performed:false,
         ambiguous_cost_reservation_released:false,
