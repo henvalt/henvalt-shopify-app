@@ -41,6 +41,9 @@ on:
       - "n8n/shopify-recovery-replay-graph-patch.json"
       - "n8n/fixtures/henvalt-recovery-active-2026-11-21.sanitized.json"
       - "n8n/shopify-recovery-candidate-builder.mjs"
+      - "n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json"
+      - "n8n/shopify-delivery-candidate-builder.mjs"
+      - "tests/shopify-delivery-full-export-candidate.test.mjs"
       - "tests/shopify-recovery-full-export-candidate.test.mjs"
       - "n8n/shopify-replay-claim-normalizer-candidate.mjs"
       - "n8n/shopify-replay-claim-normalizer-node-candidate.js"
@@ -125,6 +128,8 @@ jobs:
           retention-days: 7
       - name: Test full recovery candidate graph and safety invariants
         run: node --test tests/shopify-recovery-full-export-candidate.test.mjs
+      - name: Test full delivery no-send candidate graph and provider-egress invariants
+        run: node --test tests/shopify-delivery-full-export-candidate.test.mjs
       - name: Generate full offline no-send HENVALT_RECOVERY candidate export
         run: node n8n/shopify-recovery-candidate-builder.mjs
       - name: Parse and verify generated recovery candidate JSON
@@ -134,6 +139,17 @@ jobs:
         with:
           name: henvalt-recovery-candidate-no-send
           path: n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Generate full offline no-send HENVALT_DELIVERY candidate export
+        run: node n8n/shopify-delivery-candidate-builder.mjs
+      - name: Parse and verify generated delivery candidate JSON
+        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json", "utf8")); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999996" || w.nodes.length !== 54) process.exit(1)'
+      - name: Upload offline no-send delivery workflow candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-delivery-candidate-no-send
+          path: n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json
           if-no-files-found: error
           retention-days: 7
       - uses: denoland/setup-deno@v2
