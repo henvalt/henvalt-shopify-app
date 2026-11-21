@@ -5,9 +5,21 @@ DECLARE
   v_id uuid;
   v_role text;
   v_events integer;
+  v_status record;
 BEGIN
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
     RAISE EXCEPTION 'default interlock is not closed';
+  END IF;
+
+  SELECT * INTO v_status FROM henvalt.provider_sending_status();
+  IF v_status.enabled IS DISTINCT FROM false
+     OR v_status.control_present IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'non-secret status surface did not report default-deny state: %', v_status;
+  END IF;
+  IF NOT has_function_privilege('service_role', 'henvalt.provider_sending_status()', 'EXECUTE')
+     OR has_function_privilege('anon', 'henvalt.provider_sending_status()', 'EXECUTE')
+     OR has_function_privilege('authenticated', 'henvalt.provider_sending_status()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'provider status surface has incorrect execute grants';
   END IF;
 
   FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated', 'service_role'] LOOP
@@ -71,9 +83,29 @@ BEGIN
     RAISE EXCEPTION 'missing control row did not fail closed';
   END IF;
 
+  SELECT * INTO v_status FROM henvalt.provider_sending_status();
+  IF v_status.enabled IS DISTINCT FROM false
+     OR v_status.control_present IS DISTINCT FROM false THEN
+    RAISE EXCEPTION 'missing control row did not appear closed in status surface: %', v_status;
+  END IF;
+
+  BEGIN
+    UPDATE henvalt.provider_send_control_events
+       SET change_reason = 'tamper attempt';
+    RAISE EXCEPTION 'expected audit update to be blocked';
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    NULL;
+  END;
+  BEGIN
+    DELETE FROM henvalt.provider_send_control_events;
+    RAISE EXCEPTION 'expected audit delete to be blocked';
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    NULL;
+  END;
+
   SELECT count(*) INTO v_events FROM henvalt.provider_send_control_events;
   IF v_events <> 2 THEN
-    RAISE EXCEPTION 'expected two operator audit events, got %', v_events;
+    RAISE EXCEPTION 'append-only audit log changed unexpectedly, expected 2 events, got %', v_events;
   END IF;
 END
 $acceptance$;
