@@ -66,6 +66,8 @@ The PR #7 candidate migration and acceptance SQL were inspected against the live
 - provider_send_control is initialized closed and provider_sending_is_enabled() uses COALESCE(..., false), so a missing singleton row evaluates to deny.
 - The delivery_requests trigger rejects a send-claim transition while closed, including an insert already marked UNKNOWN and a first provider-claim timestamp.
 - The candidate delivery Edge Function authenticates its service-role bearer before parsing the body and calls the database credential-release RPC before the MailerSend network request.
+- The latest candidate migration now renames the legacy credential-release function to a private implementation, revokes service-role access to that legacy entry point, and installs a same-signature SECURITY DEFINER wrapper. The wrapper checks the global interlock before the legacy code can claim the delivery or read Vault.
+- The disposable PostgreSQL fixture now exercises the wrapper closed, enabled, and with the singleton row missing. A sequence-based secret-read sentinel proves the closed/missing-control paths do not reach the synthetic Vault read.
 - The candidate staging document correctly notes that a database gate cannot revoke a credential already released to an in-flight request.
 
 ### Remaining candidate gaps — staging sign-off blocked
