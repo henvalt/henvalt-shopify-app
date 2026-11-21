@@ -10,8 +10,8 @@
     "preview_recipient_redacted": true
   },
   "workflow": {
-    "id": "00000000-0000-4000-8000-999999999998",
-    "name": "HENVALT_RECOVERY_CANDIDATE_NO_SEND",
+    "id": "3GEDoeCA4paXTaDF",
+    "name": "HENVALT_RECOVERY",
     "active": false,
     "isArchived": false,
     "triggerCount": 1,
