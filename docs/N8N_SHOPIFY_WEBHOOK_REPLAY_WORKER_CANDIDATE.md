@@ -236,3 +236,6 @@ The manifest is deliberately not an executable n8n export: the dedicated replay 
 
 
 A further graph-level guard now makes the replay payload reload emit an explicit empty item and checks the returned job/webhook/tenant/lease fields before branching. Empty or incomplete loads go to the lease-bound retry path; they cannot be interpreted as “already processed” and cannot reach the ingest subflow. This behavior is pinned by a separate static graph test.
+
+
+The replay claim normalizer is now implemented as a pure candidate module at `n8n/shopify-replay-claim-normalizer-candidate.mjs`. It maps the database row's `id` to `job_id`, validates job type and UUIDs, requires a nonblank worker identity and valid lease expiry, and emits only the job/worker/lease tuple plus `webhook_id`. It drops the raw payload and unrelated job columns. An empty claim is a normal queue miss; a present but malformed claim terminates fail-closed instead of entering the intervention branch. Unit tests cover valid object/string payloads, empty rows, malformed JSON, wrong job type, invalid UUIDs, missing worker identity, and payload-data minimization.
