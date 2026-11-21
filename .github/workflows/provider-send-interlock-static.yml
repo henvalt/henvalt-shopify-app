@@ -122,6 +122,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-webhook-replay-postgres-acceptance.sql
+      - name: Apply candidate Shopify webhook replay loader migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210006_shopify_webhook_replay_load.sql
+      - name: Exercise worker-bound Shopify webhook replay loader
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-loader-postgres-acceptance.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
