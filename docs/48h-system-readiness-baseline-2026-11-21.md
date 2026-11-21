@@ -165,3 +165,16 @@ Additional read-only checks were completed after the initial baseline.
 - Both ordinary `MailerSend Send` and manual `MailerSend One-Off Test Email` nodes call the same `henvalt-mailersend-delivery` Edge Function.
 - The manual test path first calls `reauthorize_one_off_test_delivery`; the original test path calls `prepare_one_off_test_delivery`. Both ultimately pass through the delivery request authorization and the same provider-token RPC.
 - The candidate database trigger therefore guards the two observed n8n send routes at the database claim/credential-release boundary. The staging test must still exercise both exact routes, and all future send paths must use the same protected Edge Function/RPC.
+
+
+### Historical manual-send proof (critical)
+- Read-only inspection of n8n execution `31260` (2026-11-14 17:42 UTC) confirms the manual one-off test route reached `henvalt-mailersend-delivery`.
+- MailerSend returned HTTP `202 Accepted`; the provider event subsequently recorded HTTP `200` / `DELIVERED` for that same provider message ID.
+- The corresponding production delivery request is now in `DELIVERED` state. It has one initial credential-unavailable failure, then one provider-accepted attempt, followed by the delivered provider event.
+- This proves the manual one-off route was a real production send path, not merely a preview. Tenant recovery flags being false do not provide a global stop because the one-off test authorizer temporarily enables its narrowly allowlisted test flow inside its transaction.
+- Consequently, **production is not independently proven no-send** until the global interlock (or an equivalent approved production stop) is installed and every route is verified. No stop was installed during this session.
+
+### Production stop-state snapshot
+- All three tenant records currently report `recovery_enabled = false`; configured recovery flow entries are disabled where present.
+- This is tenant-level configuration, not a provider-wide kill switch.
+- Because the manual one-off test route has historically bypassed the tenant recovery toggle through its dedicated authorizer, tenant-level false values alone are insufficient evidence for a no-send cutover.
