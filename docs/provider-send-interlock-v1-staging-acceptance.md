@@ -13,7 +13,8 @@
 1. The singleton control row exists with `provider_sending_enabled = false`.
 2. The table has RLS enabled and no grants to `anon`, `authenticated`, or `service_role`.
 3. `provider_sending_is_enabled()` returns false if the row is absent (test in a disposable transaction/schema fixture).
-4. Only the privileged database operator can change the global setting; clients and n8n service-role credentials cannot update it directly.
+4. Only the privileged database owner/operator can call `henvalt.set_provider_sending_enabled(boolean, text)`; clients and n8n service-role credentials cannot execute it or update the control tables directly.
+5. Every setting change is recorded in `henvalt.provider_send_control_events` with previous/new value, timestamp, database session actor and reason.
 5. Trigger `delivery_requests_provider_send_interlock` is enabled on `henvalt.delivery_requests`.
 
 ## Negative-path matrix (must all deny while interlock is closed)
