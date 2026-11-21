@@ -23,19 +23,53 @@
     "ingest": "ingest_raw_webhook_v2"
   },
   "orderedEdges": [
-    ["Event Webhook", "Validate & Normalize"],
-    ["Validate & Normalize", "Engine Config"],
-    ["Engine Config", "Verify Shopify HMAC"],
-    ["Verify Shopify HMAC", "HMAC Verified?"],
-    ["HMAC Verified?", "Resolve Shopify Tenant"],
-    ["Resolve Shopify Tenant", "Bind Tenant Context"],
-    ["Bind Tenant Context", "Is Valid"],
-    ["Is Valid", "Supabase Ingest RPC"],
-    ["Supabase Ingest RPC", "Classify Result"]
+    [
+      "Event Webhook",
+      "Validate & Normalize"
+    ],
+    [
+      "Validate & Normalize",
+      "Engine Config"
+    ],
+    [
+      "Engine Config",
+      "Verify Shopify HMAC"
+    ],
+    [
+      "Verify Shopify HMAC",
+      "HMAC Verified?"
+    ],
+    [
+      "HMAC Verified?",
+      "Resolve Shopify Tenant"
+    ],
+    [
+      "Resolve Shopify Tenant",
+      "Bind Tenant Context"
+    ],
+    [
+      "Bind Tenant Context",
+      "Is Valid"
+    ],
+    [
+      "Is Valid",
+      "Supabase Ingest RPC"
+    ],
+    [
+      "Supabase Ingest RPC",
+      "Classify Result"
+    ]
   ],
   "resultContract": {
     "processDecisionField": "should_process",
     "duplicateStatus": "PROCESSED",
     "missingDecisionFailsClosed": true
+  },
+  "acknowledgement": {
+    "webhookResponseMode": "onReceived",
+    "respondToWebhookNodeCount": 0,
+    "durableIngestRpc": "ingest_raw_webhook_v2",
+    "durableIngestOccursAfterHttpAcknowledgement": true,
+    "launchBlocker": true
   }
 }
