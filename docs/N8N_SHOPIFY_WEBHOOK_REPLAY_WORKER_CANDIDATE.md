@@ -299,3 +299,10 @@ The recovery candidate must not invoke the active DELIVERY workflow. A sanitized
 - CI generates and uploads the three inactive candidates as separate seven-day artifacts; serialized JSON is parsed before upload.
 
 All three candidate workflows must be imported into an isolated n8n instance together and use isolated staging database credentials. The delivery candidate still contains non-provider application/API nodes; no candidate may be activated against production credentials. Production remains NO-GO until isolated runtime acceptance and owner-level retention evidence are complete.
+
+
+## Staging endpoint fail-closed placeholders — 2026-11-21
+
+The generated candidate exports deliberately replace the production Supabase host with https://supabase-staging.invalid in INGEST, RECOVERY, and DELIVERY. The DELIVERY candidate also replaces the live reply-AI Worker host with https://reply-ai-staging.invalid. Independent artifact inspection confirmed the three exports contain no live production Supabase or reply-AI Worker hostname, no email literals, no credential references, and no webhook IDs.
+
+These .invalid hosts are intentional non-routable placeholders, not working endpoints. Before runtime testing, an operator must replace them with the actual isolated staging Supabase project and staging reply-AI endpoint, then re-run the host allowlist audit. Rebind only isolated staging credentials. Never use production credentials or restore the paused production-adjacent projects to perform this test.
