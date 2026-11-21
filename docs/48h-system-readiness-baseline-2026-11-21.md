@@ -109,3 +109,46 @@ Staging may be considered a candidate only after:
 - A rollback plan and evidence bundle are complete.
 
 **Production remains untouched until explicit approval.**
+
+
+## Final-day live refresh — 2026-11-21 05:16 UTC
+
+Additional read-only checks were completed after the initial baseline.
+
+### Recovery worker, current production activity
+- Latest inspected scheduler execution: `40607`, 2026-11-21 05:15:28 UTC; status `success`.
+- `Discover Browse Abandonment`: `queued=0, created=0`.
+- `Discover Abandoned Cart`: `queued=0, created=0`.
+- `Discover Abandoned Checkout`: `queued=0, created=0`.
+- `Claim Due Job`: returned no job.
+- `Repair Stale Work`: `requeued_jobs=0, recovered_interventions=0`.
+- `Find Shopify Tokens Due`: no token was due at 05:15 UTC. The query refreshes tokens when access expiry is within 10 minutes.
+- The recovery scheduler is running every minute; green scheduler runs must not be represented as successful merchant recovery.
+
+### Shopify token lifecycle
+- The current expiring-offline-token connection is `ur4jvw-nz.myshopify.com`.
+- At 05:16:03 UTC, its access token was due to expire at 05:58:28 UTC and its refresh token at 2027-02-19 04:58:29 UTC.
+- The active recovery workflow contains `Find Shopify Tokens Due` and `Refresh Shopify Offline Token`, which call the active `henvalt-shopify-token-refresh` Edge Function. The refresh threshold is 10 minutes before access-token expiry.
+- The database has only one active pg_cron job, the 15-minute privacy-export purge. Shopify token refresh is orchestrated by the n8n minute worker, not pg_cron.
+- Continue observing the next scheduled refresh window; do not force a production token refresh as a test.
+
+### Pixel ingestion lineage
+- Production has 16 pixel keys, of which 1 is active and not revoked.
+- The deployed `henvalt-pixel-ingest-proxy` Edge Function (version 3) forwards to the existing authenticated `public.henvalt_ingest_pixel_event(text,text,text,jsonb)` RPC, which verifies the collector secret and delegates to `henvalt.ingest_pixel_event`.
+- The repository migration `202611160008_shopify_pixel_event_inbox_v2.sql` is not applied in the connected production project: migration history still ends at `20261114174204`, and the V2 inbox table is absent.
+- Therefore the V2 exact-install inbox is candidate code, not live production capability. Do not describe the V2 adapter or browse event pipeline as deployed.
+
+### Webhook / delivery evidence freshness
+- The latest listed `HENVALT_INGEST` executions are from 2026-11-14; the latest listed `HENVALT_DELIVERY` executions are also from 2026-11-14.
+- The n8n recovery scheduler is active today, but there is no fresh end-to-end Shopify webhook-to-delivery acceptance evidence today.
+- No synthetic Shopify webhook should be sent to production without explicit approval because it writes production event state.
+
+### Revised immediate priorities
+1. Run the static interlock tests on PR #7 and obtain a current-head result.
+2. Validate the candidate migration syntax in a disposable staging database; do not apply it to production.
+3. Verify the n8n token refresh when the current access token enters the 10-minute refresh window, using the existing scheduler's normal path.
+4. Validate the existing pixel proxy/RPC path in isolated staging; keep the V2 inbox migration explicitly separate.
+5. Build a real end-to-end Shopify webhook test in staging with synthetic payloads and isolated credentials.
+6. Finish delivery no-send negative tests, including manual one-off test send, and preserve non-send compliance endpoints.
+
+**Current go/no-go:** NO-GO for production release. The interlock is candidate code only; the V2 pixel inbox is unapplied; no fresh webhook-to-revenue acceptance exists; and staging runtime tests are not yet evidenced.
