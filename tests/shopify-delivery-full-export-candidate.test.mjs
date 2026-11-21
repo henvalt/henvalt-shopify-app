@@ -57,3 +57,39 @@ test("candidate webhooks use isolated path prefixes and graph connections resolv
     for (const output of outputs.main || []) for (const edge of output || []) assert.ok(names.has(edge.node), "unknown target " + edge.node);
   }
 });
+
+
+test("executed no-send stub and delivery classifier cannot report provider acceptance", () => {
+  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const nodes = new Map(w.nodes.map((n) => [n.name, n]));
+  const stub = new Function("$", "$json", nodes.get("No-Send Provider Stub").parameters.jsCode)(() => ({}), {});
+  assert.equal(stub.json.statusCode, 503);
+  assert.equal(stub.json.body.no_send_candidate, true);
+  const context = {
+    "Validate & Normalize": { json: {
+      precheck_ok: true, tenant_id: "tenant", delivery_request_id: "request",
+      intervention_id: "intervention", recovery_id: "recovery", opportunity_id: "opportunity",
+      correlation_id: "correlation"
+    }},
+    "Authorize & Context": { json: { statusCode: 200, body: {
+      can_send: true, delivery_request_id: "request", provider: "MailerSend"
+    }}},
+    "No-Send Provider Stub": stub
+  };
+  const classifier = new Function("$", "$json", nodes.get("Classify Result").parameters.jsCode)(
+    (name) => context[name],
+    {}
+  );
+  assert.equal(classifier.state, "REJECTED");
+  assert.equal(classifier.error_class, "NO_SEND_CANDIDATE");
+  assert.equal(classifier.provider, "none");
+  assert.equal(classifier.should_record_result, false);
+  assert.equal(classifier.retryable, false);
+  const response = new Function("$", "$json", nodes.get("Build Delivery Response").parameters.jsCode)(
+    (name) => ({ item: { json: classifier } }),
+    {}
+  );
+  assert.equal(response.json.statusCode, 503);
+  assert.equal(response.json.body.state, "REJECTED");
+  assert.equal(response.json.body.failure_category, "NO_SEND_CANDIDATE");
+});
