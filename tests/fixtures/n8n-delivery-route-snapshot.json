@@ -65,7 +65,8 @@
     "safety_notes": [
       "Snapshot records route topology and provider function slug only; credentials, URLs, payloads and customer data are intentionally excluded.",
       "This is a read-only snapshot, not a staging test and not proof that a provider request was blocked.",
-      "Both routes must be independently tested with provider egress denied before staging can be accepted."
+      "Both routes must be independently tested with provider egress denied before staging can be accepted.",
+      "The manual one-off route is isolated from ordinary delivery and must be denied during staging; this snapshot does not establish that denial."
     ]
   }
 }
