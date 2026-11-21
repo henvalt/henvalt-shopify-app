@@ -65,7 +65,7 @@ test("empty intervention and replay queues continue the scheduler loop safely", 
   const claimDue = manifest.existing_node_settings.find((x) => x.node === "Claim Due Job");
   assert.equal(claimDue.settings.alwaysOutputData, true);
   const replayClaim = manifest.nodes_to_add.find((x) => x.name === "Claim Shopify Replay Job");
-  assert.equal(replayClaim.settings.alwaysOutputData, true);
+  assert.equal(replayClaim.alwaysOutputData, true);
   assert.equal(
     manifest.required_connections.find((x) => x[0] === "Replay Job Claimed?#false")[1],
     "Loop Interventions",
