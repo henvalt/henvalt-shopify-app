@@ -11,6 +11,8 @@ DECLARE
   v_old record;
   v_new record;
   v_rejected boolean := false;
+  v_processed boolean;
+  v_processing_status text;
 BEGIN
   UPDATE henvalt.background_jobs
      SET status = 'SUCCEEDED'::henvalt.job_status,
@@ -114,13 +116,16 @@ BEGIN
     RAISE EXCEPTION 'CURRENT_WORKER_COULD_NOT_COMMIT_FENCED_CANONICAL_EVENT';
   END IF;
 
-  IF henvalt.mark_webhook_processed_fenced(
+  SELECT processing_status INTO v_processing_status
+    FROM henvalt.webhook_events WHERE id = v_webhook;
+  v_processed := henvalt.mark_webhook_processed_fenced(
     v_job,'write-worker-current',v_new.lease_id,v_webhook
-  ) IS DISTINCT FROM true OR NOT EXISTS (
-    SELECT 1 FROM henvalt.webhook_events
-     WHERE id=v_webhook AND processing_status='PROCESSED'
-  ) THEN
-    RAISE EXCEPTION 'CURRENT_WORKER_COULD_NOT_MARK_WEBHOOK_PROCESSED';
+  );
+  SELECT processing_status INTO v_processing_status
+    FROM henvalt.webhook_events WHERE id = v_webhook;
+  IF v_processed IS DISTINCT FROM true OR v_processing_status IS DISTINCT FROM 'PROCESSED' THEN
+    RAISE EXCEPTION 'CURRENT_WORKER_COULD_NOT_MARK_WEBHOOK_PROCESSED: result=%, status=%, webhook_id=%, lease_id=%',
+      v_processed, v_processing_status, v_webhook, v_new.lease_id;
   END IF;
 
   RAISE NOTICE 'SHOPIFY_REPLAY_BUSINESS_WRITE_FENCING_ACCEPTANCE_PASSED';
