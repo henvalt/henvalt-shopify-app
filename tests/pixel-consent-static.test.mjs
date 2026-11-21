@@ -90,5 +90,5 @@ test("dashboard revenue chart uses the confirmed revenue series", () => {
 });
 
 test("pixel security-definer RPCs use a hardened search path", () => {
-  assert.equal((migration.match(/SET search_path TO pg_catalog, henvalt, pg_temp/g) || []).length, 2);
+  assert.equal((migration.match(/SET search_path TO pg_catalog, henvalt, pg_temp/g) || []).length, 3);
 });
