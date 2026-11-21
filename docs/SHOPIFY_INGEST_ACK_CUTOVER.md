@@ -166,4 +166,4 @@ The connected production database was inspected with SELECT-only catalog/functio
 
 ## Safety boundary
 
-This document, candidate contract code, migration `202611210005_shopify_webhook_replay_enqueue.sql`, disposable PostgreSQL fixture/acceptance tests and regression snapshots are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
+This document, candidate n8n normalizer/classifier scripts, candidate contract code, migrations `202611210005_shopify_webhook_replay_enqueue.sql` and `202611210006_shopify_webhook_replay_load.sql`, disposable PostgreSQL fixture/acceptance tests and regression snapshots are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
