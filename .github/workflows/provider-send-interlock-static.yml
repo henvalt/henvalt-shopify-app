@@ -10,6 +10,7 @@ on:
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
+      - "cloudflare/worker.js"
       - "extensions/henvalt-pixel/src/index.js"
       - "tests/provider-send-interlock-static.test.mjs"
       - "tests/n8n-delivery-route-snapshot.test.mjs"
