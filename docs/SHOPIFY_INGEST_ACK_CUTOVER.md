@@ -37,7 +37,7 @@ A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if d
 
 Shopify's five-second end-to-end delivery deadline means the ingress path should avoid serial network round trips. The candidate Cloudflare worker now caps its n8n upstream wait at 3.5 seconds, leaving response-time margin for edge and network overhead; it returns retryable 503 on timeout. The candidate n8n ingress should combine HMAC verification, active tenant resolution, webhook persistence and replay-job enqueue into one service-role-only RPC (for example, `receive_shopify_webhook_v1`) so the success response is both durable and fast. The existing separate RPCs are useful primitives, but three sequential PostgREST calls make the five-second target harder to meet.
 
-Extend the candidate `ingest_raw_webhook_v2` transaction so that it:
+Use the new candidate-only `henvalt.ingest_shopify_webhook_with_replay_job(...)` wrapper (migration `202611210005_shopify_webhook_replay_enqueue.sql`). It calls the existing `ingest_raw_webhook_v2` and inserts the replay job in the same outer database transaction. It does not modify the active production RPC. The wrapper must:
 
 1. Verifies the tenant and accepts the authenticated event only after HMAC and tenant resolution.
 2. Inserts or idempotently finds the `webhook_events` row.
@@ -82,7 +82,7 @@ The connected production database was inspected with SELECT-only catalog/functio
 - `henvalt.verify_shopify_webhook_hmac(text,text)` returns a boolean and its execute ACL is limited to `service_role` and `postgres`. Its current implementation returns `false` both for a bad signature and when the Vault secret is missing/empty; the candidate ingress RPC must distinguish those cases so a configuration outage becomes retryable 503 rather than a permanent 401.
 - `henvalt.resolve_shopify_tenant(text)` returns a UUID or NULL for an unmapped/inactive shop; its execute ACL is limited to `service_role` and `postgres`.
 - `henvalt.ingest_raw_webhook_v2(...)` returns `webhook_id`, `is_duplicate`, `should_process`, and `processing_status`; its execute ACL is limited to `service_role` and `postgres`.
-- The ingest RPC locks matching idempotency rows and inserts a new webhook row with `PROCESSING` state, but it does not currently create a `process_shopify_webhook` job or return a replay job ID.
+- The active production `ingest_raw_webhook_v2` locks matching idempotency rows and inserts a new webhook row with `PROCESSING` state, but it does not create a `process_shopify_webhook` job or return a replay job ID. Candidate migration `202611210005_shopify_webhook_replay_enqueue.sql` adds a service-role-only wrapper that atomically ensures the job exists and returns its ID/status.
 - `claim_next_job` supports caller-supplied job-type filters, but the active recovery workflow currently filters to `execute_intervention` only. A read-only aggregate of `background_jobs` found only `execute_intervention` and a historical `HENVALT_TEST_JOB`; no `process_shopify_webhook` jobs exist.
 
 ## Acceptance matrix
@@ -116,4 +116,4 @@ The connected production database was inspected with SELECT-only catalog/functio
 
 ## Safety boundary
 
-This document, candidate contract code and regression tests are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
+This document, candidate contract code, migration `202611210005_shopify_webhook_replay_enqueue.sql`, disposable PostgreSQL fixture/acceptance tests and regression snapshots are branch-only. No production n8n workflow, Supabase object, Cloudflare Worker, Shopify app release, or email sender was changed. Isolated staging validation is still required before any cutover.
