@@ -338,10 +338,14 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   // as an additional source for the existing normalizer.
   workflow.connections["Build Shopify Replay Envelope"] = {main:[[{node:"Replay Envelope Valid?",type:"main",index:0}]]};
   workflow.connections["Replay Envelope Valid?"] = {main:[
-    [{node:"Validate & Normalize",type:"main",index:0}],
+    [{node:"Replay Already Processed?",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
   ]};
-  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
+  workflow.connections["Replay Already Processed?"] = {main:[
+    [{node:"Build Already Processed Replay Result",type:"main",index:0}],
+    [{node:"Validate & Normalize",type:"main",index:0}]
+  ]};
+  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,alreadyProcessed,alreadyProcessedResult,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
 }
 
 function validateGraph(workflow) {
