@@ -27,9 +27,9 @@ BEGIN
   IF v_first.webhook_id IS NULL
      OR v_first.is_duplicate IS NOT FALSE
      OR v_first.should_process IS NOT TRUE
-     OR v_first.processing_status <> 'PROCESSING'
+     OR v_first.processing_status IS DISTINCT FROM 'PROCESSING'
      OR v_first.replay_job_id IS NULL
-     OR v_first.replay_job_status <> 'QUEUED' THEN
+     OR v_first.replay_job_status IS DISTINCT FROM 'QUEUED' THEN
     RAISE EXCEPTION 'NEW_WEBHOOK_DID_NOT_ATOMICALLY_ENQUEUE_REPLAY_JOB';
   END IF;
 
@@ -54,11 +54,11 @@ BEGIN
       '{"correlation_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}'::jsonb
     );
 
-  IF v_duplicate.webhook_id <> v_first.webhook_id
+  IF v_duplicate.webhook_id IS DISTINCT FROM v_first.webhook_id
      OR v_duplicate.is_duplicate IS NOT TRUE
      OR v_duplicate.should_process IS NOT FALSE
-     OR v_duplicate.replay_job_id <> v_first.replay_job_id
-     OR v_duplicate.replay_job_status <> 'QUEUED' THEN
+     OR v_duplicate.replay_job_id IS DISTINCT FROM v_first.replay_job_id
+     OR v_duplicate.replay_job_status IS DISTINCT FROM 'QUEUED' THEN
     RAISE EXCEPTION 'DUPLICATE_DID_NOT_RETURN_EXISTING_REPLAY_JOB';
   END IF;
 
@@ -77,8 +77,8 @@ BEGIN
       '{"correlation_id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}'::jsonb
     );
 
-  IF v_processed.webhook_id <> v_first.webhook_id
-     OR v_processed.processing_status <> 'PROCESSED'
+  IF v_processed.webhook_id IS DISTINCT FROM v_first.webhook_id
+     OR v_processed.processing_status IS DISTINCT FROM 'PROCESSED'
      OR v_processed.should_process IS NOT FALSE
      OR v_processed.replay_job_id IS NOT NULL THEN
     RAISE EXCEPTION 'PROCESSED_DUPLICATE_SHOULD_NOT_ENQUEUE_ANOTHER_JOB';
