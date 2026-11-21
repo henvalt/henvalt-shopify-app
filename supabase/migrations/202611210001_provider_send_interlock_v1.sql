@@ -209,4 +209,39 @@ BEFORE UPDATE OR DELETE ON henvalt.provider_send_control_events
 FOR EACH ROW
 EXECUTE FUNCTION henvalt.reject_provider_send_control_event_mutation();
 
+-- Wrap the actual MailerSend credential-release RPC. The check runs before the
+-- legacy implementation can claim a request or read Vault. The legacy body is
+-- retained only as a private implementation detail for rollback/review.
+ALTER FUNCTION henvalt.get_mailersend_token_for_delivery(uuid, uuid)
+  RENAME TO get_mailersend_token_for_delivery_legacy_v1;
+
+REVOKE ALL ON FUNCTION henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid, uuid)
+  FROM PUBLIC, anon, authenticated, service_role;
+
+CREATE OR REPLACE FUNCTION henvalt.get_mailersend_token_for_delivery(
+  p_tenant_id uuid,
+  p_delivery_request_id uuid
+)
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, henvalt, vault, pg_temp
+AS $function$
+BEGIN
+  IF COALESCE(henvalt.provider_sending_is_enabled(), false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN henvalt.get_mailersend_token_for_delivery_legacy_v1(
+    p_tenant_id, p_delivery_request_id
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.get_mailersend_token_for_delivery(uuid, uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.get_mailersend_token_for_delivery(uuid, uuid)
+  TO service_role;
+
 COMMIT;
