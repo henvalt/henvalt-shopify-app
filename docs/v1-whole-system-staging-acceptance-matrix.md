@@ -46,6 +46,7 @@
 | PIX-06 | Rate limit | Over-limit requests rejected without storefront blocking |
 | PIX-07 | Pixel extension validation/release | Shopify CLI validation, app version release, pixel activation and real staging storefront event evidence |
 | PIX-08 | V2 inbox adapter | Do not claim browse recovery until the connection-aware adapter and every downstream reader/writer are store-aware |
+| PIX-09 | Existing browse opportunity after consent revocation / missing source event | Recovery context, authorization and provider-token claim all fail closed; no provider credential released |
 
 ## Recovery orchestration
 | ID | Test | Expected evidence |
