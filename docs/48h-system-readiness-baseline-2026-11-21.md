@@ -224,3 +224,11 @@ A read-only comparison of the deployed Cloudflare Worker, repository source, dep
 - This is recorded as a release blocker; no production function was changed.
 
 - The live Cloudflare pixel Worker bindings were checked without revealing values: `SUPABASE_URL` targets the active `henvalt` project, the publishable key is present, and `COLLECTOR_SHARED_SECRET` plus `RATE_LIMITER` bindings are present.
+
+
+### n8n execution-data retention evidence
+- Historical delivery execution `31260` from 2026-11-14 remained readable through the connected n8n API on 2026-11-21.
+- Its execution payload included the full recipient field, subject, HTML email body, tracking URL and unsubscribe URL. Recipient details are intentionally not copied into this document.
+- This proves that sensitive delivery content remained in execution history for at least seven days. It does not establish the configured maximum retention period.
+- The connected n8n toolset exposes workflow and execution reads but not instance-level execution-pruning/redaction settings. Those settings remain unverified and require owner/admin evidence.
+- Do not bulk-delete or alter execution history without an approved retention policy and evidence-preservation decision.
