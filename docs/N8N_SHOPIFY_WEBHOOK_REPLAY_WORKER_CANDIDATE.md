@@ -27,16 +27,15 @@ The installed n8n node type definitions were checked before specifying these par
 
 ## HENVALT_RECOVERY patch
 
-1. Change the claim query to:
-   `SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention','process_shopify_webhook']::text[])`
+1. Preserve the existing intervention claim with `SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention']::text[])`. Add a separate replay claim call to `henvalt.claim_shopify_replay_job(worker_id, 180)`. Never claim `process_shopify_webhook` through the generic claim RPC; it does not issue a fencing lease.
 2. Replace the intervention-only guard with job-type-aware validation:
    - `execute_intervention`: require a valid `intervention_id`.
    - `process_shopify_webhook`: require a UUID `payload.webhook_id`.
    - Reject every unknown job type.
 3. Add a Switch on `job_type`; the existing intervention output must connect to the current `Atomic Claim Intervention` node without behavior changes.
-4. The replay output calls `henvalt.load_shopify_webhook_replay_job(job_id, worker_id)` using the claimed job identity. If `webhook_processed=true`, complete the claimed job and stop.
+4. The replay output calls `henvalt.load_shopify_webhook_replay_job(job_id, worker_id, lease_id)` using the exact lease returned by the replay claim RPC. If `webhook_processed=true`, complete the claimed job and stop.
 5. Otherwise call the dedicated replay-processing entry in `HENVALT_INGEST` with only `job_id` and `worker_id`. Do not pass an untrusted tenant ID or raw payload from the worker itself.
-6. Complete the job only after the ingest subflow confirms `mark_webhook_processed=true`. On transient failures call `retry_job(job_id, worker_id, error, bounded_delay)`; on exhausted retries use the existing DEAD_LETTER state and an operator-visible alert/reconciliation path.
+6. Complete the replay job only after the ingest subflow confirms `mark_webhook_processed=true`, using `complete_shopify_replay_job(job_id, worker_id, lease_id)`. On transient failures call `retry_shopify_replay_job(job_id, worker_id, lease_id, error, bounded_delay)`; on exhausted retries the RPC sets DEAD_LETTER. Keep the existing `complete_job` / `retry_job` calls for the intervention branch only.
 
 ## HENVALT_INGEST replay entry
 
