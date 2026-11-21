@@ -85,3 +85,17 @@ The PR #7 candidate migration and acceptance SQL were inspected against the live
 - Re-run all checks on the exact resulting commit SHA. Do not infer production protection from the trigger-only fixture.
 
 These are candidate-code review findings, not evidence of a production change. Production remains unchanged and send-capable until an explicitly approved, independently verified cutover is completed.
+
+
+## 21 November — replay-worker lease review (read-only)
+
+A further read-only comparison of the candidate replay-loader migration with the live job-control RPCs found a worker-recovery gap that must be resolved before the replay path is staged.
+
+- The candidate loader (migration 006) requires job type process_shopify_webhook, status CLAIMED, and an exact locked_by worker ID. It does not check a lease token or an expiry timestamp.
+- The live claim_next_job(p_worker_id, p_job_types) claims only QUEUED and RETRY_WAIT rows. It does not reclaim CLAIMED rows whose locked_at is stale.
+- The live complete_job, retry_job, and dead_letter_job functions check status and locked_by, but do not check that the worker's lease is still current. A crashed worker can therefore leave a job permanently CLAIMED; a late worker with the same worker ID is not fenced by a per-claim lease generation.
+- The candidate replay specification describes bounded retries and stale-worker rejection, but the current SQL loader plus generic job-control RPCs do not yet implement those guarantees.
+
+Required candidate correction: add a bounded claim lease with a fresh per-claim lease identifier (or equivalent non-reusable fencing token), reclaim expired claims atomically, and require the same current lease identifier for payload loading, completion, retry, and dead-letter operations. Add concurrent PostgreSQL tests proving that an expired worker cannot load or finish after another worker reclaims the job, and that a crashed worker's job becomes claimable without manual row edits. Keep the existing execute_intervention path behavior unchanged while adding the new job type.
+
+This is a candidate integration blocker. No live workflow or database object was changed.
