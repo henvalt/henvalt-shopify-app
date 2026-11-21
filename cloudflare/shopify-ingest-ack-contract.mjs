@@ -16,7 +16,14 @@ export const SHOPIFY_INGEST_ACK_CONTRACT = Object.freeze({
     "ingest_raw_webhook_v2 returned HTTP 2xx",
     "webhook_id is present",
     "should_process is an explicit boolean",
+    "replay_job_id and active replay_job_status are present for unprocessed events",
   ]),
+  replayQueue: Object.freeze({
+    jobType: "process_shopify_webhook",
+    workerWorkflow: "HENVALT_RECOVERY",
+    processorWorkflow: "HENVALT_INGEST",
+    atomicWithWebhookInsert: true,
+  }),
   conflictHandling: Object.freeze({
     generic409WithoutWebhookId: 503,
     requireDurableWebhookIdForDuplicate200: true,
