@@ -64,3 +64,9 @@ test("browse delivery eligibility rechecks source-event consent at send time", (
   assert.ok(migration.includes("e.metadata->>'marketing_allowed' = 'true'"));
   assert.ok(migration.includes("NOT COALESCE("));
 });
+
+test("browse candidate preserves ISO currency width and service-role RPC access", () => {
+  assert.match(migration, /DROP FUNCTION IF EXISTS henvalt\.get_browse_abandonment_candidates\(integer, integer, integer\)/);
+  assert.match(migration, /currency character\(3\)/);
+  assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.get_browse_abandonment_candidates\(integer, integer, integer\) TO service_role/);
+});
