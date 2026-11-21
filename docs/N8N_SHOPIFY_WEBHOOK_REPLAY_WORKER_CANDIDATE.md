@@ -138,3 +138,21 @@ Candidate fenced entry points cover customer/consent/session identity, canonical
 Acceptance test: `tests/shopify-replay-business-write-fencing-postgres-acceptance.sql` forces lease expiry and reclaim, proves the stale worker cannot insert a canonical event through the fenced RPC, then proves the current lease can. CI applies migration 009 only to disposable PostgreSQL 17 and runs that test.
 
 **Scope limitation remains:** this is a fenced set of entry points, not proof that the entire replay subflow has been rewired. Before claiming end-to-end strict fencing, inventory every mutating node in the final replay subflow, map it to one of these wrappers (or add a wrapper for the missing RPC), and verify no legacy direct write remains. The live database remains on its earlier migration; migration 009 is candidate-only and has not been applied to production. No active n8n workflow was edited.
+
+
+The current fenced RPC names are:
+- `upsert_customer_fenced`
+- `apply_shopify_email_consent_update_fenced`
+- `bind_session_alias_fenced`
+- `upsert_canonical_event_fenced`
+- `upsert_checkout_fenced`
+- `create_opportunity_idempotent_fenced`
+- `create_intervention_and_enqueue_fenced`
+- `project_order_from_event_fenced`
+- `evaluate_order_attribution_fenced`
+- `create_revenue_adjustment_fenced`
+- `process_shopify_revenue_adjustment_fenced`
+- `deactivate_shopify_connection_on_uninstall_fenced`
+- `stop_recovery_after_order_fenced`
+
+These names are the allowed mutation boundary for the replay path; any additional write RPC discovered in the final workflow graph must receive the same lease-checked wrapper before staging.
