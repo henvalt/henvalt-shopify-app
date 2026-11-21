@@ -1,0 +1,100 @@
+{
+  "contract_version": 1,
+  "status": "candidate-only; not an exported or deployed n8n workflow",
+  "workflow_count": 3,
+  "recovery_workflow": {
+    "name": "HENVALT_RECOVERY",
+    "id": "3GEDoeCA4paXTaDF",
+    "inspected_active_version": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+    "existing_intervention_claim": {
+      "node": "Claim Due Job",
+      "sql": "SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention']::text[])",
+      "generic_terminal_rpcs": [
+        "henvalt.complete_job(job_id, worker_id)",
+        "henvalt.retry_job(job_id, worker_id, error, delay_seconds)"
+      ],
+      "generic_rpcs_allowed_for": [
+        "execute_intervention"
+      ],
+      "existing_guard_field": "payload.intervention_id"
+    },
+    "replay_claim": {
+      "node": "Claim Shopify Replay Job",
+      "sql": "SELECT * FROM henvalt.claim_shopify_replay_job($1, 180)",
+      "job_type": "process_shopify_webhook",
+      "required_claim_fields": [
+        "job_id",
+        "worker_id",
+        "lease_id",
+        "lease_expires_at"
+      ],
+      "claim_must_be_separate_from_generic_claim": true,
+      "load_sql": "SELECT * FROM henvalt.load_shopify_webhook_replay_job($1, $2, $3)",
+      "load_arguments": [
+        "job_id",
+        "worker_id",
+        "lease_id"
+      ],
+      "completion_sql": "SELECT henvalt.complete_shopify_replay_job($1, $2, $3)",
+      "retry_sql": "SELECT henvalt.retry_shopify_replay_job($1, $2, $3, $4, $5)",
+      "retry_delay_seconds_default": 300,
+      "retry_delay_seconds_max": 3600
+    },
+    "scheduling": {
+      "fairness": "At most one intervention claim and one replay claim per scheduler cycle.",
+      "order": [
+        "Run the existing intervention claim first.",
+        "After every intervention terminal outcome (complete, retry, skipped, or resolved failure), attempt one replay claim.",
+        "If no intervention was claimed, attempt one replay claim immediately.",
+        "After a replay terminal outcome, return to the scheduler loop."
+      ],
+      "no_queue_may_starve_the_other": true,
+      "existing_intervention_business_branch_must_remain_semantically_unchanged": true
+    },
+    "replay_guard": {
+      "accepted_job_type": "process_shopify_webhook",
+      "required_payload_field": "payload.webhook_id",
+      "required_uuid_fields": [
+        "job_id",
+        "webhook_id",
+        "lease_id"
+      ],
+      "reject_unknown_job_types": true,
+      "reject_missing_worker_or_lease": true
+    },
+    "replay_outcomes": {
+      "already_processed": "Complete with the exact lease tuple; do not invoke the ingest subflow.",
+      "unprocessed": "Load with the exact lease tuple, then call the dedicated HENVALT_INGEST replay entry.",
+      "ingest_success_requires": "mark_webhook_processed === true",
+      "ingest_failure": "Retry with the exact lease tuple and bounded delay; exhausted attempts become DEAD_LETTER in the RPC.",
+      "all_terminal_paths_return_to_scheduler_loop": true
+    },
+    "ingest_subflow_input_allowlist": [
+      "job_id",
+      "worker_id",
+      "lease_id"
+    ],
+    "replay_write_contract": {
+      "source_map": "n8n/shopify-ingest-replay-write-map.json",
+      "require_transaction_local_fenced_rpc_for_every_mutation": true,
+      "require_sequential_writes": true,
+      "require_exact_lease_tuple_on_every_write": true,
+      "forbid_unfenced_mutation_rpcs": true,
+      "stop_if_lease_validation_or_write_fails": true
+    },
+    "explicitly_forbidden": [
+      "Claim process_shopify_webhook through henvalt.claim_next_job",
+      "Complete or retry replay jobs through henvalt.complete_job or henvalt.retry_job",
+      "Pass tenant_id, raw payload, or caller-supplied HMAC-verified flags into the replay subflow",
+      "Fan out replay business mutations in parallel",
+      "Route replay jobs through Atomic Claim Intervention",
+      "Change HENVALT_DELIVERY as part of replay-worker integration"
+    ]
+  },
+  "production_boundary": {
+    "active_workflows_modified": false,
+    "workflow_published": false,
+    "production_database_changed": false,
+    "provider_sending_enabled": false
+  }
+}
