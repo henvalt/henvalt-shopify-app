@@ -35,6 +35,8 @@ A fast 200 is necessary for Shopify's webhook deadline, but it is safe only if d
 
 ### 1. Atomic durable enqueue at ingress
 
+Shopify's five-second end-to-end delivery deadline means the ingress path should avoid serial network round trips. The candidate Cloudflare worker now caps its n8n upstream wait at 3.5 seconds, leaving response-time margin for edge and network overhead; it returns retryable 503 on timeout. The candidate n8n ingress should combine HMAC verification, active tenant resolution, webhook persistence and replay-job enqueue into one service-role-only RPC (for example, `receive_shopify_webhook_v1`) so the success response is both durable and fast. The existing separate RPCs are useful primitives, but three sequential PostgREST calls make the five-second target harder to meet.
+
 Extend the candidate `ingest_raw_webhook_v2` transaction so that it:
 
 1. Verifies the tenant and accepts the authenticated event only after HMAC and tenant resolution.
