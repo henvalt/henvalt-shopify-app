@@ -36,3 +36,11 @@ test("ingest result must explicitly authorize processing; duplicate and legacy r
   assert.equal(snapshot.resultContract.duplicateStatus, "PROCESSED");
   assert.equal(snapshot.resultContract.missingDecisionFailsClosed, true);
 });
+
+test("active ingest snapshot explicitly flags early acknowledgement as a launch blocker", () => {
+  assert.equal(snapshot.acknowledgement.webhookResponseMode, "onReceived");
+  assert.equal(snapshot.acknowledgement.respondToWebhookNodeCount, 0);
+  assert.equal(snapshot.acknowledgement.durableIngestRpc, "ingest_raw_webhook_v2");
+  assert.equal(snapshot.acknowledgement.durableIngestOccursAfterHttpAcknowledgement, true);
+  assert.equal(snapshot.acknowledgement.launchBlocker, true);
+});
