@@ -14,8 +14,8 @@ test("Shopify webhook uses explicit response mode and one shared acknowledgement
   assert.equal(c.successEnvelopeNode, "Classify Result");
   assert.equal(c.rejectionEnvelopeNode, "Build Rejection Response");
   assert.equal(c.successResponseAfterNode, "Classify Result");
-  assert.equal(c.successResponseBeforeNode, "Should Process?");
-  assert.equal(c.continueExecutionAfterResponse, true);
+  assert.equal(c.successResponseBeforeNode, "Webhook execution ends after acknowledgement");
+  assert.equal(c.continueExecutionAfterResponse, false);
 });
 
 test("all pre-ingest rejection paths have explicit fail-closed response codes", () => {
@@ -48,7 +48,7 @@ test("new durable ingest returns 200 only when a replay job is durably active", 
     }],
   }, context);
   assert.equal(result.http, 200);
-  assert.equal(result.proceed, true);
+  assert.equal(result.asyncProcessingGuaranteed, true);
   assert.equal(result.webhookId, "wh-1");
   assert.equal(result.body.status, "accepted");
   assert.equal(result.body.replay_job_id, "job-1");
@@ -76,10 +76,10 @@ test("processed and actively queued duplicates return 200 without duplicate proc
     }],
   }, context);
   assert.equal(processed.http, 200);
-  assert.equal(processed.proceed, false);
+  assert.equal(processed.asyncProcessingGuaranteed, false);
   assert.equal(processed.body.status, "duplicate");
   assert.equal(processing.http, 200);
-  assert.equal(processing.proceed, false);
+  assert.equal(processing.asyncProcessingGuaranteed, true);
   assert.equal(processing.body.status, "already_processing");
 });
 
@@ -108,7 +108,7 @@ test("missing durable ID, decision or active replay job returns retryable 503", 
   ]) {
     const result = classifyIngestResponse({ statusCode: 200, body }, context);
     assert.equal(result.http, 503);
-    assert.equal(result.proceed, false);
+    assert.equal(result.asyncProcessingGuaranteed, false);
   }
 });
 
