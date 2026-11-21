@@ -320,7 +320,7 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
     [{node:"Validate & Normalize",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
   ]};
-  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,hmacResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
+  return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
 }
 
 function validateGraph(workflow) {
