@@ -49,7 +49,7 @@ test("release documentation tracks the exact candidate migration chain", () => {
   assert.match(identity, /202611190006_shopify_checkout_ambiguous_provider_reconciliation_v2\.sql/);
   assert.match(runbook, /candidate migrations 001–062/i);
   assert.match(runbook, /Candidate migrations 001–062: CI fixture only; not production-applied\./);
-  assert.match(launchMatrix, /Candidate migrations 001–061 apply in disposable PostgreSQL CI/);
+  assert.match(launchMatrix, /Candidate migrations 001–062 apply in disposable PostgreSQL CI/);
   assert.doesNotMatch(runbook, /migrations 001–046/);
   assert.doesNotMatch(launchMatrix, /migrations 001–046/);
 });
