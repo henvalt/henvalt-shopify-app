@@ -162,13 +162,18 @@
         "job_id",
         "worker_id",
         "lease_id",
-        "bounded sanitized failure reason",
+        "SHOPIFY_REPLAY_PROCESSING_FAILED",
         300
       ],
       "retry_delay_seconds_default": 300,
       "retry_delay_seconds_max": 3600,
       "settings": {
         "onError": "continueErrorOutput"
+      },
+      "error_reason_policy": {
+        "reason": "SHOPIFY_REPLAY_PROCESSING_FAILED",
+        "source": "constant; never copy raw error message, stack, webhook payload, email, URL or customer fields into background_jobs.last_error",
+        "max_delay_seconds": 3600
       }
     },
     {
@@ -297,7 +302,8 @@
     "A claim RPC failure stops the scheduler execution; it must not be treated as an empty queue.",
     "A load failure may retry only with the exact lease tuple; complete/retry RPC errors terminate fail-closed.",
     "An empty or incomplete lease-bound load is retried with the exact lease tuple; it is never mistaken for an already-processed event.",
-    "An empty claim is a normal queue miss and returns to Loop Interventions; a present but malformed claim is terminal fail-closed."
+    "An empty claim is a normal queue miss and returns to Loop Interventions; a present but malformed claim is terminal fail-closed.",
+    "Replay retry stores only the constant SHOPIFY_REPLAY_PROCESSING_FAILED reason; never persist raw exception text or customer data."
   ],
   "dependencies_before_staging": [
     "Add a dedicated Execute Workflow Trigger and isolated replay entry in HENVALT_INGEST candidate; reload payload with load_shopify_webhook_replay_job(job_id, worker_id, lease_id).",
