@@ -150,7 +150,7 @@ test("manifest matches the observed graph: only two terminals are currently loop
 
 test("empty or incomplete replay payload loads retry rather than invoking ingest", () => {
   const nodes = new Map(manifest.nodes_to_add.map((x) => [x.name, x]));
-  assert.equal(nodes.get("Load Shopify Replay Job").settings.alwaysOutputData, true);
+  assert.equal(nodes.get("Load Shopify Replay Job").alwaysOutputData, true);
   assert.equal(
     nodes.get("Replay Load Valid?").condition,
     "={{ !!$json.job_id && !!$json.webhook_id && !!$json.tenant_id && !!$json.lease_expires_at }}",
