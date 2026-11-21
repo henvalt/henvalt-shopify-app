@@ -14,6 +14,10 @@ on:
       - "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql"
       - "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql"
       - "supabase/migrations/202611210011_shopify_replay_write_lease_heartbeat.sql"
+      - "supabase/migrations/202611210012_shopify_privacy_tenant_fk_index.sql"
+      - "tests/shopify-privacy-tenant-index-bootstrap.sql"
+      - "tests/shopify-privacy-tenant-index-acceptance.sql"
+      - "docs/SUPABASE_ADVISOR_REVIEW_2026-11-21.md"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
       - "cloudflare/pixel-collector.js"
@@ -274,6 +278,24 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql
+      - name: Bootstrap isolated Shopify privacy queue index fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+            -f tests/shopify-privacy-tenant-index-bootstrap.sql
+      - name: Apply candidate Shopify privacy tenant index migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+            -f supabase/migrations/202611210012_shopify_privacy_tenant_fk_index.sql
+      - name: Verify Shopify privacy tenant foreign-key index
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+            -f tests/shopify-privacy-tenant-index-acceptance.sql
       - name: Exercise deny, allow, audit, consent and fail-closed paths
         env:
           PGPASSWORD: postgres
