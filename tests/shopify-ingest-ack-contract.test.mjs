@@ -25,11 +25,13 @@ test("all pre-ingest rejection paths have explicit fail-closed response codes", 
   ]);
   assert.deepEqual(c.preIngestFailureStatuses, {
     invalidHmac: 401,
+    hmacVerifierUnavailable: 503,
     unknownTenant: 404,
     malformedEvent: 422,
     tenantLookupUnavailable: 503,
   });
   assert.equal(buildPreIngestRejection("invalidHmac", context).http, 401);
+  assert.equal(buildPreIngestRejection("hmacVerifierUnavailable", context).http, 503);
   assert.equal(buildPreIngestRejection("unknownTenant", context).http, 404);
   assert.equal(buildPreIngestRejection("malformedEvent", context).http, 422);
   assert.equal(buildPreIngestRejection("tenantLookupUnavailable", context).http, 503);
