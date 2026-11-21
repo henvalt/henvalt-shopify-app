@@ -1,5 +1,5 @@
--- Dashboard recovery amounts and recovered counts must come from confirmed,
--- billable revenue-ledger entries, never opportunity value-at-risk estimates.
+-- Dashboard recovered-order activity must come from confirmed order attribution,
+-- while revenue totals remain sourced from confirmed billable revenue-ledger entries.
 -- Candidate migration only; validate in isolated staging before any deployment.
 BEGIN;
 
@@ -108,7 +108,7 @@ BEGIN
     FROM henvalt.opportunities o
     LEFT JOIN LATERAL (
       SELECT ri.status,
-        (SELECT rl.amount
+        (SELECT oa.attributed_value
            FROM henvalt.order_attributions oa
           WHERE oa.tenant_id = o.tenant_id
             AND oa.opportunity_id = o.id
