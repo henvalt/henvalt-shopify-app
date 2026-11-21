@@ -6,6 +6,7 @@ import { buildCandidate } from "../n8n/shopify-ingest-candidate-builder.mjs";
 const source = JSON.parse(readFileSync("n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json","utf8"));
 const map = JSON.parse(readFileSync("n8n/shopify-ingest-replay-write-map.json","utf8"));
 const pinned = "6368d539-708f-494a-8be8-b9601d0e8607";
+const byName = (w,name) => w.nodes.find(n=>n.name===name);
 
 test("full pinned 51-node active INGEST export builds an isolated no-send candidate", () => {
   const result = buildCandidate(source,map,pinned);
@@ -14,10 +15,10 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(w.active,false);
   assert.equal(w.id,"00000000-0000-4000-8000-999999999999");
   assert.equal(w.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
-  assert.equal(w.nodes.length,69);
-  assert.equal(result.graphAudit.node_count,69);
-  assert.equal(result.graphAudit.unique_node_ids,69);
-  assert.equal(result.graphAudit.unique_node_names,69);
+  assert.equal(w.nodes.length,67);
+  assert.equal(result.graphAudit.node_count,67);
+  assert.equal(result.graphAudit.unique_node_ids,67);
+  assert.equal(result.graphAudit.unique_node_names,67);
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
@@ -28,6 +29,12 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
     "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/receive_shopify_webhook_v1");
   assert.ok(w.nodes.some(n=>n.name==="Respond to Shopify"));
   assert.ok(w.nodes.some(n=>n.name==="Shopify Replay Entry Trigger"));
+  assert.equal(w.connections["Is Trusted Replay?"].main[0][0].node,"Resolve Shopify Tenant");
+  assert.equal(w.connections["Is Trusted Replay?"].main[1][0].node,"Supabase Ingest RPC");
+  assert.equal(byName(w,"Verify Shopify HMAC"),undefined);
+  assert.equal(byName(w,"HMAC Verified?"),undefined);
+  assert.match(byName(w,"Supabase Ingest RPC").parameters.jsonBody,/p_raw_body_base64/);
+  assert.match(byName(w,"Supabase Ingest RPC").parameters.jsonBody,/p_hmac/);
   assert.ok(w.nodes.every(n=>!/(MailerSend|send email|provider send)/i.test(n.name)));
 });
 
