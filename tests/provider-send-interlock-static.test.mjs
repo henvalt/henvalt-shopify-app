@@ -34,3 +34,10 @@ test("interlock trigger is installed on delivery requests", () => {
 test("trigger implementation is not callable as a client-facing RPC", () => {
   assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.enforce_provider_send_interlock\(\)[\s\S]*?FROM PUBLIC, anon, authenticated, service_role/i);
 });
+
+test("operator changes are audited and the setter is not granted to app roles", () => {
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS henvalt\\.provider_send_control_events/i);
+  assert.match(migration, /INSERT INTO henvalt\\.provider_send_control_events/i);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\\.set_provider_sending_enabled\\([\\s\\S]*?p_enabled boolean[\\s\\S]*?p_reason text/i);
+  assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\\.set_provider_sending_enabled\\(boolean, text\\)[\\s\\S]*?FROM PUBLIC, anon, authenticated, service_role/i);
+});
