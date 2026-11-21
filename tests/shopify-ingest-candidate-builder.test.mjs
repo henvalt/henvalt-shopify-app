@@ -33,7 +33,6 @@ return {
     baseNode("Build Deferred Payment Response","n8n-nodes-base.set",{assignments:{assignments:[{name:"__body",value:"={{ ({ status: 'deferred_for_reconciliation', }) }}"}]}}),
     baseNode("Capture Error","n8n-nodes-base.code",{}),
     baseNode("Reject Invalid Event","n8n-nodes-base.stopAndError",{}),
-    baseNode("Build Success Response","n8n-nodes-base.set",{}),
   ];
   for (const item of map.replay_mutations) {
     if (nodes.some(n=>n.name===item.node)) continue;
