@@ -136,7 +136,6 @@ function addReplayAndIngressNodes(workflow) {
   const normalizer = nodeByName(workflow, "Validate & Normalize");
   const engine = nodeByName(workflow, "Engine Config");
   const bind = nodeByName(workflow, "Bind Tenant Context");
-  const hmac = nodeByName(workflow, "HMAC Verified?");
   const valid = nodeByName(workflow, "Is Valid");
   const ingest = nodeByName(workflow, "Supabase Ingest RPC");
   const classifier = nodeByName(workflow, "Classify Result");
@@ -261,22 +260,14 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   },[-336,1008],2.2);
   const stopMarker = createNode("Stop Unconfirmed Processed Marker","n8n-nodes-base.stopAndError",{errorMessage:"HENVALT replay processed marker was not confirmed; lease must be retried."},[4384,992],1);
   const stopNotProceedable = createNode("Stop Replay Not Proceedable","n8n-nodes-base.stopAndError",{errorMessage:"HENVALT replay did not pass the proceed guard; retry through the lease worker."},[1120,1120],1);
-  const hmacResponse = createNode("Build HMAC Rejection Response","n8n-nodes-base.set",{
-    mode:"manual",assignments:{assignments:[
-      {id:"hmac-http",name:"__http",type:"number",value:401},
-      {id:"hmac-body",name:"__body",type:"object",value:"={{ { status: 'invalid_hmac' } }}"}
-    ]},includeOtherFields:true,options:{}
-  },[672,520],3.4);
 
   // The replay route bypasses only the second HMAC RPC. It still resolves the shop
   // and Bind Tenant Context enforces equality with the loader's tenant_id.
   workflow.connections["Engine Config"] = {main:[[{node:"Is Trusted Replay?",type:"main",index:0}]]};
   workflow.connections["Is Trusted Replay?"] = {main:[
     [{node:"Resolve Shopify Tenant",type:"main",index:0}],
-    [{node:"Verify Shopify HMAC",type:"main",index:0}]
+    [{node:"Supabase Ingest RPC",type:"main",index:0}]
   ]};
-  workflow.connections["HMAC Verified?"].main[0] = [{node:"Resolve Shopify Tenant",type:"main",index:0}];
-  workflow.connections["HMAC Verified?"].main[1] = [{node:"Build HMAC Rejection Response",type:"main",index:0}];
   workflow.connections["Bind Tenant Context"].main = [[{node:"Is Valid",type:"main",index:0}]];
   workflow.connections["Is Valid"].main[0] = [{node:"Is Replay Entry?",type:"main",index:0}];
   workflow.connections["Is Valid"].main[1] = [{node:"Is Rejected Replay?",type:"main",index:0}];
@@ -299,7 +290,6 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   workflow.connections["Deferred Handoff Confirmed?"] = {main:[[{node:"Build Deferred Payment Response",type:"main",index:0}],[{node:"Capture Error",type:"main",index:0}]]};
   workflow.connections["Is Rejected Replay?"] = {main:[[{node:"Stop Invalid Replay Envelope",type:"main",index:0}],[{node:"Build Invalid Ingress Response",type:"main",index:0}]]};
   workflow.connections["Build Invalid Ingress Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
-  workflow.connections["Build HMAC Rejection Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Replay Envelope Valid?"] = {main:[
     [{node:"Validate & Normalize",type:"main",index:0}],
     [{node:"Stop Invalid Replay Envelope",type:"main",index:0}]
@@ -310,10 +300,15 @@ return { ...prior, replay_context: { ...context, lease_expires_at: response.body
   workflow.connections["Event Webhook"].main = [[{node:"Validate & Normalize",type:"main",index:0}]];
   workflow.connections["Event Webhook"].main[0] = [{node:"Validate & Normalize",type:"main",index:0}];
 
+  // The atomic ingress RPC now owns HMAC verification and tenant resolution for
+  // public requests. Keep tenant lookup only on the trusted internal replay branch.
+  workflow.nodes = workflow.nodes.filter((node) => !["Verify Shopify HMAC","HMAC Verified?"].includes(node.name));
+  delete workflow.connections["Verify Shopify HMAC"];
+  delete workflow.connections["HMAC Verified?"];
   addNode(workflow,trigger); addNode(workflow,loader); addNode(workflow,envelope); addNode(workflow,envelopeValid);
   addNode(workflow,invalidReplay); addNode(workflow,trustedReplay); addNode(workflow,replayOrIngress);
   addNode(workflow,invalidReplayContext);
-  addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse); addNode(workflow,hmacResponse);
+  addNode(workflow,replayPipeline); addNode(workflow,respond); addNode(workflow,invalidResponse);
   addNode(workflow,renewLease); addNode(workflow,confirmRenewal);
   addNode(workflow,processedGate); addNode(workflow,deferredGate); addNode(workflow,stopMarker);
   addNode(workflow,stopNotProceedable);
