@@ -14,8 +14,22 @@ if (resp.error !== undefined || resp.statusCode === undefined) {
 const code = resp.statusCode;
 const raw = resp.body;
 const row = Array.isArray(raw) ? (raw[0] || {}) : (raw || {});
+const applicationStatus = Number(row.http_status || code);
 
-if (code >= 200 && code < 300) {
+if (code >= 200 && code < 300 && applicationStatus !== 200) {
+  if (applicationStatus === 401) {
+    return { __proceed: false, __http: 401, __body: { status: "invalid_hmac", correlation_id: corr } };
+  }
+  if (applicationStatus === 404) {
+    return { __proceed: false, __http: 404, __body: { status: "unknown_tenant", correlation_id: corr } };
+  }
+  if (applicationStatus === 422) {
+    return { __proceed: false, __http: 422, __body: { status: "rejected", correlation_id: corr } };
+  }
+  return { __proceed: false, __http: 503, __body: { status: "temporarily_unavailable", correlation_id: corr } };
+}
+
+if (code >= 200 && code < 300 && applicationStatus === 200) {
   if (!row.webhook_id || !row.processing_status) {
     return {
       __proceed: false,
