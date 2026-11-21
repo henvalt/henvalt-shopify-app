@@ -33,17 +33,17 @@ Read-only production catalog inspection found `henvalt.shopify_privacy_requests`
 - `henvalt.redact_shopify_shop_data(uuid)` exists and is service-role-only. It consumes a queued `shop/redact` request and deletes the tenant after sanitizing the queue receipt.
 - `henvalt.purge_expired_shopify_privacy_exports()` exists.
 - The production pg_cron catalog shows the export-purge job active every 15 minutes. This only proves expiry cleanup is scheduled; it does not implement the missing request ingestion or customer-data export.
-- The inspected function catalog contains no `customers/data_request` export/response handler and no dedicated durable privacy webhook enqueue/worker entry point.
+- Correction from the 2026-11-21 Edge Function inspection: an active `henvalt-shopify-privacy` production Edge Function exists (version 1, `verify_jwt=false`). It receives the three compliance topics, verifies HMAC over the raw request body, inserts into `shopify_privacy_requests`, and calls export/redaction RPCs synchronously. It is not yet a proven end-to-end compliance implementation: the data export awaits secure merchant delivery, the queue is not atomically claimed, and the edge function source is absent from this Git branch.
 
 The presence of a queue table and isolated redaction functions is not evidence that Shopify's incoming compliance webhooks are accepted, acknowledged, completed or retried correctly.
 
 ## Required implementation before adding the TOML subscriptions
 
-1. Create a dedicated privacy webhook ingress/handler path, or a rigorously separated branch at the shared ingress. Verify Shopify HMAC over exact raw bytes and bind the request to the shop/tenant without trusting payload tenant IDs.
-2. Durably enqueue each compliance request idempotently by Shopify delivery ID before returning 2xx. Unknown shops, malformed payloads, database failure and duplicate deliveries need explicit outcomes.
-3. Implement `customers/data_request`: assemble the requested customer/order data from all HENVALT stores and return it to the merchant through a controlled, auditable export process. The Shopify webhook itself is not the export response.
-4. Implement `customers/redact`: call the tenant-scoped redaction function using verified shop/customer identity; handle absent customer rows and email-only payloads safely; preserve legally required records only under an approved retention basis.
-5. Implement `shop/redact`: wait for Shopify's scheduled delivery, validate the queued shop identity, stop future processing/sending, delete or anonymize the tenant's data, and verify the operation. Define how backups, provider logs and n8n execution data are handled.
+1. Bring the deployed `henvalt-shopify-privacy` v1 source under version control, then harden it. It already verifies HMAC over exact raw bytes; additionally bind the signed payload `shop_id`/`shop_domain` to the resolved `shopify_connections` row, and never trust the unsigned `x-shopify-shop-id` header as identity.
+2. Replace read-then-process queue handling with an atomic claim/lease transition. The current function inserts idempotently by webhook ID but does not change `PENDING` to `PROCESSING` before doing work, so concurrent duplicate deliveries can race. Preserve retryable failures and explicit unknown-shop handling.
+3. Complete `customers/data_request`: the current handler calls `export_shopify_customer_data` and stores a 30-day result, but marks it `REVIEW_REQUIRED` with `export_ready_for_secure_merchant_delivery`; no secure merchant delivery is performed in the inspected handler. Implement and test that controlled, auditable delivery.
+4. Harden `customers/redact`: the handler calls the tenant-scoped redaction RPC, but that RPC returns `matched: true` even when no customer or related rows match, making the handler's no-match review branch ineffective. Add a real affected-record/no-match result and test customer-ID-only and email-only requests.
+5. Verify `shop/redact`: the current handler invokes the tenant deletion RPC. Prove shop identity binding, tenant-wide send/processing stop, deletion scope, backups, provider logs and n8n execution-data treatment in isolated staging.
 6. Add a lease-bound worker with retries, terminal/dead-letter states, append-only audit evidence, strict tenant isolation and no raw payload leakage to n8n execution history.
 7. Test duplicates, invalid HMAC, unknown shops, service/database outage, partial failure, retry, customer-id-only and email-only payloads, completed replay, legal-hold exceptions, and full shop deletion in isolated staging.
 8. Only after the endpoint and handler tests pass, add the three `compliance_topics` in `shopify.app.toml` and validate the actual Shopify app configuration. Do not add a configuration-only declaration that points at an unimplemented handler.
@@ -60,7 +60,7 @@ The presence of a queue table and isolated redaction functions is not evidence t
 - [ ] Isolated end-to-end acceptance evidence exists.
 - [ ] Shopify app configuration validation and App Store security checks pass.
 
-**Current status: NOT IMPLEMENTED / NOT CONFIGURED / NO-GO.** Keep the current app configuration unchanged until the complete handler exists.
+**Current status: PARTIALLY IMPLEMENTED / NOT CONFIGURED / NO-GO.** A production v1 handler exists, but critical identity, concurrency, retention and export-delivery controls remain unproven. Keep the current app configuration unchanged.
 
 ## Additional production catalog evidence — 2026-11-21 (second read-only catalog pass)
 
@@ -83,3 +83,42 @@ This is a distinct privacy-retention defect, not just the missing webhook receiv
 ### Release-gate consequence
 
 Do not describe the existing customer-redaction RPC as end-to-end Shopify compliance. The function is a useful tenant-scoped primitive, but request ingestion, request lifecycle, durable worker orchestration, customer-data export, and post-redaction queue sanitization are still incomplete. Do not add `compliance_topics` to TOML until those paths have been implemented and tested in an isolated environment.
+
+
+## Correction and additional live evidence — 2026-11-21 (production function read-only inspection)
+
+The earlier statement that no privacy webhook handler exists was too broad. A read-only Supabase function inventory found an **ACTIVE** production Edge Function:
+
+- Slug: `henvalt-shopify-privacy`
+- Version: `1`
+- JWT verification: disabled (appropriate only because the function performs Shopify HMAC verification itself)
+- Deployed source SHA-256: `213af659378fd3da90b8edbfce12347445e4f5ce633ca6bf6705f8d3cae3e5f4`
+- The function is not present in the current Git branch tree, creating a source-control/reproducibility gap.
+
+### What the deployed v1 actually does
+
+- Accepts `customers/data_request`, `customers/redact` and `shop/redact`.
+- Verifies HMAC-SHA256 against the exact raw request body before parsing JSON.
+- Resolves a tenant by `shop_domain`, inserts a privacy queue row with unique `webhook_id`, and invokes export/customer-redaction/shop-redaction RPCs.
+- For data requests, generates a result and stores it with a 30-day expiry, but leaves the request in `REVIEW_REQUIRED` with `export_ready_for_secure_merchant_delivery`. The inspected handler does not deliver that export to the merchant.
+- For customer redaction, calls `redact_shopify_customer_data`, then clears the queue payload only if the RPC reports success.
+- For shop redaction, calls `redact_shopify_shop_data`, which sanitizes its queue receipt before tenant deletion.
+
+### Confirmed gaps in v1
+
+1. **Shop identity binding:** the function resolves by the shop-domain header and stores the unsigned shop-ID header, but does not compare the HMAC-covered payload `shop_id` with the resolved connection's `shopify_shop_id`. The shop-ID header itself is not covered by the body HMAC.
+2. **No atomic claim/lease:** after idempotent insert, the function reads the row and processes it without first transitioning `PENDING` to `PROCESSING` under an atomic lock/lease. Concurrent duplicate deliveries can race.
+3. **Customer no-match detection is ineffective:** the current `redact_shopify_customer_data` SQL function returns `matched: true` unconditionally after its tenant-scoped operations, including when it found no customer row. The handler's `if (!result?.matched)` review branch therefore cannot detect this case.
+4. **PII retention on unresolved states:** `FAILED` and `REVIEW_REQUIRED` customer requests can retain the original inbound payload and customer ID. The 15-minute purge only clears expired `result_payload` and does not sanitize inbound `payload`.
+5. **Export delivery incomplete:** generated customer export data is stored for 30 days but remains awaiting secure merchant delivery. No delivery implementation was found in this function.
+6. **Source drift:** the deployed function is not tracked in the current Git tree, so the repository cannot reproduce or reliably test the live implementation.
+
+### GitHub workflow safety finding
+
+The prior `.github/workflows/controlled-privacy-hmac-test.yml` was manually triggerable and used the repository `SHOPIFY_API_SECRET` to POST a synthetic `customers/data_request` directly to the production Supabase function URL. This was not a staging test. The candidate branch now replaces that workflow with offline-only HMAC fixtures and a static guard test. **This candidate change does not alter the default branch**; the production-calling workflow remains on the default branch until a reviewed merge or an explicitly authorized workflow-disable action.
+
+The candidate branch's offline workflow is guarded by:
+- `tests/shopify-privacy-hmac-contract.test.mjs`
+- `tests/shopify-privacy-workflow-safety.test.mjs`
+
+No production function, workflow, secret, database row, app configuration or deployment was changed during this inspection.
