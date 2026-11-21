@@ -35,6 +35,8 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(findNode(w,"HMAC Verified?"),undefined);
   assert.match(findNode(w,"Supabase Ingest RPC").parameters.jsonBody,/p_raw_body_base64/);
   assert.match(findNode(w,"Supabase Ingest RPC").parameters.jsonBody,/p_hmac/);
+  assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.webhook_id\)/);
+  assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.replay_job_id\)/);
   assert.ok(w.nodes.every(n=>!/(MailerSend|send email|provider send)/i.test(n.name)));
 });
 
