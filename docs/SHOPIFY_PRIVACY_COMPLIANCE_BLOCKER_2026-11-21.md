@@ -62,7 +62,7 @@ The presence of a queue table and isolated redaction functions is not evidence t
 
 **Current status: NOT IMPLEMENTED / NOT CONFIGURED / NO-GO.** Keep the current app configuration unchanged until the complete handler exists.
 
-## Additional production catalog evidence — 2026-11-21 22:xx PKT
+## Additional production catalog evidence — 2026-11-21 (second read-only catalog pass)
 
 A second read-only catalog pass inspected the exact privacy queue columns, constraints, grants and full definitions of the three existing privacy functions.
 
