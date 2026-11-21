@@ -175,3 +175,20 @@ Both provider nodes issue POST requests to the same function slug, `henvalt-mail
 This CI test is a **route-topology regression guard**, not a live n8n query and not evidence that the stop control is installed or that either route is blocked. A live route can change without this fixture changing; refresh the snapshot after any approved workflow-version change. Staging still requires independent tests of both routes against provider egress denied, asserting zero provider-stub calls and no token release.
 
 **Production remains NO-GO.** No live workflow was changed, no sender was disabled or enabled, and no provider request was generated during this inspection.
+
+
+## 11. Delivery Edge Function provider-boundary harness — 2026-11-21
+
+The MailerSend delivery Edge Function was refactored into a small injectable handler module at `supabase/functions/henvalt-mailersend-delivery/handler.mjs`; the deployed entrypoint remains `index.ts` and now supplies the existing environment values to `Deno.serve`. No environment values, credentials, endpoint changes or deployment actions were made.
+
+A Node 22 test suite at `tests/henvalt-mailersend-delivery-handler.test.mjs` injects a fetch stub for every outbound call. It exercises:
+
+- Credential-release RPC rejection (representing a closed/missing interlock): HTTP 409 and **zero provider calls**.
+- Missing, malformed, too-short and unavailable provider token: no provider call.
+- Valid synthetic token: exactly one provider-stub call, with expected tenant/delivery tags and response handling.
+- Invalid service bearer and malformed request: rejected before any fetch.
+- Provider transport exception: explicit ambiguous result; no automatic retry.
+
+The tests use `.invalid` recipient/sender domains and a fake Supabase URL, and all fetch calls are injected. They cannot send a real message. This proves handler-level ordering and failure behavior under a stub; it does **not** independently prove the live SQL function rejects when the live interlock is closed, nor does it exercise n8n's two live HTTP nodes. Those remain staging acceptance requirements.
+
+The CI workflow was updated to run the handler tests together with the existing route snapshot and disposable PostgreSQL acceptance suite. Check the run attached to the latest branch head before treating this batch as green.
