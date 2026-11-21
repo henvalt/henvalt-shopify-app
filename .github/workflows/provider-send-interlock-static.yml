@@ -25,7 +25,7 @@ on:
       - "tests/shopify-oauth-completion-url.test.mjs"
       - "tests/shopify-oauth-infrastructure-config.test.mjs"
       - "tests/shopify-oauth-webhook-contract.test.mjs"
-      - "tests/shopify-ingest-ack-contract.test.mjs"
+      - "tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs"
       - "tests/shopify-ingest-delivery-identity.test.mjs"
       - "tests/shopify-ingest-classifier-candidate.test.mjs"
       - "cloudflare/shopify-ingest-ack-contract.mjs"
@@ -45,6 +45,8 @@ on:
       - "tests/shopify-webhook-replay-loader-postgres-acceptance.sql"
       - "tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql"
       - "tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-worker-spec-static.test.mjs"
+      - "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md"
       - ".github/workflows/provider-send-interlock-static.yml"
   workflow_dispatch:
 
