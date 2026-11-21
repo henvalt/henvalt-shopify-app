@@ -89,6 +89,7 @@ BEGIN
   IF (SELECT is_called FROM henvalt.mailersend_secret_read_counter) IS NOT TRUE THEN
     RAISE EXCEPTION 'enabled credential-release wrapper did not reach synthetic Vault fixture';
   END IF;
+  SELECT last_value INTO v_secret_reads FROM henvalt.mailersend_secret_read_counter;
 
   PERFORM henvalt.set_provider_sending_enabled(false, 'close after synthetic staging integration test');
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
@@ -120,8 +121,8 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN
     IF SQLERRM <> 'HENVALT_PROVIDER_SENDING_DISABLED' THEN RAISE; END IF;
   END;
-  IF (SELECT is_called FROM henvalt.mailersend_secret_read_counter) IS NOT TRUE THEN
-    RAISE EXCEPTION 'missing control row changed the Vault-read counter unexpectedly';
+  IF (SELECT last_value FROM henvalt.mailersend_secret_read_counter) IS DISTINCT FROM v_secret_reads THEN
+    RAISE EXCEPTION 'missing control row reached the synthetic Vault read boundary';
   END IF;
 
   SELECT * INTO v_status FROM henvalt.provider_sending_status();
