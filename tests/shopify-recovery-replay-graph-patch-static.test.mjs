@@ -225,3 +225,23 @@ test("replay subworkflow node contracts expose only the exact three required inp
   assert.equal(trigger.isTrigger, true);
   assert.equal(trigger.parameters.returnOutput, "lastRunOnly");
 });
+
+
+test("every required replay graph edge resolves to a known baseline or candidate node", () => {
+  const existing = new Set(manifest.known_existing_nodes);
+  const added = manifest.nodes_to_add.map((node) => node.name);
+  assert.equal(new Set(added).size, added.length, "candidate node names must be unique");
+  const known = new Set([...existing, ...added]);
+  assert.equal(manifest.graph_integrity_evidence.baseline_node_count, 46);
+  assert.equal(manifest.graph_integrity_evidence.active_version_id, active.activeVersionId);
+  for (const [from, to] of manifest.required_connections) {
+    const source = String(from).split("#")[0];
+    const target = String(to).split("#")[0];
+    assert.ok(known.has(source), "unknown source node: " + source);
+    assert.ok(known.has(target), "unknown target node: " + target);
+  }
+  for (const edge of manifest.connections_to_add) {
+    assert.ok(known.has(edge.from), "unknown added-edge source: " + edge.from);
+    assert.ok(known.has(edge.to), "unknown added-edge target: " + edge.to);
+  }
+});
