@@ -23,10 +23,10 @@
       "sql": "SELECT * FROM henvalt.claim_shopify_replay_job($1, 180)",
       "job_type": "process_shopify_webhook",
       "required_claim_fields": [
-        "job_id",
-        "worker_id",
+        "id",
         "lease_id",
-        "lease_expires_at"
+        "lease_expires_at",
+        "payload"
       ],
       "claim_must_be_separate_from_generic_claim": true,
       "load_sql": "SELECT * FROM henvalt.load_shopify_webhook_replay_job($1, $2, $3)",
@@ -38,7 +38,27 @@
       "completion_sql": "SELECT henvalt.complete_shopify_replay_job($1, $2, $3)",
       "retry_sql": "SELECT henvalt.retry_shopify_replay_job($1, $2, $3, $4, $5)",
       "retry_delay_seconds_default": 300,
-      "retry_delay_seconds_max": 3600
+      "retry_delay_seconds_max": 3600,
+      "raw_claim_fields": [
+        "id",
+        "lease_id",
+        "lease_expires_at",
+        "payload"
+      ],
+      "normalized_claim_fields": [
+        "job_id",
+        "worker_id",
+        "lease_id",
+        "lease_expires_at",
+        "webhook_id"
+      ],
+      "normalization": {
+        "job_id": "raw claim row id",
+        "worker_id": "the same worker_id passed to claim_shopify_replay_job",
+        "lease_id": "raw claim row lease_id, unchanged",
+        "lease_expires_at": "raw claim row lease_expires_at",
+        "webhook_id": "UUID parsed from raw claim row payload.webhook_id"
+      }
     },
     "scheduling": {
       "fairness": "At most one intervention claim and one replay claim per scheduler cycle.",
