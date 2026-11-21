@@ -70,3 +70,20 @@ test("browse candidate preserves ISO currency width and service-role RPC access"
   assert.match(migration, /currency character\(3\)/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.get_browse_abandonment_candidates\(integer, integer, integer\) TO service_role/);
 });
+
+test("dashboard recovered activity uses confirmed order attribution, not opportunity value-at-risk", () => {
+  const dashboardMigration = readFileSync(
+    new URL("../supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql", import.meta.url),
+    "utf8",
+  );
+  assert.match(dashboardMigration, /oa\.attribution_confidence = 'CONFIRMED'/);
+  assert.match(dashboardMigration, /count\(DISTINCT oa\.order_id\)/);
+  assert.match(dashboardMigration, /Awaiting confirmed attribution/);
+  assert.match(dashboardMigration, /ri\.confirmed_amount IS NOT NULL/);
+});
+
+test("dashboard revenue chart uses the confirmed revenue series", () => {
+  const dashboard = readFileSync(new URL("../dashboard/index.html", import.meta.url), "utf8");
+  assert.match(dashboard, /data\.revenueSeries\|\|\[\]/);
+  assert.doesNotMatch(dashboard, /a\.filter\(x=>x\.outcome==="recovered"&&x\.amount!=null\)/);
+});
