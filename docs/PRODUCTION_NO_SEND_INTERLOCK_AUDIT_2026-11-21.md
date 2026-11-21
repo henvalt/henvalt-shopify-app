@@ -126,3 +126,12 @@ A candidate-only implementation has now been added in migration `202611210008_sh
 - CI workflow was updated to apply migration 008 and run the new stale-worker acceptance test on disposable PostgreSQL.
 
 This is candidate code only. It has not been applied to Supabase production, and the active n8n recovery workflow has not been modified. CI results for the final commit must be checked before treating the candidate as validated. Full isolated staging, n8n wiring, and end-to-end delivery/attribution acceptance remain outstanding.
+
+
+## 21 November — replay subflow lease-token contract correction
+
+A cross-document review found the HENVALT_INGEST replay-entry section still described the revoked two-argument loader, despite the recovery branch and migration 008 requiring a per-claim lease token. The candidate worker specification now passes `job_id`, `worker_id`, and the exact `lease_id` into the ingest subflow; its second payload load, renewals, completion and retry all use that same lease. A static regression test now guards the contract and the fail-closed renewal rule.
+
+The exact candidate head `9dc247ff7aa78dad933b628edbd2e32257ea3f23` passed HENVALT safety run [44887910222](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44887910222). Verified successful steps include the Node static test suite, both Edge Function type checks, disposable PostgreSQL 17 bootstrap, all candidate migrations 001–008, replay enqueue/loader/ingress acceptance, lease fencing acceptance, and the existing interlock/consent/dashboard/token-refresh acceptance suite. Shopify configuration static validation passed on [44887910188](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44887910188); deployment was skipped.
+
+This remains candidate CI only. The three active n8n workflows were re-read and remain on their original active versions; no workflow draft or active version was changed. The live ingress and recovery paths therefore remain unconverted, and isolated full-schema staging remains a release blocker.
