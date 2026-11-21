@@ -44,3 +44,9 @@ test("active ingest snapshot explicitly flags early acknowledgement as a launch 
   assert.equal(snapshot.acknowledgement.durableIngestOccursAfterHttpAcknowledgement, true);
   assert.equal(snapshot.acknowledgement.launchBlocker, true);
 });
+
+test("active classifier's generic 409 duplicate shortcut is a launch blocker until row identity is proven", () => {
+  assert.equal(snapshot.resultContract.generic409WithoutWebhookIdCurrentlyAcknowledged, true);
+  assert.equal(snapshot.resultContract.candidateMustRequireWebhookIdForEvery200, true);
+  assert.equal(snapshot.resultContract.generic409MustBeRetryableWithoutDurableRow, true);
+});
