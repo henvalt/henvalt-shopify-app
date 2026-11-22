@@ -23,3 +23,14 @@ test("terminal privacy outcomes minimize inbound personal data", () => {
   assert.match(sql, /revoke all on function henvalt\.claim_shopify_privacy_request/i);
   assert.match(sql, /to service_role/i);
 });
+
+test("shared PostgreSQL acceptance suites run before the privacy fixture resets henvalt", () => {
+  const workflow = readFileSync(".github/workflows/provider-send-interlock-static.yml", "utf8");
+  const privacyBootstrap = readFileSync("tests/shopify-privacy-lease-postgres-bootstrap.sql", "utf8");
+  const providerStep = workflow.indexOf("name: Exercise deny, allow, audit, consent and fail-closed paths");
+  const privacyResetStep = workflow.indexOf("name: Bootstrap isolated Shopify privacy lease fixture");
+  assert.notEqual(providerStep, -1, "provider acceptance step must exist");
+  assert.notEqual(privacyResetStep, -1, "privacy fixture bootstrap step must exist");
+  assert.ok(providerStep < privacyResetStep, "provider acceptance must run before the privacy fixture drops/recreates henvalt");
+  assert.match(privacyBootstrap, /drop schema if exists henvalt cascade/i);
+});
