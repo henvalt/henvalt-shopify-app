@@ -39,7 +39,7 @@ The currently deployed Edge Function does not call these RPCs. A future replacem
 - `claim_shopify_privacy_request_by_id` atomically claims only the exact webhook receipt inserted by the current request. This avoids the dangerous case where a generic queue claim could select an older, unrelated privacy request.
 - `redact_shopify_customer_data_checked` performs tenant-scoped existence checks before calling the legacy destructive redaction routine. It can truthfully return `matched: false` without reporting a no-op as successful deletion.
 - `redact_shopify_shop_data_with_lease` locks and verifies the exact PROCESSING row, token, and unexpired lease before invoking tenant deletion.
-- `supabase/functions/henvalt-shopify-privacy-candidate/index.ts` is a separate, non-deployed handler candidate. It verifies HMAC over raw bytes, compares signed body `shop_id` to the active connection, ignores the unsigned shop-ID header, stores only minimal identifiers, claims the exact receipt, and routes each topic through the guarded RPCs.
+- `supabase/functions/henvalt-shopify-privacy/index.ts` is now the candidate source at the exact Supabase deployment path; the deployed v1 source is preserved byte-for-byte under `supabase/audit-baselines/henvalt-shopify-privacy-v1.ts`. The candidate verifies HMAC over raw bytes, compares signed body `shop_id` to the stored connection even after uninstall, ignores the unsigned shop-ID header as identity, stores only minimal identifiers, and returns after durable receipt persistence. The scheduled database worker claims requests and routes each topic through guarded RPCs.
 - The candidate customer-data export remains in REVIEW_REQUIRED pending secure merchant delivery. It does not claim that generating an export means the merchant received it.
 - Unmatched shops are queued without retaining customer ID/email. A missing or ambiguous active shop connection fails closed.
 
@@ -81,6 +81,6 @@ The worker is database-native because the production project currently has pg_cr
 
 ## Post-uninstall shop resolution
 
-The OAuth uninstall handler deactivates the shop connection rather than deleting it. Shopify can send `shop/redact` after uninstall, so the privacy candidate intentionally resolves the unique connection by shop domain without filtering `active=true`. The signed payload shop ID must still match the stored shop ID. The connection's inactive state must not block legal data deletion; the shop-redaction worker then uses the tenant-scoped legacy deletion RPC and sanitizes the receipt.
+The OAuth uninstall handler deactivates the shop connection rather than deleting it. Shopify can send `shop/redact` after uninstall, so the candidate handler intentionally resolves the unique connection by shop domain without filtering `active=true`. The signed payload shop ID must still match the stored shop ID. The connection's inactive state must not block legal data deletion; the shop-redaction worker then uses the tenant-scoped legacy deletion RPC and sanitizes the receipt.
 
 A legacy connection whose `shopify_shop_id` is null is not treated as a verified tenant mapping. Its HMAC-authenticated request is retained in REVIEW_REQUIRED with no tenant/customer identifiers rather than being processed against a guessed tenant.
