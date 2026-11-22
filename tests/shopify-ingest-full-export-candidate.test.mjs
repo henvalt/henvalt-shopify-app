@@ -16,10 +16,10 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(w.settings.availableInMCP,false);
   assert.equal(w.id,"00000000-0000-4000-8000-999999999999");
   assert.equal(w.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
-  assert.equal(w.nodes.length,68);
-  assert.equal(result.graphAudit.node_count,68);
-  assert.equal(result.graphAudit.unique_node_ids,68);
-  assert.equal(result.graphAudit.unique_node_names,68);
+  assert.equal(w.nodes.length,70);
+  assert.equal(result.graphAudit.node_count,70);
+  assert.equal(result.graphAudit.unique_node_ids,70);
+  assert.equal(result.graphAudit.unique_node_names,70);
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
@@ -49,6 +49,19 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.webhook_id\)/);
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.replay_job_id\)/);
   assert.ok(w.nodes.every(n=>!/(MailerSend|send email|provider send)/i.test(n.name)));
+});
+
+test("non-Shopify events cannot enter the Shopify HMAC ingress RPC", () => {
+  const w = buildCandidate(source,map,pinned).workflow;
+  const byName = new Map(w.nodes.map(n=>[n.name,n]));
+  assert.equal(w.connections["Is Trusted Replay?"].main[1][0].node,"Is Shopify Source?");
+  assert.equal(w.connections["Is Replay Entry?"].main[1][0].node,"Is Shopify Source?");
+  assert.equal(w.connections["Is Shopify Source?"].main[0][0].node,"Supabase Ingest RPC");
+  assert.equal(w.connections["Is Shopify Source?"].main[1][0].node,"Build Unsupported Internal Source Response");
+  const reject = byName.get("Build Unsupported Internal Source Response");
+  assert.equal(reject.parameters.assignments.assignments.find(a=>a.name==="__http").value,422);
+  assert.match(reject.parameters.assignments.assignments.find(a=>a.name==="__body").value,/unsupported_internal_source/);
+  assert.equal(w.connections["Build Unsupported Internal Source Response"].main[0][0].node,"Respond to Shopify");
 });
 
 test("all 18 write paths are lease-fenced and every connection resolves", () => {
