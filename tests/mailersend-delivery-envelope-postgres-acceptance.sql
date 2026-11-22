@@ -11,6 +11,7 @@ DECLARE
   v_opportunity uuid := gen_random_uuid();
   v_recovery uuid := gen_random_uuid();
   v_intervention uuid := gen_random_uuid();
+  v_message uuid := gen_random_uuid();
   v_result boolean;
   v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text)'::regprocedure;
 BEGIN
@@ -48,17 +49,24 @@ BEGIN
   VALUES (v_recovery, v_tenant, v_opportunity, 'SCHEDULED');
   INSERT INTO henvalt.recovery_interventions(id, tenant_id, opportunity_id, sequence_id, status)
   VALUES (v_intervention, v_tenant, v_opportunity, v_recovery, 'SENDING');
+  INSERT INTO henvalt.messages(id, tenant_id, intervention_id, recipient, subject, body, metadata)
+  VALUES (v_message, v_tenant, v_intervention, 'customer@example.invalid',
+          'Synthetic delivery test', 'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+          '{"unsubscribe_url":"https://unsubscribe.example.invalid/token"}'::jsonb);
   INSERT INTO henvalt.delivery_requests(
     id, tenant_id, status, recipient_reference, channel, provider,
-    delivery_mode, provider_claimed_at, opportunity_id, recovery_id, intervention_id
+    delivery_mode, provider_claimed_at, opportunity_id, recovery_id, intervention_id, message_reference
   ) VALUES (
     v_delivery, v_tenant, 'UNKNOWN', 'customer@example.invalid',
-    'EMAIL', 'mailersend', 'HENVALT_MANAGED', now(), v_opportunity, v_recovery, v_intervention
+    'EMAIL', 'mailersend', 'HENVALT_MANAGED', now(), v_opportunity, v_recovery, v_intervention, v_message
   );
 
   SELECT henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) INTO v_result;
   IF v_result IS NOT TRUE THEN
     RAISE EXCEPTION 'valid tenant delivery envelope was rejected';
@@ -102,7 +110,10 @@ BEGIN
   UPDATE henvalt.delivery_requests SET provider_claimed_at = NULL WHERE id = v_delivery;
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'unclaimed delivery request was authorized';
   END IF;
@@ -111,7 +122,10 @@ BEGIN
   UPDATE henvalt.customers SET email_consent = false WHERE id = v_customer;
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'revoked email consent was authorized';
   END IF;
@@ -120,7 +134,10 @@ BEGIN
   VALUES (v_tenant, v_customer, 'customer@example.invalid', true);
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'suppressed recipient was authorized';
   END IF;
@@ -128,7 +145,10 @@ BEGIN
   UPDATE henvalt.opportunities SET status = 'SUPPRESSED' WHERE id = v_opportunity;
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'ineligible opportunity was authorized';
   END IF;
@@ -136,7 +156,10 @@ BEGIN
   UPDATE henvalt.tenants SET status = 'SUSPENDED' WHERE id = v_tenant;
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'suspended tenant delivery was authorized';
   END IF;
