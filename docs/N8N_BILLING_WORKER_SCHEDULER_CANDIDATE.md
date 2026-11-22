@@ -16,6 +16,8 @@ The discovery query also requires `billing_accounts.test_mode = true`. The candi
 
 The discovery query is deliberately read-only. It does not allocate credits, create usage charges, or change billing state. The claim RPC remains the sole authority for charge creation and refund-credit allocation. The query mirrors the worker's retry windows so the scheduler does not repeatedly call shops whose charges are not yet due.
 
+Billing accounts are currently tenant-scoped, not shop-scoped. Therefore the discovery query admits a tenant only when exactly one Shopify connection is active, and the database claim RPC independently returns `SINGLE_ACTIVE_SHOP_REQUIRED` when that invariant is not met. The database guard is authoritative; the scheduler filter is only an efficiency measure. This prevents a tenant with multiple active stores from submitting a fee against the wrong store's subscription line item.
+
 ## Credential and endpoint gate
 
 The generated candidate uses `https://supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing` and contains no credential material. Before isolated staging execution only:
