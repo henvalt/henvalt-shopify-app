@@ -36,3 +36,7 @@ test("merchant dashboard API supplies the series consumed by the chart", () => {
   assert.match(workflow, /supabase\/functions\/henvalt-merchant-dashboard\/index\.ts/);
   assert.match(workflow, /Type-check merchant dashboard Edge Function/);
 });
+
+test("credentialed dashboard API requests reject unexpected redirects", () => {
+  assert.equal((merchantDashboard.match(/redirect: "error"/g) || []).length, 4);
+});
