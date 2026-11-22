@@ -107,8 +107,12 @@ Deno.serve(async (req: Request) => {
   }
 
   const customerId = asId(payload?.customer?.id);
-  const customerEmail = typeof payload?.customer?.email === "string"
-    ? payload.customer.email.trim().toLowerCase().slice(0, 320) : null;
+  const rawCustomerEmail = typeof payload?.customer?.email === "string"
+    ? payload.customer.email.trim() : null;
+  if (rawCustomerEmail && rawCustomerEmail.length > 320) {
+    return reply(400, { error: "customer_email_too_long" });
+  }
+  const customerEmail = rawCustomerEmail ? rawCustomerEmail.toLowerCase() : null;
   const requestId = asId(payload?.data_request?.id);
   if (topic !== "shop/redact" && !customerId && !customerEmail) {
     return reply(400, { error: "customer_identifier_missing" });
@@ -175,10 +179,9 @@ Deno.serve(async (req: Request) => {
 
   try {
     if (topic === "customers/data_request") {
-      const exported = await rpc("export_shopify_customer_data", {
-        p_tenant_id: claim.tenant_id,
-        p_shopify_customer_id: customerId,
-        p_customer_email: customerEmail,
+      const exported = await rpc("export_shopify_customer_data_with_lease", {
+        p_privacy_request_id: claim.id,
+        p_lease_token: claim.lease_token,
       });
       if (!exported.ok) {
         await finish("FAILED", "customer_export_failed");
@@ -186,23 +189,6 @@ Deno.serve(async (req: Request) => {
       }
       const result = await exported.json();
       const found = result?.found === true;
-      if (found) {
-        const saved = await db(
-          "/rest/v1/shopify_privacy_requests?id=eq." + encodeURIComponent(claim.id),
-          {
-            method: "PATCH",
-            headers: { prefer: "return=minimal" },
-            body: JSON.stringify({
-              result_payload: result,
-              result_expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            }),
-          },
-        );
-        if (!saved.ok) {
-          await finish("FAILED", "customer_export_persistence_failed");
-          return reply(503, { error: "customer_export_persistence_failed" });
-        }
-      }
       const completed = await finish("REVIEW_REQUIRED",
         found ? "export_ready_for_secure_merchant_delivery" : "customer_record_not_found");
       if (!completed) return reply(503, { error: "privacy_request_lease_lost" });
