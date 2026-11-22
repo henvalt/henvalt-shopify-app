@@ -91,12 +91,12 @@ Filter the returned line item by exact ID, then match `idempotencyKey`, amount a
 
 ## Required state and authorization work
 
-The candidate migration now persists a separate `reconciliation_status` on each billing charge. The worker calls `control_plane_mark_billing_reconciliation_required` when its fifth attempt has an ambiguous outcome. The scheduler discovery query excludes `REQUIRED` and `MISMATCH` charges. The migration supplies service-role-only, tenant-bound read and resolution RPCs. A new `henvalt-billing-reconciliation` Edge Function validates the Supabase Auth session, requires exactly one OWNER/ADMIN membership, derives the shop from the active tenant connection, and requires an active test-mode billing account before calling those RPCs. It never accepts a client-supplied tenant or shop as authority and records the authenticated user ID as the operator reference. The service-role key remains server-side. These changes are candidate-only and have not been deployed.
+The candidate migration now persists a separate `reconciliation_status` on each billing charge and exposes a bounded queue RPC for unresolved cases. The worker calls `control_plane_mark_billing_reconciliation_required` when its fifth attempt has an ambiguous outcome. The scheduler discovery query excludes `REQUIRED` and `MISMATCH` charges. The migration supplies service-role-only, tenant-bound read and resolution RPCs. A new `henvalt-billing-reconciliation` Edge Function validates the Supabase Auth session, requires exactly one OWNER/ADMIN membership, derives the shop from the active tenant connection, and requires an active test-mode billing account before calling those RPCs. It never accepts a client-supplied tenant or shop as authority and records the authenticated user ID as the operator reference. The service-role key remains server-side. These changes are candidate-only and have not been deployed.
 
 1. Validate the candidate migration and Edge Function against isolated Supabase staging with the exact production schema, roles and PostgREST JWT claims.
-2. Add the operator panel to the merchant dashboard and ensure only OWNER/ADMIN users can reach the action.
+2. Deploy the candidate dashboard panel and Edge Function to isolated staging; verify OWNER/ADMIN access, member denial, multi-tenant denial and server-derived shop scope.
 3. Exercise all three resolutions (`MATCHED`, `NOT_FOUND_CONFIRMED`, `MISMATCH`) against Shopify development-store evidence.
-4. Add alerts and dashboard visibility for unresolved `REQUIRED` / `MISMATCH` rows.
+4. Add alerting for unresolved `REQUIRED` / `MISMATCH` rows and operational ownership for the queue.
 5. Complete the timeout-after-acceptance, pagination, concurrent reconciliation and no-duplicate-charge end-to-end scenarios.
 
 No operator action may accept an arbitrary shop/tenant pairing, overwrite a SUBMITTED charge, or replace the persisted idempotency key.
