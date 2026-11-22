@@ -54,10 +54,14 @@ BEGIN
     RAISE EXCEPTION 'CROSS_TENANT_WEBHOOK_STATE_CHANGED';
   END IF;
 
-  PERFORM henvalt.upsert_customer_fenced(
+  -- Exercise the positive authorization path without depending on a
+  -- business-RPC fixture unrelated to the tenant guard itself.
+  PERFORM henvalt.assert_shopify_replay_tenant_for_write(
     v_job,'tenant-binding-worker',v_claim.lease_id,
-    'edededed-eded-4ded-8ded-edededededed','local-customer','local@example.invalid',
-    NULL,NULL,NULL,true,false,false,'{}'::jsonb
+    'edededed-eded-4ded-8ded-edededededed'
+  );
+  PERFORM henvalt.assert_shopify_replay_webhook_for_write(
+    v_job,'tenant-binding-worker',v_claim.lease_id,v_webhook_a
   );
 
   RAISE NOTICE 'SHOPIFY_REPLAY_TENANT_BINDING_ACCEPTANCE_PASSED';
