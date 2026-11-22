@@ -10,7 +10,7 @@ test("privacy export download records initiation separately from client acknowle
   assert.match(source, /begin_shopify_privacy_export_download/);
   assert.match(source, /export_download_already_in_progress_or_expired/);
   assert.match(source, /result_delivery_ack_token_hash/);
-  assert.doesNotMatch(source, /"PATCH"[\\s\\S]*result_delivery_ack_token_hash/);
+  assert.equal(source.includes("\n      \"PATCH\",\n      {\n        result_download_started_at:"), false, "download claims must use the atomic RPC, not a blind row PATCH");
   assert.match(source, /x-henvalt-delivery-ack-token/);
   assert.match(source, /acknowledge_shopify_privacy_export_download/);
   assert.doesNotMatch(source, /result_delivered_at:\s*new Date\(\)\.toISOString\(\)/);
