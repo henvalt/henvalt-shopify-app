@@ -137,13 +137,7 @@ BEGIN
   -- Allocate each eligible refund/cancellation credit once. Row locks serialize
   -- competing workers so the same credit cannot reduce two charges.
   FOR v_credit IN
-    SELECT cbm.id,
-           abs(cbm.henvalt_fee) - COALESCE((
-             SELECT sum(o.amount)
-               FROM henvalt.billing_measurement_credit_offsets o
-              WHERE o.tenant_id = cbm.tenant_id
-                AND o.credit_measurement_id = cbm.id
-           ), 0) AS available_credit
+    SELECT cbm.id
       FROM henvalt.billing_measurements cbm
       JOIN henvalt.revenue_ledger crl
         ON crl.id = cbm.ledger_entry_id
@@ -154,18 +148,30 @@ BEGIN
        AND cbm.henvalt_fee < 0
        AND crl.entry_type = 'ADJUSTMENT'
        AND crl.billable = true
+       AND crl.attribution_confidence = 'CONFIRMED'
        AND crl.billing_status = 'MEASURED'
-       AND abs(cbm.henvalt_fee) > COALESCE((
-         SELECT sum(o.amount)
-           FROM henvalt.billing_measurement_credit_offsets o
-          WHERE o.tenant_id = cbm.tenant_id
-            AND o.credit_measurement_id = cbm.id
-       ), 0)
      ORDER BY cbm.created_at, cbm.id
      FOR UPDATE OF cbm
   LOOP
     EXIT WHEN v_remaining <= 0;
-    v_credit_remaining := v_credit.available_credit;
+
+    -- Re-read the offset total in a fresh READ COMMITTED statement snapshot
+    -- after obtaining the credit-row lock. The cursor snapshot may predate a
+    -- competing worker's commit while this loop waited for that lock.
+    SELECT abs(cbm.henvalt_fee) - COALESCE(sum(o.amount), 0)
+      INTO v_credit_remaining
+      FROM henvalt.billing_measurements cbm
+      LEFT JOIN henvalt.billing_measurement_credit_offsets o
+        ON o.tenant_id = cbm.tenant_id
+       AND o.credit_measurement_id = cbm.id
+     WHERE cbm.id = v_credit.id
+       AND cbm.tenant_id = v_tenant_id
+     GROUP BY cbm.henvalt_fee;
+
+    IF COALESCE(v_credit_remaining, 0) <= 0 THEN
+      CONTINUE;
+    END IF;
+
     v_apply := LEAST(v_remaining, v_credit_remaining);
 
     INSERT INTO henvalt.billing_measurement_credit_offsets (
