@@ -34,6 +34,9 @@ on:
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/billing-refund-credit-concurrency-postgres.sh"
       - "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql"
+      - "supabase/functions/henvalt-shopify-usage-billing/handler.mjs"
+      - "supabase/functions/henvalt-shopify-usage-billing/index.ts"
+      - "tests/shopify-usage-billing-worker.test.mjs"
       - "tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql"
       - "tests/shopify-order-edit-revenue-reconciliation.test.mjs"
       - "n8n/shopify-ingest-candidate-builder.mjs"
@@ -237,7 +240,7 @@ jobs:
         run: node --test tests/shopify-privacy-compliance-blocker.test.mjs tests/shopify-privacy-deployed-baseline.test.mjs
       - name: Type-check Shopify OAuth Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
-      - name: Type-check MailerSend delivery Edge Function
+      - name: Type-check Shopify usage billing Edge Function\n        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-usage-billing/index.ts\n      - name: Type-check MailerSend delivery Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
       - name: Type-check MailerSend provider setup Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-setup/index.ts
