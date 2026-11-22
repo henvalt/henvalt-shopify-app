@@ -13,7 +13,10 @@ values
    '{"customer":{"id":"redacted"}}'::jsonb,now()+interval '1 day',repeat('b',64),now()-interval '1 second'),
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa3','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
    'fixture.myshopify.com','1','customers/data_request','export-ack-cleanup',null,'{}','REVIEW_REQUIRED',
-   '{"customer":{"id":"redacted"}}'::jsonb,now()+interval '1 day',repeat('c',64),now()-interval '1 second');
+   '{"customer":{"id":"redacted"}}'::jsonb,now()+interval '1 day',repeat('c',64),now()-interval '1 second'),
+  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+   'fixture.myshopify.com','1','customers/data_request','export-ack-claim',null,'{}','REVIEW_REQUIRED',
+   '{"customer":{"id":"redacted"}}'::jsonb,now()+interval '1 day',null,null);
 
 do $ack$
 declare
@@ -33,6 +36,24 @@ begin
     raise exception 'privacy export acknowledgement cleanup schedule missing';
   end if;
 
+  -- Atomic download claim: a concurrent browser cannot replace the first live token.
+  v_ok := henvalt.begin_shopify_privacy_export_download('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',repeat('d',64),now()+interval '5 minutes');
+  if not v_ok then raise exception 'first atomic download claim was rejected'; end if;
+  v_ok := henvalt.begin_shopify_privacy_export_download('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',repeat('e',64),now()+interval '5 minutes');
+  if v_ok then raise exception 'concurrent download replaced an active acknowledgement token'; end if;
+  select result_delivery_ack_token_hash into v_hash from henvalt.shopify_privacy_requests
+  where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4';
+  if v_hash <> repeat('d',64) then raise exception 'active acknowledgement token was overwritten'; end if;
+  update henvalt.shopify_privacy_requests set result_delivery_ack_expires_at=now()-interval '1 second'
+  where id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4';
+  v_ok := henvalt.begin_shopify_privacy_export_download('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',repeat('e',64),now()+interval '5 minutes');
+  if not v_ok then raise exception 'expired download claim was not replaceable'; end if;
+  v_ok := henvalt.acknowledge_shopify_privacy_export_download('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',repeat('e',64));
+  if not v_ok then raise exception 'latest atomic download claim could not be acknowledged'; end if;
   v_ok := henvalt.acknowledge_shopify_privacy_export_download(
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
     'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
