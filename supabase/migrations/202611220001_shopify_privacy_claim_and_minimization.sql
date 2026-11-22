@@ -203,8 +203,10 @@ end;
 $function$;
 
 revoke all on function henvalt.claim_shopify_privacy_request(integer) from public, anon, authenticated;
-revoke all on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) from public, anon, authenticated;\nrevoke all on function henvalt.claim_shopify_privacy_request_by_id(uuid, integer) from public, anon, authenticated;
+revoke all on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) from public, anon, authenticated;
+revoke all on function henvalt.claim_shopify_privacy_request_by_id(uuid, integer) from public, anon, authenticated;
 grant execute on function henvalt.claim_shopify_privacy_request(integer) to service_role;
-grant execute on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) to service_role;\ngrant execute on function henvalt.claim_shopify_privacy_request_by_id(uuid, integer) to service_role;
+grant execute on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) to service_role;
+grant execute on function henvalt.claim_shopify_privacy_request_by_id(uuid, integer) to service_role;
 
 commit;
