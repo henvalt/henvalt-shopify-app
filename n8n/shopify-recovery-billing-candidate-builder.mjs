@@ -41,6 +41,8 @@ JOIN LATERAL (
           AND buc.attempted_at < now() - interval '1 minute')
       OR (buc.status = 'PENDING' AND buc.attempt_count < 5
           AND buc.attempted_at < now() - interval '2 minutes')
+      OR (buc.status = 'PENDING' AND buc.attempt_count >= 5
+          AND buc.reconciliation_status = 'NONE')
     )
   ORDER BY bm.created_at, bm.id
   LIMIT 1
