@@ -13,7 +13,7 @@ test("dashboard exposes a dedicated billing review page without a service-role c
 
 test("billing review reads queue and charge envelope through the authenticated Edge Function", () => {
   assert.match(html, /async function loadBillingCases\(\)/);
-  assert.match(html, /control_plane_list_billing_reconciliations/ === false/); // browser must not call database RPCs directly
+  assert.doesNotMatch(html, /control_plane_list_billing_reconciliations/); // browser must not call database RPCs directly
   assert.match(html, /BILLING_RECONCILIATION\+\?"\?chargeId="/);
   assert.match(html, /Authorization:"Bearer "\+session\.access_token/);
 });
