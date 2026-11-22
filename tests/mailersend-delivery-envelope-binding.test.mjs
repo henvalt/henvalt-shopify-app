@@ -28,6 +28,10 @@ test("envelope authorization binds tenant, claimed delivery, recipient and confi
   assert.match(migration, /dr\.provider_claimed_at IS NOT NULL/i);
   assert.match(migration, /dr\.status = 'UNKNOWN'/i);
   assert.match(migration, /dr\.recipient_reference[\s\S]*?p_to/i);
+  assert.match(migration, /m\.subject[\s\S]*?p_subject/i);
+  assert.match(migration, /render_sender_identity_footer[\s\S]*?p_html_body/i);
+  assert.match(migration, /render_email_plain_text[\s\S]*?p_text_body/i);
+  assert.match(migration, /messaging_compliance,sender_profile,merchant_confirmed/i);
   assert.match(migration, /si\.sender_reference[\s\S]*?p_from_email/i);
   assert.match(migration, /metadata->>'from_name'[\s\S]*?p_from_name/i);
   assert.match(migration, /metadata->>'reply_to'[\s\S]*?p_reply_to/i);
