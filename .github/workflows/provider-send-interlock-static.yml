@@ -19,6 +19,8 @@ on:
       - "supabase/migrations/202611220002_shopify_privacy_redaction_guards.sql"
       - "supabase/migrations/202611220003_shopify_privacy_retention_cron.sql"
       - "supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql"
+      - "supabase/migrations/202611220005_shopify_privacy_queue_worker.sql"
+      - "tests/shopify-privacy-queue-worker.test.mjs"
       - "tests/shopify-privacy-retention.test.mjs"
       - "tests/shopify-privacy-redaction-guards.test.mjs"
       - "tests/shopify-privacy-lease-migration.test.mjs"
@@ -357,12 +359,24 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql
+      - name: Apply candidate durable Shopify privacy queue worker migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220005_shopify_privacy_queue_worker.sql
       - name: Exercise signed-payload privacy webhook idempotency
         env:
           PGPASSWORD: postgres
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-privacy-idempotency-postgres-acceptance.sql
+      - name: Exercise durable Shopify privacy queue worker
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-queue-worker-postgres-acceptance.sql
       - name: Exercise privacy lease fencing and PII minimization
         env:
           PGPASSWORD: postgres
