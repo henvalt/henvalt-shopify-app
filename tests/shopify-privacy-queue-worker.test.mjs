@@ -22,3 +22,7 @@ test("privacy queue worker has bounded batches and a one-minute cron schedule", 
 test("privacy worker never swallows a lost lease while recording a failure", () => {
   assert.match(sql, /if not v_finished then\s+raise exception 'privacy worker could not finalize failed request under its lease'/);
 });
+
+test("privacy worker exits when an atomic claim returns no row", () => {
+  assert.match(sql, /if not found or v_claim\.id is null then\s+exit;/);
+});
