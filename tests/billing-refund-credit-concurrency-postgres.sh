@@ -64,7 +64,7 @@ wait "$pid_b"
 wait "$pid_a"
 
 if ! grep -Eq '"amount":7([.]0+)?' "$tmp_a"; then
-  echo "worker A did not receive the $3 credit offset: $(cat "$tmp_a")" >&2
+  echo "worker A did not receive the 3-unit credit offset: $(cat "$tmp_a")" >&2
   exit 1
 fi
 if ! grep -Eq '"amount":10([.]0+)?' "$tmp_b"; then
@@ -76,11 +76,11 @@ offsets=$("${psql_cmd[@]}" -c "SELECT COALESCE(sum(amount),0) FROM henvalt.billi
 charges=$("${psql_cmd[@]}" -c "SELECT COALESCE(sum(amount),0) FROM henvalt.billing_usage_charges WHERE tenant_id='$tenant';")
 charge_count=$("${psql_cmd[@]}" -c "SELECT count(*) FROM henvalt.billing_usage_charges WHERE tenant_id='$tenant';")
 if [[ "$offsets" != "3.0000" && "$offsets" != "3" ]]; then
-  echo "expected exactly $3 allocated credit, got $offsets" >&2
+  echo "expected exactly 3 allocated credit, got $offsets" >&2
   exit 1
 fi
 if [[ "$charges" != "17.0000" && "$charges" != "17" ]]; then
-  echo "expected net usage charges totaling $17, got $charges" >&2
+  echo "expected net usage charges totaling 17, got $charges" >&2
   exit 1
 fi
 if [[ "$charge_count" != "2" ]]; then
