@@ -183,3 +183,6 @@ A new two-session disposable PostgreSQL harness now tests the actual race:
 5. After session A commits, verify its renewed lease is visible; then expire it explicitly and prove a different worker can reclaim it with a fresh lease.
 
 The harness is wired into the PostgreSQL safety workflow and has a companion static test for the lock/heartbeat/claim contract. It is a disposable database test only. Its first exact-head run is still required before this concurrency property can be marked verified; production remains untouched.
+
+
+The graph helper itself is also fail-closed: it has an explicit customer-root branch and rejects unknown object-table names instead of defaulting them to valid. Static coverage now checks the exact target UUID argument for each UUID-only wrapper, its guard-before-mutation order, and the fail-closed helper behavior.
