@@ -25,3 +25,10 @@ test("privacy candidate routes each compliance topic through guarded operations"
   assert.match(source, /redact_shopify_shop_data_with_lease/);
   assert.match(source, /finish_shopify_privacy_request/);
 });
+
+test("privacy request replay identity comes from signed bytes, not unsigned webhook headers", () => {
+  assert.match(source, /crypto\.subtle\.digest\("SHA-256", raw\)/);
+  assert.match(source, /persist_shopify_privacy_request/);
+  assert.match(source, /p_signed_payload_hash: signedPayloadHash/);
+  assert.doesNotMatch(source, /on_conflict=webhook_id/);
+});
