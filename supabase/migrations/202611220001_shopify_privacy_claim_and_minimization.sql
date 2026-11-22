@@ -182,7 +182,7 @@ begin
   where r.id = p_request_id
     and r.status in ('FAILED', 'PROCESSING')
     and r.lease_attempts >= 8
-    and (r.status = 'FAILED' or r.lease_expires_at <= now());
+    and (r.status = 'FAILED' or r.lease_expires_at is null or r.lease_expires_at <= now());
 
   return query
   update henvalt.shopify_privacy_requests r
@@ -194,7 +194,7 @@ begin
   where r.id = p_request_id
     and (r.status = 'PENDING'
       or (r.status = 'FAILED' and r.lease_attempts < 8)
-      or (r.status = 'PROCESSING' and r.lease_attempts < 8 and r.lease_expires_at <= now()))
+      or (r.status = 'PROCESSING' and r.lease_attempts < 8 and (r.lease_expires_at is null or r.lease_expires_at <= now())))
     and (r.lease_expires_at is null or r.lease_expires_at <= now())
   returning r.id, r.tenant_id, r.shop_domain, r.shopify_shop_id, r.topic,
     r.webhook_id, r.customer_id, r.request_id, r.payload,
