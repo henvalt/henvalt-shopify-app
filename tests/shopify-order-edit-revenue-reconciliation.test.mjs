@@ -7,6 +7,7 @@ const acceptance = readFileSync(new URL("./shopify-order-edit-revenue-reconcilia
 const builder = readFileSync(new URL("../n8n/shopify-ingest-candidate-builder.mjs", import.meta.url), "utf8");
 const candidateTest = readFileSync(new URL("./shopify-ingest-full-export-candidate.test.mjs", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
+const billingWorkflow = readFileSync(new URL("../.github/workflows/shopify-config-validation.yml", import.meta.url), "utf8");
 
 test("order updates prefer current Shopify totals and only create incremental downward adjustments", () => {
   assert.match(migration, /current_total_price/);
@@ -55,4 +56,12 @@ test("safety CI executes this regression suite and applies the isolated SQL acce
   assert.match(workflow, /tests\/shopify-order-edit-revenue-reconciliation\.test\.mjs/);
   assert.match(workflow, /202611220013_shopify_order_edit_revenue_reconciliation\.sql/);
   assert.match(workflow, /shopify-order-edit-revenue-reconciliation-postgres-acceptance\.sql/);
+});
+
+test("billing workflow applies replay lease and fenced-write prerequisites before order-edit acceptance", () => {
+  const lease = billingWorkflow.indexOf("202611210008_shopify_replay_lease_fencing.sql");
+  const fenced = billingWorkflow.indexOf("202611210009_shopify_replay_business_write_fencing.sql");
+  const heartbeat = billingWorkflow.indexOf("202611210011_shopify_replay_write_lease_heartbeat.sql");
+  const orderEdit = billingWorkflow.indexOf("202611220013_shopify_order_edit_revenue_reconciliation.sql");
+  assert.ok(lease >= 0 && fenced > lease && heartbeat > fenced && orderEdit > heartbeat);
 });
