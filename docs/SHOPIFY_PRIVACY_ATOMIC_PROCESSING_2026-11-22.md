@@ -82,3 +82,5 @@ The worker is database-native because the production project currently has pg_cr
 ## Post-uninstall shop resolution
 
 The OAuth uninstall handler deactivates the shop connection rather than deleting it. Shopify can send `shop/redact` after uninstall, so the privacy candidate intentionally resolves the unique connection by shop domain without filtering `active=true`. The signed payload shop ID must still match the stored shop ID. The connection's inactive state must not block legal data deletion; the shop-redaction worker then uses the tenant-scoped legacy deletion RPC and sanitizes the receipt.
+
+A legacy connection whose `shopify_shop_id` is null is not treated as a verified tenant mapping. Its HMAC-authenticated request is retained in REVIEW_REQUIRED with no tenant/customer identifiers rather than being processed against a guessed tenant.
