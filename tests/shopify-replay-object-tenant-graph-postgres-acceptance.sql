@@ -80,6 +80,50 @@ BEGIN
 END;
 $function$;
 
+-- Build a fully linked tenant-A graph to prove legitimate edges remain valid.
+INSERT INTO henvalt.checkouts(id,tenant_id,customer_id,created_at,updated_at)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa22','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11',now(),now())
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.webhook_events(id,tenant_id,source_event_id,topic,idempotency_key,payload)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa32','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','graph-webhook-a','orders/create','graph-webhook-a','{}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.canonical_events(
+ id,tenant_id,webhook_event_id,event_type,event_class,source,source_event_id,
+ occurred_at,payload,metadata,idempotency_key
+) VALUES (
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa33','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa32','orders/create','OTHER','shopify','graph-event-a-valid',
+ now(),'{}'::jsonb,'{}'::jsonb,'graph-event-a-valid'
+) ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.opportunities(id,tenant_id,opportunity_type,status,customer_id,checkout_id,source_event_id)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa44','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+ 'ABANDONED_CHECKOUT','ELIGIBLE','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa22','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa33')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.orders(id,tenant_id,customer_id,checkout_id)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa53','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa11','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa22')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.recovery_sequences(id,tenant_id,opportunity_id)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa62','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa44')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,status,sequence_id)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa44','PENDING','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa62')
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO henvalt.order_attributions(id,tenant_id,order_id,attribution_confidence,opportunity_id,recovery_id,matched_intervention_id)
+VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa85','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa53','HIGH','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa44',
+ 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa62','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73')
+ON CONFLICT (id) DO NOTHING;
+
 DO $graph_acceptance$
 BEGIN
   PERFORM pg_temp.expect_replay_graph_rejection('checkouts','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21');
@@ -104,9 +148,13 @@ BEGIN
   INSERT INTO henvalt.order_attributions(id,tenant_id,order_id,attribution_confidence)
   VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa92','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa91','HIGH')
   ON CONFLICT (id) DO NOTHING;
-  PERFORM henvalt.assert_shopify_replay_object_graph_tenant(
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','order_attributions','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa92'
-  );
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','checkouts','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa22');
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','canonical_events','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa33');
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','opportunities','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa44');
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','orders','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa53');
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','recovery_sequences','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa62');
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','recovery_interventions','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa73');
+  PERFORM henvalt.assert_shopify_replay_object_graph_tenant('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','order_attributions','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa85');
   RAISE NOTICE 'SHOPIFY_REPLAY_OBJECT_TENANT_GRAPH_ACCEPTANCE_PASSED';
 END;
 $graph_acceptance$;
