@@ -22,6 +22,20 @@ function validUuid(value) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function decimalEqual(a, b) {
+  const canonical = (value) => {
+    const raw = String(value ?? "");
+    if (!/^[0-9]+(?:[.][0-9]+)?$/.test(raw)) return null;
+    const [whole, fraction = ""] = raw.split(".");
+    const integer = whole.replace(/^0+(?=\\d)/, "");
+    const decimals = fraction.replace(/0+$/, "");
+    return integer + (decimals ? "." + decimals : "");
+  };
+  const left = canonical(a);
+  const right = canonical(b);
+  return left !== null && right !== null && left === right;
+}
+
 function validShop(value) {
   if (typeof value !== "string") return false;
   const parts = value.toLowerCase().split(".");
@@ -336,7 +350,7 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
 
       if (body.resolution === "MATCHED") {
         if (matches.length !== 1 || !record?.id ||
-            record.amount !== String(charge.amount) ||
+            !decimalEqual(record.amount, charge.amount) ||
             record.currency !== charge.currency) {
           return reply(409, { error: "shopify_record_does_not_match_charge" });
         }
