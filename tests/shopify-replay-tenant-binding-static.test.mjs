@@ -20,6 +20,9 @@ test("explicit tenant wrappers bind tenant to the leased replay job and stored w
 test("webhook lifecycle writes are bound to the exact webhook in the claimed job", () => {
   assert.match(migration,/assert_shopify_replay_webhook_for_write/);
   assert.match(migration,/v_job_webhook_id IS DISTINCT FROM p_webhook_id::text/);
+  const canonicalStart=migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.upsert_canonical_event_fenced(");
+  const canonicalEnd=migration.indexOf("$function$;",canonicalStart);
+  assert.match(migration.slice(canonicalStart,canonicalEnd),/assert_shopify_replay_webhook_for_write\\(p_job_id,p_worker_id,p_lease_id,p_webhook_event_id\\)/);
   for (const name of ["mark_webhook_processed_fenced","mark_webhook_failed_fenced"]) {
     const start=migration.indexOf("CREATE OR REPLACE FUNCTION henvalt."+name+"(");
     const end=migration.indexOf("$function$;",start);
