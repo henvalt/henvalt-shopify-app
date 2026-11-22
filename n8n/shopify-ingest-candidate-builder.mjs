@@ -60,7 +60,7 @@ function addFencing(workflow, map) {
       throw new Error("Unsupported mutation node type for " + entry.node + ": " + node.type);
     }
   }
-  if (changed !== 18) throw new Error("Expected exactly 18 fenced mutation nodes, changed " + changed);
+  if (changed !== 19) throw new Error("Expected exactly 19 fenced mutation nodes, changed " + changed);
   return changed;
 }
 function preserveReplayContext(normalizer) {
@@ -456,9 +456,9 @@ function buildCandidate(input, map, activeVersionId) {
   if (!input || input.id !== REQUIRED_WORKFLOW_ID) throw new Error("Wrong HENVALT_INGEST workflow ID");
   if (activeVersionId !== REQUIRED_ACTIVE_VERSION) throw new Error("Active workflow version drift; re-audit before building");
   const workflow = structuredClone(input);
-  const changed = addFencing(workflow,map);
   addReplayAndIngressNodes(workflow);
   addOrderEditRevenueReconciliation(workflow);
+  const changed = addFencing(workflow,map);
   // Credential references are deliberately removed from the candidate export.
   // Rebind the existing Supabase service-role credential in an isolated n8n draft.
   for (const node of workflow.nodes) { delete node.credentials; node.parameters = JSON.parse(JSON.stringify(node.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid")); if (node.name === "Event Webhook") { node.parameters.path = "henvalt/ingest-candidate-no-send"; delete node.webhookId; } }
