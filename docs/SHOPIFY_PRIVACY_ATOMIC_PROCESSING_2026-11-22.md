@@ -56,3 +56,9 @@ These files are candidate-only. Static Node contract tests are wired into the pu
 - Shop deletion clears lease metadata after the existing tenant-deletion routine completes.
 
 These refinements still require disposable PostgreSQL execution tests. The current CI acceptance covers claim serialization, request-specific claim, retry retention, attempt-eight escalation, and terminal minimization. It does not yet execute the new wrappers against a full disposable copy of the HENVALT schema.
+
+## Scheduled retention
+
+A separate candidate migration adds `henvalt.purge_stale_shopify_privacy_request_identifiers()` and schedules it daily at 03:17 using pg_cron when the `cron` schema is already installed. It moves PENDING/FAILED/expired PROCESSING requests older than seven days to REVIEW_REQUIRED, clears customer identifiers and payload, preserves active unexpired leases, and clears expired export bundles. The routine is also executable by service_role for controlled maintenance.
+
+The deployed project currently has pg_cron 1.6.4 installed, and its privacy request table was empty at the latest read-only check. This does not mean the candidate job is installed: the migration remains un-applied.
