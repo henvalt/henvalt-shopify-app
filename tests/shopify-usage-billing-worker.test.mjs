@@ -34,7 +34,7 @@ function request(body = { shop }, token = env.HENVALT_BILLING_WORKER_TOKEN) {
   });
 }
 
-function harness({ claim = charge, shopify = response({ data: { appUsageRecordCreate: { appUsageRecord: { id: "gid://shopify/AppUsageRecord/999" }, userErrors: [] } } }), failShopify = false, failResult = false } = {}) {
+function harness({ claim = charge, shopify = response({ data: { appUsageRecordCreate: { appUsageRecord: { id: "gid://shopify/AppUsageRecord/999" }, userErrors: [] } } }), failShopify = false, failResult = false, failReconciliation = false } = {}) {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url: String(url), init });
@@ -43,6 +43,10 @@ function harness({ claim = charge, shopify = response({ data: { appUsageRecordCr
     if (String(url).includes("/admin/api/")) {
       if (failShopify) throw new Error("socket closed after write");
       return shopify;
+    }
+    if (String(url).includes("/control_plane_mark_billing_reconciliation_required")) {
+      if (failReconciliation) return response({ message: "db unavailable" }, 503);
+      return response({ updated: true, status: "REQUIRED" });
     }
     if (String(url).includes("/control_plane_record_billing_usage_result")) {
       if (failResult) return response({ message: "db unavailable" }, 503);
@@ -171,7 +175,7 @@ test("rejects malformed charge envelopes without contacting Shopify", async () =
   assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
 });
 
-test("surfaces operator reconciliation when the final ambiguous attempt is exhausted", async () => {
+test("persists durable reconciliation when the fifth ambiguous attempt is exhausted", async () => {
   const h = harness({ claim: { ...charge, attempt: 5 }, failShopify: true });
   const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
   const result = await handler(request());
@@ -179,8 +183,23 @@ test("surfaces operator reconciliation when the final ambiguous attempt is exhau
   assert.equal(result.status, 202);
   assert.equal(body.retryable, false);
   assert.equal(body.requiresOperatorReview, true);
+  assert.equal(body.reconciliationStatus, "REQUIRED");
   assert.equal(body.state, "PENDING");
+  const persisted = h.calls.find((call) => call.url.includes("/control_plane_mark_billing_reconciliation_required"));
+  assert.ok(persisted);
+  assert.equal(JSON.parse(persisted.init.body).p_charge_id, charge.chargeId);
+  assert.equal(JSON.parse(persisted.init.body).p_reason, "SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN");
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")), false);
+});
+
+test("does not pretend reconciliation is persisted when the database RPC fails", async () => {
+  const h = harness({ claim: { ...charge, attempt: 5 }, failShopify: true, failReconciliation: true });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 503);
+  assert.equal(body.reconciliationPersisted, false);
+  assert.equal(body.requiresOperatorReview, true);
 });
 
 
