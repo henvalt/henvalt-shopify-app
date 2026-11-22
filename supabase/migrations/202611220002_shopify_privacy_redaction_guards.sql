@@ -115,7 +115,8 @@ begin
     or v_request.topic <> 'customers/redact'
     or v_request.status <> 'PROCESSING'
     or v_request.lease_token is distinct from p_lease_token
-    or v_request.lease_expires_at is null\n    or v_request.lease_expires_at <= now()
+    or v_request.lease_expires_at is null
+    or v_request.lease_expires_at <= now()
     or v_request.tenant_id is null
   then
     raise exception 'privacy request lease is not current';
@@ -156,7 +157,8 @@ begin
     or v_request.topic <> 'customers/data_request'
     or v_request.status <> 'PROCESSING'
     or v_request.lease_token is distinct from p_lease_token
-    or v_request.lease_expires_at is null\n    or v_request.lease_expires_at <= now()
+    or v_request.lease_expires_at is null
+    or v_request.lease_expires_at <= now()
     or v_request.tenant_id is null
   then
     raise exception 'privacy request lease is not current';
@@ -222,7 +224,8 @@ begin
     or v_request.topic <> 'shop/redact'
     or v_request.status <> 'PROCESSING'
     or v_request.lease_token is distinct from p_lease_token
-    or v_request.lease_expires_at is null\n    or v_request.lease_expires_at <= now()
+    or v_request.lease_expires_at is null
+    or v_request.lease_expires_at <= now()
   then
     raise exception 'privacy request lease is not current';
   end if;
