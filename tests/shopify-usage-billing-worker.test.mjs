@@ -119,6 +119,7 @@ test("keeps ambiguous provider transport failures PENDING and does not mark them
   assert.equal(result.status, 202);
   assert.equal((await result.json()).state, "PENDING");
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")), false);
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_mark_billing_reconciliation_required")), false);
 });
 
 test("keeps Shopify 5xx and malformed responses PENDING", async () => {
@@ -165,6 +166,20 @@ test("uses the same persisted idempotency key if Shopify accepted but local resu
   assert.equal((await result.json()).state, "PENDING");
   const provider = h.calls.find((call) => call.url.includes("/admin/api/"));
   assert.equal(JSON.parse(provider.init.body).variables.idempotencyKey, charge.idempotencyKey);
+});
+
+test("accepted provider mutation with failed local commit is escalated after the final attempt", async () => {
+  const h = harness({ claim: { ...charge, attempt: 5 }, failResult: true });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 202);
+  assert.equal(body.reconciliationStatus, "REQUIRED");
+  const providerCalls = h.calls.filter((call) => call.url.includes("/admin/api/"));
+  assert.equal(providerCalls.length, 1);
+  assert.equal(JSON.parse(providerCalls[0].init.body).variables.idempotencyKey, charge.idempotencyKey);
+  const persisted = h.calls.find((call) => call.url.includes("/control_plane_mark_billing_reconciliation_required"));
+  assert.equal(JSON.parse(persisted.init.body).p_reason, "LOCAL_RESULT_COMMIT_UNKNOWN");
 });
 
 test("rejects malformed charge envelopes without contacting Shopify", async () => {
