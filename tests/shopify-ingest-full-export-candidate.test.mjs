@@ -23,6 +23,8 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
+  const normalizer=findNode(w,"Validate & Normalize");
+  assert.match(normalizer.parameters.jsCode,/const eventType = source === 'shopify' \? shopifyTopic : \(body\.event_type \|\| body\.type \|\| null\);/);
   const webhook=w.nodes.find(n=>n.name==="Event Webhook");
   assert.equal(webhook.parameters.path,"henvalt/ingest-candidate-no-send");
   assert.equal(webhook.parameters.responseMode,"responseNode");
