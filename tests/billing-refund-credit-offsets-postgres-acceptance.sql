@@ -273,6 +273,14 @@ BEGIN
   IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'REQUIRED' THEN RAISE EXCEPTION 'durable reconciliation marker failed: %',v_result; END IF;
   v_result := henvalt.control_plane_get_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id);
   IF v_result->>'available' <> 'true' OR v_result->>'idempotencyKey' IS NULL OR v_result ? 'accessToken' THEN RAISE EXCEPTION 'safe reconciliation envelope invalid: %',v_result; END IF;
+  v_result := henvalt.control_plane_get_billing_reconciliation('other-tenant.myshopify.com',v_charge_id);
+  IF v_result->>'available' <> 'false' THEN RAISE EXCEPTION 'reconciliation read crossed tenant/shop boundary'; END IF;
+  v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id,'MISMATCH',NULL,
+    jsonb_build_object('lookupComplete',true,'matchingCount','1','reason','provider amount mismatch'),
+    'operator-test-0','Provider evidence does not match the charge; stop for further review');
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'MISMATCH_REQUIRES_REVIEW' THEN RAISE EXCEPTION 'mismatch did not remain in manual review: %',v_result; END IF;
+  v_result := henvalt.control_plane_claim_billing_usage('reconcile-match.myshopify.com');
+  IF v_result->>'available' <> 'false' THEN RAISE EXCEPTION 'scheduler claim retried a mismatch reconciliation case: %',v_result; END IF;
   v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id,'MATCHED','gid://shopify/AppUsageRecord/reconcile-match-1',
     jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'providerUsageRecordId','gid://shopify/AppUsageRecord/reconcile-match-1','matchingCount','1','idempotencyKey',(SELECT idempotency_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id),'lineItemId','gid://shopify/AppSubscriptionLineItem/reconcile-match','amount','10','currency','USD','pagesScanned',1),
     'operator-test-1','Verified exact provider idempotency key, amount, currency and line item');
@@ -293,6 +301,15 @@ BEGIN
   SELECT idempotency_key INTO v_original_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id;
   UPDATE henvalt.billing_usage_charges SET attempt_count=5,attempted_at=now()-interval '5 minutes' WHERE id=v_charge_id;
   PERFORM henvalt.control_plane_mark_billing_reconciliation_required('reconcile-retry.myshopify.com',v_charge_id,'SHOPIFY_RESPONSE_NOT_JSON');
+  BEGIN
+    PERFORM henvalt.control_plane_resolve_billing_reconciliation('reconcile-retry.myshopify.com',v_charge_id,'NOT_FOUND_CONFIRMED',NULL,
+      jsonb_build_object('lookupComplete',false,'subscriptionFound',true,'lineItemFound',true,'matchingCount','0','pagesScanned',1),
+      'operator-test-invalid','An incomplete lookup must not authorize retry');
+    RAISE EXCEPTION 'incomplete no-match evidence was incorrectly accepted';
+  EXCEPTION WHEN invalid_parameter_value THEN
+    NULL;
+  END;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND status='PENDING' AND attempt_count=5 AND reconciliation_status='REQUIRED') THEN RAISE EXCEPTION 'incomplete lookup changed the charge retry state'; END IF;
   v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-retry.myshopify.com',v_charge_id,'NOT_FOUND_CONFIRMED',NULL,
     jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'matchingCount','0','pagesScanned',3),
     'operator-test-2','Complete paginated lookup found no record for the original key');
