@@ -13,6 +13,7 @@ const charge = {
   currency: "USD",
   idempotencyKey: "henvalt-recovery-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   attempt: 1,
+  testMode: true,
 };
 const env = {
   SUPABASE_URL: "https://supabase.invalid",
@@ -82,6 +83,7 @@ test("claims one usage measurement and sends exact amount with persisted Shopify
   assert.equal(body.variables.idempotencyKey, charge.idempotencyKey);
   assert.equal(provider.init.redirect, "error");
   assert.ok(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")));
+  assert.ok(h.calls.findIndex((call) => call.url.includes("/control_plane_claim_billing_usage")) < h.calls.findIndex((call) => call.url.includes("/get_shopify_access_token_for_control_plane")));
 });
 
 test("does not charge when the database has no eligible measurement", async () => {
@@ -91,6 +93,19 @@ test("does not charge when the database has no eligible measurement", async () =
   assert.equal(result.status, 200);
   assert.equal((await result.json()).claimed, false);
   assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
+  assert.equal(h.calls.some((call) => call.url.includes("/get_shopify_access_token_for_control_plane")), false);
+});
+
+test("refuses live-mode or unverified claims before obtaining credentials or contacting Shopify", async () => {
+  for (const claim of [{ ...charge, testMode: false }, { ...charge, testMode: undefined }]) {
+    const h = harness({ claim });
+    const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+    const result = await handler(request());
+    assert.equal(result.status, 409);
+    assert.equal((await result.json()).error, "test_mode_required");
+    assert.equal(h.calls.some((call) => call.url.includes("/get_shopify_access_token_for_control_plane")), false);
+    assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
+  }
 });
 
 test("keeps ambiguous provider transport failures PENDING and does not mark them FAILED", async () => {
