@@ -36,7 +36,10 @@ on:
       - "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql"
       - "supabase/functions/henvalt-shopify-usage-billing/handler.mjs"
       - "supabase/functions/henvalt-shopify-usage-billing/index.ts"
-      - "tests/shopify-usage-billing-worker.test.mjs"
+      - "supabase/functions/henvalt-billing-reconciliation/handler.mjs"
+      - "supabase/functions/henvalt-billing-reconciliation/index.ts"
+      - "tests/billing-reconciliation-handler.test.mjs"
+      - "tests/shopify-usage-billing-worker.test.mjs tests/billing-reconciliation-handler.test.mjs"
       - "tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql"
       - "tests/shopify-order-edit-revenue-reconciliation.test.mjs"
       - "n8n/shopify-ingest-candidate-builder.mjs"
@@ -255,6 +258,8 @@ jobs:
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
       - name: Type-check Shopify usage billing Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-usage-billing/index.ts
+      - name: Type-check billing reconciliation Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-billing-reconciliation/index.ts
       - name: Type-check MailerSend delivery Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
       - name: Type-check MailerSend provider setup Edge Function
