@@ -30,7 +30,7 @@ function id() { return "00000000-0000-4000-8000-" + String(candidateNodeCounter+
 function fencedBody(source, nodeName) {
   const original = expressionBody(source);
   const forceConstantError = nodeName === "Mark Webhook Failed" || nodeName === "Defer Payment Reconciliation";
-  return "={{ (() => { const p = (" + original + "); const r = $('Validate & Normalize').item.json.replay_context; if (!r) return p; return { p_job_id: r.job_id, p_worker_id: r.worker_id, p_lease_id: r.lease_id, ...p" +
+  return "={{ (() => { const p = (" + original + "); const r = $('Validate & Normalize').item.json.replay_context; if (!r) return p; return { ...p, p_job_id: r.job_id, p_worker_id: r.worker_id, p_lease_id: r.lease_id" +
     (forceConstantError ? ", p_error: 'SHOPIFY_REPLAY_PROCESSING_FAILED'" : "") +
     " }; })() }}";
 }
