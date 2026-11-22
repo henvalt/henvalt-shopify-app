@@ -20,6 +20,17 @@ DECLARE
   v_offsets numeric;
   v_offset_rows integer;
 BEGIN
+  IF has_function_privilege('anon','henvalt.control_plane_claim_billing_usage(text)','EXECUTE')
+     OR has_function_privilege('authenticated','henvalt.control_plane_claim_billing_usage(text)','EXECUTE') THEN
+    RAISE EXCEPTION 'billing usage claim RPC must not be executable by client roles';
+  END IF;
+  IF NOT has_function_privilege('service_role','henvalt.control_plane_claim_billing_usage(text)','EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain billing usage claim RPC access';
+  END IF;
+  IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid='henvalt.billing_measurement_credit_offsets'::regclass) THEN
+    RAISE EXCEPTION 'billing credit allocations must have row-level security enabled';
+  END IF;
+
   INSERT INTO henvalt.tenants(id,status,default_currency)
   VALUES (v_tenant,'ACTIVE','USD');
 
