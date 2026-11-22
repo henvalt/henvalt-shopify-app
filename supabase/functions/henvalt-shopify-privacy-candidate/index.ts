@@ -155,80 +155,12 @@ Deno.serve(async (req: Request) => {
     return reply(200, { received: true, queued: true, review_required: true, topic });
   }
 
-  const claimResponse = await rpc("claim_shopify_privacy_request_by_id", {
-    p_request_id: stored.id,
-    p_lease_seconds: 120,
+  // Acknowledge only after durable receipt persistence. The pg_cron worker performs
+  // lease-backed processing out of band so Shopify receives a 2xx within its 5s budget.
+  return reply(200, {
+    received: true,
+    queued: true,
+    duplicate: stored.status !== "PENDING",
+    topic,
   });
-  if (!claimResponse.ok) return reply(503, { error: "privacy_request_claim_failed" });
-  const claims = await claimResponse.json().catch(() => []);
-  const claim = Array.isArray(claims) ? claims[0] : null;
-  if (!claim?.lease_token) {
-    return reply(200, { received: true, queued: true, duplicate: true, topic });
-  }
-
-  const finish = async (status: "COMPLETED" | "FAILED" | "REVIEW_REQUIRED", errorCode: string | null) => {
-    const result = await rpc("finish_shopify_privacy_request", {
-      p_request_id: claim.id,
-      p_lease_token: claim.lease_token,
-      p_status: status,
-      p_error_code: errorCode,
-    });
-    if (!result.ok) return false;
-    return await result.json().catch(() => false) === true;
-  };
-
-  try {
-    if (topic === "customers/data_request") {
-      const exported = await rpc("export_shopify_customer_data_with_lease", {
-        p_privacy_request_id: claim.id,
-        p_lease_token: claim.lease_token,
-      });
-      if (!exported.ok) {
-        await finish("FAILED", "customer_export_failed");
-        return reply(503, { error: "customer_export_failed" });
-      }
-      const result = await exported.json();
-      const found = result?.found === true;
-      const completed = await finish("REVIEW_REQUIRED",
-        found ? "export_ready_for_secure_merchant_delivery" : "customer_record_not_found");
-      if (!completed) return reply(503, { error: "privacy_request_lease_lost" });
-      return reply(200, {
-        received: true, export_generated: found,
-        awaiting_secure_delivery: found, review_required: true,
-      });
-    }
-
-    if (topic === "customers/redact") {
-      const redacted = await rpc("redact_shopify_customer_data_checked_with_lease", {
-        p_privacy_request_id: claim.id,
-        p_lease_token: claim.lease_token,
-      });
-      if (!redacted.ok) {
-        await finish("FAILED", "customer_redaction_failed");
-        return reply(503, { error: "customer_redaction_failed" });
-      }
-      const result = await redacted.json();
-      const matched = result?.matched === true;
-      const completed = await finish(
-        matched ? "COMPLETED" : "REVIEW_REQUIRED",
-        matched ? null : "customer_record_not_found",
-      );
-      if (!completed) return reply(503, { error: "privacy_request_lease_lost" });
-      return reply(200, { received: true, processed: matched, review_required: !matched, topic });
-    }
-
-    const redacted = await rpc("redact_shopify_shop_data_with_lease", {
-      p_privacy_request_id: claim.id,
-      p_lease_token: claim.lease_token,
-    });
-    if (!redacted.ok) {
-      await finish("FAILED", "shop_redaction_failed");
-      return reply(503, { error: "shop_redaction_failed" });
-    }
-    return reply(200, { received: true, processed: true, topic });
-  } catch {
-    // A retry may reclaim FAILED immediately or PROCESSING after lease expiry.
-    await finish("FAILED", "privacy_processing_exception");
-    return reply(503, { error: "privacy_processing_failed" });
-  }
 });
