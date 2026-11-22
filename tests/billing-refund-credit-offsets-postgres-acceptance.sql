@@ -58,6 +58,14 @@ BEGIN
   END IF;
   UPDATE henvalt.shopify_connections SET active=false WHERE id=v_second_shop_connection;
 
+  UPDATE henvalt.billing_accounts SET status='CANCELLED' WHERE tenant_id=v_tenant;
+  v_result := henvalt.control_plane_claim_billing_usage('credits.myshopify.com');
+  IF v_result->>'available' <> 'false'
+     OR v_result->>'reason' <> 'BILLING_SUBSCRIPTION_NOT_ACTIVE' THEN
+    RAISE EXCEPTION 'cancelled subscription was still eligible for a billing claim: %',v_result;
+  END IF;
+  UPDATE henvalt.billing_accounts SET status='ACTIVE' WHERE tenant_id=v_tenant;
+
   INSERT INTO henvalt.revenue_ledger(
     id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata
   ) VALUES
