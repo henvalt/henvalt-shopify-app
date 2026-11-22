@@ -48,6 +48,7 @@ function harness({
     if (parsed.pathname === "/rest/v1/tenant_memberships") return response(memberships);
     if (parsed.pathname === "/rest/v1/shopify_connections") return response(connections);
     if (parsed.pathname === "/rest/v1/billing_accounts") return response(accounts);
+    if (parsed.pathname === "/rest/v1/rpc/control_plane_list_billing_reconciliations") return response({ cases: [{ chargeId, shop }], count: 1 });
     if (parsed.pathname === "/rest/v1/rpc/control_plane_get_billing_reconciliation") return response(readResult);
     if (parsed.pathname === "/rest/v1/rpc/control_plane_resolve_billing_reconciliation") return response(resolveResult);
     throw new Error("Unexpected outbound request: " + url);
@@ -82,6 +83,21 @@ test("requires one active test-mode billing account before reading reconciliatio
   const result = await handler(request());
   assert.equal(result.status, 409);
   assert.equal(h.calls.some((call) => call.url.includes("/rpc/")), false);
+});
+
+test("lists only unresolved cases for the authenticated owner's database-derived shop", async () => {
+  const h = harness();
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(new Request("https://edge.invalid/reconciliation", {
+    method: "GET",
+    headers: { authorization: "Bearer valid-user-token" },
+  }));
+  assert.equal(result.status, 200);
+  const body = await result.json();
+  assert.equal(body.count, 1);
+  const call = h.calls.find((item) => item.url.includes("/control_plane_list_billing_reconciliations"));
+  assert.ok(call);
+  assert.deepEqual(JSON.parse(call.init.body), { p_shop_domain: shop, p_limit: 50 });
 });
 
 test("reads only the authenticated owner's database-derived shop and charge", async () => {
