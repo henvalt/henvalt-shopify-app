@@ -310,6 +310,7 @@ BEGIN
 COMMIT;
 
      OR p_charge_id IS NULL
+     OR p_reason IS NULL
      OR p_reason NOT IN (
        'SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN',
        'SHOPIFY_TRANSIENT_HTTP',
@@ -470,6 +471,7 @@ BEGIN
 COMMIT;
 
      OR p_charge_id IS NULL
+     OR p_resolution IS NULL
      OR p_resolution NOT IN ('MATCHED','NOT_FOUND_CONFIRMED','MISMATCH')
      OR jsonb_typeof(COALESCE(p_evidence,'{}'::jsonb)) <> 'object'
      OR octet_length(COALESCE(p_evidence,'{}'::jsonb)::text) > 16384
