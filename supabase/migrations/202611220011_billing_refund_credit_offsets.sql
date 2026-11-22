@@ -96,6 +96,7 @@ BEGIN
      AND rl.billable = true
      AND rl.attribution_confidence = 'CONFIRMED'
      AND rl.billing_status = 'MEASURED'
+     AND (buc.id IS NULL OR buc.reconciliation_status IN ('NONE','NOT_FOUND_CONFIRMED'))
      AND (
        buc.id IS NULL
        OR (buc.status = 'FAILED' AND buc.attempt_count < 5 AND buc.attempted_at < now() - interval '1 minute')
@@ -119,6 +120,13 @@ BEGIN
   IF FOUND THEN
     UPDATE henvalt.billing_usage_charges
        SET status = 'PENDING',
+           reconciliation_status = 'NONE',
+           reconciliation_required_at = NULL,
+           reconciliation_reason = NULL,
+           reconciliation_evidence = '{}'::jsonb,
+           reconciliation_resolved_at = NULL,
+           reconciliation_operator_reference = NULL,
+           reconciliation_operator_note = NULL,
            attempt_count = attempt_count + 1,
            attempted_at = now(),
            error_code = NULL,
@@ -508,6 +516,9 @@ COMMIT;
 COMMIT;
 
        OR p_evidence->>'lookupComplete' IS DISTINCT FROM 'true'
+       OR p_evidence->>'subscriptionFound' IS DISTINCT FROM 'true'
+       OR p_evidence->>'lineItemFound' IS DISTINCT FROM 'true'
+       OR p_evidence->>'providerUsageRecordId' IS DISTINCT FROM p_provider_usage_record_id
        OR p_evidence->>'matchingCount' IS DISTINCT FROM '1'
        OR p_evidence->>'idempotencyKey' IS DISTINCT FROM v_charge.idempotency_key
        OR p_evidence->>'lineItemId' IS DISTINCT FROM v_line_item
