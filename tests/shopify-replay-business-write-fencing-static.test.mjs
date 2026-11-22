@@ -88,7 +88,7 @@ test("audited active-ingest replay mutation map is complete and points only to f
   assert.ok(writeMap.replay_mutations.length >= 18);
   const names = writeMap.replay_mutations.map((item) => item.fenced_rpc);
   assert.equal(new Set(names).size, names.length, "fenced RPC names must be unique");
-  const allMigrations = migration + "\n" + completionMigration;
+  const allMigrations = migration + "\n" + completionMigration + "\n" + orderEditMigration;
   for (const item of writeMap.replay_mutations) {
     assert.ok(item.node && item.current_rpc && item.fenced_rpc, "mapping entries must be complete");
     assert.ok(allMigrations.includes("FUNCTION henvalt." + item.fenced_rpc + "("),
@@ -131,7 +131,7 @@ function extractFencedFunction(source, name) {
 }
 
 test("fenced wrapper signatures put the lease tuple first and guard before mutation", () => {
-  const allMigrations = migration + "\n" + completionMigration;
+  const allMigrations = migration + "\n" + completionMigration + "\n" + orderEditMigration;
   for (const item of writeMap.replay_mutations) {
     const definition = extractFencedFunction(allMigrations, item.fenced_rpc);
     assert.ok(definition, "missing complete wrapper definition: " + item.fenced_rpc);
@@ -174,7 +174,7 @@ test("the live active-ingest mutation inventory is exactly covered by the replay
 });
 
 test("fenced write wrappers are SECURITY DEFINER with a pinned empty search path and service-role-only ACL", () => {
-  const allMigrations = migration + "\n" + completionMigration;
+  const allMigrations = migration + "\n" + completionMigration + "\n" + orderEditMigration;
   for (const item of writeMap.replay_mutations) {
     const definition = extractFencedFunction(allMigrations, item.fenced_rpc);
     assert.ok(definition, "missing wrapper " + item.fenced_rpc);
