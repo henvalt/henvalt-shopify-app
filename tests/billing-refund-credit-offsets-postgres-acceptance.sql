@@ -319,6 +319,18 @@ BEGIN
   v_result := henvalt.control_plane_claim_billing_usage('reconcile-retry.myshopify.com');
   IF (v_result->>'chargeId')::uuid <> v_charge_id OR v_result->>'idempotencyKey' <> v_original_key OR (v_result->>'attempt')::integer <> 1 THEN RAISE EXCEPTION 'retry did not preserve original charge identity and idempotency key: %',v_result; END IF;
   IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND reconciliation_status='NONE') THEN RAISE EXCEPTION 'retry did not clear resolved reconciliation gate'; END IF;
+  -- A Shopify provider usage-record ID may settle only one HENVALT charge.
+  UPDATE henvalt.billing_usage_charges SET attempt_count=5,attempted_at=now()-interval '5 minutes' WHERE id=v_charge_id;
+  PERFORM henvalt.control_plane_mark_billing_reconciliation_required('reconcile-retry.myshopify.com',v_charge_id,'SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN');
+  BEGIN
+    PERFORM henvalt.control_plane_resolve_billing_reconciliation('reconcile-retry.myshopify.com',v_charge_id,'MATCHED','gid://shopify/AppUsageRecord/reconcile-match-1',
+      jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'providerUsageRecordId','gid://shopify/AppUsageRecord/reconcile-match-1','matchingCount','1','idempotencyKey',v_original_key,'lineItemId','gid://shopify/AppSubscriptionLineItem/reconcile-retry','amount','10','currency','USD','pagesScanned',1),
+      'operator-test-duplicate','Attempt to attach an already settled provider record');
+    RAISE EXCEPTION 'duplicate provider usage record was attached to a second charge';
+  EXCEPTION WHEN unique_violation THEN
+    NULL;
+  END;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND status='PENDING' AND reconciliation_status='REQUIRED' AND provider_usage_record_id IS NULL) THEN RAISE EXCEPTION 'duplicate provider record attempt mutated second charge'; END IF;
   IF has_function_privilege('anon','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') THEN RAISE EXCEPTION 'client roles can execute reconciliation resolution'; END IF;
   IF has_function_privilege('anon','henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)','EXECUTE') THEN RAISE EXCEPTION 'client roles can execute reconciliation marker'; END IF;
   IF has_function_privilege('anon','henvalt.control_plane_get_billing_reconciliation(text,uuid)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_get_billing_reconciliation(text,uuid)','EXECUTE') THEN RAISE EXCEPTION 'client roles can read reconciliation envelope'; END IF;
