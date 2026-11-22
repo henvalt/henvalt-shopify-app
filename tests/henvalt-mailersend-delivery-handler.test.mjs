@@ -78,6 +78,9 @@ test("authorized synthetic request reaches only the injected provider stub", asy
       if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
         return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
       }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
+      }
       assert.equal(url, "https://api.mailersend.com/v1/email");
       return new Response(JSON.stringify({ message: "accepted" }), {
         status: 202,
@@ -89,11 +92,20 @@ test("authorized synthetic request reaches only the injected provider stub", asy
   assert.equal(response.status, 202);
   assert.equal(response.headers.get("x-message-id"), "synthetic-provider-message-id");
   assert.deepEqual(await response.json(), { message: "accepted" });
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].url, SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery");
-  assert.equal(calls[1].url, "https://api.mailersend.com/v1/email");
-  assert.equal(calls[1].init.headers.authorization, "Bearer " + PROVIDER_TOKEN);
-  const payload = JSON.parse(calls[1].init.body);
+  assert.equal(calls[1].url, SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope");
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
+    p_tenant_id: TENANT_ID,
+    p_delivery_request_id: DELIVERY_ID,
+    p_to: "merchant-test@example.invalid",
+    p_from_email: "recovery@example.invalid",
+    p_from_name: "HENVALT Test",
+    p_reply_to: "recovery@example.invalid",
+  });
+  assert.equal(calls[2].url, "https://api.mailersend.com/v1/email");
+  assert.equal(calls[2].init.headers.authorization, "Bearer " + PROVIDER_TOKEN);
+  const payload = JSON.parse(calls[2].init.body);
   assert.equal(payload.to[0].email, "merchant-test@example.invalid");
   assert.ok(payload.tags.includes("tenant:" + TENANT_ID));
   assert.ok(payload.tags.includes("delivery:" + DELIVERY_ID));
@@ -113,6 +125,31 @@ test("invalid service credential and invalid input are rejected before any fetch
   assert.equal(calls, 0);
 });
 
+test("database envelope mismatch blocks provider egress even after token claim", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+        return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("false", { status: 200 });
+      }
+      throw new Error("provider egress must not occur");
+    },
+  });
+  const response = await handler(request(validBody()));
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), { error: "delivery_envelope_not_authorized" });
+  assert.deepEqual(calls, [
+    SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery",
+    SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope",
+  ]);
+});
+
 test("provider transport failure is marked ambiguous and not retried automatically", async () => {
   let providerCalls = 0;
   const handler = createDeliveryHandler({
@@ -121,6 +158,9 @@ test("provider transport failure is marked ambiguous and not retried automatical
     fetchImpl: async (url) => {
       if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
         return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
       }
       providerCalls++;
       throw new Error("synthetic provider transport failure");
