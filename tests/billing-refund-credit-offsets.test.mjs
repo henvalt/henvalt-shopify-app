@@ -8,6 +8,7 @@ const claimLockMigration = readFileSync(new URL("../supabase/migrations/20261122
 const acceptance = readFileSync(new URL("./billing-refund-credit-offsets-postgres-acceptance.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
 const billingWorkflow = readFileSync(new URL("../.github/workflows/billing-result-lock-safety.yml", import.meta.url), "utf8");
+const shopifyWorkflow = readFileSync(new URL("../.github/workflows/shopify-config-validation.yml", import.meta.url), "utf8");
 const concurrency = readFileSync(new URL("./billing-refund-credit-concurrency-postgres.sh", import.meta.url), "utf8");
 const bootstrap = readFileSync(new URL("./provider-send-interlock-postgres-bootstrap.sql", import.meta.url), "utf8");
 
@@ -98,11 +99,11 @@ test("full safety CI applies billing migrations in dependency order before accep
   assert.ok(subscriptionLockApply > resultApply);
   assert.ok(acceptanceRun > subscriptionLockApply);
 
-  const configuredBillingJob = billingWorkflow.indexOf("billing-lock-safety:");
-  const configuredOrderEdit = billingWorkflow.indexOf("Apply Shopify order-edit reconciliation migration");
-  const configuredResult = billingWorkflow.indexOf("Apply billing result lock-order migration");
-  const configuredLock = billingWorkflow.indexOf("Apply billing claim subscription lock migration");
-  const configuredAcceptance = billingWorkflow.indexOf("Exercise billing reconciliation, monotonic result and refund-credit acceptance");
+  const configuredBillingJob = shopifyWorkflow.indexOf("billing-lock-safety:");
+  const configuredOrderEdit = shopifyWorkflow.indexOf("Apply Shopify order-edit reconciliation migration");
+  const configuredResult = shopifyWorkflow.indexOf("Apply billing result lock-order migration");
+  const configuredLock = shopifyWorkflow.indexOf("Apply billing claim subscription lock migration");
+  const configuredAcceptance = shopifyWorkflow.indexOf("Exercise billing reconciliation, monotonic result and refund-credit acceptance");
   assert.ok(configuredBillingJob >= 0 && configuredOrderEdit > configuredBillingJob);
   assert.ok(configuredResult > configuredOrderEdit);
   assert.ok(configuredLock > configuredResult);
