@@ -7,6 +7,150 @@
 
 BEGIN;
 
+CREATE OR REPLACE FUNCTION henvalt.project_order_from_event(p_event_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  v_tenant_id uuid;
+  v_payload jsonb;
+  v_order_id text;
+  v_order_number text;
+  v_email text;
+  v_checkout_id text;
+  v_checkout_token text;
+  v_landing_site text;
+  v_tracking_token text;
+  v_total numeric(18,2);
+  v_currency char(3);
+  v_financial_status text;
+  v_fulfillment_status text;
+  v_ordered_at timestamptz;
+  v_cancelled_at timestamptz;
+  v_customer_id uuid;
+  v_checkout_uuid uuid;
+  v_existing uuid;
+BEGIN
+  SELECT tenant_id,payload
+    INTO v_tenant_id,v_payload
+    FROM henvalt.canonical_events
+   WHERE id=p_event_id;
+
+  IF v_tenant_id IS NULL THEN
+    RAISE EXCEPTION 'Canonical event not found';
+  END IF;
+
+  v_order_id := COALESCE(v_payload->>'id',v_payload->>'order_id');
+  IF v_order_id IS NULL OR trim(v_order_id)='' THEN
+    RAISE EXCEPTION 'Shopify order id missing';
+  END IF;
+
+  SELECT id INTO v_existing
+    FROM henvalt.orders
+   WHERE tenant_id=v_tenant_id
+     AND shopify_order_id=v_order_id;
+
+  v_order_number := v_payload->>'order_number';
+  v_email := lower(trim(COALESCE(v_payload->>'email',v_payload->'customer'->>'email')));
+  v_checkout_id := COALESCE(v_payload->>'checkout_id',v_payload->'checkout'->>'id');
+  v_checkout_token := COALESCE(v_payload->>'checkout_token',v_payload->'checkout'->>'token');
+
+  -- Shopify current_total_price is the authoritative post-edit value. The
+  -- original total_price is only a fallback for older webhook payloads.
+  v_total := NULLIF(COALESCE(
+    v_payload->>'current_total_price',
+    v_payload->'current_total_price_set'->'shop_money'->>'amount',
+    v_payload->>'total_price',
+    v_payload->'total_price_set'->'shop_money'->>'amount'
+  ),'')::numeric;
+
+  v_currency := LEFT(COALESCE(
+    v_payload->'current_total_price_set'->'shop_money'->>'currency_code',
+    v_payload->>'currency',
+    v_payload->>'presentment_currency'
+  ),3)::char(3);
+  v_financial_status := v_payload->>'financial_status';
+  v_fulfillment_status := v_payload->>'fulfillment_status';
+  v_ordered_at := COALESCE(NULLIF(v_payload->>'created_at','')::timestamptz,now());
+  v_cancelled_at := NULLIF(v_payload->>'cancelled_at','')::timestamptz;
+  v_landing_site := COALESCE(
+    v_payload->>'landing_site',
+    v_payload->>'landing_site_ref',
+    v_payload->'client_details'->>'landing_page'
+  );
+  v_tracking_token := COALESCE(
+    NULLIF(v_payload->>'henvalt_tracking_token',''),
+    NULLIF(v_payload->>'tracking_token',''),
+    (regexp_match(COALESCE(v_landing_site,''),'[?&]henvalt_token=([0-9a-f]{48})(?:&|$)'))[1]
+  );
+
+  SELECT id INTO v_customer_id
+    FROM henvalt.customers
+   WHERE tenant_id=v_tenant_id
+     AND (
+       lower(email)=v_email
+       OR shopify_customer_id=COALESCE(v_payload->'customer'->>'id',v_payload->>'customer_id')
+     )
+   ORDER BY
+     CASE WHEN shopify_customer_id=COALESCE(v_payload->'customer'->>'id',v_payload->>'customer_id')
+       THEN 1 ELSE 2 END,
+     created_at DESC
+   LIMIT 1;
+
+  IF v_checkout_id IS NOT NULL THEN
+    SELECT id INTO v_checkout_uuid
+      FROM henvalt.checkouts
+     WHERE tenant_id=v_tenant_id
+       AND shopify_checkout_id=v_checkout_id
+     LIMIT 1;
+  END IF;
+
+  IF v_existing IS NOT NULL THEN
+    UPDATE henvalt.orders
+       SET customer_id=COALESCE(v_customer_id,customer_id),
+           checkout_id=COALESCE(v_checkout_uuid,checkout_id),
+           order_number=COALESCE(v_order_number,order_number),
+           total_value=COALESCE(v_total,total_value),
+           currency=COALESCE(v_currency,currency),
+           financial_status=COALESCE(v_financial_status,financial_status),
+           fulfillment_status=COALESCE(v_fulfillment_status,fulfillment_status),
+           ordered_at=COALESCE(v_ordered_at,ordered_at),
+           cancelled_at=COALESCE(v_cancelled_at,cancelled_at),
+           tracking_token=COALESCE(v_tracking_token,tracking_token),
+           metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object(
+             'checkout_token',v_checkout_token,
+             'henvalt_tracking_token',v_tracking_token,
+             'landing_site',v_landing_site,
+             'last_event_id',p_event_id
+           ),
+           updated_at=now()
+     WHERE id=v_existing;
+    RETURN v_existing;
+  END IF;
+
+  INSERT INTO henvalt.orders(
+    tenant_id,customer_id,checkout_id,shopify_order_id,order_number,
+    total_value,currency,financial_status,fulfillment_status,ordered_at,
+    cancelled_at,tracking_token,metadata
+  ) VALUES (
+    v_tenant_id,v_customer_id,v_checkout_uuid,v_order_id,v_order_number,
+    COALESCE(v_total,0),v_currency,v_financial_status,v_fulfillment_status,
+    v_ordered_at,v_cancelled_at,v_tracking_token,
+    jsonb_build_object(
+      'checkout_token',v_checkout_token,
+      'henvalt_tracking_token',v_tracking_token,
+      'landing_site',v_landing_site,
+      'source_event_id',p_event_id
+    )
+  )
+  RETURNING id INTO v_existing;
+
+  RETURN v_existing;
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION henvalt.create_revenue_adjustment(
   p_order_id uuid,
   p_amount numeric,
