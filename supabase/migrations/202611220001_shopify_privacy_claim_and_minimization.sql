@@ -44,11 +44,23 @@ begin
     raise exception 'lease_seconds must be between 15 and 300';
   end if;
 
+  update henvalt.shopify_privacy_requests r
+  set status = 'REVIEW_REQUIRED',
+      payload = '{}'::jsonb,
+      customer_id = null,
+      last_error = 'retry_limit_exceeded',
+      lease_token = null,
+      lease_expires_at = null
+  where r.status in ('FAILED', 'PROCESSING')
+    and r.lease_attempts >= 8
+    and (r.status = 'FAILED' or r.lease_expires_at <= now());
+
   select r.id into v_id
   from henvalt.shopify_privacy_requests r
   where
-    (r.status in ('PENDING', 'FAILED')
-      or (r.status = 'PROCESSING' and r.lease_expires_at <= now()))
+    (r.status = 'PENDING'
+      or (r.status = 'FAILED' and r.lease_attempts < 8)
+      or (r.status = 'PROCESSING' and r.lease_attempts < 8 and r.lease_expires_at <= now()))
     and (r.lease_expires_at is null or r.lease_expires_at <= now())
   order by r.received_at, r.id
   for update skip locked
@@ -97,11 +109,25 @@ begin
   end if;
 
   update henvalt.shopify_privacy_requests r
-  set status = p_status,
-      payload = '{}'::jsonb,
-      customer_id = null,
+  set status = case
+        when p_status = 'FAILED' and r.lease_attempts >= 8 then 'REVIEW_REQUIRED'
+        else p_status
+      end,
+      payload = case
+        when p_status in ('COMPLETED', 'REVIEW_REQUIRED')
+          or (p_status = 'FAILED' and r.lease_attempts >= 8)
+        then '{}'::jsonb else r.payload
+      end,
+      customer_id = case
+        when p_status in ('COMPLETED', 'REVIEW_REQUIRED')
+          or (p_status = 'FAILED' and r.lease_attempts >= 8)
+        then null else r.customer_id
+      end,
       processed_at = case when p_status = 'COMPLETED' then now() else r.processed_at end,
-      last_error = p_error_code,
+      last_error = case
+        when p_status = 'FAILED' and r.lease_attempts >= 8 then 'retry_limit_exceeded'
+        else p_error_code
+      end,
       lease_token = null,
       lease_expires_at = null
   where r.id = p_request_id
@@ -146,6 +172,18 @@ begin
     raise exception 'lease_seconds must be between 15 and 300';
   end if;
 
+  update henvalt.shopify_privacy_requests r
+  set status = 'REVIEW_REQUIRED',
+      payload = '{}'::jsonb,
+      customer_id = null,
+      last_error = 'retry_limit_exceeded',
+      lease_token = null,
+      lease_expires_at = null
+  where r.id = p_request_id
+    and r.status in ('FAILED', 'PROCESSING')
+    and r.lease_attempts >= 8
+    and (r.status = 'FAILED' or r.lease_expires_at <= now());
+
   return query
   update henvalt.shopify_privacy_requests r
   set status = 'PROCESSING',
@@ -154,8 +192,9 @@ begin
       lease_attempts = r.lease_attempts + 1,
       last_error = null
   where r.id = p_request_id
-    and (r.status in ('PENDING', 'FAILED')
-      or (r.status = 'PROCESSING' and r.lease_expires_at <= now()))
+    and (r.status = 'PENDING'
+      or (r.status = 'FAILED' and r.lease_attempts < 8)
+      or (r.status = 'PROCESSING' and r.lease_attempts < 8 and r.lease_expires_at <= now()))
     and (r.lease_expires_at is null or r.lease_expires_at <= now())
   returning r.id, r.tenant_id, r.shop_domain, r.shopify_shop_id, r.topic,
     r.webhook_id, r.customer_id, r.request_id, r.payload,
