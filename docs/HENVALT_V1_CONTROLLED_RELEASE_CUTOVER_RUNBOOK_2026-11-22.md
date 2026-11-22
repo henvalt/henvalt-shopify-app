@@ -183,7 +183,50 @@ Production cutover requires a new, explicit approval identifying the exact commi
 
 Rollback must be forward-safe: stop new claims/schedules first, preserve webhook/privacy/billing receipts, leases, idempotency keys, audit rows, and financial ledger history, and restore only previously verified function/workflow versions. Do not drop columns or delete queue/audit/financial history to imitate rollback. If a worker is stopped, do not acknowledge new webhooks successfully unless a durable alternate processor remains available.
 
-## 11. Current known blockers at authoring time
+## 11. Fresh production baseline captured 2026-11-22 (read-only)
+
+The following snapshot was rechecked against the connected production Supabase project and the active n8n workflow versions after this runbook was drafted. It is evidence of the live baseline, not permission to change it.
+
+### Supabase production
+
+- Project: `ocyplckdojdubyrsxcxa`; Postgres 17.6.1.
+- Latest applied migration: `20261114174204`. Candidate migrations listed in Gate C are not applied.
+- `henvalt-control-plane`: ACTIVE version 24, gateway `verify_jwt=false`.
+- `henvalt-shopify-oauth`: ACTIVE version 27.
+- `henvalt-merchant-dashboard`: ACTIVE version 4.
+- `henvalt-mailersend-setup`: ACTIVE version 8.
+- `henvalt-mailersend-delivery`: ACTIVE version 1.
+- `henvalt-shopify-privacy`: ACTIVE version 1.
+- `henvalt-privacy-export`: ACTIVE version 1.
+- `henvalt-shopify-usage-billing` and `henvalt-billing-reconciliation`: absent from the production Edge Function inventory at this inspection.
+
+The two privacy functions already present in production are older deployed versions; their presence does not mean the candidate privacy queue/acknowledgement implementation has been deployed. Compare the deployed function hashes and candidate source before any replacement.
+
+### Legacy control-plane billing route — precise authentication and mutation boundary
+
+Read-only source retrieval of deployed `henvalt-control-plane` v24 confirms:
+
+- The Supabase gateway has `verify_jwt=false`, but the handler requires a Bearer token and calls service-only `henvalt.control_plane_verify_api_token` before route dispatch.
+- That verifier reads the Vault secret named `HENVALT_CONTROL_PLANE_TOKEN`, rejects candidates outside 32–512 characters, and compares SHA-256 digests. The Edge Function then requires a valid `x-henvalt-shop` header.
+- The old `POST /v1/billing/usage/claim` and `POST /v1/billing/usage/result` routes are present. They call the production `control_plane_claim_billing_usage` and `control_plane_record_billing_usage_result` RPCs.
+- The inspected production RPC definitions are older than the candidate lock-order/monotonicity/reconciliation migrations. In particular, the old result RPC updates charge state to SUBMITTED or FAILED without the candidate monotonic transition protections. A late failure can therefore overwrite a previously submitted state if this legacy route is invoked.
+- The old claim RPC selects an active connection with `LIMIT 1` and does not implement the candidate exact-one-active-shop, tenant/shop row-lock, subscription-row-lock, or exhausted deterministic reconciliation behavior.
+- Database ACL inspection shows these legacy billing RPCs execute only for `service_role`; application roles do not receive direct execution. This reduces direct client exposure but does not remove the old authenticated Edge Function route.
+- The three active n8n workflows were inspected and do not call these legacy billing routes. The candidate billing worker is a separate design and is not deployed.
+
+**Required disposition before merchant-facing billing:** recover/version-control the exact deployed control-plane source; map every caller of the two legacy routes; prove no active client or workflow depends on them; then remove or hard-disable the legacy billing routes in a separately reviewed release. Do not replace the entire production function from the candidate branch merely to remove these routes. Do not rotate the shared Vault token until every dependent control-plane caller has been inventoried and migrated.
+
+### Active n8n production versions
+
+| Workflow | Workflow ID | Active version ID | Nodes | State |
+|---|---|---|---:|---|
+| `HENVALT_INGEST` | `VTpfGKNtu1CSQ4Rv` | `6368d539-708f-494a-8be8-b9601d0e8607` | 51 | Active |
+| `HENVALT_RECOVERY` | `3GEDoeCA4paXTaDF` | `32e50bf7-4cbd-4070-bbba-f259ed17b369` | 46 | Active |
+| `HENVALT_DELIVERY` | `CvVyybGJZSnklxiZ` | `621ae6ce-a006-4fed-a70e-acf774c360fb` | 62 | Active |
+
+The live ingest graph still needs an explicit Respond to Webhook path and durable replay-job acknowledgement before a 2xx can be considered safe. The live recovery graph still has its intervention-job claim/guard and does not yet implement the candidate `process_shopify_webhook` replay-job router. The live delivery graph retains both normal and manual send entry paths; both require isolated egress-denied validation against the same interlock before release. These are not candidate deployment claims.
+
+## 12. Current known blockers at authoring time
 
 - No isolated Supabase staging project/branch has been verified; do not incur cost by creating one without approval.
 - Production migration history remains behind candidate migrations 001–016; none of these migrations has been applied to production.
