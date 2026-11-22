@@ -71,6 +71,7 @@ DECLARE
   v_order_4 uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0316';
   v_recovery_4 uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccc0316';
   v_edit_5 uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0319';
+  v_edit_6 uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0322';
   v_job uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0320';
   v_lease uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0321';
   v_result jsonb;
@@ -133,7 +134,7 @@ BEGIN
   ) VALUES(
     v_edit_1,v_tenant,'orders/updated','ADJUSTMENT','shopify',
     'order-edit-delivery-1',now(),
-    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"70.00","currency":"USD","current_total_price_set":{"shop_money":{"amount":"70.00","currency_code":"USD"}}}',
+    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"70.00","currency":"USD","current_total_price_set":{"shop_money":{"amount":"70.00","currency_code":"USD"}},"updated_at":"2026-11-22T10:00:00Z"}',
     '{}','order-edit-idem-1'
   );
   PERFORM henvalt.project_order_from_event(v_edit_1);
@@ -172,9 +173,10 @@ BEGIN
   ) VALUES(
     v_edit_2,v_tenant,'orders/updated','ADJUSTMENT','shopify',
     'order-edit-delivery-2',now(),
-    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"60.00","currency":"USD"}',
+    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"60.00","currency":"USD","updated_at":"2026-11-22T11:00:00Z"}',
     '{}','order-edit-idem-2'
   );
+  PERFORM henvalt.project_order_from_event(v_edit_2);
   v_result := henvalt.process_shopify_order_edit_adjustment(v_edit_2);
   IF v_result->>'status' <> 'adjusted' OR (v_result->>'amount')::numeric <> 10 THEN
     RAISE EXCEPTION 'second order edit did not create only incremental 10 adjustment: %',v_result;
@@ -188,9 +190,10 @@ BEGIN
   ) VALUES(
     v_edit_3,v_tenant,'orders/updated','ADJUSTMENT','shopify',
     'order-edit-delivery-3',now(),
-    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"90.00","currency":"USD"}',
+    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"90.00","currency":"USD","updated_at":"2026-11-22T12:00:00Z"}',
     '{}','order-edit-idem-3'
   );
+  PERFORM henvalt.project_order_from_event(v_edit_3);
   v_result := henvalt.process_shopify_order_edit_adjustment(v_edit_3);
   IF v_result->>'status' <> 'no_additional_downward_adjustment' THEN
     RAISE EXCEPTION 'upward order edit unexpectedly reversed prior credit: %',v_result;
@@ -199,6 +202,25 @@ BEGIN
   SELECT COALESCE(ABS(sum(amount)),0) INTO v_total FROM henvalt.revenue_ledger
    WHERE tenant_id=v_tenant AND order_id=v_order AND entry_type='ADJUSTMENT';
   IF v_total <> 40 THEN RAISE EXCEPTION 'order edit/refund adjustments did not remain monotonic'; END IF;
+
+  -- A late-arriving older Shopify snapshot cannot roll the order back to 50
+  -- after the newer 90 total has already been projected.
+  INSERT INTO henvalt.canonical_events(
+    id,tenant_id,event_type,event_class,source,source_event_id,
+    occurred_at,payload,metadata,idempotency_key
+  ) VALUES(
+    v_edit_6,v_tenant,'orders/updated','ADJUSTMENT','shopify',
+    'order-edit-delivery-stale',now(),
+    '{"id":"order-edit-100","total_price":"100.00","current_total_price":"50.00","currency":"USD","updated_at":"2026-11-22T10:30:00Z"}',
+    '{}','order-edit-idem-stale'
+  );
+  PERFORM henvalt.project_order_from_event(v_edit_6);
+  v_result := henvalt.process_shopify_order_edit_adjustment(v_edit_6);
+  IF v_result->>'status' <> 'stale_shopify_order_update' THEN
+    RAISE EXCEPTION 'older order snapshot was not rejected: %',v_result;
+  END IF;
+  SELECT total_value INTO v_total FROM henvalt.orders WHERE id=v_order;
+  IF v_total <> 90 THEN RAISE EXCEPTION 'stale Shopify snapshot overwrote the newer order total'; END IF;
 
   -- A confirmed recovery that was never measured must not create a fee credit.
   INSERT INTO henvalt.orders(id,tenant_id,shopify_order_id,total_value,currency,metadata)
