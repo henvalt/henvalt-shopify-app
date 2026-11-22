@@ -13,16 +13,16 @@ test("dashboard exposes a dedicated billing review page without a service-role c
 
 test("billing review reads queue and charge envelope through the authenticated Edge Function", () => {
   assert.match(html, /async function loadBillingCases\(\)/);
-  assert.doesNotMatch(html, /control_plane_list_billing_reconciliations/); // browser must not call database RPCs directly
-  assert.match(html, /BILLING_RECONCILIATION\+\?"\?chargeId="/);
+  assert.doesNotMatch(html, /control_plane_list_billing_reconciliations/);
+  assert.match(html, /BILLING_RECONCILIATION\+?"\?chargeId="/);
   assert.match(html, /Authorization:"Bearer "\+session\.access_token/);
 });
 
-test("billing decisions require operator note and evidence and are submitted through the server endpoint", () => {
+test("billing decisions cannot submit browser-created provider evidence", () => {
   assert.match(html, /async function resolveBillingCase\(e\)/);
-  assert.match(html, /JSON\.parse\(\$\("billingevidence"\)\.value\)/);
-  assert.match(html, /action:"resolve",chargeId,resolution,providerUsageRecordId,evidence,operatorNote:/);
-  assert.match(html, /independently complete the Shopify Admin GraphQL lookup/);
+  assert.doesNotMatch(html, /billingevidence|billingproviderid/);
+  assert.match(html, /action:"resolve",chargeId,resolution,operatorNote:/);
+  assert.match(html, /retrieves the stored Shopify access token server-side/);
   assert.match(html, /Every decision is attributed to your authenticated HENVALT account/);
 });
 
