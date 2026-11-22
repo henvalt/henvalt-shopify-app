@@ -42,6 +42,10 @@ begin
     select 1 from henvalt.messages x
     where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient)=v_email
     union all
+    select 1 from henvalt.conversation_messages x
+    where x.tenant_id=p_tenant_id and v_email is not null
+      and (lower(x.sender_email)=v_email or lower(x.recipient_email)=v_email)
+    union all
     select 1 from henvalt.email_suppressions x
     where x.tenant_id=p_tenant_id and v_email is not null and lower(x.email_normalized)=v_email
     union all
