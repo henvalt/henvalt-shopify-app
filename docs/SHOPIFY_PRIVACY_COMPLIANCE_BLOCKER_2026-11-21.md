@@ -46,7 +46,7 @@ The presence of a queue table and isolated redaction functions is not evidence t
 5. Verify `shop/redact`: the current handler invokes the tenant deletion RPC. Prove shop identity binding, tenant-wide send/processing stop, deletion scope, backups, provider logs and n8n execution-data treatment in isolated staging.
 6. Add a lease-bound worker with retries, terminal/dead-letter states, append-only audit evidence, strict tenant isolation and no raw payload leakage to n8n execution history.
 7. Test duplicates, invalid HMAC, unknown shops, service/database outage, partial failure, retry, customer-id-only and email-only payloads, completed replay, legal-hold exceptions, and full shop deletion in isolated staging.
-8. Only after the endpoint and handler tests pass, add the three `compliance_topics` in `shopify.app.toml` and validate the actual Shopify app configuration. Do not add a configuration-only declaration that points at an unimplemented handler.
+8. Only after the endpoint and handler tests pass, add the three `compliance_topics` in `shopify.app.toml` and validate the actual Shopify app configuration. The candidate configuration now declares all three mandatory compliance topics against the existing Supabase privacy endpoint. Do not deploy this configuration until the candidate privacy handler and its durable queue worker are deployed, verified end-to-end, and the existing endpoint is confirmed to run the candidate implementation.nts at an unimplemented handler.
 
 ## Explicit release gate
 
@@ -166,3 +166,8 @@ Both deployed v1 functions are now preserved under `supabase/functions/` as **AU
 ### Candidate CI evidence for baseline capture
 
 The two audit-baseline files, documentation, and static regression test were added to the candidate branch. The offline contract workflow passed (run 44937879940) and the full safety/pixel-consent workflow passed (run 44937880000) on candidate commit `cb686659d1c3b1678b264a23db6a4c2785e419f7`. These are code/fixture checks only; they do not exercise production webhooks or prove the live privacy flow is compliant.
+
+
+## 2026-11-22 candidate update
+
+The candidate `shopify.app.toml` now declares `customers/data_request`, `customers/redact`, and `shop/redact` under `[[webhooks.subscriptions]]`, using the existing Supabase privacy endpoint. This removes the configuration omission from the source tree, but does not complete the production compliance gate: the endpoint still runs the previously deployed implementation. The candidate handler, queue worker migration, and cron schedule must be deployed and verified before running `shopify app deploy`. No app configuration deployment or Shopify release was performed.
