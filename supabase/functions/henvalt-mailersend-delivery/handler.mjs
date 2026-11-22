@@ -116,6 +116,9 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
           p_from_email: sender,
           p_from_name: fromName,
           p_reply_to: validEmail(replyTo) ? replyTo : sender,
+          p_subject: subject,
+          p_html_body: typeof html === "string" ? html : null,
+          p_text_body: typeof textBody === "string" ? textBody : null,
         }),
       });
       if (!envelopeResponse.ok) return json(409, { error: "delivery_envelope_not_authorized" });
