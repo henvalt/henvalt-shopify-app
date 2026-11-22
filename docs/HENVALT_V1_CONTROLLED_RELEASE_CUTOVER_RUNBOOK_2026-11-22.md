@@ -109,6 +109,15 @@ For every function, record gateway `verify_jwt` mode and the handler's own authe
 - Owner/admin dashboard and reconciliation routes must validate Supabase identity and tenant membership server-side.
 - Never expose service-role keys or provider secrets to browser code, n8n execution payloads, logs, or dashboard responses.
 - Configure secret names from the source contract, validate presence without printing values, and rotate staging credentials independently.
+
+For the candidate `henvalt-shopify-oauth`, record and validate these exact environment-variable **names** in the isolated staging function before deployment:
+- `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_REDIRECT_URI`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` — required HTTPS origin; candidate appends `/shopify/webhooks`
+- `SHOPIFY_PIXEL_COLLECTOR_URL` — required HTTPS URL with exact path `/v1/events`
+- `HENVALT_DASHBOARD_URL` — optional override; candidate default is `https://henvalt-dashboard.pages.dev`
+- `SHOPIFY_SCOPES` — optional override; required scopes are appended by the handler
+
+The candidate OAuth handler deliberately returns configuration-unavailable when either Worker URL is absent or invalid. Do not copy the old hard-coded Worker origins from deployed v27; verify the new staging Worker endpoints and bind them explicitly.
 - Do not deploy the legacy `henvalt-control-plane` from the candidate branch: its deployed source is not present in this repository and its legacy billing routes require separate review.
 
 Run Deno type checks and authenticated/unauthenticated handler tests after each function deploy. Record deployed function version identifiers and test request IDs.
