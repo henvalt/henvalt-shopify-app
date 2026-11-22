@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/202611220011_billing_refund_credit_offsets.sql", import.meta.url), "utf8");
+const resultMigration = readFileSync(new URL("../supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql", import.meta.url), "utf8");
 const acceptance = readFileSync(new URL("./billing-refund-credit-offsets-postgres-acceptance.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
+const billingWorkflow = readFileSync(new URL("../.github/workflows/billing-result-lock-safety.yml", import.meta.url), "utf8");
 const concurrency = readFileSync(new URL("./billing-refund-credit-concurrency-postgres.sh", import.meta.url), "utf8");
 const bootstrap = readFileSync(new URL("./provider-send-interlock-postgres-bootstrap.sql", import.meta.url), "utf8");
 
@@ -32,19 +34,19 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.ok(bootstrap.includes("plan_key text NOT NULL CHECK (plan_key IN ('STARTER','GROWTH'))"));
   assert.ok(!acceptance.includes("'PERFORMANCE'"));
   assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
-  assert.match(migration, /control_plane_record_billing_usage_result/);
-  assert.match(migration, /CHARGE_ALREADY_SUBMITTED/);
-  assert.match(migration, /MISMATCH_REQUIRES_OPERATOR/);
+  assert.match(resultMigration, /control_plane_record_billing_usage_result/);
+  assert.match(resultMigration, /CHARGE_ALREADY_SUBMITTED/);
+  assert.match(resultMigration, /MISMATCH_REQUIRES_OPERATOR/);
   assert.match(acceptance, /worker result bypassed an operator-confirmed mismatch/);
   assert.match(acceptance, /late failure was allowed to downgrade a submitted charge/);
   assert.match(acceptance, /billing result RPC ACL is not service-role-only/);
-  const recordStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_record_billing_usage_result");
-  const recordEnd = migration.indexOf("REVOKE ALL ON FUNCTION henvalt.control_plane_record_billing_usage_result", recordStart);
-  const recordFunction = migration.slice(recordStart, recordEnd);
+  const recordStart = resultMigration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_record_billing_usage_result");
+  const recordEnd = resultMigration.indexOf("REVOKE ALL ON FUNCTION henvalt.control_plane_record_billing_usage_result", recordStart);
+  const recordFunction = resultMigration.slice(recordStart, recordEnd);
   assert.ok(recordFunction.indexOf("FROM henvalt.billing_measurements") < recordFunction.indexOf("SELECT status, provider_usage_record_id"));
   assert.ok(recordFunction.indexOf("FOR UPDATE;") < recordFunction.indexOf("SELECT status, provider_usage_record_id"));
-  const resolveStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_resolve_billing_reconciliation");
-  const resolveFunction = migration.slice(resolveStart);
+  const resolveStart = resultMigration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_resolve_billing_reconciliation");
+  const resolveFunction = resultMigration.slice(resolveStart);
   assert.ok(resolveFunction.indexOf("FROM henvalt.billing_measurements") < resolveFunction.indexOf("FOR UPDATE OF buc"));
   assert.match(migration, /control_plane_get_billing_reconciliation/);
   assert.match(migration, /control_plane_list_billing_reconciliations/);
@@ -82,6 +84,8 @@ test("PostgreSQL acceptance covers partial, full, exhausted and retry-safe refun
 test("safety CI applies and exercises the refund-credit migration", () => {
   assert.match(workflow, /202611220011_billing_refund_credit_offsets\.sql/);
   assert.match(workflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
+  assert.match(billingWorkflow, /202611220014_billing_result_lock_order_and_monotonicity\.sql/);
+  assert.match(billingWorkflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
 });
 
 test("concurrent workers serialize on credit rows and re-read the balance after lock acquisition", () => {
