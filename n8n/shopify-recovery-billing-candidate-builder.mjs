@@ -16,6 +16,7 @@ JOIN henvalt.billing_accounts ba
   ON ba.tenant_id = sc.tenant_id
  AND ba.status = 'ACTIVE'
  AND ba.usage_line_item_id IS NOT NULL
+ AND ba.test_mode = true
 JOIN LATERAL (
   SELECT bm.created_at
   FROM henvalt.billing_measurements bm
