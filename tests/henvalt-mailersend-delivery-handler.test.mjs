@@ -102,6 +102,9 @@ test("authorized synthetic request reaches only the injected provider stub", asy
     p_from_email: "recovery@example.invalid",
     p_from_name: "HENVALT Test",
     p_reply_to: "recovery@example.invalid",
+    p_subject: "Synthetic delivery test",
+    p_html_body: null,
+    p_text_body: "This message must never leave the mocked provider boundary.",
   });
   assert.equal(calls[2].url, "https://api.mailersend.com/v1/email");
   assert.equal(calls[2].init.headers.authorization, "Bearer " + PROVIDER_TOKEN);
