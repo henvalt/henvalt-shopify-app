@@ -18,6 +18,7 @@ on:
       - "supabase/migrations/202611220001_shopify_privacy_claim_and_minimization.sql"
       - "supabase/migrations/202611220002_shopify_privacy_redaction_guards.sql"
       - "supabase/migrations/202611220003_shopify_privacy_retention_cron.sql"
+      - "supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql"
       - "tests/shopify-privacy-retention.test.mjs"
       - "tests/shopify-privacy-redaction-guards.test.mjs"
       - "tests/shopify-privacy-lease-migration.test.mjs"
@@ -349,6 +350,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220003_shopify_privacy_retention_cron.sql
+      - name: Apply candidate Shopify signed-payload idempotency migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql
       - name: Exercise privacy lease fencing and PII minimization
         env:
           PGPASSWORD: postgres
