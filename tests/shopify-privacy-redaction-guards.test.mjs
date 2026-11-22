@@ -34,3 +34,8 @@ test("customer redaction and export side effects are fenced by request leases", 
   assert.match(sql, /v_request\.lease_expires_at <= now\(\)/i);
   assert.match(sql, /result_payload = null, result_expires_at = null/i);
 });
+
+test("legacy null lease metadata fails closed in every side-effect wrapper", () => {
+  assert.match(sql, /v_request\.lease_token is distinct from p_lease_token/i);
+  assert.match(sql, /v_request\.lease_expires_at is null/i);
+});
