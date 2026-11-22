@@ -12,19 +12,19 @@ test("privacy candidate authenticates exact raw bytes and signed shop identity",
   assert.match(source, /X-Shopify-Shop-Id/);
 });
 
-test("privacy candidate persists minimal data and claims only its own request", () => {
-  assert.match(source, /claim_shopify_privacy_request_by_id/);
+test("privacy candidate persists only minimal identifiers and acknowledges before processing", () => {
   assert.match(source, /customer_id: connection \? customerId : null/);
   assert.match(source, /payload: connection \? minimalPayload : \{\}/);
   assert.match(source, /customer_email: customerEmail/);
+  assert.match(source, /persist_shopify_privacy_request/);
+  assert.match(source, /return reply\(200, \{[\s\S]*queued: true/);
+  assert.doesNotMatch(source, /claim_shopify_privacy_request_by_id|export_shopify_customer_data_with_lease|redact_shopify_customer_data_checked_with_lease/);
   assert.doesNotMatch(source, /body: JSON\.stringify\(payload\)/);
 });
 
-test("privacy candidate routes each compliance topic through guarded operations", () => {
-  assert.match(source, /export_shopify_customer_data_with_lease/);
-  assert.match(source, /redact_shopify_customer_data_checked_with_lease/);
-  assert.match(source, /redact_shopify_shop_data_with_lease/);
-  assert.match(source, /finish_shopify_privacy_request/);
+test("privacy candidate delegates all processing to the durable database worker", () => {
+  assert.match(source, /acknowledge only after durable receipt persistence/i);
+  assert.doesNotMatch(source, /finish_shopify_privacy_request/);
 });
 
 test("privacy request replay identity comes from signed bytes, not unsigned webhook headers", () => {
