@@ -306,6 +306,12 @@ BEGIN
   IF v_result->>'updated' <> 'false' OR v_result->>'reason' <> 'MISMATCH_REQUIRES_OPERATOR' THEN
     RAISE EXCEPTION 'worker result bypassed an operator-confirmed mismatch: %',v_result;
   END IF;
+  v_result := henvalt.control_plane_mark_billing_reconciliation_required(
+    'reconcile-match.myshopify.com',v_charge_id,'SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN'
+  );
+  IF v_result->>'updated' <> 'false' OR v_result->>'reason' <> 'MISMATCH_REQUIRES_OPERATOR' THEN
+    RAISE EXCEPTION 'stale timeout marker overwrote an operator mismatch: %',v_result;
+  END IF;
   v_result := henvalt.control_plane_claim_billing_usage('reconcile-match.myshopify.com');
   IF v_result->>'available' <> 'false' THEN RAISE EXCEPTION 'scheduler claim retried a mismatch reconciliation case: %',v_result; END IF;
   v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id,'MATCHED','gid://shopify/AppUsageRecord/reconcile-match-1',
