@@ -27,7 +27,7 @@ test("dashboard revokes the temporary object URL and never labels acknowledgemen
 });
 
 test("dashboard inline JavaScript parses before browser execution", () => {
-  const scripts = [...dashboard.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)];
+  const scripts = [...dashboard.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
   assert.ok(scripts.length > 0, "dashboard script block missing");
   for (const script of scripts) assert.doesNotThrow(() => new Function(script[1]));
 });
