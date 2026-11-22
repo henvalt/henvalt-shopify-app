@@ -1,0 +1,25 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const sql = readFileSync("supabase/migrations/202611220001_shopify_privacy_claim_and_minimization.sql", "utf8");
+
+test("privacy request claims are serialized and lease bounded", () => {
+  assert.match(sql, /for update skip locked/i);
+  assert.match(sql, /lease_token\s*=\s*v_token/i);
+  assert.match(sql, /lease_expires_at\s*=\s*now\(\)\s*\+/i);
+  assert.match(sql, /p_lease_seconds < 15 or p_lease_seconds > 300/i);
+});
+
+test("privacy request completion is fenced by the live lease", () => {
+  assert.match(sql, /r\.lease_token\s*=\s*p_lease_token/i);
+  assert.match(sql, /r\.lease_expires_at > now\(\)/i);
+  assert.match(sql, /r\.status = 'PROCESSING'/i);
+});
+
+test("terminal privacy outcomes minimize inbound personal data", () => {
+  assert.match(sql, /payload = '\{\}'::jsonb/i);
+  assert.match(sql, /customer_id = null/i);
+  assert.match(sql, /revoke all on function henvalt\.claim_shopify_privacy_request/i);
+  assert.match(sql, /to service_role/i);
+});
