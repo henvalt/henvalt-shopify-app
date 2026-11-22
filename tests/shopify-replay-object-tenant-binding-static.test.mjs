@@ -4,18 +4,18 @@ import { readFileSync } from "node:fs";
 
 const sql=readFileSync("supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql","utf8");
 const wrappers=[
- ["resolve_identity_fenced","canonical_events","henvalt.resolve_identity("],
- ["upsert_checkout_fenced","customers","henvalt.upsert_checkout("],
- ["create_opportunity_idempotent_fenced","canonical_events","henvalt.create_opportunity_idempotent("],
- ["apply_eligibility_fenced","opportunities","henvalt.apply_eligibility("],
- ["create_recovery_sequence_fenced","opportunities","henvalt.create_recovery_sequence("],
- ["create_intervention_and_enqueue_fenced","recovery_sequences","henvalt.create_intervention_and_enqueue("],
- ["project_order_from_event_fenced","canonical_events","henvalt.project_order_from_event("],
- ["evaluate_order_attribution_fenced","orders","henvalt.evaluate_order_attribution("],
- ["create_revenue_adjustment_fenced","orders","henvalt.create_revenue_adjustment("],
- ["process_shopify_revenue_adjustment_fenced","canonical_events","henvalt.process_shopify_revenue_adjustment("],
- ["stop_recovery_after_order_fenced","order_attributions","henvalt.stop_recovery_after_order("],
- ["post_recovery_to_ledger_and_measure_billing_fenced","order_attributions","henvalt.post_recovery_to_ledger_and_measure_billing("]
+ ["resolve_identity_fenced","henvalt.resolve_identity(",["'canonical_events',p_event_id"]],
+ ["upsert_checkout_fenced","henvalt.upsert_checkout(",["'customers',p_customer_id"]],
+ ["create_opportunity_idempotent_fenced","henvalt.create_opportunity_idempotent(",["'canonical_events',p_source_event_id","'customers',p_customer_id","'checkouts',p_checkout_id"]],
+ ["apply_eligibility_fenced","henvalt.apply_eligibility(",["'opportunities',p_opportunity_id"]],
+ ["create_recovery_sequence_fenced","henvalt.create_recovery_sequence(",["'opportunities',p_opportunity_id"]],
+ ["create_intervention_and_enqueue_fenced","henvalt.create_intervention_and_enqueue(",["'recovery_sequences',p_recovery_id"]],
+ ["project_order_from_event_fenced","henvalt.project_order_from_event(",["'canonical_events',p_event_id"]],
+ ["evaluate_order_attribution_fenced","henvalt.evaluate_order_attribution(",["'orders',p_order_id"]],
+ ["create_revenue_adjustment_fenced","henvalt.create_revenue_adjustment(",["'orders',p_order_id","'canonical_events',p_source_event_id"]],
+ ["process_shopify_revenue_adjustment_fenced","henvalt.process_shopify_revenue_adjustment(",["'canonical_events',p_event_id"]],
+ ["stop_recovery_after_order_fenced","henvalt.stop_recovery_after_order(",["'order_attributions',p_attribution_id"]],
+ ["post_recovery_to_ledger_and_measure_billing_fenced","henvalt.post_recovery_to_ledger_and_measure_billing(",["'order_attributions',p_attribution_id"]]
 ];
 
 test("object tenant guard uses explicit allow-listed tenant-owned tables",()=>{
@@ -26,16 +26,20 @@ test("object tenant guard uses explicit allow-listed tenant-owned tables",()=>{
 });
 
 test("every UUID-only fenced business wrapper validates its target ownership before legacy mutation",()=>{
- for(const [name,table,mutation] of wrappers){
+ for(const [name,mutation,expectedGuards] of wrappers){
   const start=sql.indexOf("CREATE OR REPLACE FUNCTION henvalt."+name+"(");
   assert.ok(start>=0,"missing "+name);
   const end=sql.indexOf("$function$;",start);
   const body=sql.slice(start,end);
-  const guardAt=body.indexOf("assert_shopify_replay_object_tenant");
   const mutationAt=body.indexOf(mutation);
-  assert.ok(guardAt>=0,name+" missing object tenant check");
   assert.ok(mutationAt>=0,name+" missing expected legacy mutation "+mutation);
-  assert.ok(guardAt<mutationAt,name+" guard must precede mutation");
+  for(const guard of expectedGuards){
+   const guardAt=body.indexOf("assert_shopify_replay_object_tenant");
+   const exactGuard=body.indexOf(guard);
+   assert.ok(guardAt>=0,name+" missing object tenant check");
+   assert.ok(exactGuard>=0,name+" missing target ownership check "+guard);
+   assert.ok(exactGuard<mutationAt,name+" target check must precede mutation: "+guard);
+  }
  }
 });
 
