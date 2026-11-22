@@ -182,6 +182,19 @@ jobs:
           path: n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json
           if-no-files-found: error
           retention-days: 7
+      - name: Validate candidate Shopify app TOML privacy subscriptions
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          app = tomllib.loads(pathlib.Path("shopify.app.toml").read_text())
+          subscriptions = app["webhooks"]["subscriptions"]
+          topics = [topic for item in subscriptions for topic in item.get("compliance_topics", [])]
+          assert set(topics) == {"customers/data_request", "customers/redact", "shop/redact"}
+          privacy = [item for item in subscriptions if item.get("compliance_topics")]
+          assert len(privacy) == 1
+          assert privacy[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy"
+          print("SHOPIFY_PRIVACY_COMPLIANCE_TOML_ACCEPTANCE_PASSED")
+          PY
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
