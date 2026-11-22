@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const migration = readFileSync(new URL("../supabase/migrations/202611220011_billing_refund_credit_offsets.sql", import.meta.url), "utf8");
 const acceptance = readFileSync(new URL("./billing-refund-credit-offsets-postgres-acceptance.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
+const concurrency = readFileSync(new URL("./billing-refund-credit-concurrency-postgres.sh", import.meta.url), "utf8");
 
 test("refund fee credits are tenant-scoped, currency-scoped, locked and allocated once", () => {
   assert.match(migration, /billing_measurement_credit_offsets/);
@@ -32,4 +33,13 @@ test("PostgreSQL acceptance covers partial, full, exhausted and retry-safe refun
 test("safety CI applies and exercises the refund-credit migration", () => {
   assert.match(workflow, /202611220011_billing_refund_credit_offsets\.sql/);
   assert.match(workflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
+});
+
+test("concurrent workers serialize on credit rows and re-read the balance after lock acquisition", () => {
+  assert.match(migration, /fresh READ COMMITTED statement snapshot/);
+  assert.match(migration, /SELECT abs\(cbm\.henvalt_fee\) - COALESCE\(sum\(o\.amount\), 0\)/);
+  assert.match(migration, /FOR UPDATE OF cbm\s*LOOP/);
+  assert.match(concurrency, /BILLING_REFUND_CREDIT_CONCURRENCY_ACCEPTANCE_PASSED/);
+  assert.match(concurrency, /worker B incorrectly reused or lost the locked credit/);
+  assert.match(workflow, /billing-refund-credit-concurrency-postgres\.sh/);
 });
