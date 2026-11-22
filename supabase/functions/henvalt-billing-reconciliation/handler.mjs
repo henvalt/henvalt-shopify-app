@@ -72,12 +72,13 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
     const user = await authResponse.json();
     if (!validUuid(user?.id)) return { response: reply(401, { error: "invalid_session" }) };
 
-    const membershipUrl = new URL(env.SUPABASE_URL + "/rest/v1/tenant_memberships");
-    membershipUrl.searchParams.set("select", "tenant_id,role");
-    membershipUrl.searchParams.set("user_id", "eq." + user.id);
-    membershipUrl.searchParams.set("role", "in.(OWNER,ADMIN)");
-    membershipUrl.searchParams.set("limit", "2");
-    const memberships = await serviceRequest(membershipUrl.pathname + membershipUrl.search);
+    const membershipQuery = new URLSearchParams({
+      select: "tenant_id,role",
+      user_id: "eq." + user.id,
+      role: "in.(OWNER,ADMIN)",
+      limit: "2",
+    });
+    const memberships = await serviceRequest("tenant_memberships?" + membershipQuery.toString());
     if (!Array.isArray(memberships) || memberships.length !== 1 ||
         !validUuid(memberships[0]?.tenant_id) ||
         !["OWNER", "ADMIN"].includes(memberships[0]?.role)) {
@@ -85,24 +86,26 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
     }
 
     const tenantId = memberships[0].tenant_id;
-    const connectionUrl = new URL(env.SUPABASE_URL + "/rest/v1/shopify_connections");
-    connectionUrl.searchParams.set("select", "shop_domain,active,tenants!inner(status)");
-    connectionUrl.searchParams.set("tenant_id", "eq." + tenantId);
-    connectionUrl.searchParams.set("active", "eq.true");
-    connectionUrl.searchParams.set("tenants.status", "eq.ACTIVE");
-    connectionUrl.searchParams.set("limit", "2");
-    const connections = await serviceRequest(connectionUrl.pathname + connectionUrl.search);
+    const connectionQuery = new URLSearchParams({
+      select: "shop_domain,active,tenants!inner(status)",
+      tenant_id: "eq." + tenantId,
+      active: "eq.true",
+      "tenants.status": "eq.ACTIVE",
+      limit: "2",
+    });
+    const connections = await serviceRequest("shopify_connections?" + connectionQuery.toString());
     if (!Array.isArray(connections) || connections.length !== 1 ||
         !validShop(connections[0]?.shop_domain)) {
       return { response: reply(409, { error: "single_active_shop_connection_required" }) };
     }
 
-    const billingUrl = new URL(env.SUPABASE_URL + "/rest/v1/billing_accounts");
-    billingUrl.searchParams.set("select", "status,test_mode");
-    billingUrl.searchParams.set("tenant_id", "eq." + tenantId);
-    billingUrl.searchParams.set("status", "eq.ACTIVE");
-    billingUrl.searchParams.set("limit", "2");
-    const accounts = await serviceRequest(billingUrl.pathname + billingUrl.search);
+    const billingQuery = new URLSearchParams({
+      select: "status,test_mode",
+      tenant_id: "eq." + tenantId,
+      status: "eq.ACTIVE",
+      limit: "2",
+    });
+    const accounts = await serviceRequest("billing_accounts?" + billingQuery.toString());
     if (!Array.isArray(accounts) || accounts.length !== 1 || accounts[0]?.test_mode !== true) {
       return { response: reply(409, { error: "active_test_billing_account_required" }) };
     }
