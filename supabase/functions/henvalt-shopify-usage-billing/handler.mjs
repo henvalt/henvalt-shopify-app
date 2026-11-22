@@ -118,18 +118,6 @@ export function createShopifyUsageBillingHandler({
       return json(503, { error: "billing_worker_not_configured" });
     }
 
-    let accessToken;
-    try {
-      const tokenResult = await rpc(TOKEN_RPC, { p_shop_domain: shop });
-      accessToken = typeof tokenResult === "string"
-        ? tokenResult
-        : (typeof tokenResult?.access_token === "string" ? tokenResult.access_token : "");
-    } catch (error) {
-      logger.error("Billing worker could not obtain Shopify token", error instanceof Error ? error.message : "unknown");
-      return json(503, { error: "shopify_token_unavailable", retryable: true });
-    }
-    if (accessToken.length < 20) return json(503, { error: "shopify_token_unavailable", retryable: true });
-
     let claim;
     try {
       claim = await rpc(CLAIM_RPC, { p_shop_domain: shop });
@@ -142,6 +130,13 @@ export function createShopifyUsageBillingHandler({
         claimed: false,
         reason: typeof claim?.reason === "string" ? claim.reason : "NO_PENDING_USAGE_CHARGE",
       });
+    }
+
+    // Fail closed if the database does not explicitly attest that this is a test subscription.
+    // This protects against accidentally deploying the candidate worker against an older/live schema.
+    if (claim.testMode !== true) {
+      logger.error("Billing worker refused a non-test or unverified subscription claim");
+      return json(409, { error: "test_mode_required", retryable: false });
     }
 
     const chargeId = typeof claim.chargeId === "string" ? claim.chargeId : "";
@@ -157,6 +152,18 @@ export function createShopifyUsageBillingHandler({
       logger.error("Billing claim returned an invalid charge envelope");
       return json(503, { error: "invalid_billing_claim", retryable: false });
     }
+
+    let accessToken;
+    try {
+      const tokenResult = await rpc(TOKEN_RPC, { p_shop_domain: shop });
+      accessToken = typeof tokenResult === "string"
+        ? tokenResult
+        : (typeof tokenResult?.access_token === "string" ? tokenResult.access_token : "");
+    } catch (error) {
+      logger.error("Billing worker could not obtain Shopify token", error instanceof Error ? error.message : "unknown");
+      return json(503, { error: "shopify_token_unavailable", retryable: true });
+    }
+    if (accessToken.length < 20) return json(503, { error: "shopify_token_unavailable", retryable: true });
 
     let upstream;
     try {
