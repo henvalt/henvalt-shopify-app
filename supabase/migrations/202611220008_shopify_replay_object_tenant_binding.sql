@@ -264,6 +264,12 @@ BEGIN
      WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
        AND x.customer_id IS NOT NULL AND (c.id IS NULL OR c.tenant_id IS DISTINCT FROM p_tenant_id))
     INTO v_valid;
+  WHEN 'canonical_events' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.canonical_events x
+     LEFT JOIN henvalt.webhook_events w ON w.id=x.webhook_event_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND x.webhook_event_id IS NOT NULL AND (w.id IS NULL OR w.tenant_id IS DISTINCT FROM p_tenant_id))
+    INTO v_valid;
   WHEN 'opportunities' THEN
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.opportunities x
      LEFT JOIN henvalt.customers c ON c.id=x.customer_id
