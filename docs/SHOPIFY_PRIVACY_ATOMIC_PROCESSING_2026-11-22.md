@@ -72,3 +72,9 @@ Disposable PostgreSQL acceptance now checks same-ID replay, same-body/different-
 ## Customer redaction coverage review
 
 The deployed customer-redaction RPC was inspected read-only with `pg_get_functiondef`. Its actual mutation graph includes customer rows, canonical events, checkouts, orders, sessions, opportunities, messages, recovery interventions, tracking tokens, delivery requests/attempts, provider events, conversations, suppression rows, webhook events, processing errors, background jobs, and audit records. The candidate's no-match preflight now checks those same relationship paths before invoking that existing RPC; this prevents a request containing only an email-linked delivery record (for example) from being incorrectly classified as no-match. Disposable acceptance includes that orphaned delivery-attempt case. The production function was not changed.
+
+## Fast webhook acknowledgement and durable worker
+
+Shopify requires a 2xx webhook response within five seconds and recommends queuing long-running work. The candidate handler now performs HMAC verification, signed-shop validation, and durable receipt persistence, then returns 200 without running exports or multi-table redaction inline. Migration `202611220005_shopify_privacy_queue_worker.sql` adds a bounded (maximum 20, scheduled at 5) SQL worker using the atomic lease claim RPC. It handles all three compliance topics and is scheduled every minute through pg_cron when available. Failed work remains retryable through the lease state machine; export bundles remain REVIEW_REQUIRED pending secure merchant delivery.
+
+The worker is database-native because the production project currently has pg_cron but not pg_net. This avoids adding a network extension or another n8n workflow. The migration and worker remain candidate-only until CI and full production lifecycle checks pass.
