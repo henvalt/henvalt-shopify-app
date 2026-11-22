@@ -41,5 +41,6 @@ test("billing review is wired into navigation and escapes untrusted case fields"
   assert.match(html, /esc\(r\.status\|\|"—"\)/);
   assert.match(html, /\["Charge state",result\.status\]/);
   assert.match(html, /<th>PROVIDER STATE<\/th>/);
+  assert.match(html, /id="billingcases"><tr><td colspan="8"/);
   assert.match(html, /esc\(v\?\?"—"\)/);
 });
