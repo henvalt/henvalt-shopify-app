@@ -26,3 +26,7 @@ test("privacy worker never swallows a lost lease while recording a failure", () 
 test("privacy worker exits when an atomic claim returns no row", () => {
   assert.match(sql, /if not found or v_claim\.id is null then\s+exit;/);
 });
+
+test("shop redaction completion check fails closed when the request row is missing", () => {
+  assert.match(sql, /if v_status IS DISTINCT FROM 'COMPLETED' then raise exception 'shop redaction did not complete'/);
+});
