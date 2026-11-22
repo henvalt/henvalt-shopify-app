@@ -9,6 +9,7 @@ on:
       - "tests/shopify-privacy-workflow-safety.test.mjs"
       - "tests/privacy-export-delivery-semantics.test.mjs"
       - "supabase/functions/henvalt-privacy-export/index.ts"
+      - "supabase/functions/henvalt-shopify-privacy/index.ts"
       - "docs/PRIVACY_EXPORT_DELIVERY_SEMANTICS_2026-11-22.md"
   push:
     branches:
