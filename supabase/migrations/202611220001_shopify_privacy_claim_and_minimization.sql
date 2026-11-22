@@ -53,14 +53,14 @@ begin
       lease_expires_at = null
   where r.status in ('FAILED', 'PROCESSING')
     and r.lease_attempts >= 8
-    and (r.status = 'FAILED' or r.lease_expires_at <= now());
+    and (r.status = 'FAILED' or r.lease_expires_at is null or r.lease_expires_at <= now());
 
   select r.id into v_id
   from henvalt.shopify_privacy_requests r
   where
     (r.status = 'PENDING'
       or (r.status = 'FAILED' and r.lease_attempts < 8)
-      or (r.status = 'PROCESSING' and r.lease_attempts < 8 and r.lease_expires_at <= now()))
+      or (r.status = 'PROCESSING' and r.lease_attempts < 8 and (r.lease_expires_at is null or r.lease_expires_at <= now())))
     and (r.lease_expires_at is null or r.lease_expires_at <= now())
   order by r.received_at, r.id
   for update skip locked
