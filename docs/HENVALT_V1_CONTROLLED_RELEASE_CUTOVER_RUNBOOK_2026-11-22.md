@@ -79,7 +79,7 @@ After each migration, verify its expected objects, grants, constraints, indexes,
 - `anon` and `authenticated` cannot execute service-only ingestion, replay, provider-token, billing claim/result, or operator RPCs.
 - RLS and tenant-bound checks deny cross-tenant reads and writes.
 - The global send interlock defaults closed and cannot be changed by application roles.
-- The three privacy cron/queue components have exactly the expected schedule and no duplicate active job.
+- Privacy cron/queue schedules have exactly the expected cadence and command, with no duplicate active job.
 - Replay jobs and privacy jobs have bounded leases, retry limits, dead-letter behavior, and tenant binding.
 - Billing result transitions remain monotonic; cancelled/suspended subscriptions cannot create a new claim; exhausted deterministic failures become operator-visible reconciliation items.
 - Revenue ledger adjustments are idempotent and net revenue includes refunds, cancellations, and downward order edits.
