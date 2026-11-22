@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS henvalt.billing_measurement_credit_offsets (
     UNIQUE (tenant_id, credit_measurement_id, charge_measurement_id)
 );
 
+ALTER TABLE henvalt.billing_measurement_credit_offsets ENABLE ROW LEVEL SECURITY;
+
 CREATE INDEX IF NOT EXISTS billing_measurement_credit_offsets_charge_idx
   ON henvalt.billing_measurement_credit_offsets (tenant_id, charge_measurement_id);
 CREATE INDEX IF NOT EXISTS billing_measurement_credit_offsets_credit_idx
