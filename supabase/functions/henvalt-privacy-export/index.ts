@@ -118,21 +118,15 @@ Deno.serve(async (req: Request) => {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(ackToken));
     const tokenHash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, "0")).join("");
     const ackExpiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
-    const started = await rest(
-      "shopify_privacy_requests?id=eq." + encodeURIComponent(requestId) +
-      "&tenant_id=eq." + encodeURIComponent(tenantId) +
-      "&topic=eq.customers/data_request&status=eq.REVIEW_REQUIRED&result_payload=not.is.null&result_expires_at=gt." + encodeURIComponent(new Date().toISOString()),
-      "PATCH",
-      {
-        result_download_started_at: new Date().toISOString(),
-        result_delivery_ack_token_hash: tokenHash,
-        result_delivery_ack_expires_at: ackExpiresAt,
-      },
-      "return=representation",
-    );
+    const started = await rest("rpc/begin_shopify_privacy_export_download", "POST", {
+      p_request_id: requestId,
+      p_tenant_id: tenantId,
+      p_token_hash: tokenHash,
+      p_token_expires_at: ackExpiresAt,
+    }, "return=representation");
     if (!started.ok) return reply(503, { error: "export_download_start_failed" });
-    const startedRows = await started.json().catch(() => []);
-    if (!Array.isArray(startedRows) || startedRows.length !== 1) return reply(409, { error: "export_expired_or_unavailable" });
+    const claimed = await started.json().catch(() => false);
+    if (claimed !== true) return reply(409, { error: "export_download_already_in_progress_or_expired" });
 
     const filename = "henvalt-customer-data-" + String(record.request_id || requestId).replace(/[^a-zA-Z0-9_-]/g, "_") + ".json";
     return new Response(JSON.stringify(record.result_payload, null, 2), {
