@@ -60,8 +60,12 @@ function harness({
   subscriptionTest = true,
   subscriptionPageInfo = { hasNextPage: false, endCursor: null },
   usagePageInfo = { hasNextPage: false, endCursor: null },
+  subscriptionPages = null,
+  usagePages = null,
 } = {}) {
   const calls = [];
+  let subscriptionPageIndex = 0;
+  let usagePageIndex = 0;
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url: String(url), init });
     const parsed = new URL(String(url));
@@ -76,24 +80,23 @@ function harness({
     if (parsed.pathname === "/admin/api/2026-10/graphql.json") {
       const body = JSON.parse(init.body);
       if (body.query.includes("currentAppInstallation")) {
-        return response({
-          data: {
-            currentAppInstallation: {
-              allSubscriptions: {
-                edges: [{
-                  node: {
-                    id: subscriptionId,
-                    test: subscriptionTest,
-                    lineItems: [{ id: lineItemId }],
-                  },
-                }],
-                pageInfo: subscriptionPageInfo,
-              },
+        const page = subscriptionPages?.[subscriptionPageIndex++] ?? {
+          edges: [{
+            node: {
+              id: subscriptionId,
+              test: subscriptionTest,
+              lineItems: [{ id: lineItemId }],
             },
-          },
-        });
+          }],
+          pageInfo: subscriptionPageInfo,
+        };
+        return response({ data: { currentAppInstallation: { allSubscriptions: page } } });
       }
       if (body.query.includes("HenvaltReconciliationUsageRecords")) {
+        const page = usagePages?.[usagePageIndex++] ?? {
+          records: usageRecords,
+          pageInfo: usagePageInfo,
+        };
         return response({
           data: {
             node: {
@@ -102,8 +105,8 @@ function harness({
               lineItems: [{
                 id: lineItemId,
                 usageRecords: {
-                  edges: usageRecords.map((node) => ({ node })),
-                  pageInfo: usagePageInfo,
+                  edges: page.records.map((node) => ({ node })),
+                  pageInfo: page.pageInfo,
                 },
               }],
             },
@@ -294,6 +297,31 @@ test("MISMATCH records only the provider evidence returned by Shopify", async ()
   assert.equal(args.p_evidence.matchingCount, "1");
 });
 
+test("finds the exact subscription line item across subscription pages", async () => {
+  const h = harness({
+    subscriptionPages: [
+      {
+        edges: [{ node: { id: "gid://shopify/AppSubscription/old", test: true, lineItems: [{ id: "gid://shopify/AppSubscriptionLineItem/other" }] } }],
+        pageInfo: { hasNextPage: true, endCursor: "subscriptions-cursor-1" },
+      },
+      {
+        edges: [{ node: { id: subscriptionId, test: true, lineItems: [{ id: lineItemId }] } }],
+        pageInfo: { hasNextPage: false, endCursor: "subscriptions-cursor-2" },
+      },
+    ],
+  });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MATCHED",
+    operatorNote: "Found the owning subscription after pagination",
+  }));
+  assert.equal(result.status, 200);
+  const subscriptionCalls = h.calls.filter((item) => item.url.includes("/admin/api/2026-10/graphql.json") && JSON.parse(item.init.body).query.includes("currentAppInstallation"));
+  assert.equal(subscriptionCalls.length, 2);
+});
+
 test("permits confirmed no-match only after complete Shopify pagination", async () => {
   const h = harness({ usageRecords: [] });
   const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
@@ -338,6 +366,25 @@ test("refuses incomplete usage-record pagination before confirming no-match", as
   }));
   assert.equal(result.status, 503);
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
+test("requires every usage-record page to complete before confirming no-match", async () => {
+  const h = harness({
+    usagePages: [
+      { records: [], pageInfo: { hasNextPage: true, endCursor: "usage-cursor-1" } },
+      { records: [], pageInfo: { hasNextPage: false, endCursor: "usage-cursor-2" } },
+    ],
+  });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "NOT_FOUND_CONFIRMED",
+    operatorNote: "Completed both usage-record pages",
+  }));
+  assert.equal(result.status, 200);
+  const call = h.calls.find((item) => item.url.includes("/control_plane_resolve_billing_reconciliation"));
+  assert.equal(JSON.parse(call.init.body).p_evidence.pagesScanned, 2);
 });
 
 test("refuses incomplete Shopify subscription pagination and records no decision", async () => {
