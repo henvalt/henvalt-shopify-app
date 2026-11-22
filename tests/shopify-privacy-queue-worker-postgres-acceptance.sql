@@ -92,7 +92,7 @@ begin
   from henvalt.shopify_privacy_requests
   where id='50505050-5050-4050-8050-505050505050';
   if v_status <> 'FAILED' or v_payload = '{}'::jsonb or v_customer <> 'export-fail'
-     or v_retry_at <= now() or v_attempts <> 1 then
+     or v_retry_at is null or v_retry_at <= now() or v_attempts <> 1 then
     raise exception 'worker failure did not preserve bounded retry identifiers and delay';
   end if;
 
@@ -108,7 +108,7 @@ begin
   select next_attempt_at,lease_attempts into v_retry_at,v_attempts
   from henvalt.shopify_privacy_requests
   where id='50505050-5050-4050-8050-505050505050';
-  if v_retry_at <= now() or v_attempts <> 2 then
+  if v_retry_at is null or v_retry_at <= now() or v_attempts <> 2 then
     raise exception 'privacy retry did not schedule the next exponential delay';
   end if;
 
