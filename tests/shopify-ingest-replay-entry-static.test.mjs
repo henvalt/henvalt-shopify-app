@@ -47,7 +47,7 @@ test("public ingress only acknowledges a durable active replay job", () => {
 
 test("replay mutations use the audited write map and never downgrade to unfenced RPCs", () => {
   const map = JSON.parse(writes);
-  assert.equal(map.replay_mutations.length, 18);
+  assert.equal(map.replay_mutations.length, 19);
   assert.match(contract.design.shared_pipeline.downstream, /\*_fenced/);
   assert.match(contract.design.lifecycle.processed, /mark_webhook_processed_fenced/);
   assert.match(contract.design.lifecycle.failed, /mark_webhook_failed_fenced/);
