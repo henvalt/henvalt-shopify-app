@@ -239,6 +239,8 @@ test("billing execution is attached to the existing recovery scheduler in an ina
   assert.ok(discovery.parameters.query.includes("rl.attribution_confidence = 'CONFIRMED'"));
   assert.ok(discovery.parameters.query.includes("buc.attempt_count < 5"));
   assert.ok(discovery.parameters.query.includes("ba.test_mode = true"));
+  assert.ok(discovery.parameters.query.includes("active_sc.active = true"));
+  assert.match(discovery.parameters.query, /count\\(\\*\\)[\\s\\S]*?= 1/);
   assert.ok(discovery.parameters.query.includes("reconciliation_status IN ('NONE','NOT_FOUND_CONFIRMED')"));
   assert.ok(discovery.parameters.query.includes("LIMIT 10"));
   assert.doesNotMatch(discovery.parameters.query, /\b(?:INSERT|UPDATE|DELETE|MERGE)\b/i);
