@@ -671,6 +671,7 @@ ALTER TABLE henvalt.revenue_ledger
   ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 CREATE TYPE henvalt.ledger_entry_type AS ENUM ('RECOVERY', 'ADJUSTMENT');
 CREATE TYPE henvalt.billing_status AS ENUM ('PENDING', 'MEASURED', 'BILLED', 'VOIDED');
+ALTER TABLE henvalt.revenue_ledger ALTER COLUMN billing_status DROP DEFAULT;
 ALTER TABLE henvalt.revenue_ledger
   ALTER COLUMN attribution_confidence TYPE henvalt.attribution_confidence
     USING NULLIF(attribution_confidence, '')::henvalt.attribution_confidence,
@@ -678,6 +679,8 @@ ALTER TABLE henvalt.revenue_ledger
     USING entry_type::henvalt.ledger_entry_type,
   ALTER COLUMN billing_status TYPE henvalt.billing_status
     USING billing_status::henvalt.billing_status;
+ALTER TABLE henvalt.revenue_ledger
+  ALTER COLUMN billing_status SET DEFAULT 'PENDING'::henvalt.billing_status;
 CREATE UNIQUE INDEX ux_revenue_ledger_one_recovery_per_order
   ON henvalt.revenue_ledger(tenant_id, order_id)
   WHERE entry_type = 'RECOVERY';
