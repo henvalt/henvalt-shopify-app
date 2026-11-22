@@ -6,6 +6,7 @@ DO $billing_refund_credit_acceptance$
 DECLARE
   v_tenant uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0111';
   v_shop_connection uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0111';
+  v_second_shop_connection uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0199';
   v_credit_1 uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccc0111';
   v_recovery_1 uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0111';
   v_recovery_2 uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0112';
@@ -46,6 +47,16 @@ BEGIN
     v_tenant,'SHOPIFY','PERFORMANCE',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/credits',
     'ACTIVE',true,now()-interval '1 day',2000
   );
+
+  -- One tenant-level billing account must never be claimed through two shops.
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES (v_second_shop_connection,v_tenant,true,'credits-secondary.myshopify.com');
+  v_result := henvalt.control_plane_claim_billing_usage('credits.myshopify.com');
+  IF v_result->>'available' <> 'false'
+     OR v_result->>'reason' <> 'SINGLE_ACTIVE_SHOP_REQUIRED' THEN
+    RAISE EXCEPTION 'billing claim did not fail closed for multiple active shops: %',v_result;
+  END IF;
+  UPDATE henvalt.shopify_connections SET active=false WHERE id=v_second_shop_connection;
 
   INSERT INTO henvalt.revenue_ledger(
     id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata
