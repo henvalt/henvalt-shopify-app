@@ -38,5 +38,5 @@ test("privacy request replay identity comes from signed bytes, not unsigned webh
 test("privacy handler resolves inactive connections for post-uninstall compliance", () => {
   assert.match(oauthSource, /active: false/);
   assert.match(source, /shop_domain=eq/);
-  assert.doesNotMatch(source, /active=eq\\.true/);
+  assert.doesNotMatch(source, /active=eq/);
 });
