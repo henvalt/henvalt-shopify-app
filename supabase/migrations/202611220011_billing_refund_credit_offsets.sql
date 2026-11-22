@@ -38,6 +38,7 @@ DECLARE
   v_line_item text;
   v_currency char(3);
   v_test_mode boolean;
+  v_active_shop_count integer;
   v_charge henvalt.billing_usage_charges%ROWTYPE;
   v_measurement henvalt.billing_measurements%ROWTYPE;
   v_credit record;
@@ -56,11 +57,23 @@ BEGIN
     JOIN henvalt.tenants t ON t.id = sc.tenant_id
    WHERE lower(sc.shop_domain) = v_shop
      AND sc.active = true
+     AND sc.reauth_required_at IS NULL
      AND t.status = 'ACTIVE'
    LIMIT 1;
 
   IF v_tenant_id IS NULL THEN
     RETURN jsonb_build_object('available', false, 'reason', 'SHOP_NOT_ACTIVE');
+  END IF;
+
+  -- Billing accounts are tenant-scoped. Until billing is explicitly bound to a
+  -- single shop, never let one tenant's subscription be selected by two shops.
+  SELECT count(*) INTO v_active_shop_count
+    FROM henvalt.shopify_connections
+   WHERE tenant_id = v_tenant_id
+     AND active = true;
+
+  IF v_active_shop_count <> 1 THEN
+    RETURN jsonb_build_object('available', false, 'reason', 'SINGLE_ACTIVE_SHOP_REQUIRED');
   END IF;
 
   SELECT usage_line_item_id, currency, test_mode
