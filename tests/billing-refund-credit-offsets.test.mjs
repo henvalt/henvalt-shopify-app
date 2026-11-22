@@ -6,6 +6,7 @@ const migration = readFileSync(new URL("../supabase/migrations/202611220011_bill
 const acceptance = readFileSync(new URL("./billing-refund-credit-offsets-postgres-acceptance.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
 const concurrency = readFileSync(new URL("./billing-refund-credit-concurrency-postgres.sh", import.meta.url), "utf8");
+const bootstrap = readFileSync(new URL("./provider-send-interlock-postgres-bootstrap.sql", import.meta.url), "utf8");
 
 test("refund fee credits are tenant-scoped, currency-scoped, locked and allocated once", () => {
   assert.match(migration, /billing_measurement_credit_offsets/);
@@ -23,6 +24,8 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /SINGLE_ACTIVE_SHOP_REQUIRED/);
   assert.match(migration, /v_active_shop_count <> 1/);
   assert.match(acceptance, /billing claim did not fail closed for multiple active shops/);
+  assert.ok(bootstrap.includes("plan_key text NOT NULL CHECK (plan_key IN ('STARTER','GROWTH'))"));
+  assert.ok(!acceptance.includes("'PERFORMANCE'"));
   assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
   assert.match(migration, /control_plane_get_billing_reconciliation/);
   assert.match(migration, /control_plane_list_billing_reconciliations/);
