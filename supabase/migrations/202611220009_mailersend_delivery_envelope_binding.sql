@@ -47,8 +47,10 @@ AS $function$
       AND lower(si.provider) = 'mailersend'
       AND pc.configuration->>'credential_validated' = 'true'
       AND NULLIF(btrim(pc.configuration->>'verified_domain'), '') IS NOT NULL
-      AND lower(split_part(si.sender_reference, '@', 2)) =
-          lower(pc.configuration->>'verified_domain')
+      AND (
+        lower(split_part(si.sender_reference, '@', 2)) = lower(pc.configuration->>'verified_domain')
+        OR lower(split_part(si.sender_reference, '@', 2)) LIKE '%.' || lower(pc.configuration->>'verified_domain')
+      )
     ORDER BY si.updated_at DESC NULLS LAST, si.created_at DESC
     LIMIT 1
   )
