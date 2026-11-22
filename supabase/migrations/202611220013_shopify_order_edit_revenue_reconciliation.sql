@@ -25,6 +25,7 @@ DECLARE
   v_opportunity_id uuid;
   v_attribution_id uuid;
   v_recovery_ledger_id uuid;
+  v_adjustment_order_id uuid;
   v_recovery_currency char(3);
   v_original_amount numeric(18,2);
   v_existing uuid;
@@ -60,7 +61,7 @@ BEGIN
     -- is safe only when the original confirmed recovery had a positive
     -- measurement, and the unique ledger-measurement key makes it idempotent.
     SELECT rl.tenant_id, rl.order_id
-      INTO v_tenant_id, p_order_id
+      INTO v_tenant_id, v_adjustment_order_id
       FROM henvalt.revenue_ledger rl
      WHERE rl.id = v_existing;
 
@@ -68,7 +69,7 @@ BEGIN
       INTO v_recovery_ledger_id
       FROM henvalt.revenue_ledger rl
      WHERE rl.tenant_id = v_tenant_id
-       AND rl.order_id = p_order_id
+       AND rl.order_id = v_adjustment_order_id
        AND rl.entry_type = 'RECOVERY'
        AND rl.billable = true
        AND rl.attribution_confidence = 'CONFIRMED'
