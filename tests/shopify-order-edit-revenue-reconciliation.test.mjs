@@ -21,6 +21,8 @@ test("refund and order-edit adjustments create fee credits only when the origina
   assert.match(migration, /bm\.ledger_entry_id = v_recovery_ledger_id/);
   assert.match(migration, /bm\.henvalt_fee > 0/);
   assert.match(migration, /PERFORM henvalt\.measure_billing_entry\(v_adjustment_id, v_percentage\)/);
+  assert.match(migration, /Backfill a missing fee measurement on retry/);
+  assert.match(migration, /NOT EXISTS \([\s\S]*bm\.ledger_entry_id = v_existing/);
   assert.match(acceptance, /unbilled original recovery incorrectly generated a fee credit/);
 });
 
