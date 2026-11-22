@@ -116,7 +116,7 @@ $function$;
 revoke all on function henvalt.process_shopify_privacy_queue(integer,integer) from public, anon, authenticated;
 grant execute on function henvalt.process_shopify_privacy_queue(integer,integer) to service_role;
 
-do $$
+do $schedule$
 declare
   v_job_id bigint;
 begin
@@ -133,6 +133,6 @@ begin
     '* * * * *',
     'select henvalt.process_shopify_privacy_queue(5,120);'
   );
-end $;
+end $schedule$;
 
 commit;
