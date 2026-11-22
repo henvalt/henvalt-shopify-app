@@ -51,7 +51,8 @@ begin
       customer_id = null,
       last_error = 'retry_limit_exceeded',
       lease_token = null,
-      lease_expires_at = null
+      lease_expires_at = null,
+      next_attempt_at = null
   where r.status in ('FAILED', 'PROCESSING')
     and r.lease_attempts >= 8
     and (r.status = 'FAILED' or r.lease_expires_at is null or r.lease_expires_at <= now());
@@ -136,7 +137,8 @@ begin
         else null
       end,
       lease_token = null,
-      lease_expires_at = null
+      lease_expires_at = null,
+      next_attempt_at = null
   where r.id = p_request_id
     and r.status = 'PROCESSING'
     and r.lease_token = p_lease_token
