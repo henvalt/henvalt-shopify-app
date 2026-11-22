@@ -116,6 +116,53 @@ test("per-item replay Code nodes return explicit n8n item wrappers", () => {
   assert.match(envelope.parameters.jsCode, /if \\(alreadyProcessed\\) return \\{ json: \\{/);
 });
 
+test("generated replay envelope Code node executes valid, processed and invalid rows", () => {
+  const workflow = buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
+  const node = workflow.nodes.find(n => n.name === "Build Shopify Replay Envelope");
+  const job = "11111111-1111-4111-8111-111111111111";
+  const lease = "22222222-2222-4222-8222-222222222222";
+  const webhook = "33333333-3333-4333-8333-333333333333";
+  const tenant = "44444444-4444-4444-8444-444444444444";
+  const claim = {job_id:job,worker_id:"recovery-worker",lease_id:lease};
+  const row = {
+    job_id:job,webhook_id:webhook,tenant_id:tenant,source_event_id:"delivery-123",
+    topic:"checkouts/update",payload:{id:42,email:"buyer@example.test"},
+    metadata:{ingress_hmac_verified:true,shop_domain:"demo.myshopify.com",shopify_webhook_id:"delivery-123"},
+    processing_status:"PROCESSING",webhook_processed:false,
+    lease_expires_at:"2099-11-21T23:00:00.000Z",correlation_id:null
+  };
+  const run = (input) => new Function("$","$json",node.parameters.jsCode)(
+    (name) => { assert.equal(name,"Shopify Replay Entry Trigger"); return {item:{json:claim}}; },
+    input
+  );
+  const valid = run({statusCode:200,body:row});
+  assert.equal(valid.json.body.event_id,"delivery-123");
+  assert.equal(valid.json.headers["x-shopify-webhook-id"],"delivery-123");
+  assert.equal(valid.json.replay_context.tenant_id,tenant);
+  assert.equal(valid.json.replay_context.lease_id,lease);
+  const processed = run({statusCode:200,body:{...row,webhook_processed:true,processing_status:"PROCESSED"}});
+  assert.equal(processed.json.mark_webhook_processed,true);
+  assert.equal(processed.json.replay_context.webhook_id,webhook);
+  const invalid = run({statusCode:200,body:{...row,metadata:{...row.metadata,ingress_hmac_verified:false}}});
+  assert.equal(invalid.json.__replay_invalid,true);
+  assert.match(invalid.json.__replay_reason,/INGRESS_NOT_AUTHENTICATED/);
+});
+
+test("generated lease renewal Code node preserves the exact trusted context", () => {
+  const workflow = buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
+  const node = workflow.nodes.find(n => n.name === "Confirm Replay Lease Renewal");
+  const prior = {__proceed:true,__replay:true,replay_context:{job_id:"job"}};
+  const context = {job_id:"job",worker_id:"worker",lease_id:"lease",lease_expires_at:"old"};
+  const result = new Function("$","$json",node.parameters.jsCode)(
+    (name) => name === "Classify Result"
+      ? {item:{json:prior}}
+      : {item:{json:{replay_context:context}}},
+    {statusCode:200,body:"2099-11-21T23:00:00.000Z"}
+  );
+  assert.deepEqual(result.json.replay_context,{...context,lease_expires_at:"2099-11-21T23:00:00.000Z"});
+  assert.equal(result.json.__proceed,true);
+});
+
 test("candidate fixes Shopify delivery identity and preserves trusted replay context", () => {
   const workflow=buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
   const normalizer=workflow.nodes.find(n=>n.name==="Validate & Normalize");
