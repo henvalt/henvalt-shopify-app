@@ -22,3 +22,8 @@ test("safety CI tracks the dashboard net-revenue migration", () => {
   assert.match(workflow, /202611220012_dashboard_net_revenue_series\.sql/);
   assert.match(workflow, /dashboard-net-revenue\.test\.mjs/);
 });
+
+test("net revenue chart retains negative adjustment amounts rather than dropping refunds", () => {
+  assert.match(series, /entry_type IN \('RECOVERY', 'ADJUSTMENT'\)/);
+  assert.doesNotMatch(series, /entry_type = 'RECOVERY' AND rl\.billable IS TRUE/);
+});
