@@ -85,6 +85,7 @@
 | REV-01 | Unconfirmed attribution | Excluded from recovered revenue |
 | REV-02 | Confirmed order attribution | One ledger entry per eligible order, with correct currency/value |
 | REV-03 | Refund/cancellation | Revenue ledger reversal/adjustment idempotent |
+| REV-04 | Attribution confidence promotion | A prior PROBABLE ledger row is promoted in place to billable CONFIRMED after exact tracked-click evidence; no duplicate row and no downgrade on later weaker evidence |
 | BILL-01 | Fee measurement | Calculated only from confirmed recovered revenue |
 | BILL-02 | Billing period/charge | No charge until a verified measurement and explicit billing policy |
 | BILL-03 | Uninstall/cancel | Sending and billing entitlements stop; retained records follow documented policy |
