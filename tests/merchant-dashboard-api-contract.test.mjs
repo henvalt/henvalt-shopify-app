@@ -13,7 +13,10 @@ test("candidate merchant dashboard preserves the deployed v4 ledger response con
 });
 
 test("candidate merchant dashboard keeps the confirmed revenue series and comparison fields", () => {
-  assert.match(source, /p_granularity: "day"/);
+  assert.match(source, /p_granularity: granularity/);
+  assert.match(source, /requestedGranularity/);
+  assert.match(source, /\["day", "week", "month"\]/);
+  assert.match(source, /range: \{ from, to, granularity \}/);
   assert.match(source, /currentRevenue: revenue\?\.current_revenue/);
   assert.match(source, /previousRevenue: revenue\?\.previous_revenue/);
   assert.match(source, /changePercent: revenue\?\.change_percent/);
