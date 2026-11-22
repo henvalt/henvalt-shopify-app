@@ -308,11 +308,6 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
       if (!["MATCHED", "NOT_FOUND_CONFIRMED", "MISMATCH"].includes(body?.resolution)) {
         return reply(400, { error: "invalid_resolution" });
       }
-      if (!body?.evidence || typeof body.evidence !== "object" ||
-          Array.isArray(body.evidence) ||
-          new TextEncoder().encode(JSON.stringify(body.evidence)).length > 16384) {
-        return reply(400, { error: "bounded_evidence_object_required" });
-      }
       const note = typeof body.operatorNote === "string" ? body.operatorNote.trim() : "";
       if (note.length < 1 || note.length > 1000) {
         return reply(400, { error: "operator_note_required" });
