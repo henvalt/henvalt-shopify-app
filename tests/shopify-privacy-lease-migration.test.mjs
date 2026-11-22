@@ -43,9 +43,9 @@ test("handler-facing claim RPC is scoped to the exact inserted request", () => {
 });
 
 test("retryable failures retain only bounded retry identifiers and exhaust to review", () => {
-  assert.match(sql, /r\\.lease_attempts < 8/i);
-  assert.match(sql, /p_status = 'FAILED' and r\\.lease_attempts >= 8/i);
+  assert.match(sql, /r\.lease_attempts < 8/i);
+  assert.match(sql, /p_status = 'FAILED' and r\.lease_attempts >= 8/i);
   assert.match(sql, /then 'REVIEW_REQUIRED'/i);
-  assert.match(sql, /then null else r\\.customer_id/i);
-  assert.match(sql, /then '\\{\\}'::jsonb else r\\.payload/i);
+  assert.match(sql, /then null else r\.customer_id/i);
+  assert.match(sql, /then '\{\}'::jsonb else r\.payload/i);
 });
