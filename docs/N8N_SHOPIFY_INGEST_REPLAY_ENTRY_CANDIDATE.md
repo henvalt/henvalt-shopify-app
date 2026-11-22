@@ -79,6 +79,6 @@ The generated JSON is a raw inactive workflow export with credentials intentiona
 
 ## Candidate graph builder and additional guards
 
-`n8n/shopify-ingest-candidate-builder.mjs` transforms a version-pinned workflow export into an offline candidate. It rewrites all 18 audited mutation nodes to select their corresponding `*_fenced` RPC when replay context exists, adds the internal replay trigger and lease-bound loader, adds tenant equality and lease-renewal guards, switches public ingress to `receive_shopify_webhook_v1`, and requires explicit processed/deferred terminal booleans. It also forces Shopify delivery identity to `X-Shopify-Webhook-Id`.
+`n8n/shopify-ingest-candidate-builder.mjs` transforms a version-pinned workflow export into an offline candidate. It rewrites all 18 active audited mutation nodes and the candidate-only order-edit reconciliation node to select their corresponding `*_fenced` RPC when replay context exists, adds the internal replay trigger and lease-bound loader, adds tenant equality and lease-renewal guards, switches public ingress to `receive_shopify_webhook_v1`, and requires explicit processed/deferred terminal booleans. It also forces Shopify delivery identity to `X-Shopify-Webhook-Id`.
 
 The builder removes credential references from the offline candidate. The Supabase service-role credential must be rebound only in an isolated n8n draft. The fixture-driven regression suite is `tests/shopify-ingest-candidate-builder.test.mjs`. The generated graph has not been imported, executed or validated against a live n8n draft.
