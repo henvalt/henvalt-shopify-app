@@ -37,7 +37,7 @@ Read-only production catalog inspection found `henvalt.shopify_privacy_requests`
 
 The presence of a queue table and isolated redaction functions is not evidence that Shopify's incoming compliance webhooks are accepted, acknowledged, completed or retried correctly.
 
-## Required implementation before adding the TOML subscriptions
+## Required implementation before deploying the TOML subscriptions
 
 1. Bring the deployed `henvalt-shopify-privacy` v1 source under version control, then harden it. It already verifies HMAC over exact raw bytes; additionally bind the signed payload `shop_id`/`shop_domain` to the resolved `shopify_connections` row, and never trust the unsigned `x-shopify-shop-id` header as identity.
 2. Replace read-then-process queue handling with an atomic claim/lease transition. The current function inserts idempotently by webhook ID but does not change `PENDING` to `PROCESSING` before doing work, so concurrent duplicate deliveries can race. Preserve retryable failures and explicit unknown-shop handling.
@@ -46,11 +46,11 @@ The presence of a queue table and isolated redaction functions is not evidence t
 5. Verify `shop/redact`: the current handler invokes the tenant deletion RPC. Prove shop identity binding, tenant-wide send/processing stop, deletion scope, backups, provider logs and n8n execution-data treatment in isolated staging.
 6. Add a lease-bound worker with retries, terminal/dead-letter states, append-only audit evidence, strict tenant isolation and no raw payload leakage to n8n execution history.
 7. Test duplicates, invalid HMAC, unknown shops, service/database outage, partial failure, retry, customer-id-only and email-only payloads, completed replay, legal-hold exceptions, and full shop deletion in isolated staging.
-8. Only after the endpoint and handler tests pass, add the three `compliance_topics` in `shopify.app.toml` and validate the actual Shopify app configuration. The candidate configuration now declares all three mandatory compliance topics against the existing Supabase privacy endpoint. Do not deploy this configuration until the candidate privacy handler and its durable queue worker are deployed, verified end-to-end, and the existing endpoint is confirmed to run the candidate implementation.nts at an unimplemented handler.
+8. The candidate `shopify.app.toml` now declares all three `compliance_topics` against the existing Supabase privacy endpoint. Before deploying that configuration, deploy the candidate privacy handler and durable queue worker, verify the endpoint end-to-end, then validate the actual Shopify app configuration. Do not point production compliance subscriptions at an implementation that has not passed the lifecycle tests.
 
 ## Explicit release gate
 
-- [ ] All three compliance topics declared in Shopify app configuration.
+- [ ] All three compliance topics deployed in the Shopify app configuration (candidate TOML declaration exists; production configuration is unchanged).
 - [ ] The configured URI resolves to the intended production endpoint with valid TLS.
 - [ ] Each topic reaches a dedicated handler and is durably accepted before 2xx.
 - [ ] Customer data request export is implemented and tested.
