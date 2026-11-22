@@ -128,3 +128,19 @@ A lease-aware replay implementation cannot fence only `upsert_canonical_event` a
 The same RPC name may be used by non-replay callers. Before changing its signature or revoking its legacy grant, inventory every internal and external caller and provide an explicit non-replay compatibility path. The safest design may be topic-specific transactional replay processors that call private internal routines, rather than exposing a large set of partially fenced generic RPCs.
 
 The active `HENVALT_RECOVERY` version `32e50bf7-4cbd-4070-bbba-f259ed17b369` currently claims only `execute_intervention` jobs via `claim_next_job`; its current guard requires an intervention ID. No replay worker is live. This confirms that migration 009 and replay wiring must remain candidate-only until the call graph and write boundaries are refactored and tested.
+
+
+## Additional tenant-binding audit — 2026-11-22
+
+A follow-up review of migrations 009–011 found a separate authorization gap: the write guard validated the replay job/worker/lease tuple, but several SECURITY DEFINER wrappers still accepted a caller-supplied tenant UUID and passed it to the legacy business RPC without comparing it to the tenant on the claimed job. Lease possession alone is not tenant authorization.
+
+Candidate migration `202611220007_shopify_replay_tenant_binding.sql` now:
+- binds explicit tenant arguments to `background_jobs.tenant_id`;
+- verifies the job's persisted `payload.webhook_id` resolves to a webhook owned by that same tenant;
+- replaces the explicit-tenant wrappers for customer, consent, session alias, canonical event, checkout, opportunity and uninstall writes;
+- additionally binds canonical-event creation and webhook processed/failed transitions to the exact webhook ID carried by the claimed job;
+- keeps the helper and wrapper functions service-role-only.
+
+New disposable PostgreSQL acceptance covers a valid tenant-A lease paired with tenant-B customer write arguments, a tenant-B webhook ID supplied to tenant-A's failure-state wrapper, and the valid same-tenant control case. Static tests require each rewritten wrapper to invoke the tenant guard before its legacy mutation. CI is wired to apply this migration after the lease-heartbeat migration and execute the cross-tenant acceptance fixture.
+
+**Important remaining boundary:** this migration does not yet prove ownership for every wrapper whose input is an object UUID rather than an explicit tenant UUID (for example opportunity, order, attribution and recovery-sequence IDs). Those target-row ownership checks still need concrete table-level assertions and cross-tenant fixtures. The replay path also remains unwired in active n8n. Do not treat this partial tenant-binding correction as full isolation or release approval. Exact-head CI must pass before this candidate change can be considered validated, and isolated Supabase staging remains mandatory.
