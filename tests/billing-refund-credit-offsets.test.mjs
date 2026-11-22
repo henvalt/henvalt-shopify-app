@@ -41,6 +41,7 @@ test("concurrent workers serialize on credit rows and re-read the balance after 
   assert.match(migration, /SELECT abs\(cbm\.henvalt_fee\) - COALESCE\(sum\(o\.amount\), 0\)/);
   assert.match(migration, /FOR UPDATE OF cbm\s*LOOP/);
   assert.match(concurrency, /BILLING_REFUND_CREDIT_CONCURRENCY_ACCEPTANCE_PASSED/);
+  assert.match(concurrency, /"amount":\[\[:space:\]\]\*7/);
   assert.match(concurrency, /worker B incorrectly reused or lost the locked credit/);
   assert.doesNotMatch(concurrency, /\$[0-9]+/);
   assert.match(workflow, /billing-refund-credit-concurrency-postgres\.sh/);
