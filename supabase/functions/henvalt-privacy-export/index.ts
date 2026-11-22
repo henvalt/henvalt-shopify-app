@@ -1,7 +1,6 @@
 // Candidate replacement for deployed Supabase Edge Function henvalt-privacy-export.
 // Preserves owner/admin authentication and adds explicit client acknowledgement after the response body is received.
-// Source SHA-256: 708f0d953874f9e4896f433d950d57b823b56cbb33e30e8c0b1f966ec1212d97
-// This is a merchant-owner authenticated download endpoint; do not treat it as automatic Shopify delivery.
+// Download initiation and client acknowledgement are audited separately; neither claims the customer saved the file.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -17,7 +16,7 @@ const headers = {
 const reply = (status: number, body: unknown, extra: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { ...headers, "content-type": "application/json; charset=utf-8", ...extra } });
 
-async function rest(path: string, method = "GET", body?: unknown) {
+async function rest(path: string, method = "GET", body?: unknown, prefer = "return=minimal") {
   return fetch(SUPABASE_URL + "/rest/v1/" + path, {
     method,
     headers: {
@@ -26,7 +25,7 @@ async function rest(path: string, method = "GET", body?: unknown) {
       "content-type": "application/json",
       "accept-profile": "henvalt",
       "content-profile": "henvalt",
-      ...(body === undefined ? {} : { prefer: "return=minimal" }),
+      ...(body === undefined ? {} : { prefer }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
@@ -74,7 +73,7 @@ Deno.serve(async (req: Request) => {
         p_request_id: requestId,
         p_tenant_id: tenantId,
         p_token_hash: tokenHash,
-      });
+      }, "return=representation");
       if (!acknowledged.ok) return reply(503, { error: "export_acknowledgement_failed" });
       const accepted = await acknowledged.json().catch(() => false);
       if (accepted !== true) return reply(409, { error: "export_acknowledgement_expired_or_invalid" });
@@ -129,8 +128,11 @@ Deno.serve(async (req: Request) => {
         result_delivery_ack_token_hash: tokenHash,
         result_delivery_ack_expires_at: ackExpiresAt,
       },
+      "return=representation",
     );
     if (!started.ok) return reply(503, { error: "export_download_start_failed" });
+    const startedRows = await started.json().catch(() => []);
+    if (!Array.isArray(startedRows) || startedRows.length !== 1) return reply(409, { error: "export_expired_or_unavailable" });
 
     const filename = "henvalt-customer-data-" + String(record.request_id || requestId).replace(/[^a-zA-Z0-9_-]/g, "_") + ".json";
     return new Response(JSON.stringify(record.result_payload, null, 2), {
