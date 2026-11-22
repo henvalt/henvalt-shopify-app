@@ -1,3 +1,6 @@
+CREATE SCHEMA IF NOT EXISTS extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 \set ON_ERROR_STOP on
 
 DO $bootstrap$
@@ -608,3 +611,18 @@ CREATE OR REPLACE FUNCTION henvalt.render_sender_identity_footer(p_tenant_id uui
 RETURNS text LANGUAGE sql IMMUTABLE AS $function$ SELECT p_html $function$;
 CREATE OR REPLACE FUNCTION henvalt.render_email_plain_text(p_html text)
 RETURNS text LANGUAGE sql IMMUTABLE AS $function$ SELECT p_html $function$;
+
+CREATE TABLE henvalt.customer_conversations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  delivery_request_id uuid NOT NULL,
+  customer_id uuid,
+  opportunity_id uuid,
+  recovery_id uuid,
+  intervention_id uuid,
+  reply_token_hash text NOT NULL,
+  status text NOT NULL DEFAULT 'OPEN',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, delivery_request_id)
+);
