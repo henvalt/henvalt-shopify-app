@@ -136,7 +136,7 @@ on:
       - "tests/shopify-replay-business-write-fencing-postgres-acceptance.sql"
       - "tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql"
       - "tests/shopify-replay-business-write-fencing-static.test.mjs"
-      - "tests/active-workflow-cutover-contract-static.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs"
+      - "tests/active-workflow-cutover-contract-static.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs"
       - "tests/shopify-replay-worker-spec-static.test.mjs"
       - "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md"
       - "docs/N8N_SHOPIFY_INGEST_REPLAY_ENTRY_CANDIDATE.md"
