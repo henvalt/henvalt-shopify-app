@@ -225,6 +225,51 @@ test("does not accept browser-supplied evidence when Shopify has no matching rec
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
 });
 
+test("rejects MATCHED when the real Shopify amount or currency differs from the charge", async () => {
+  const h = harness({
+    usageRecords: [{
+      id: providerRecordId,
+      idempotencyKey,
+      price: { amount: "12.00", currencyCode: "USD" },
+    }],
+  });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MATCHED",
+    operatorNote: "Attempt to match an amount mismatch",
+  }));
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "shopify_record_does_not_match_charge");
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
+test("MISMATCH records only the provider evidence returned by Shopify", async () => {
+  const h = harness({
+    usageRecords: [{
+      id: providerRecordId,
+      idempotencyKey,
+      price: { amount: "12.00", currencyCode: "USD" },
+    }],
+  });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MISMATCH",
+    evidence: { amount: "10.00", matchingCount: "0" },
+    operatorNote: "Provider amount does not match the measured fee",
+  }));
+  assert.equal(result.status, 200);
+  const call = h.calls.find((item) => item.url.includes("/control_plane_resolve_billing_reconciliation"));
+  const args = JSON.parse(call.init.body);
+  assert.equal(args.p_resolution, "MISMATCH");
+  assert.equal(args.p_provider_usage_record_id, null);
+  assert.equal(args.p_evidence.amount, "12.00");
+  assert.equal(args.p_evidence.matchingCount, "1");
+});
+
 test("permits confirmed no-match only after complete Shopify pagination", async () => {
   const h = harness({ usageRecords: [] });
   const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
@@ -255,6 +300,19 @@ test("refuses no-match resolution if Shopify reports an existing matching record
   }));
   assert.equal(result.status, 409);
   assert.equal((await result.json()).error, "shopify_record_exists_use_matched_or_mismatch");
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
+test("refuses incomplete usage-record pagination before confirming no-match", async () => {
+  const h = harness({ usageRecords: [], usagePageInfo: { hasNextPage: true, endCursor: null } });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "NOT_FOUND_CONFIRMED",
+    operatorNote: "Attempt incomplete usage-record lookup",
+  }));
+  assert.equal(result.status, 503);
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
 });
 
