@@ -129,7 +129,7 @@ values
    '{"customer_email":"active@example.test"}'::jsonb,'PROCESSING',now()-interval '8 days'),
   ('88888888-8888-4888-8888-888888888888','fixture.myshopify.com',
    'customers/data_request','privacy-retention-export',null,
-   '{}'::jsonb,'REVIEW_REQUIRED',now()-interval '40 days');,
+   '{}'::jsonb,'REVIEW_REQUIRED',now()-interval '40 days'),
   ('aaaaaaaa-1111-4111-8111-111111111111','fixture.myshopify.com',
    'customers/data_request','privacy-retention-export-null-expiry',null,
    '{}'::jsonb,'REVIEW_REQUIRED',now()-interval '40 days');
