@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const migration = readFileSync(new URL("../supabase/migrations/202611220011_billing_refund_credit_offsets.sql", import.meta.url), "utf8");
 const resultMigration = readFileSync(new URL("../supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql", import.meta.url), "utf8");
 const claimLockMigration = readFileSync(new URL("../supabase/migrations/202611220015_billing_claim_subscription_lock.sql", import.meta.url), "utf8");
+const deterministicFailureMigration = readFileSync(new URL("../supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql", import.meta.url), "utf8");
 const acceptance = readFileSync(new URL("./billing-refund-credit-offsets-postgres-acceptance.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
 const billingWorkflow = readFileSync(new URL("../.github/workflows/billing-result-lock-safety.yml", import.meta.url), "utf8");
@@ -26,6 +27,17 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(claimLockMigration, /FOR UPDATE;/);
   assert.match(claimLockMigration, /Serialize claim against subscription cancellation/);
   assert.match(claimLockMigration, /control_plane_claim_billing_usage/);
+  assert.match(deterministicFailureMigration, /SHOPIFY_USAGE_DETERMINISTIC_REJECTION/);
+  assert.match(deterministicFailureMigration, /buc\.status IN \('PENDING','FAILED'\)/);
+  assert.match(deterministicFailureMigration, /BILLING_RETRY_BUDGET_EXHAUSTED/);
+  assert.match(acceptance, /exhausted deterministic failure was not visible in operator queue/);
+  assert.match(acceptance, /deterministic rejection retry changed charge identity or idempotency key/);
+  assert.match(acceptance, /exhausted FAILED deterministic charge was not repaired into reconciliation/);
+  assert.match(acceptance, /failed deterministic charge could not be opened for reconciliation/);
+  assert.match(acceptance, /exhausted deterministic rejection did not enter reconciliation/);
+  assert.match(acceptance, /exhausted FAILED charge was retried instead of repaired/);
+  assert.match(deterministicFailureMigration, /AND buc\.status IN \('PENDING','FAILED'\)[\s\S]*?reconciliation_status IN \('REQUIRED','MISMATCH'\)/);
+
   assert.match(acceptance, /cancelled subscription was still eligible for a billing claim/);
   assert.match(concurrency, /claim proceeded on a subscription cancelled while waiting for the account lock/);
   assert.match(migration, /v_test_mode IS DISTINCT FROM TRUE/);
@@ -115,6 +127,9 @@ test("safety CI applies and exercises the refund-credit migration", () => {
   assert.match(workflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
   assert.match(billingWorkflow, /202611220014_billing_result_lock_order_and_monotonicity\.sql/);
   assert.match(billingWorkflow, /202611220015_billing_claim_subscription_lock\.sql/);
+  assert.match(billingWorkflow, /202611220016_billing_deterministic_failure_reconciliation\.sql/);
+  assert.match(billingWorkflow, /SHOPIFY_USAGE_DETERMINISTIC_REJECTION/);
+  assert.match(billingWorkflow, /202611220016_billing_deterministic_failure_reconciliation\.sql/);
   assert.match(billingWorkflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
 });
 
