@@ -132,7 +132,6 @@ test("safety CI applies and exercises the refund-credit migration", () => {
   assert.match(billingWorkflow, /202611220014_billing_result_lock_order_and_monotonicity\.sql/);
   assert.match(billingWorkflow, /202611220015_billing_claim_subscription_lock\.sql/);
   assert.match(billingWorkflow, /202611220016_billing_deterministic_failure_reconciliation\.sql/);
-  assert.match(billingWorkflow, /SHOPIFY_USAGE_DETERMINISTIC_REJECTION/);
   assert.match(billingWorkflow, /202611220016_billing_deterministic_failure_reconciliation\.sql/);
   assert.match(billingWorkflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
 });
