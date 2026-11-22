@@ -90,6 +90,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220011_billing_refund_credit_offsets.sql
+      - name: Apply dashboard net-revenue migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220012_dashboard_net_revenue_series.sql
+      - name: Apply Shopify order-edit reconciliation migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql
+      - name: Exercise Shopify order-edit revenue and fee reconciliation
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql
       - name: Apply billing result lock-order migration
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
@@ -98,7 +110,7 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
-      - name: Exercise billing reconciliation and monotonic result acceptance
+      - name: Exercise billing reconciliation, monotonic result and refund-credit acceptance
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
