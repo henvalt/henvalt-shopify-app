@@ -10,7 +10,7 @@ test("captured production control-plane baseline is pinned to the inspected depl
   assert.equal(metadata.deployed_version, 24);
   assert.equal(metadata.deployed_status, "ACTIVE");
   assert.equal(metadata.verify_jwt, false);
-  assert.match(metadata.deployed_source_sha256, /^[a-f0-9]{64}$/);
+  assert.match(metadata.deployment_artifact_ezbr_sha256, /^[a-f0-9]{64}$/);
   assert.ok(metadata.evidence_limits.some((item) => /complete set of external callers/i.test(item)));
 });
 
