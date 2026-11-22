@@ -137,8 +137,7 @@ begin
         else null
       end,
       lease_token = null,
-      lease_expires_at = null,
-      next_attempt_at = null
+      lease_expires_at = null
   where r.id = p_request_id
     and r.status = 'PROCESSING'
     and r.lease_token = p_lease_token
