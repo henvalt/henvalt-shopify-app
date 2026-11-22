@@ -533,12 +533,15 @@ BEGIN
        OR p_evidence->>'idempotencyKey' IS DISTINCT FROM v_charge.idempotency_key
        OR p_evidence->>'lineItemId' IS DISTINCT FROM v_line_item
        OR p_evidence->>'currency' IS DISTINCT FROM v_charge.currency::text
-       OR COALESCE(p_evidence->>'amount','') = ''
-       OR translate(COALESCE(p_evidence->>'amount',''),'0123456789.','') <> ''
-       OR replace(COALESCE(p_evidence->>'amount',''),'.','') = ''
-       OR length(COALESCE(p_evidence->>'amount','')) - length(replace(COALESCE(p_evidence->>'amount',''),'.','')) > 1
-       OR length(split_part(COALESCE(p_evidence->>'amount',''),'.',2)) > 4
-       OR (p_evidence->>'amount')::numeric <> v_charge.amount THEN
+       OR CASE
+            WHEN COALESCE(p_evidence->>'amount','') <> ''
+             AND translate(COALESCE(p_evidence->>'amount',''),'0123456789.','') = ''
+             AND replace(COALESCE(p_evidence->>'amount',''),'.','') <> ''
+             AND length(COALESCE(p_evidence->>'amount','')) - length(replace(COALESCE(p_evidence->>'amount',''),'.','')) <= 1
+             AND length(split_part(COALESCE(p_evidence->>'amount',''),'.',2)) <= 4
+            THEN (p_evidence->>'amount')::numeric <> v_charge.amount
+            ELSE true
+          END THEN
       RAISE EXCEPTION 'Provider evidence does not match the persisted charge envelope' USING ERRCODE = '22023';
     END IF;
 
@@ -578,9 +581,12 @@ BEGIN
        OR p_evidence->>'subscriptionFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'lineItemFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'matchingCount' IS DISTINCT FROM '0'
-       OR COALESCE(p_evidence->>'pagesScanned','') = ''
-       OR translate(COALESCE(p_evidence->>'pagesScanned',''),'0123456789','') <> ''
-       OR (p_evidence->>'pagesScanned')::numeric < 1 THEN
+       OR CASE
+            WHEN COALESCE(p_evidence->>'pagesScanned','') <> ''
+             AND translate(COALESCE(p_evidence->>'pagesScanned',''),'0123456789','') = ''
+            THEN (p_evidence->>'pagesScanned')::numeric < 1
+            ELSE true
+          END THEN
       RAISE EXCEPTION 'Complete no-match provider lookup evidence is required' USING ERRCODE = '22023';
     END IF;
 
@@ -591,7 +597,7 @@ BEGIN
            attempt_count = 0,
            attempted_at = now() - interval '2 minutes',
            reconciliation_status = 'NOT_FOUND_CONFIRMED',
-           reconciliation_evidence = p_evidence,
+           reconciliation_evidence = v_safe_evidence,
            reconciliation_resolved_at = now(),
            reconciliation_operator_reference = btrim(p_operator_reference),
            reconciliation_operator_note = btrim(p_operator_note),
@@ -603,7 +609,7 @@ BEGIN
   ELSE
     UPDATE henvalt.billing_usage_charges
        SET reconciliation_status = 'MISMATCH',
-           reconciliation_evidence = p_evidence,
+           reconciliation_evidence = v_safe_evidence,
            reconciliation_resolved_at = NULL,
            reconciliation_operator_reference = btrim(p_operator_reference),
            reconciliation_operator_note = btrim(p_operator_note),
