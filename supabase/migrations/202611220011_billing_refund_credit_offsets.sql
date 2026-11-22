@@ -106,6 +106,41 @@ BEGIN
     RETURN jsonb_build_object('available', false, 'reason', 'TEST_MODE_REQUIRED');
   END IF;
 
+  -- Recover exhausted charges whose previous escalation RPC could not persist
+  -- after a provider timeout. The next scheduler tick retries this durable
+  -- state transition before considering any new charge.
+  WITH repaired AS (
+    UPDATE henvalt.billing_usage_charges buc
+       SET reconciliation_status = 'REQUIRED',
+           reconciliation_required_at = COALESCE(reconciliation_required_at, now()),
+           reconciliation_reason = 'BILLING_RETRY_BUDGET_EXHAUSTED',
+           reconciliation_evidence = jsonb_build_object(
+             'source', 'billing_claim_repair',
+             'attemptCount', buc.attempt_count,
+             'recordedAt', now()
+           ),
+           updated_at = now()
+     WHERE buc.tenant_id = v_tenant_id
+       AND buc.provider = 'SHOPIFY'
+       AND buc.status = 'PENDING'
+       AND buc.provider_usage_record_id IS NULL
+       AND buc.attempt_count >= 5
+       AND buc.reconciliation_status = 'NONE'
+    RETURNING buc.id, buc.tenant_id, buc.attempt_count
+  )
+  INSERT INTO henvalt.audit_log(
+    tenant_id,event_name,entity_type,entity_id,actor_type,actor_reference,payload
+  )
+  SELECT
+    repaired.tenant_id,'BILLING_RECONCILIATION_REQUIRED','BILLING_USAGE_CHARGE',
+    repaired.id,'SYSTEM','henvalt-shopify-usage-billing-repair',
+    jsonb_build_object(
+      'reason','BILLING_RETRY_BUDGET_EXHAUSTED',
+      'attemptCount',repaired.attempt_count,
+      'shop',v_shop
+    )
+  FROM repaired;
+
   -- Lock one positive, confirmed, measured recovery. A pre-existing charge is
   -- retried with its original net amount; credits are never reallocated on retry.
   SELECT bm.*
