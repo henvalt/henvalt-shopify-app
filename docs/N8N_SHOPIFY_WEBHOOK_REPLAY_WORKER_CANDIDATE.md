@@ -16,6 +16,12 @@ Status: design/patch specification only. No active workflow or draft was modifie
 4. Add explicit response handling for invalid HMAC, missing verifier secret, unknown tenant, malformed payload, and durable acceptance. Every path must send exactly one response; do not hard-code 200.
 5. After a durable 200 response, stop the Shopify branch. Do not continue into canonical-event processing in parallel with the recovery worker. The replay worker becomes the single processing owner for Shopify events. Keep non-Shopify internal-event handling separate.
 
+## Source isolation boundary
+
+The public ingress URL in this candidate is Shopify-specific. The source gate runs before the Shopify atomic receive RPC: Shopify events continue to the HMAC-verifying receive_shopify_webhook_v1 function; replay entries use the dedicated trusted lease path; non-Shopify/internal events receive an explicit HTTP 422 unsupported_internal_source response and are never submitted to the Shopify HMAC RPC.
+
+This is a fail-closed boundary, not an implementation of the internal-event pipeline. A separate authenticated internal-ingress contract and synchronous processing route must be implemented and tested before internal sources can be enabled. Do not silently route internal events through the Shopify verifier or treat them as accepted.
+
 ## Exact response-node contract
 
 The installed n8n node type definitions were checked before specifying these parameters:
