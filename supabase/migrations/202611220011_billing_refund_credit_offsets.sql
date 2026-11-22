@@ -461,6 +461,7 @@ DECLARE
   v_line_item text;
   v_ledger_entry_id uuid;
   v_new_status text;
+  v_safe_evidence jsonb;
 BEGIN
   IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'Service role required' USING ERRCODE = '42501';
@@ -504,6 +505,22 @@ COMMIT;
     RETURN jsonb_build_object('updated',false,'reason','CHARGE_NOT_ELIGIBLE');
   END IF;
 
+  -- Persist only the allowlisted provider evidence fields, never arbitrary request keys.
+  v_safe_evidence := jsonb_build_object(
+    'lookupComplete',p_evidence->'lookupComplete',
+    'subscriptionFound',p_evidence->'subscriptionFound',
+    'lineItemFound',p_evidence->'lineItemFound',
+    'providerUsageRecordId',p_evidence->'providerUsageRecordId',
+    'matchingCount',p_evidence->'matchingCount',
+    'idempotencyKey',p_evidence->'idempotencyKey',
+    'lineItemId',p_evidence->'lineItemId',
+    'amount',p_evidence->'amount',
+    'currency',p_evidence->'currency',
+    'pagesScanned',p_evidence->'pagesScanned',
+    'lookupCompletedAt',p_evidence->'lookupCompletedAt',
+    'lookupSource',p_evidence->'lookupSource'
+  );
+
   SELECT usage_line_item_id
     INTO v_line_item
     FROM henvalt.billing_accounts
@@ -539,7 +556,7 @@ COMMIT;
            provider_usage_record_id = p_provider_usage_record_id,
            submitted_at = COALESCE(submitted_at,now()),
            reconciliation_status = 'MATCHED',
-           reconciliation_evidence = p_evidence,
+           reconciliation_evidence = v_safe_evidence,
            reconciliation_resolved_at = now(),
            reconciliation_operator_reference = btrim(p_operator_reference),
            reconciliation_operator_note = btrim(p_operator_note),
@@ -617,7 +634,7 @@ COMMIT;
       'resolution',p_resolution,
       'operatorNote',btrim(p_operator_note),
       'providerUsageRecordId',CASE WHEN p_resolution='MATCHED' THEN p_provider_usage_record_id ELSE NULL END,
-      'evidence',p_evidence
+      'evidence',v_safe_evidence
     )
   );
 
