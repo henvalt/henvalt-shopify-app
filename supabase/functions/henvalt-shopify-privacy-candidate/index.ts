@@ -33,17 +33,25 @@ async function verifyHmac(raw: ArrayBuffer, supplied: string): Promise<boolean> 
 }
 
 async function db(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(SUPABASE_URL + path, {
-    ...init,
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      authorization: "Bearer " + SERVICE_ROLE_KEY,
-      "content-type": "application/json",
-      "accept-profile": "henvalt",
-      "content-profile": "henvalt",
-      ...(init.headers ?? {}),
-    },
-  });
+  try {
+    return await fetch(SUPABASE_URL + path, {
+      ...init,
+      signal: init.signal ?? AbortSignal.timeout(1800),
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        authorization: "Bearer " + SERVICE_ROLE_KEY,
+        "content-type": "application/json",
+        "accept-profile": "henvalt",
+        "content-profile": "henvalt",
+        ...(init.headers ?? {}),
+      },
+    });
+  } catch {
+    return new Response(JSON.stringify({ error: "database_unavailable" }), {
+      status: 503,
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+    });
+  }
 }
 
 async function rpc(name: string, body: Json): Promise<Response> {
@@ -97,7 +105,7 @@ Deno.serve(async (req: Request) => {
     encodeURIComponent(shop) + "&limit=2",
   );
   if (!connectionResponse.ok) return reply(503, { error: "tenant_lookup_failed" });
-  const connections = await connectionResponse.json().catch(() => []);
+  const connections = await connectionResponse.json().catch(() => null);
   if (!Array.isArray(connections) || connections.length > 1) {
     return reply(503, { error: "shop_connection_not_unique" });
   }
