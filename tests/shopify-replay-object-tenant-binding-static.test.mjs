@@ -2,8 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const sql=readFileSync("supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql",
-  "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql","utf8");
+const sql=readFileSync("supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql","utf8");
 const wrappers=[
  ["resolve_identity_fenced","henvalt.resolve_identity(",["'canonical_events',p_event_id"]],
  ["upsert_checkout_fenced","henvalt.upsert_checkout(",["'customers',p_customer_id"]],
@@ -78,7 +77,8 @@ test("all replay mutation-map RPCs have a candidate fenced implementation",()=>{
   "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql",
   "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql",
   "supabase/migrations/202611220007_shopify_replay_tenant_binding.sql",
-  "supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql"
+  "supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql",
+  "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql"
  ].map(path=>readFileSync(path,"utf8")).join("\\n");
  for(const item of map.replay_mutations){
   assert.ok(sources.includes("FUNCTION henvalt."+item.fenced_rpc+"("),"missing fenced RPC "+item.fenced_rpc);
