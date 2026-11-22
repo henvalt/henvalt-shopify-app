@@ -53,3 +53,10 @@ test("retryable failures retain only bounded retry identifiers and exhaust to re
 test("legacy PROCESSING rows without lease metadata can be safely reclaimed", () => {
   assert.match(sql, /r\.status = 'PROCESSING' and r\.lease_attempts < 8 and \(r\.lease_expires_at is null or r\.lease_expires_at <= now\(\)\)/i);
 });
+
+test("failed privacy requests use exponential retry delay instead of re-entering the same batch", () => {
+  assert.match(sql, /add column if not exists next_attempt_at timestamptz/i);
+  assert.match(sql, /r\.next_attempt_at is null or r\.next_attempt_at <= now\(\)/i);
+  assert.match(sql, /next_attempt_at = case[\s\S]*p_status = 'FAILED'[\s\S]*make_interval\(mins/i);
+  assert.match(sql, /next_attempt_at = null/i);
+});
