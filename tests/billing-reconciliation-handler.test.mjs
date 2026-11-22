@@ -11,6 +11,10 @@ const userId = "11111111-1111-4111-8111-111111111111";
 const tenantId = "22222222-2222-4222-8222-222222222222";
 const chargeId = "33333333-3333-4333-8333-333333333333";
 const shop = "reconcile.myshopify.com";
+const lineItemId = "gid://shopify/AppSubscriptionLineItem/777";
+const subscriptionId = "gid://shopify/AppSubscription/888";
+const providerRecordId = "gid://shopify/AppUsageRecord/999";
+const idempotencyKey = "henvalt-charge-key-001";
 
 function response(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -37,8 +41,24 @@ function harness({
   memberships = [{ tenant_id: tenantId, role: "OWNER" }],
   connections = [{ shop_domain: shop, active: true }],
   accounts = [{ status: "ACTIVE", test_mode: true }],
-  readResult = { available: true, chargeId, shop },
+  readResult = {
+    available: true,
+    chargeId,
+    shop,
+    amount: "10.0000",
+    currency: "USD",
+    idempotencyKey,
+    subscriptionLineItemId: lineItemId,
+  },
   resolveResult = { updated: true, status: "SUBMITTED", chargeId },
+  usageRecords = [{
+    id: providerRecordId,
+    idempotencyKey,
+    price: { amount: "10.00", currencyCode: "USD" },
+  }],
+  subscriptionTest = true,
+  subscriptionPageInfo = { hasNextPage: false, endCursor: null },
+  usagePageInfo = { hasNextPage: false, endCursor: null },
 } = {}) {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
@@ -50,7 +70,47 @@ function harness({
     if (parsed.pathname === "/rest/v1/billing_accounts") return response(accounts);
     if (parsed.pathname === "/rest/v1/rpc/control_plane_list_billing_reconciliations") return response({ cases: [{ chargeId, shop }], count: 1 });
     if (parsed.pathname === "/rest/v1/rpc/control_plane_get_billing_reconciliation") return response(readResult);
+    if (parsed.pathname === "/rest/v1/rpc/get_shopify_access_token_for_control_plane") return response("test-shopify-access-token-0123456789");
     if (parsed.pathname === "/rest/v1/rpc/control_plane_resolve_billing_reconciliation") return response(resolveResult);
+    if (parsed.pathname === "/admin/api/2026-10/graphql.json") {
+      const body = JSON.parse(init.body);
+      if (body.query.includes("currentAppInstallation")) {
+        return response({
+          data: {
+            currentAppInstallation: {
+              allSubscriptions: {
+                edges: [{
+                  node: {
+                    id: subscriptionId,
+                    test: subscriptionTest,
+                    lineItems: [{ id: lineItemId }],
+                  },
+                }],
+                pageInfo: subscriptionPageInfo,
+              },
+            },
+          },
+        });
+      }
+      if (body.query.includes("HenvaltReconciliationUsageRecords")) {
+        return response({
+          data: {
+            node: {
+              id: subscriptionId,
+              test: subscriptionTest,
+              lineItems: [{
+                id: lineItemId,
+                usageRecords: {
+                  edges: usageRecords.map((node) => ({ node })),
+                  pageInfo: usagePageInfo,
+                },
+              }],
+            },
+          },
+        });
+      }
+      throw new Error("Unexpected Shopify GraphQL query");
+    }
     throw new Error("Unexpected outbound request: " + url);
   };
   return { calls, fetchImpl };
@@ -113,43 +173,129 @@ test("reads only the authenticated owner's database-derived shop and charge", as
   assert.equal(call.init.headers.authorization, "Bearer " + env.SUPABASE_SERVICE_ROLE_KEY);
 });
 
-test("resolves a case with server-derived tenant, shop and authenticated operator identity", async () => {
+test("verifies the exact Shopify usage record before settling a matched charge", async () => {
   const h = harness();
   const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
   const result = await handler(request("POST", {
     action: "resolve",
     chargeId,
     resolution: "MATCHED",
-    providerUsageRecordId: "gid://shopify/AppUsageRecord/123",
-    evidence: { lookupComplete: true, matchingCount: "1" },
+    providerUsageRecordId: "gid://shopify/AppUsageRecord/attacker-value",
+    evidence: { lookupComplete: true, matchingCount: "0", idempotencyKey: "forged-key" },
     operatorNote: "Verified against Shopify usage records",
     shop: "attacker.myshopify.com",
     tenantId: "55555555-5555-4555-8555-555555555555",
     operatorReference: "forged-operator",
   }));
   assert.equal(result.status, 200);
+  const tokenCall = h.calls.find((item) => item.url.includes("/get_shopify_access_token_for_control_plane"));
+  assert.ok(tokenCall);
+  const graphCalls = h.calls.filter((item) => item.url.includes("/admin/api/2026-10/graphql.json"));
+  assert.equal(graphCalls.length, 2);
+  assert.ok(JSON.parse(graphCalls[0].init.body).query.includes("allSubscriptions"));
+  assert.ok(JSON.parse(graphCalls[1].init.body).query.includes("idempotencyKey"));
+  assert.equal(graphCalls[0].init.headers["x-shopify-access-token"], "test-shopify-access-token-0123456789");
+
   const call = h.calls.find((item) => item.url.includes("/control_plane_resolve_billing_reconciliation"));
   assert.ok(call);
   const args = JSON.parse(call.init.body);
   assert.equal(args.p_shop_domain, shop);
   assert.equal(args.p_charge_id, chargeId);
   assert.equal(args.p_operator_reference, userId);
-  assert.equal(args.p_provider_usage_record_id, "gid://shopify/AppUsageRecord/123");
+  assert.equal(args.p_provider_usage_record_id, providerRecordId);
   assert.equal(args.p_operator_note, "Verified against Shopify usage records");
+  assert.equal(args.p_evidence.idempotencyKey, idempotencyKey);
+  assert.equal(args.p_evidence.matchingCount, "1");
+  assert.equal(args.p_evidence.amount, "10.00");
+  assert.equal(args.p_evidence.currency, "USD");
 });
 
-test("rejects invalid resolution and unbounded evidence before invoking the RPC", async () => {
+test("does not accept browser-supplied evidence when Shopify has no matching record", async () => {
+  const h = harness({ usageRecords: [] });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MATCHED",
+    evidence: { lookupComplete: true, matchingCount: "1", idempotencyKey },
+    operatorNote: "Browser claims that the provider accepted it",
+  }));
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "shopify_record_does_not_match_charge");
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
+test("permits confirmed no-match only after complete Shopify pagination", async () => {
+  const h = harness({ usageRecords: [] });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "NOT_FOUND_CONFIRMED",
+    operatorNote: "Completed the full usage-record lookup",
+  }));
+  assert.equal(result.status, 200);
+  const call = h.calls.find((item) => item.url.includes("/control_plane_resolve_billing_reconciliation"));
+  const args = JSON.parse(call.init.body);
+  assert.equal(args.p_resolution, "NOT_FOUND_CONFIRMED");
+  assert.equal(args.p_evidence.lookupComplete, true);
+  assert.equal(args.p_evidence.matchingCount, "0");
+  assert.equal(args.p_evidence.pagesScanned, 1);
+  assert.equal(args.p_provider_usage_record_id, null);
+});
+
+test("refuses no-match resolution if Shopify reports an existing matching record", async () => {
+  const h = harness();
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "NOT_FOUND_CONFIRMED",
+    operatorNote: "Try to retry despite existing usage record",
+  }));
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "shopify_record_exists_use_matched_or_mismatch");
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
+test("refuses incomplete Shopify subscription pagination and records no decision", async () => {
+  const h = harness({ subscriptionPageInfo: { hasNextPage: true, endCursor: null } });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "NOT_FOUND_CONFIRMED",
+    operatorNote: "Attempt incomplete lookup",
+  }));
+  assert.equal(result.status, 503);
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
+test("rejects invalid resolution and missing operator note before provider lookup", async () => {
   for (const body of [
-    { action: "resolve", chargeId, resolution: "CHARGE_ANYTHING", evidence: {}, operatorNote: "x" },
-    { action: "resolve", chargeId, resolution: "MATCHED", evidence: { data: "x".repeat(17000) }, operatorNote: "x" },
-    { action: "resolve", chargeId, resolution: "MATCHED", evidence: {}, operatorNote: "" },
+    { action: "resolve", chargeId, resolution: "CHARGE_ANYTHING", operatorNote: "x" },
+    { action: "resolve", chargeId, resolution: "MATCHED", operatorNote: "" },
   ]) {
     const h = harness();
     const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
     const result = await handler(request("POST", body));
     assert.equal(result.status, 400);
-    assert.equal(h.calls.some((call) => call.url.includes("/rpc/control_plane_resolve_billing_reconciliation")), false);
+    assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
+    assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
   }
+});
+
+test("requires Shopify test-mode subscription attestation", async () => {
+  const h = harness({ subscriptionTest: false });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MATCHED",
+    operatorNote: "Test mode mismatch",
+  }));
+  assert.equal(result.status, 503);
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
 });
 
 test("returns conflict when the database refuses a stale or already-resolved case", async () => {
@@ -159,7 +305,6 @@ test("returns conflict when the database refuses a stale or already-resolved cas
     action: "resolve",
     chargeId,
     resolution: "MISMATCH",
-    evidence: { reason: "provider evidence mismatch" },
     operatorNote: "Stop for further review",
   }));
   assert.equal(result.status, 409);
