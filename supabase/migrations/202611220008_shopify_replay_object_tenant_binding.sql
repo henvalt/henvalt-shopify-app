@@ -219,3 +219,31 @@ GRANT EXECUTE ON FUNCTION henvalt.create_revenue_adjustment_fenced(uuid,text,uui
 GRANT EXECUTE ON FUNCTION henvalt.process_shopify_revenue_adjustment_fenced(uuid,text,uuid,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.stop_recovery_after_order_fenced(uuid,text,uuid,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.post_recovery_to_ledger_and_measure_billing_fenced(uuid,text,uuid,uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(
+ p_job_id uuid,p_worker_id text,p_lease_id uuid,p_tenant_id uuid,p_shop_domain text,
+ p_webhook_event_id uuid,p_correlation_id uuid
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+BEGIN
+ PERFORM henvalt.assert_shopify_replay_tenant_for_write(p_job_id,p_worker_id,p_lease_id,p_tenant_id);
+ PERFORM henvalt.assert_shopify_replay_webhook_for_write(p_job_id,p_worker_id,p_lease_id,p_webhook_event_id);
+ RETURN henvalt.deactivate_shopify_connection_on_uninstall(p_tenant_id,p_shop_domain,p_webhook_event_id,p_correlation_id);
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.defer_payment_webhook_reconciliation_fenced(
+ p_job_id uuid,p_worker_id text,p_lease_id uuid,p_webhook_id uuid,p_error text
+) RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+BEGIN
+ PERFORM henvalt.assert_shopify_replay_webhook_for_write(p_job_id,p_worker_id,p_lease_id,p_webhook_id);
+ RETURN henvalt.defer_payment_webhook_reconciliation(p_webhook_id,p_error);
+END;
+$function$;
+REVOKE ALL ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(uuid,text,uuid,uuid,text,uuid,uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION henvalt.defer_payment_webhook_reconciliation_fenced(uuid,text,uuid,uuid,text) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(uuid,text,uuid,uuid,text,uuid,uuid) FROM anon,authenticated;
+REVOKE EXECUTE ON FUNCTION henvalt.defer_payment_webhook_reconciliation_fenced(uuid,text,uuid,uuid,text) FROM anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(uuid,text,uuid,uuid,text,uuid,uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION henvalt.defer_payment_webhook_reconciliation_fenced(uuid,text,uuid,uuid,text) TO service_role;
