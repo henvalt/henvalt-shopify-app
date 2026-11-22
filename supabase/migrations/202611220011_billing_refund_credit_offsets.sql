@@ -162,7 +162,7 @@ BEGIN
             AND o.credit_measurement_id = cbm.id
        ), 0)
      ORDER BY cbm.created_at, cbm.id
-     FOR UPDATE OF cbm SKIP LOCKED
+     FOR UPDATE OF cbm
   LOOP
     EXIT WHEN v_remaining <= 0;
     v_credit_remaining := v_credit.available_credit;
