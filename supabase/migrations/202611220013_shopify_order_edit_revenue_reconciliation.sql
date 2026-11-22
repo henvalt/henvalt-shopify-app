@@ -56,6 +56,42 @@ BEGIN
      AND rl.metadata->>'source_event_id' = p_source_event_id::text
    LIMIT 1;
   IF v_existing IS NOT NULL THEN
+    -- Backfill a missing fee measurement on retry after this migration. This
+    -- is safe only when the original confirmed recovery had a positive
+    -- measurement, and the unique ledger-measurement key makes it idempotent.
+    SELECT rl.tenant_id, rl.order_id
+      INTO v_tenant_id, p_order_id
+      FROM henvalt.revenue_ledger rl
+     WHERE rl.id = v_existing;
+
+    SELECT rl.id
+      INTO v_recovery_ledger_id
+      FROM henvalt.revenue_ledger rl
+     WHERE rl.tenant_id = v_tenant_id
+       AND rl.order_id = p_order_id
+       AND rl.entry_type = 'RECOVERY'
+       AND rl.billable = true
+       AND rl.attribution_confidence = 'CONFIRMED'
+     ORDER BY rl.created_at ASC
+     LIMIT 1;
+
+    SELECT bm.henvalt_percentage
+      INTO v_percentage
+      FROM henvalt.billing_measurements bm
+     WHERE bm.tenant_id = v_tenant_id
+       AND bm.ledger_entry_id = v_recovery_ledger_id
+       AND bm.henvalt_fee > 0
+     ORDER BY bm.created_at ASC
+     LIMIT 1;
+
+    IF v_percentage IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM henvalt.billing_measurements bm
+          WHERE bm.tenant_id = v_tenant_id
+            AND bm.ledger_entry_id = v_existing
+       ) THEN
+      PERFORM henvalt.measure_billing_entry(v_existing, v_percentage);
+    END IF;
     RETURN v_existing;
   END IF;
 
