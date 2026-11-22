@@ -11,7 +11,7 @@ const workflow = readFileSync(new URL("../.github/workflows/provider-send-interl
 test("order updates prefer current Shopify totals and only create incremental downward adjustments", () => {
   assert.match(migration, /current_total_price/);
   assert.match(migration, /current_total_price_set/);
-  assert.match(migration, /v_payload->>'current_total_price'[\\s\\S]*v_payload->>'total_price'/);
+  assert.match(migration, /v_payload->>'current_total_price'[\s\S]*v_payload->>'total_price'/);
   assert.match(acceptance, /order projection did not prefer current_total_price/);
   assert.match(migration, /GREATEST\(v_original_amount - LEAST\(v_current_total, v_original_amount\), 0\)/);
   assert.match(migration, /GREATEST\(v_target_adjustment - v_previously_adjusted, 0\)/);
