@@ -655,6 +655,8 @@ ALTER TABLE henvalt.order_attributions
   ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 ALTER TABLE henvalt.orders
+  ADD COLUMN IF NOT EXISTS shopify_order_id text,
+  ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS total_value numeric(18,2),
   ADD COLUMN IF NOT EXISTS currency character(3),
   ADD COLUMN IF NOT EXISTS financial_status text,
@@ -678,6 +680,11 @@ ALTER TABLE henvalt.revenue_ledger
     USING billing_status::henvalt.billing_status;
 ALTER TABLE henvalt.revenue_ledger
   ALTER COLUMN billing_status SET DEFAULT 'PENDING'::henvalt.billing_status;
+CREATE UNIQUE INDEX IF NOT EXISTS revenue_ledger_adjustment_source_event_uidx
+  ON henvalt.revenue_ledger(tenant_id, (metadata->>'source_event_id'))
+  WHERE entry_type = 'ADJUSTMENT' AND metadata ? 'source_event_id';
+CREATE UNIQUE INDEX IF NOT EXISTS orders_tenant_shopify_order_id_uidx
+  ON henvalt.orders(tenant_id,shopify_order_id) WHERE shopify_order_id IS NOT NULL;
 CREATE UNIQUE INDEX ux_revenue_ledger_one_recovery_per_order
   ON henvalt.revenue_ledger(tenant_id, order_id)
   WHERE entry_type = 'RECOVERY';
