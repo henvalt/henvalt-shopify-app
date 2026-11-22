@@ -94,6 +94,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220012_dashboard_net_revenue_series.sql
+      - name: Apply Shopify replay lease foundation for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210008_shopify_replay_lease_fencing.sql
+      - name: Apply Shopify replay business-write fencing for order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql
+      - name: Apply transactional replay lease heartbeat for order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210011_shopify_replay_write_lease_heartbeat.sql
       - name: Apply Shopify order-edit reconciliation migration
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
