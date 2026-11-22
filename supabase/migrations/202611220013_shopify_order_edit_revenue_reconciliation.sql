@@ -346,6 +346,9 @@ DECLARE
   v_shopify_order_id text;
   v_order_id uuid;
   v_order_currency char(3);
+  v_order_metadata jsonb;
+  v_event_updated_at timestamptz;
+  v_existing_shopify_updated_at timestamptz;
   v_current_total numeric(18,2);
   v_currency text;
   v_recovery_ledger_id uuid;
@@ -369,6 +372,7 @@ BEGIN
     RETURN jsonb_build_object('status','ignored_topic','event_id',p_event_id);
   END IF;
 
+  v_event_updated_at := NULLIF(v_event.payload->>'updated_at','')::timestamptz;
   v_shopify_order_id := NULLIF(v_event.payload->>'id','');
   IF v_shopify_order_id IS NULL THEN
     RAISE EXCEPTION 'Shopify order id missing from order update';
@@ -397,8 +401,8 @@ BEGIN
     RAISE EXCEPTION 'Shopify order currency is missing or invalid';
   END IF;
 
-  SELECT o.id, o.currency
-    INTO v_order_id, v_order_currency
+  SELECT o.id, o.currency, o.metadata
+    INTO v_order_id, v_order_currency, v_order_metadata
     FROM henvalt.orders o
    WHERE o.tenant_id = v_event.tenant_id
      AND o.shopify_order_id = v_shopify_order_id
@@ -409,6 +413,19 @@ BEGIN
     RETURN jsonb_build_object('status','no_matching_order','event_id',p_event_id);
   END IF;
 
+  v_existing_shopify_updated_at := NULLIF(v_order_metadata->>'shopify_updated_at','')::timestamptz;
+  IF v_event_updated_at IS NOT NULL
+     AND v_existing_shopify_updated_at IS NOT NULL
+     AND v_event_updated_at < v_existing_shopify_updated_at
+     AND v_order_metadata->>'last_event_id' IS DISTINCT FROM p_event_id::text THEN
+    RETURN jsonb_build_object(
+      'status','stale_shopify_order_update',
+      'event_id',p_event_id,
+      'shopify_updated_at',v_event_updated_at,
+      'latest_shopify_updated_at',v_existing_shopify_updated_at
+    );
+  END IF;
+
   IF v_order_currency IS NOT NULL AND upper(trim(v_order_currency::text)) <> v_currency THEN
     RAISE EXCEPTION 'Shopify order edit currency does not match projected order currency';
   END IF;
@@ -416,6 +433,11 @@ BEGIN
   UPDATE henvalt.orders
      SET total_value = v_current_total,
          currency = v_currency,
+         metadata = COALESCE(metadata,'{}'::jsonb)
+           || jsonb_build_object('last_event_id',p_event_id)
+           || CASE WHEN v_event_updated_at IS NOT NULL
+               THEN jsonb_build_object('shopify_updated_at',v_event_updated_at)
+               ELSE '{}'::jsonb END,
          updated_at = now()
    WHERE id = v_order_id
      AND tenant_id = v_event.tenant_id;
