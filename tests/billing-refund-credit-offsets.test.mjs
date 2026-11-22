@@ -89,6 +89,26 @@ test("PostgreSQL acceptance covers partial, full, exhausted and retry-safe refun
   assert.match(acceptance, /remaining \$2 credit was not applied/);
 });
 
+test("full safety CI applies billing migrations in dependency order before acceptance", () => {
+  const orderEditApply = workflow.indexOf("Apply Shopify order-edit revenue reconciliation migration");
+  const resultApply = workflow.indexOf("Apply billing result lock-order migration to disposable PostgreSQL");
+  const subscriptionLockApply = workflow.indexOf("Apply billing claim subscription lock migration to disposable PostgreSQL");
+  const acceptanceRun = workflow.indexOf("Exercise billing reconciliation, monotonic results and refund credits");
+  assert.ok(orderEditApply >= 0 && resultApply > orderEditApply);
+  assert.ok(subscriptionLockApply > resultApply);
+  assert.ok(acceptanceRun > subscriptionLockApply);
+
+  const configuredBillingJob = billingWorkflow.indexOf("billing-lock-safety:");
+  const configuredOrderEdit = billingWorkflow.indexOf("Apply Shopify order-edit reconciliation migration");
+  const configuredResult = billingWorkflow.indexOf("Apply billing result lock-order migration");
+  const configuredLock = billingWorkflow.indexOf("Apply billing claim subscription lock migration");
+  const configuredAcceptance = billingWorkflow.indexOf("Exercise billing reconciliation, monotonic result and refund-credit acceptance");
+  assert.ok(configuredBillingJob >= 0 && configuredOrderEdit > configuredBillingJob);
+  assert.ok(configuredResult > configuredOrderEdit);
+  assert.ok(configuredLock > configuredResult);
+  assert.ok(configuredAcceptance > configuredLock);
+});
+
 test("safety CI applies and exercises the refund-credit migration", () => {
   assert.match(workflow, /202611220011_billing_refund_credit_offsets\.sql/);
   assert.match(workflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
