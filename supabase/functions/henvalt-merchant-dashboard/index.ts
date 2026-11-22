@@ -16,6 +16,7 @@ const reply = (status: number, body: unknown) =>
 async function rest(path: string, method = "GET", body?: unknown) {
   const response = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
     method,
+    redirect: "error",
     headers: {
       apikey: SERVICE_ROLE_KEY,
       authorization: "Bearer " + SERVICE_ROLE_KEY,
@@ -42,6 +43,7 @@ Deno.serve(async (req: Request) => {
 
     // Validate the Supabase access token against Auth; do not trust decoded JWT claims.
     const authResponse = await fetch(SUPABASE_URL + "/auth/v1/user", {
+      redirect: "error",
       headers: { apikey: ANON_KEY, authorization: "Bearer " + token },
     });
     if (!authResponse.ok) return reply(401, { error: "invalid_session" });
@@ -74,6 +76,7 @@ Deno.serve(async (req: Request) => {
 
     const summaryResponse = await fetch(SUPABASE_URL + "/rest/v1/rpc/control_plane_dashboard_summary", {
       method: "POST",
+      redirect: "error",
       headers: {
         apikey: SERVICE_ROLE_KEY,
         authorization: "Bearer " + SERVICE_ROLE_KEY,
@@ -93,6 +96,7 @@ Deno.serve(async (req: Request) => {
 
     const seriesResponse = await fetch(SUPABASE_URL + "/rest/v1/rpc/control_plane_revenue_series", {
       method: "POST",
+      redirect: "error",
       headers: {
         apikey: SERVICE_ROLE_KEY,
         authorization: "Bearer " + SERVICE_ROLE_KEY,
