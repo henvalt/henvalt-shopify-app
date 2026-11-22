@@ -5,14 +5,15 @@ begin;
 alter table henvalt.shopify_privacy_requests
   add column if not exists lease_token uuid,
   add column if not exists lease_expires_at timestamptz,
-  add column if not exists lease_attempts integer not null default 0;
+  add column if not exists lease_attempts integer not null default 0,
+  add column if not exists next_attempt_at timestamptz;
 
 alter table henvalt.shopify_privacy_requests
   add constraint shopify_privacy_requests_lease_attempts_nonnegative
   check (lease_attempts >= 0) not valid;
 
 create index if not exists shopify_privacy_requests_claim_idx
-  on henvalt.shopify_privacy_requests (status, lease_expires_at, received_at)
+  on henvalt.shopify_privacy_requests (status, next_attempt_at, lease_expires_at, received_at)
   where status in ('PENDING', 'FAILED', 'PROCESSING');
 
 create or replace function henvalt.claim_shopify_privacy_request(
@@ -59,7 +60,7 @@ begin
   from henvalt.shopify_privacy_requests r
   where
     (r.status = 'PENDING'
-      or (r.status = 'FAILED' and r.lease_attempts < 8)
+      or (r.status = 'FAILED' and r.lease_attempts < 8 and (r.next_attempt_at is null or r.next_attempt_at <= now()))
       or (r.status = 'PROCESSING' and r.lease_attempts < 8 and (r.lease_expires_at is null or r.lease_expires_at <= now())))
     and (r.lease_expires_at is null or r.lease_expires_at <= now())
   order by r.received_at, r.id
@@ -76,6 +77,7 @@ begin
       lease_token = v_token,
       lease_expires_at = now() + make_interval(secs => p_lease_seconds),
       lease_attempts = r.lease_attempts + 1,
+      next_attempt_at = null,
       last_error = null
   where r.id = v_id
   returning r.id, r.tenant_id, r.shop_domain, r.shopify_shop_id, r.topic,
@@ -127,6 +129,11 @@ begin
       last_error = case
         when p_status = 'FAILED' and r.lease_attempts >= 8 then 'retry_limit_exceeded'
         else p_error_code
+      end,
+      next_attempt_at = case
+        when p_status = 'FAILED' and r.lease_attempts < 8
+          then now() + make_interval(mins => least(360, 5 * (2 ^ least(greatest(r.lease_attempts - 1, 0), 6))::integer))
+        else null
       end,
       lease_token = null,
       lease_expires_at = null
