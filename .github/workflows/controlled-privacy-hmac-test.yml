@@ -7,6 +7,9 @@ on:
       - ".github/workflows/controlled-privacy-hmac-test.yml"
       - "tests/shopify-privacy-hmac-contract.test.mjs"
       - "tests/shopify-privacy-workflow-safety.test.mjs"
+      - "tests/privacy-export-delivery-semantics.test.mjs"
+      - "supabase/functions/henvalt-privacy-export/index.ts"
+      - "docs/PRIVACY_EXPORT_DELIVERY_SEMANTICS_2026-11-22.md"
   push:
     branches:
       - work/48h-system-readiness-2026-11-21
@@ -24,4 +27,4 @@ jobs:
         with:
           node-version: 22
       - name: Verify privacy HMAC fixtures without contacting production
-        run: node --test tests/shopify-privacy-hmac-contract.test.mjs tests/shopify-privacy-workflow-safety.test.mjs
+        run: node --test tests/shopify-privacy-hmac-contract.test.mjs tests/shopify-privacy-workflow-safety.test.mjs tests/privacy-export-delivery-semantics.test.mjs
