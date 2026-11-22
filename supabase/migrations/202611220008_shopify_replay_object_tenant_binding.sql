@@ -247,3 +247,107 @@ REVOKE EXECUTE ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fe
 REVOKE EXECUTE ON FUNCTION henvalt.defer_payment_webhook_reconciliation_fenced(uuid,text,uuid,uuid,text) FROM anon,authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.deactivate_shopify_connection_on_uninstall_fenced(uuid,text,uuid,uuid,text,uuid,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.defer_payment_webhook_reconciliation_fenced(uuid,text,uuid,uuid,text) TO service_role;
+
+-- Validate the tenant of the referenced object graph as well as the root row.
+-- Foreign keys on UUID alone do not prevent cross-tenant relationships.
+CREATE OR REPLACE FUNCTION henvalt.assert_shopify_replay_object_graph_tenant(
+ p_tenant_id uuid,p_object_table text,p_object_id uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+DECLARE v_valid boolean := false;
+BEGIN
+ IF p_object_id IS NULL THEN RETURN; END IF;
+ CASE p_object_table
+  WHEN 'checkouts' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.checkouts x
+     LEFT JOIN henvalt.customers c ON c.id=x.customer_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND x.customer_id IS NOT NULL AND (c.id IS NULL OR c.tenant_id IS DISTINCT FROM p_tenant_id))
+    INTO v_valid;
+  WHEN 'opportunities' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.opportunities x
+     LEFT JOIN henvalt.customers c ON c.id=x.customer_id
+     LEFT JOIN henvalt.checkouts co ON co.id=x.checkout_id
+     LEFT JOIN henvalt.canonical_events e ON e.id=x.source_event_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND ((x.customer_id IS NOT NULL AND (c.id IS NULL OR c.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.checkout_id IS NOT NULL AND (co.id IS NULL OR co.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.source_event_id IS NOT NULL AND (e.id IS NULL OR e.tenant_id IS DISTINCT FROM p_tenant_id))))
+    INTO v_valid;
+  WHEN 'orders' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.orders x
+     LEFT JOIN henvalt.customers c ON c.id=x.customer_id
+     LEFT JOIN henvalt.checkouts co ON co.id=x.checkout_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND ((x.customer_id IS NOT NULL AND (c.id IS NULL OR c.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.checkout_id IS NOT NULL AND (co.id IS NULL OR co.tenant_id IS DISTINCT FROM p_tenant_id))))
+    INTO v_valid;
+  WHEN 'recovery_sequences' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.recovery_sequences x
+     LEFT JOIN henvalt.opportunities o ON o.id=x.opportunity_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND (o.id IS NULL OR o.tenant_id IS DISTINCT FROM p_tenant_id))
+    INTO v_valid;
+  WHEN 'recovery_interventions' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.recovery_interventions x
+     LEFT JOIN henvalt.recovery_sequences s ON s.id=x.sequence_id
+     LEFT JOIN henvalt.opportunities o ON o.id=x.opportunity_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND ((x.sequence_id IS NOT NULL AND (s.id IS NULL OR s.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.opportunity_id IS NOT NULL AND (o.id IS NULL OR o.tenant_id IS DISTINCT FROM p_tenant_id))))
+    INTO v_valid;
+  WHEN 'order_attributions' THEN
+   SELECT NOT EXISTS (SELECT 1 FROM henvalt.order_attributions x
+     LEFT JOIN henvalt.orders o ON o.id=x.order_id
+     LEFT JOIN henvalt.recovery_sequences s ON s.id=x.recovery_id
+     LEFT JOIN henvalt.opportunities p ON p.id=x.opportunity_id
+     LEFT JOIN henvalt.recovery_interventions i ON i.id=x.matched_intervention_id
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
+       AND ((x.order_id IS NOT NULL AND (o.id IS NULL OR o.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.recovery_id IS NOT NULL AND (s.id IS NULL OR s.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.opportunity_id IS NOT NULL AND (p.id IS NULL OR p.tenant_id IS DISTINCT FROM p_tenant_id))
+         OR (x.matched_intervention_id IS NOT NULL AND (i.id IS NULL OR i.tenant_id IS DISTINCT FROM p_tenant_id))))
+    INTO v_valid;
+  ELSE
+   v_valid := true;
+ END CASE;
+ IF NOT COALESCE(v_valid,false) THEN
+  RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_GRAPH_TENANT_MISMATCH'
+   USING ERRCODE='42501';
+ END IF;
+END;
+$function$;
+REVOKE ALL ON FUNCTION henvalt.assert_shopify_replay_object_graph_tenant(uuid,text,uuid) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION henvalt.assert_shopify_replay_object_graph_tenant(uuid,text,uuid) FROM anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.assert_shopify_replay_object_graph_tenant(uuid,text,uuid) TO service_role;
+
+CREATE OR REPLACE FUNCTION henvalt.assert_shopify_replay_object_tenant(
+ p_job_id uuid,p_worker_id text,p_lease_id uuid,p_tenant_id uuid,
+ p_object_table text,p_object_id uuid
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
+AS $function$
+BEGIN
+ PERFORM henvalt.assert_shopify_replay_tenant_for_write(p_job_id,p_worker_id,p_lease_id,p_tenant_id);
+ IF p_object_id IS NULL THEN RETURN; END IF;
+ CASE p_object_table
+  WHEN 'customers' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.customers x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'checkouts' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.checkouts x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'canonical_events' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.canonical_events x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'opportunities' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.opportunities x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'orders' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.orders x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'order_attributions' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.order_attributions x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'recovery_sequences' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.recovery_sequences x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  WHEN 'recovery_interventions' THEN
+   IF NOT EXISTS (SELECT 1 FROM henvalt.recovery_interventions x WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id) THEN RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TENANT_MISMATCH' USING ERRCODE='42501'; END IF;
+  ELSE RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TABLE_NOT_ALLOWED' USING ERRCODE='22023';
+ END CASE;
+ PERFORM henvalt.assert_shopify_replay_object_graph_tenant(p_tenant_id,p_object_table,p_object_id);
+END;
+$function$;
