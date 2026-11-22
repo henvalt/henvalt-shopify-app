@@ -88,7 +88,6 @@ Deno.serve(async (req: Request) => {
   // shop_id is part of the HMAC-covered body. The X-Shopify-Shop-Id header is deliberately ignored.
   const signedShopId = asId(payload?.shop_id);
   if (!signedShopId) return reply(400, { error: "signed_shop_id_missing" });
-  const minimalPayload = { shop_id: signedShopId };
   if (payload?.shop_domain && String(payload.shop_domain).toLowerCase() !== shop) {
     return reply(400, { error: "signed_shop_domain_mismatch" });
   }
@@ -114,6 +113,8 @@ Deno.serve(async (req: Request) => {
     return reply(400, { error: "customer_email_too_long" });
   }
   const customerEmail = rawCustomerEmail ? rawCustomerEmail.toLowerCase() : null;
+  // Retain only the email required for tenant-scoped export/redaction; never the raw webhook body.
+  const minimalPayload = { shop_id: signedShopId, customer_email: customerEmail };
   const requestId = asId(payload?.data_request?.id);
   if (topic !== "shop/redact" && !customerId && !customerEmail) {
     return reply(400, { error: "customer_identifier_missing" });
