@@ -347,15 +347,15 @@ SECURITY DEFINER
 SET search_path TO ''
 AS $function$
 BEGIN
-  PERFORM henvalt.assert_shopify_replay_lease_for_write(
-    p_job_id,p_worker_id,p_lease_id
-  );
+  PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
   RETURN henvalt.process_shopify_order_edit_adjustment(p_event_id);
 END;
 $function$;
 
 REVOKE ALL ON FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)
   FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)
+  FROM anon,authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)
   TO service_role;
 
