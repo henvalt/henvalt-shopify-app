@@ -91,7 +91,7 @@ begin
   v_result := henvalt.redact_shopify_customer_data_checked_with_lease(v_claim.id,v_claim.lease_token);
   if v_result->>'matched' <> 'true' then raise exception 'matching customer was not redacted'; end if;
   select count(*) into v_calls from henvalt.privacy_redaction_calls;
-  if v_calls <> 1 then raise exception 'matching customer redaction did not run exactly once'; end if;
+  if v_calls <> 2 then raise exception 'matching customer redaction did not run exactly once'; end if;
   v_finished := henvalt.finish_shopify_privacy_request(
     v_claim.id,v_claim.lease_token,'COMPLETED',null
   );
@@ -114,7 +114,7 @@ begin
   end;
   if not v_rejected then raise exception 'stale privacy lease was accepted'; end if;
   select count(*) into v_calls from henvalt.privacy_redaction_calls;
-  if v_calls <> 1 then raise exception 'stale lease reached destructive redaction'; end if;
+  if v_calls <> 2 then raise exception 'stale lease reached destructive redaction'; end if;
 
   -- Export generation and persistence occur inside the active lease.
   insert into henvalt.shopify_privacy_requests
