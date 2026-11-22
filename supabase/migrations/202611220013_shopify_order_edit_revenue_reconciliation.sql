@@ -50,7 +50,8 @@ BEGIN
   SELECT id INTO v_existing
     FROM henvalt.orders
    WHERE tenant_id=v_tenant_id
-     AND shopify_order_id=v_order_id;
+     AND shopify_order_id=v_order_id
+   FOR UPDATE;
 
   v_order_number := v_payload->>'order_number';
   v_email := lower(trim(COALESCE(v_payload->>'email',v_payload->'customer'->>'email')));
