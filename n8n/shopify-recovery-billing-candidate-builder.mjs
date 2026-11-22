@@ -47,6 +47,10 @@ JOIN LATERAL (
 ) due ON true
 WHERE sc.active = true
   AND sc.reauth_required_at IS NULL
+  AND (SELECT count(*)
+         FROM henvalt.shopify_connections active_sc
+        WHERE active_sc.tenant_id = sc.tenant_id
+          AND active_sc.active = true) = 1
   AND (sc.access_token_expires_at IS NULL
        OR sc.access_token_expires_at > now() + interval '2 minutes')
 ORDER BY due.created_at ASC, sc.shop_domain ASC
