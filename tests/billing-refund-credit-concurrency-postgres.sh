@@ -21,7 +21,7 @@ INSERT INTO henvalt.billing_accounts(
   tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,
   usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at
 ) VALUES (
-  '$tenant','SHOPIFY','PERFORMANCE',0,10,100,'USD',
+  '$tenant','SHOPIFY','STARTER',0,10,100,'USD',
   'gid://shopify/AppSubscriptionLineItem/billing-race','ACTIVE',true,now()-interval '1 day'
 );
 INSERT INTO henvalt.revenue_ledger(
