@@ -76,3 +76,13 @@ test("all replay mutation-map RPCs have a candidate fenced implementation",()=>{
   assert.ok(sources.includes("FUNCTION henvalt."+item.fenced_rpc+"("),"missing fenced RPC "+item.fenced_rpc);
  }
 });
+
+
+test("disposable PostgreSQL acceptance exercises every tenant relationship edge",()=>{
+ const fixture=readFileSync("tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql","utf8");
+ for(const table of ["checkouts","canonical_events","opportunities","orders","recovery_sequences","recovery_interventions","order_attributions"])
+  assert.ok(fixture.includes("expect_replay_graph_rejection('"+table+"'"),"missing graph rejection fixture "+table);
+ assert.match(fixture,/SHOPIFY_REPLAY_OBJECT_TENANT_GRAPH_ACCEPTANCE_PASSED/);
+ const workflow=readFileSync(".github/workflows/provider-send-interlock-static.yml","utf8");
+ assert.ok(workflow.includes("shopify-replay-object-tenant-graph-postgres-acceptance.sql"),"graph acceptance is not wired into CI");
+});
