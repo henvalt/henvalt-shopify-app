@@ -41,7 +41,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(replayTrigger.parameters.inputSource,"workflowInputs");
   assert.equal(replayTrigger.parameters.returnOutput,"lastRunOnly");
   assert.equal(w.connections["Is Trusted Replay?"].main[0][0].node,"Resolve Shopify Tenant");
-  assert.equal(w.connections["Is Trusted Replay?"].main[1][0].node,"Supabase Ingest RPC");
+  assert.equal(w.connections["Is Trusted Replay?"].main[1][0].node,"Is Shopify Source?");
   assert.equal(findNode(w,"Verify Shopify HMAC"),undefined);
   assert.equal(findNode(w,"HMAC Verified?"),undefined);
   assert.match(findNode(w,"Supabase Ingest RPC").parameters.jsonBody,/p_raw_body_base64/);
