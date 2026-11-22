@@ -44,7 +44,7 @@ BEGIN
     usage_cap_amount,currency,usage_line_item_id,status,test_mode,
     activated_at,monthly_email_limit
   ) VALUES (
-    v_tenant,'SHOPIFY','PERFORMANCE',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/credits',
+    v_tenant,'SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/credits',
     'ACTIVE',true,now()-interval '1 day',2000
   );
 
@@ -167,7 +167,7 @@ BEGIN
     usage_cap_amount,currency,usage_line_item_id,status,test_mode,
     activated_at,monthly_email_limit
   ) VALUES (
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','SHOPIFY','PERFORMANCE',0,10,100,'USD',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','SHOPIFY','STARTER',0,10,100,'USD',
     'gid://shopify/AppSubscriptionLineItem/late-credit','ACTIVE',true,now()-interval '1 day',2000
   );
   INSERT INTO henvalt.revenue_ledger(
@@ -237,7 +237,7 @@ BEGIN
     usage_cap_amount,currency,usage_line_item_id,status,test_mode,
     activated_at,monthly_email_limit
   ) VALUES (
-    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113','SHOPIFY','PERFORMANCE',0,10,100,'USD',
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113','SHOPIFY','STARTER',0,10,100,'USD',
     'gid://shopify/AppSubscriptionLineItem/live-blocked','ACTIVE',false,now()-interval '1 day',2000
   );
   INSERT INTO henvalt.revenue_ledger(
@@ -272,7 +272,7 @@ BEGIN
   INSERT INTO henvalt.tenants(id,status,default_currency) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','ACTIVE','USD');
   INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0114','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114',true,'reconcile-match.myshopify.com');
   INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
-  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','SHOPIFY','PERFORMANCE',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/reconcile-match','ACTIVE',true,now()-interval '1 day',2000);
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/reconcile-match','ACTIVE',true,now()-interval '1 day',2000);
   INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
   VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0121','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
   INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
@@ -312,7 +312,7 @@ BEGIN
   INSERT INTO henvalt.tenants(id,status,default_currency) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','ACTIVE','USD');
   INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0115','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115',true,'reconcile-retry.myshopify.com');
   INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
-  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','SHOPIFY','PERFORMANCE',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/reconcile-retry','ACTIVE',true,now()-interval '1 day',2000);
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/reconcile-retry','ACTIVE',true,now()-interval '1 day',2000);
   INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
   VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0122','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
   INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
