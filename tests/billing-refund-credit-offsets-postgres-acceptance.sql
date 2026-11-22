@@ -143,6 +143,77 @@ BEGIN
   IF v_offsets <> 5 THEN
     RAISE EXCEPTION 'refund credit was not consumed exactly once across two measurements';
   END IF;
+
+  -- Credits arriving after a charge was created do not rewrite that pending charge.
+  -- They offset the next new positive measurement instead.
+  INSERT INTO henvalt.tenants(id,status,default_currency)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0112','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112',true,'late-credit.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(
+    tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,
+    usage_cap_amount,currency,usage_line_item_id,status,test_mode,
+    activated_at,monthly_email_limit
+  ) VALUES (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','SHOPIFY','PERFORMANCE',0,10,100,'USD',
+    'gid://shopify/AppSubscriptionLineItem/late-credit','ACTIVE',true,now()-interval '1 day',2000
+  );
+  INSERT INTO henvalt.revenue_ledger(
+    id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata
+  ) VALUES
+    ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0117','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}'),
+    ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0118','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','ADJUSTMENT',-50,'USD','CONFIRMED',true,'MEASURED','{}'),
+    ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0119','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112','RECOVERY',80,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(
+    id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,
+    henvalt_percentage,henvalt_fee,currency,status,created_at
+  ) VALUES (
+    'dddddddd-dddd-4ddd-8ddd-dddddddd0115','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112',gen_random_uuid(),
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeee0117',100,10,10,'USD','MEASURED',now()-interval '2 hours'
+  );
+
+  v_result := henvalt.control_plane_claim_billing_usage('late-credit.myshopify.com');
+  IF (v_result->>'amount')::numeric <> 10 THEN
+    RAISE EXCEPTION 'initial pending charge should be the full $10 fee: %',v_result;
+  END IF;
+  v_first_charge := (v_result->>'chargeId')::uuid;
+
+  INSERT INTO henvalt.billing_measurements(
+    id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,
+    henvalt_percentage,henvalt_fee,currency,status,created_at
+  ) VALUES
+    ('cccccccc-cccc-4ccc-8ccc-cccccccc0113','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112',gen_random_uuid(),
+     'eeeeeeee-eeee-4eee-8eee-eeeeeeee0118',-50,10,-5,'USD','MEASURED',now()-interval '1 hour'),
+    ('dddddddd-dddd-4ddd-8ddd-dddddddd0116','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112',gen_random_uuid(),
+     'eeeeeeee-eeee-4eee-8eee-eeeeeeee0119',80,10,8,'USD','MEASURED',now()-interval '30 minutes');
+
+  UPDATE henvalt.billing_usage_charges
+     SET status='FAILED',attempt_count=1,attempted_at=now()-interval '5 minutes'
+   WHERE id=v_first_charge;
+  v_result := henvalt.control_plane_claim_billing_usage('late-credit.myshopify.com');
+  IF (v_result->>'chargeId')::uuid <> v_first_charge
+     OR (v_result->>'amount')::numeric <> 10 THEN
+    RAISE EXCEPTION 'late refund credit rewrote an already-created pending charge: %',v_result;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM henvalt.billing_measurement_credit_offsets
+     WHERE tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0112'
+       AND credit_measurement_id='cccccccc-cccc-4ccc-8ccc-cccccccc0113'
+  ) THEN
+    RAISE EXCEPTION 'late credit must not be allocated to a pre-existing charge';
+  END IF;
+
+  UPDATE henvalt.billing_usage_charges SET status='SUBMITTED' WHERE id=v_first_charge;
+  UPDATE henvalt.billing_measurements SET status='BILLED'
+   WHERE id='dddddddd-dddd-4ddd-8ddd-dddddddd0115';
+  UPDATE henvalt.revenue_ledger SET billing_status='BILLED'
+   WHERE id='eeeeeeee-eeee-4eee-8eee-eeeeeeee0117';
+
+  v_result := henvalt.control_plane_claim_billing_usage('late-credit.myshopify.com');
+  IF (v_result->>'amount')::numeric <> 3
+     OR (v_result->>'refundCreditApplied')::numeric <> 5 THEN
+    RAISE EXCEPTION 'late refund credit was not applied to the next charge: %',v_result;
+  END IF;
 END;
 $billing_refund_credit_acceptance$;
 
