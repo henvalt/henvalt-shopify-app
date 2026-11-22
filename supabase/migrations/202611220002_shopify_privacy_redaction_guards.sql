@@ -175,6 +175,17 @@ begin
     if v_updated <> 1 then
       raise exception 'privacy request lease expired while saving export';
     end if;
+  else
+    update henvalt.shopify_privacy_requests
+    set result_payload = null, result_expires_at = null
+    where id=p_privacy_request_id
+      and status='PROCESSING'
+      and lease_token=p_lease_token
+      and lease_expires_at > now();
+    get diagnostics v_updated = row_count;
+    if v_updated <> 1 then
+      raise exception 'privacy request lease expired while clearing export';
+    end if;
   end if;
 
   return v_result;
