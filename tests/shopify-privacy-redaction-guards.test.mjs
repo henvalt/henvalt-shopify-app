@@ -15,7 +15,7 @@ test("customer redaction reports no-match before invoking destructive redaction"
 });
 
 test("redaction preflight checks tenant-scoped customer and operational PII stores", () => {
-  for (const table of ["customers", "checkouts", "canonical_events", "delivery_requests", "messages", "email_suppressions", "provider_events", "recovery_interventions", "webhook_events", "processing_errors", "background_jobs", "audit_log"]) {
+  for (const table of ["customers", "checkouts", "canonical_events", "delivery_requests", "messages", "conversation_messages", "email_suppressions", "provider_events", "recovery_interventions", "webhook_events", "processing_errors", "background_jobs", "audit_log"]) {
     assert.ok(sql.toLowerCase().includes("from henvalt." + table + " "), "missing tenant-scoped preflight for " + table);
   }
 });
