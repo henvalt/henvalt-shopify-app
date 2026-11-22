@@ -39,7 +39,7 @@
 
 ## Outstanding release gates
 
-- Candidate migrations and function must pass the full current CI workflow.
-- Export acknowledgement is now implemented in candidate source and disposable PostgreSQL tests; verify the dashboard integration and actual browser round trip in isolated staging.
+- Candidate migrations and function passed the full safety CI workflow on candidate commit `487882dd7bb4c51bf4af6b2b4b73cbf22c2cc52b` (GitHub run `44991610695`); repeat after any further edits.
+- Export acknowledgement is implemented in candidate source, disposable PostgreSQL acceptance, and the dashboard Privacy requests page. Static dashboard tests verify the response-body → one-time acknowledgement → local download ordering. Actual browser round-trip verification in isolated staging remains required.
 - Full isolated end-to-end lifecycle evidence is still required.
 - Candidate TOML declaration is source-only; production Shopify configuration remains unchanged.
