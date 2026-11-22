@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const baseline = readFileSync("supabase/functions/henvalt-privacy-export/index.ts", "utf8");
+const baseline = readFileSync("supabase/audit-baselines/henvalt-privacy-export-v1.ts", "utf8");
+const candidate = readFileSync("supabase/functions/henvalt-privacy-export/index.ts", "utf8");
 const audit = readFileSync("docs/PRIVACY_EXPORT_DELIVERY_SEMANTICS_2026-11-22.md", "utf8");
 
 test("deployed export source remains an immutable audit baseline", () => {
@@ -17,4 +18,12 @@ test("audit documents that result_delivered_at is written before response constr
   assert.match(audit, /cannot prove that the merchant's browser received/);
   assert.match(audit, /response-start event/);
   assert.match(audit, /Production remains NO-GO/);
+});
+
+test("candidate export endpoint separates download start from client acknowledgement", () => {
+  assert.match(candidate, /result_download_started_at/);
+  assert.match(candidate, /x-henvalt-delivery-ack-token/);
+  assert.match(candidate, /rpc\/acknowledge_shopify_privacy_export_download/);
+  assert.doesNotMatch(candidate, /result_delivered_at:\\s*new Date/);
+  assert.ok(candidate.indexOf("result_download_started_at") < candidate.indexOf("return new Response(JSON.stringify(record.result_payload, null, 2)"));
 });
