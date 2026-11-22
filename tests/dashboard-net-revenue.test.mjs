@@ -34,7 +34,8 @@ test("net revenue chart retains negative adjustment amounts rather than dropping
 
 test("merchant dashboard API supplies the series consumed by the chart", () => {
   assert.match(merchantDashboard, /rpc\/control_plane_revenue_series/);
-  assert.match(merchantDashboard, /p_granularity: "day"/);
+  assert.match(merchantDashboard, /p_granularity: granularity/);
+  assert.match(merchantDashboard, /: "day"/);
   assert.match(merchantDashboard, /revenueSeries,?[\s\S]*range:/);
   assert.match(workflow, /supabase\/functions\/henvalt-merchant-dashboard\/index\.ts/);
   assert.match(workflow, /Type-check merchant dashboard Edge Function/);
