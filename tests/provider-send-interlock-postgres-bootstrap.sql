@@ -641,3 +641,34 @@ CREATE OR REPLACE FUNCTION henvalt.browse_opportunity_advanced(
 ) RETURNS boolean LANGUAGE sql STABLE AS $function$
   SELECT false
 $function$;
+
+-- Minimal revenue-attribution schema for the confirmed-ledger promotion acceptance.
+CREATE TYPE henvalt.attribution_confidence AS ENUM ('UNATTRIBUTED', 'POSSIBLE', 'PROBABLE', 'CONFIRMED');
+ALTER TABLE henvalt.order_attributions
+  ALTER COLUMN attribution_confidence TYPE henvalt.attribution_confidence
+  USING attribution_confidence::henvalt.attribution_confidence;
+ALTER TABLE henvalt.order_attributions
+  ADD COLUMN recovery_id uuid,
+  ADD COLUMN matched_intervention_id uuid,
+  ADD COLUMN attribution_method text,
+  ADD COLUMN tracking_token_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN checkout_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN cart_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN customer_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+ALTER TABLE henvalt.orders
+  ADD COLUMN total_value numeric(18,2),
+  ADD COLUMN currency character(3),
+  ADD COLUMN financial_status text,
+  ADD COLUMN cancelled_at timestamptz,
+  ADD COLUMN ordered_at timestamptz;
+
+ALTER TABLE henvalt.revenue_ledger
+  ADD COLUMN recovery_id uuid,
+  ADD COLUMN attribution_id uuid,
+  ADD COLUMN billing_status text NOT NULL DEFAULT 'PENDING',
+  ADD COLUMN metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE UNIQUE INDEX ux_revenue_ledger_one_recovery_per_order
+  ON henvalt.revenue_ledger(tenant_id, order_id)
+  WHERE entry_type = 'RECOVERY';
