@@ -271,6 +271,15 @@ BEGIN
   UPDATE henvalt.billing_usage_charges SET attempt_count=5,attempted_at=now()-interval '5 minutes' WHERE id=v_charge_id;
   v_result := henvalt.control_plane_mark_billing_reconciliation_required('reconcile-match.myshopify.com',v_charge_id,'SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN');
   IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'REQUIRED' THEN RAISE EXCEPTION 'durable reconciliation marker failed: %',v_result; END IF;
+  v_result := henvalt.control_plane_list_billing_reconciliations('reconcile-match.myshopify.com',50);
+  IF (v_result->>'count')::integer <> 1
+     OR jsonb_array_length(v_result->'cases') <> 1
+     OR v_result->'cases'->0->>'chargeId' <> v_charge_id::text THEN
+    RAISE EXCEPTION 'tenant-scoped reconciliation queue did not list the pending case: %',v_result;
+  END IF;
+  IF v_result::text LIKE '%accessToken%' THEN
+    RAISE EXCEPTION 'reconciliation queue leaked credential fields';
+  END IF;
   v_result := henvalt.control_plane_get_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id);
   IF v_result->>'available' <> 'true' OR v_result->>'idempotencyKey' IS NULL OR v_result ? 'accessToken' THEN RAISE EXCEPTION 'safe reconciliation envelope invalid: %',v_result; END IF;
   v_result := henvalt.control_plane_get_billing_reconciliation('other-tenant.myshopify.com',v_charge_id);
@@ -332,8 +341,10 @@ BEGIN
   END;
   IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND status='PENDING' AND reconciliation_status='REQUIRED' AND provider_usage_record_id IS NULL) THEN RAISE EXCEPTION 'duplicate provider record attempt mutated second charge'; END IF;
   IF has_function_privilege('anon','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') THEN RAISE EXCEPTION 'client roles can execute reconciliation resolution'; END IF;
+  IF has_function_privilege('anon','henvalt.control_plane_list_billing_reconciliations(text,integer)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_list_billing_reconciliations(text,integer)','EXECUTE') THEN RAISE EXCEPTION 'client roles can list reconciliation cases'; END IF;
   IF has_function_privilege('anon','henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)','EXECUTE') THEN RAISE EXCEPTION 'client roles can execute reconciliation marker'; END IF;
   IF has_function_privilege('anon','henvalt.control_plane_get_billing_reconciliation(text,uuid)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_get_billing_reconciliation(text,uuid)','EXECUTE') THEN RAISE EXCEPTION 'client roles can read reconciliation envelope'; END IF;
+  IF NOT has_function_privilege('service_role','henvalt.control_plane_list_billing_reconciliations(text,integer)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot list reconciliation cases'; END IF;
   IF NOT has_function_privilege('service_role','henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)','EXECUTE') OR NOT has_function_privilege('service_role','henvalt.control_plane_get_billing_reconciliation(text,uuid)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot access reconciliation marker or read RPC'; END IF;
   IF NOT has_function_privilege('service_role','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot execute reconciliation resolution'; END IF;
 END;
