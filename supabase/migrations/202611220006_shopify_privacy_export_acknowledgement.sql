@@ -59,4 +59,52 @@ $function$;
 revoke all on function henvalt.acknowledge_shopify_privacy_export_download(uuid,uuid,text) from public, anon, authenticated;
 grant execute on function henvalt.acknowledge_shopify_privacy_export_download(uuid,uuid,text) to service_role;
 
+
+create or replace function henvalt.purge_expired_shopify_privacy_export_ack_tokens()
+returns integer
+language plpgsql
+security definer
+set search_path = henvalt, pg_temp
+as $function$
+declare
+  v_cleared integer;
+begin
+  update henvalt.shopify_privacy_requests r
+  set result_delivery_ack_token_hash = null,
+      result_delivery_ack_expires_at = null
+  where r.result_delivery_ack_token_hash is not null
+    and (
+      r.result_delivery_ack_expires_at is null
+      or r.result_delivery_ack_expires_at <= now()
+      or r.result_expires_at is null
+      or r.result_expires_at <= now()
+      or r.result_payload is null
+    );
+  get diagnostics v_cleared = row_count;
+  return v_cleared;
+end;
+$function$;
+
+revoke all on function henvalt.purge_expired_shopify_privacy_export_ack_tokens() from public, anon, authenticated;
+grant execute on function henvalt.purge_expired_shopify_privacy_export_ack_tokens() to service_role;
+
+do $ack_cron$
+declare
+  v_job_id bigint;
+begin
+  if to_regnamespace('cron') is null then
+    raise exception 'pg_cron is required for privacy export acknowledgement token cleanup';
+  end if;
+  execute 'select jobid from cron.job where jobname = $1 limit 1'
+    into v_job_id using 'henvalt-shopify-privacy-export-ack-cleanup';
+  if v_job_id is not null then
+    execute 'select cron.unschedule($1)' using v_job_id;
+  end if;
+  perform cron.schedule(
+    'henvalt-shopify-privacy-export-ack-cleanup',
+    '*/15 * * * *',
+    'select henvalt.purge_expired_shopify_privacy_export_ack_tokens();'
+  );
+end $ack_cron$;
+
 commit;
