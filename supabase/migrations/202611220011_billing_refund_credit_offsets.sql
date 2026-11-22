@@ -513,9 +513,7 @@ BEGIN
     'lineItemId',p_evidence->'lineItemId',
     'amount',p_evidence->'amount',
     'currency',p_evidence->'currency',
-    'pagesScanned',p_evidence->'pagesScanned',
-    'lookupCompletedAt',p_evidence->'lookupCompletedAt',
-    'lookupSource',p_evidence->'lookupSource'
+    'pagesScanned',p_evidence->'pagesScanned'
   );
 
   SELECT usage_line_item_id
