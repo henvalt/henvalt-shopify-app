@@ -15,7 +15,7 @@ const rawBodyBase64 = ($input.item.binary && $input.item.binary.data && $input.i
 
 const source = (shopDomain || shopifyTopic) ? "shopify" : (body.source || "internal");
 const eventId = source === "shopify" ? shopifyWebhookId : (body.event_id || body.id || null);
-const eventType = body.event_type || shopifyTopic || body.type || null;
+const eventType = source === "shopify" ? shopifyTopic : (body.event_type || body.type || null);
 const occurredAt = body.occurred_at || body.updated_at || body.created_at || body.email_marketing_consent?.consent_updated_at || shopifyTriggeredAt || new Date().toISOString();
 
 // Tenant identity signal only (shop domain). Never trusted as a tenant_id.
