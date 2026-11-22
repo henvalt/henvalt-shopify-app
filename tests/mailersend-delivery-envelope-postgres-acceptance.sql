@@ -16,6 +16,10 @@ DECLARE
   v_result boolean;
   v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text,text,text,text)'::regprocedure;
 BEGIN
+  -- This is an isolated disposable database with no provider network. Open
+  -- only the SQL interlock needed to construct a claimed fixture row.
+  PERFORM henvalt.set_provider_sending_enabled(true, 'isolated disposable PostgreSQL acceptance fixture');
+
   INSERT INTO henvalt.tenants(id, status) VALUES
     (v_tenant, 'ACTIVE'),
     (v_other_tenant, 'ACTIVE');
@@ -245,6 +249,8 @@ BEGIN
      OR NOT has_function_privilege('service_role', v_signature, 'EXECUTE') THEN
     RAISE EXCEPTION 'delivery envelope RPC grants are not restricted to service_role';
   END IF;
+
+  PERFORM henvalt.set_provider_sending_enabled(false, 'close after isolated disposable PostgreSQL acceptance fixture');
 END
 $envelope_acceptance$;
 
