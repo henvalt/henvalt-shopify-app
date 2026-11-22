@@ -11,6 +11,13 @@ VALUES
   ('11111111-1111-4111-8111-111111111111','cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd','ABANDONED_CHECKOUT','ELIGIBLE')
 ON CONFLICT (id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id;
 
+INSERT INTO henvalt.orders(id,tenant_id)
+VALUES (
+  '44444444-4444-4444-8444-444444444444',
+  'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd'
+)
+ON CONFLICT (id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id;
+
 INSERT INTO henvalt.order_attributions(id,tenant_id,order_id,attribution_confidence)
 VALUES (
   '33333333-3333-4333-8333-333333333333',
