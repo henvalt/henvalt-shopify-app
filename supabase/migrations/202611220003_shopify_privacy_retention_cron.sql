@@ -27,9 +27,7 @@ begin
 
   update henvalt.shopify_privacy_requests r
   set result_payload = null,
-      result_expires_at = null,
-      result_delivery_ack_token_hash = null,
-      result_delivery_ack_expires_at = null
+      result_expires_at = null
   where r.result_payload is not null
     and (r.result_expires_at is null or r.result_expires_at <= now());
   get diagnostics v_exports = row_count;
