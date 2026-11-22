@@ -645,9 +645,6 @@ $function$;
 -- Minimal revenue-attribution schema for the confirmed-ledger promotion acceptance.
 CREATE TYPE henvalt.attribution_confidence AS ENUM ('UNATTRIBUTED', 'POSSIBLE', 'PROBABLE', 'CONFIRMED');
 ALTER TABLE henvalt.order_attributions
-  ALTER COLUMN attribution_confidence TYPE henvalt.attribution_confidence
-  USING attribution_confidence::henvalt.attribution_confidence;
-ALTER TABLE henvalt.order_attributions
   ADD COLUMN IF NOT EXISTS recovery_id uuid,
   ADD COLUMN IF NOT EXISTS matched_intervention_id uuid,
   ADD COLUMN IF NOT EXISTS attribution_method text,
