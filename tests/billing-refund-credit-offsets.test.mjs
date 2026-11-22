@@ -9,6 +9,7 @@ const concurrency = readFileSync(new URL("./billing-refund-credit-concurrency-po
 
 test("refund fee credits are tenant-scoped, currency-scoped, locked and allocated once", () => {
   assert.match(migration, /billing_measurement_credit_offsets/);
+  assert.match(migration, /ALTER TABLE henvalt\.billing_measurement_credit_offsets ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /UNIQUE \(tenant_id, credit_measurement_id, charge_measurement_id\)/);
   assert.match(migration, /FOR UPDATE OF cbm\s*LOOP/);\n  assert.doesNotMatch(migration, /FOR UPDATE OF cbm SKIP LOCKED/);
   assert.match(migration, /cbm\.currency = v_currency/);
