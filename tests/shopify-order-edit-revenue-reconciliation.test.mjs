@@ -59,9 +59,12 @@ test("safety CI executes this regression suite and applies the isolated SQL acce
 });
 
 test("billing workflow applies replay lease and fenced-write prerequisites before order-edit acceptance", () => {
+  const enqueue = billingWorkflow.indexOf("202611210005_shopify_webhook_replay_enqueue.sql");
+  const loader = billingWorkflow.indexOf("202611210006_shopify_webhook_replay_load.sql");
+  const ingress = billingWorkflow.indexOf("202611210007_shopify_webhook_single_roundtrip_ingress.sql");
   const lease = billingWorkflow.indexOf("202611210008_shopify_replay_lease_fencing.sql");
   const fenced = billingWorkflow.indexOf("202611210009_shopify_replay_business_write_fencing.sql");
   const heartbeat = billingWorkflow.indexOf("202611210011_shopify_replay_write_lease_heartbeat.sql");
   const orderEdit = billingWorkflow.indexOf("202611220013_shopify_order_edit_revenue_reconciliation.sql");
-  assert.ok(lease >= 0 && fenced > lease && heartbeat > fenced && orderEdit > heartbeat);
+  assert.ok(enqueue >= 0 && loader > enqueue && ingress > loader && lease > ingress && fenced > lease && heartbeat > fenced && orderEdit > heartbeat);
 });
