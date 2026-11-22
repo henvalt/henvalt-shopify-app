@@ -49,3 +49,7 @@ test("retryable failures retain only bounded retry identifiers and exhaust to re
   assert.match(sql, /then null else r\.customer_id/i);
   assert.match(sql, /then '\{\}'::jsonb else r\.payload/i);
 });
+
+test("legacy PROCESSING rows without lease metadata can be safely reclaimed", () => {
+  assert.match(sql, /r\.status = 'PROCESSING' and r\.lease_attempts < 8 and \(r\.lease_expires_at is null or r\.lease_expires_at <= now\(\)\)/i);
+});
