@@ -593,12 +593,14 @@ CREATE TABLE IF NOT EXISTS henvalt.recovery_sequences (
 -- Additional relationships rechecked immediately before provider egress.
 ALTER TABLE henvalt.opportunities
   ADD COLUMN IF NOT EXISTS customer_id uuid,
-  ADD COLUMN IF NOT EXISTS checkout_id uuid;
+  ADD COLUMN IF NOT EXISTS checkout_id uuid,
+  ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE henvalt.recovery_sequences
   ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'SCHEDULED';
 ALTER TABLE henvalt.orders
   ADD COLUMN IF NOT EXISTS financial_status text,
-  ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
+  ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
+  ADD COLUMN IF NOT EXISTS ordered_at timestamptz;
 CREATE TABLE henvalt.email_suppressions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -626,3 +628,16 @@ CREATE TABLE henvalt.customer_conversations (
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, delivery_request_id)
 );
+
+CREATE OR REPLACE FUNCTION henvalt.evaluate_opportunity_communication_eligibility(
+  p_tenant_id uuid, p_opportunity_id uuid
+) RETURNS jsonb LANGUAGE sql STABLE AS $function$
+  SELECT jsonb_build_object('allowed', true, 'decision', 'ALLOW')
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.browse_opportunity_advanced(
+  p_tenant_id uuid, p_session_reference text, p_source_event_id uuid,
+  p_fallback_at timestamptz DEFAULT NULL
+) RETURNS boolean LANGUAGE sql STABLE AS $function$
+  SELECT false
+$function$;
