@@ -71,6 +71,10 @@ begin
     raise exception 'retryable failure did not retain minimal retry identifiers';
   end if;
 
+  update henvalt.shopify_privacy_requests
+  set next_attempt_at = now() - interval '1 second'
+  where id = v_claim.id;
+
   select * into v_claim from henvalt.claim_shopify_privacy_request_by_id(v_claim.id,120);
   if v_claim.lease_attempts <> 2 then raise exception 'failed request was not reclaimable'; end if;
   v_finished := henvalt.finish_shopify_privacy_request(
