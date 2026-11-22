@@ -714,7 +714,7 @@ CREATE UNIQUE INDEX ux_revenue_ledger_one_recovery_per_order
 CREATE TABLE henvalt.billing_accounts (
   tenant_id uuid PRIMARY KEY REFERENCES henvalt.tenants(id),
   provider text NOT NULL DEFAULT 'SHOPIFY',
-  plan_key text NOT NULL,
+  plan_key text NOT NULL CHECK (plan_key IN ('STARTER','GROWTH')),
   recurring_amount numeric NOT NULL,
   henvalt_percentage numeric NOT NULL,
   usage_cap_amount numeric NOT NULL,
