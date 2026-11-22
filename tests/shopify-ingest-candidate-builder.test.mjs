@@ -175,7 +175,7 @@ test("embedded replay envelope enforces the pure helper's missing edge-case guar
   const embedded = execute(row);
   const helper = buildShopifyReplayEnvelope(claim,row,Date.now());
   assert.equal(helper.ok,true);
-  assert.equal(embedded.body.event_id,helper.envelope.body.event_id);
+  assert.deepEqual(embedded.body,helper.envelope.body);
   assert.deepEqual(embedded.headers,helper.envelope.headers);
   assert.equal(embedded.headers["x-shopify-api-version"],"2026-10");
   assert.equal(embedded.headers["x-shopify-triggered-at"],"2099-11-21T22:59:00.000Z");
