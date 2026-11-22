@@ -1,7 +1,7 @@
 {
   "source_workflow": "HENVALT_INGEST",
   "inspected_active_version": "6368d539-708f-494a-8be8-b9601d0e8607",
-  "status": "read-only audit; candidate contract only",
+  "status": "read-only active-workflow audit plus candidate-only order-edit reconciliation; production workflow unchanged",
   "replay_mutations": [
     {
       "node": "Resolve Identity",
