@@ -52,3 +52,13 @@ test("redefined object-fenced wrappers remain service-role-only",()=>{
   assert.ok(tail.indexOf("GRANT EXECUTE ON FUNCTION henvalt."+name+"(")>=0,"missing service grant "+name);
  }
 });
+
+test("object graph checks reject cross-tenant foreign-key edges, not only root rows",()=>{
+ assert.match(sql,/assert_shopify_replay_object_graph_tenant/);
+ for(const table of ["customers","checkouts","canonical_events","opportunities","orders","order_attributions","recovery_sequences","recovery_interventions"])
+  assert.ok(sql.includes("WHEN '"+table+"'"),"missing graph branch "+table);
+ assert.match(sql,/SHOPIFY_REPLAY_OBJECT_GRAPH_TENANT_MISMATCH/);
+ assert.match(sql,/LEFT JOIN henvalt\\.orders o ON o\\.id=x\\.order_id/);
+ assert.match(sql,/LEFT JOIN henvalt\\.recovery_sequences s ON s\\.id=x\\.recovery_id/);
+ assert.match(sql,/LEFT JOIN henvalt\\.recovery_interventions i ON i\\.id=x\\.matched_intervention_id/);
+});
