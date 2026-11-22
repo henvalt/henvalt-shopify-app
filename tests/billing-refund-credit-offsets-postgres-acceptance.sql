@@ -214,6 +214,47 @@ BEGIN
      OR (v_result->>'refundCreditApplied')::numeric <> 5 THEN
     RAISE EXCEPTION 'late refund credit was not applied to the next charge: %',v_result;
   END IF;
+
+  -- Live-mode subscriptions are blocked by default in this candidate worker.
+  INSERT INTO henvalt.tenants(id,status,default_currency)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0113','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113',true,'live-blocked.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(
+    tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,
+    usage_cap_amount,currency,usage_line_item_id,status,test_mode,
+    activated_at,monthly_email_limit
+  ) VALUES (
+    'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113','SHOPIFY','PERFORMANCE',0,10,100,'USD',
+    'gid://shopify/AppSubscriptionLineItem/live-blocked','ACTIVE',false,now()-interval '1 day',2000
+  );
+  INSERT INTO henvalt.revenue_ledger(
+    id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata
+  ) VALUES (
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeee0120','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113',
+    'RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}'
+  );
+  INSERT INTO henvalt.billing_measurements(
+    id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,
+    henvalt_percentage,henvalt_fee,currency,status,created_at
+  ) VALUES (
+    'dddddddd-dddd-4ddd-8ddd-dddddddd0117','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113',
+    gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0120',100,10,10,'USD','MEASURED',now()
+  );
+
+  v_result := henvalt.control_plane_claim_billing_usage('live-blocked.myshopify.com');
+  IF (v_result->>'available')::boolean IS TRUE
+     OR v_result->>'reason' <> 'TEST_MODE_REQUIRED' THEN
+    RAISE EXCEPTION 'live-mode subscription was not blocked by default: %',v_result;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM henvalt.billing_usage_charges
+     WHERE tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0113'
+       AND billing_measurement_id='dddddddd-dddd-4ddd-8ddd-dddddddd0117'
+  ) THEN
+    RAISE EXCEPTION 'live-mode subscription created a usage charge despite the test-mode gate';
+  END IF;
+
 END;
 $billing_refund_credit_acceptance$;
 
