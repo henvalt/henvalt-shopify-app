@@ -106,20 +106,24 @@ test("full safety CI applies billing migrations in dependency order before accep
   const orderEditApply = workflow.indexOf("Apply Shopify order-edit revenue reconciliation migration");
   const resultApply = workflow.indexOf("Apply billing result lock-order migration to disposable PostgreSQL");
   const subscriptionLockApply = workflow.indexOf("Apply billing claim subscription lock migration to disposable PostgreSQL");
+  const failureApply = workflow.indexOf("Apply deterministic billing failure reconciliation migration to disposable PostgreSQL");
   const acceptanceRun = workflow.indexOf("Exercise billing reconciliation, monotonic results and refund credits");
   assert.ok(orderEditApply >= 0 && resultApply > orderEditApply);
   assert.ok(subscriptionLockApply > resultApply);
-  assert.ok(acceptanceRun > subscriptionLockApply);
+  assert.ok(failureApply > subscriptionLockApply);
+  assert.ok(acceptanceRun > failureApply);
 
   const configuredBillingJob = shopifyWorkflow.indexOf("billing-lock-safety:");
   const configuredOrderEdit = shopifyWorkflow.indexOf("Apply Shopify order-edit reconciliation migration");
   const configuredResult = shopifyWorkflow.indexOf("Apply billing result lock-order migration");
   const configuredLock = shopifyWorkflow.indexOf("Apply billing claim subscription lock migration");
+  const configuredFailure = shopifyWorkflow.indexOf("Apply deterministic billing failure reconciliation migration");
   const configuredAcceptance = shopifyWorkflow.indexOf("Exercise billing reconciliation, monotonic result and refund-credit acceptance");
   assert.ok(configuredBillingJob >= 0 && configuredOrderEdit > configuredBillingJob);
   assert.ok(configuredResult > configuredOrderEdit);
   assert.ok(configuredLock > configuredResult);
-  assert.ok(configuredAcceptance > configuredLock);
+  assert.ok(configuredFailure > configuredLock);
+  assert.ok(configuredAcceptance > configuredFailure);
 });
 
 test("safety CI applies and exercises the refund-credit migration", () => {
