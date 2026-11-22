@@ -128,9 +128,9 @@ Deno.serve(async (req: Request) => {
       shopify_shop_id: signedShopId,
       topic,
       webhook_id: webhookId,
-      customer_id: customerId,
+      customer_id: connection ? customerId : null,
       request_id: requestId,
-      payload: minimalPayload,
+      payload: connection ? minimalPayload : {},
       status: initialStatus,
     }),
   });
