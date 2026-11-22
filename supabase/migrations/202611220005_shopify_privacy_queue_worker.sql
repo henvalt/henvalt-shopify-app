@@ -80,7 +80,7 @@ begin
         );
         select r.status into v_status
         from henvalt.shopify_privacy_requests r where r.id=v_claim.id;
-        if v_status <> 'COMPLETED' then raise exception 'shop redaction did not complete'; end if;
+        if v_status IS DISTINCT FROM 'COMPLETED' then raise exception 'shop redaction did not complete'; end if;
         v_completed := v_completed + 1;
 
       else
