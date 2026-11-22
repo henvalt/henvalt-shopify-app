@@ -34,6 +34,7 @@ JOIN LATERAL (
     AND rl.billable = true
     AND rl.attribution_confidence = 'CONFIRMED'
     AND rl.billing_status = 'MEASURED'
+    AND (buc.id IS NULL OR buc.reconciliation_status IN ('NONE','NOT_FOUND_CONFIRMED'))
     AND (
       buc.id IS NULL
       OR (buc.status = 'FAILED' AND buc.attempt_count < 5
