@@ -204,6 +204,7 @@ test("billing execution is attached to the existing recovery scheduler in an ina
   assert.ok(discovery.parameters.query.includes("rl.entry_type = 'RECOVERY'"));
   assert.ok(discovery.parameters.query.includes("rl.attribution_confidence = 'CONFIRMED'"));
   assert.ok(discovery.parameters.query.includes("buc.attempt_count < 5"));
+  assert.ok(discovery.parameters.query.includes("ba.test_mode = true"));
   assert.ok(discovery.parameters.query.includes("LIMIT 10"));
   assert.equal(call.parameters.url, "https://supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing");
   assert.equal(call.parameters.authentication, "genericCredentialType");
