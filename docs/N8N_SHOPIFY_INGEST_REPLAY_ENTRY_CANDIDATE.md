@@ -52,7 +52,7 @@ The replay branch must not call the public ingress RPC again, because that would
 
 ## Write-boundary requirements
 
-All 18 observed mutating operations in `n8n/shopify-ingest-replay-write-map.json` must dispatch to their matching `*_fenced` wrapper whenever replay context is present. The exact tuple `job_id + worker_id + lease_id` is the first three arguments. Every write remains sequential. A replay branch must never call the unfenced counterpart. The processed and failed webhook markers must use `mark_webhook_processed_fenced` and `mark_webhook_failed_fenced`.
+All 18 observed active mutating operations plus the candidate-only order-edit revenue reconciliation mutation in `n8n/shopify-ingest-replay-write-map.json` must dispatch to their matching `*_fenced` wrapper whenever replay context is present. The exact tuple `job_id + worker_id + lease_id` is the first three arguments. Every write remains sequential. A replay branch must never call the unfenced counterpart. The processed and failed webhook markers must use `mark_webhook_processed_fenced` and `mark_webhook_failed_fenced`.
 
 The existing workflow's raw error capture must not write customer data or exception text into replay queue error fields. Replay retry reasons should remain constant and non-PII.
 
