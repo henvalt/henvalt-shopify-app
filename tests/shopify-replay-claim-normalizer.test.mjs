@@ -5,7 +5,7 @@ import { normalizeShopifyReplayClaim } from "../n8n/shopify-replay-claim-normali
 const JOB_ID = "11111111-1111-4111-8111-111111111111";
 const LEASE_ID = "22222222-2222-4222-8222-222222222222";
 const WEBHOOK_ID = "33333333-3333-4333-8333-333333333333";
-const EXPIRY = "2026-11-21T23:00:00.000Z";
+const EXPIRY = "2099-11-21T23:00:00.000Z";
 const WORKER = "henvalt_recovery:execution-42";
 
 function row(overrides = {}) {
