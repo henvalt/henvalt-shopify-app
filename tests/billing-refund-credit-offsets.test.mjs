@@ -11,7 +11,8 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /billing_measurement_credit_offsets/);
   assert.match(migration, /ALTER TABLE henvalt\.billing_measurement_credit_offsets ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /UNIQUE \(tenant_id, credit_measurement_id, charge_measurement_id\)/);
-  assert.match(migration, /FOR UPDATE OF cbm\s*LOOP/);\n  assert.doesNotMatch(migration, /FOR UPDATE OF cbm SKIP LOCKED/);
+  assert.match(migration, /FOR UPDATE OF cbm\s*LOOP/);
+  assert.doesNotMatch(migration, /FOR UPDATE OF cbm SKIP LOCKED/);
   assert.match(migration, /cbm\.currency = v_currency/);
   assert.match(migration, /crl\.entry_type = 'ADJUSTMENT'/);
   assert.match(migration, /crl\.attribution_confidence = 'CONFIRMED'/);
