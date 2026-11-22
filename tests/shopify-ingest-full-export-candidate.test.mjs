@@ -26,6 +26,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   const webhook=w.nodes.find(n=>n.name==="Event Webhook");
   assert.equal(webhook.parameters.path,"henvalt/ingest-candidate-no-send");
   assert.equal(webhook.parameters.responseMode,"responseNode");
+  assert.equal(webhook.parameters.options.rawBody,true,"Shopify HMAC must receive the exact raw request bytes");
   assert.equal(w.nodes.find(n=>n.name==="Supabase Ingest RPC").parameters.url,
     "https://supabase-staging.invalid/rest/v1/rpc/receive_shopify_webhook_v1");
   assert.ok(w.nodes.some(n=>n.name==="Respond to Shopify"));
