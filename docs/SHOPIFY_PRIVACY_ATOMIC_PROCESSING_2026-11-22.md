@@ -33,3 +33,16 @@ The currently deployed Edge Function does not call these RPCs. A future replacem
 - It does not change the deployed handler or workflow.
 - The candidate migration needs a disposable PostgreSQL 17 execution test before review.
 - Do not add Shopify `compliance_topics` until the complete request lifecycle passes isolated acceptance tests.
+
+## Additional candidate integration added
+
+- `claim_shopify_privacy_request_by_id` atomically claims only the exact webhook receipt inserted by the current request. This avoids the dangerous case where a generic queue claim could select an older, unrelated privacy request.
+- `redact_shopify_customer_data_checked` performs tenant-scoped existence checks before calling the legacy destructive redaction routine. It can truthfully return `matched: false` without reporting a no-op as successful deletion.
+- `redact_shopify_shop_data_with_lease` locks and verifies the exact PROCESSING row, token, and unexpired lease before invoking tenant deletion.
+- `supabase/functions/henvalt-shopify-privacy-candidate/index.ts` is a separate, non-deployed handler candidate. It verifies HMAC over raw bytes, compares signed body `shop_id` to the active connection, ignores the unsigned shop-ID header, stores only minimal identifiers, claims the exact receipt, and routes each topic through the guarded RPCs.
+- The candidate customer-data export remains in REVIEW_REQUIRED pending secure merchant delivery. It does not claim that generating an export means the merchant received it.
+- Unmatched shops are queued without retaining customer ID/email. A missing or ambiguous active shop connection fails closed.
+
+## Validation boundary
+
+These files are candidate-only. Static Node contract tests are wired into the pull-request workflow. The new redaction wrapper migration still requires disposable PostgreSQL integration coverage against a schema containing all referenced HENVALT tables, plus Deno type-checking and end-to-end signed webhook fixtures. Do not deploy either function or apply either migration until those checks pass and the complete export-delivery lifecycle is approved.
