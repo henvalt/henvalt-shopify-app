@@ -155,3 +155,17 @@ Candidate migration `202611220008_shopify_replay_object_tenant_binding.sql` adds
 The same migration also binds uninstall and deferred payment-webhook state changes to the exact webhook stored on the claimed job. The guard uses a fixed table allow-list; caller-provided table names cannot become dynamic SQL identifiers. The static suite checks wrapper coverage, guard-before-mutation ordering and service-role-only grants. The disposable PostgreSQL CI workflow now applies this migration after the explicit tenant-binding migration.
 
 **Validation boundary:** this new migration has been added to the candidate CI pipeline, but its exact-head CI result is still pending. The production schema was queried read-only to confirm the target table names, tenant columns and relevant foreign-key relationships; no production data or schema was changed. Full cross-tenant fixture tests for every object type and isolated Supabase staging are still required. Treat this as a candidate hardening layer, not proof of release readiness.
+
+
+### Relationship-graph extension
+
+A row-level tenant match alone can still hide a cross-tenant edge when the database foreign key constrains only the UUID. The object guard now checks the referenced graph for:
+- checkout → customer;
+- opportunity → customer, checkout and canonical event;
+- canonical event → source webhook;
+- order → customer and checkout;
+- recovery sequence → opportunity;
+- recovery intervention → sequence and opportunity;
+- order attribution → order, recovery sequence, opportunity and matched intervention.
+
+The tenant guard rejects a broken or foreign-tenant edge before the wrapped SECURITY DEFINER mutation runs. The disposable acceptance fixture now inserts two tenant-owned customers, proves a tenant-A lease cannot validate tenant-B's customer UUID, and proves the same-tenant control succeeds. The broader graph branches are compiled by the disposable migration workflow and are covered by static branch/relationship assertions; individual cross-tenant row fixtures for every graph edge remain a follow-on acceptance task.
