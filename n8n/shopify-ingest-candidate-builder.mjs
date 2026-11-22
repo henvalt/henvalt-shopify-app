@@ -388,6 +388,29 @@ return { json: { ...prior, replay_context: { ...context, lease_expires_at: respo
   return {trigger,loader,envelope,envelopeValid,invalidReplay,invalidReplayContext,alreadyProcessed,alreadyProcessedResult,trustedReplay,replayOrIngress,replayPipeline,renewLease,confirmRenewal,respond,invalidResponse,processedGate,deferredGate,stopMarker,stopNotProceedable};
 }
 
+function addOrderEditRevenueReconciliation(workflow) {
+  const template = nodeByName(workflow, "Process Shopify Revenue Adjustment");
+  const node = structuredClone(template);
+  node.id = id("process-shopify-order-edit-adjustment");
+  node.name = "Process Shopify Order Edit Adjustment";
+  node.position = [template.position[0] + 240, template.position[1] + 180];
+  node.parameters.url = "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/process_shopify_order_edit_adjustment";
+  node.parameters.jsonBody = "={{ { p_event_id: [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}";
+  addNode(workflow, node);
+
+  // The database RPC is a no-op for non-orders/updated topics. It runs after
+  // attribution/ledger posting so a first-seen confirmed order is reconciled
+  // in the same webhook transaction path.
+  workflow.connections["Post Recovery To Ledger"].main[0] = [
+    { node: node.name, type: "main", index: 0 }
+  ];
+  workflow.connections[node.name] = { main: [
+    [{ node: "Mark Webhook Processed", type: "main", index: 0 }],
+    [{ node: "Capture Error", type: "main", index: 0 }]
+  ] };
+  return node;
+}
+
 function validateGraph(workflow) {
   const names = new Set();
   const ids = new Set();
@@ -416,6 +439,7 @@ function buildCandidate(input, map, activeVersionId) {
   const workflow = structuredClone(input);
   const changed = addFencing(workflow,map);
   addReplayAndIngressNodes(workflow);
+  addOrderEditRevenueReconciliation(workflow);
   // Credential references are deliberately removed from the candidate export.
   // Rebind the existing Supabase service-role credential in an isolated n8n draft.
   for (const node of workflow.nodes) { delete node.credentials; node.parameters = JSON.parse(JSON.stringify(node.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid")); if (node.name === "Event Webhook") { node.parameters.path = "henvalt/ingest-candidate-no-send"; delete node.webhookId; } }
