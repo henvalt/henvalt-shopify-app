@@ -49,6 +49,62 @@ jobs:
           print("HENVALT Shopify app configuration and Pixel source checks passed.")
           PY
 
+  billing-lock-safety:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Run billing and scheduler regression tests
+        run: |
+          node --test \
+            tests/billing-refund-credit-offsets.test.mjs \
+            tests/shopify-usage-billing-worker.test.mjs
+      - name: Bootstrap disposable PostgreSQL fixture
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-bootstrap.sql
+      - name: Apply refund credit offset migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220011_billing_refund_credit_offsets.sql
+      - name: Apply billing result lock-order migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql
+      - name: Apply billing claim subscription lock migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
+      - name: Exercise billing reconciliation and monotonic result acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
+      - name: Exercise concurrent refund credit and subscription cancellation races
+        run: bash tests/billing-refund-credit-concurrency-postgres.sh
+
   deploy-shopify-version:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
