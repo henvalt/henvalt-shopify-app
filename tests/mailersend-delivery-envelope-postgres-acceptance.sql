@@ -101,16 +101,42 @@ BEGIN
 
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'Spoofed Sender', 'support@example.invalid'
+    'recovery@example.invalid', 'Spoofed Sender', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'spoofed sender display name was authorized';
   END IF;
 
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'attacker@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'attacker@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'unconfigured reply-to was authorized';
+  END IF;
+
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Tampered subject',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'tampered subject was authorized';
+  END IF;
+
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Injected attacker HTML',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'tampered HTML body was authorized';
   END IF;
 
   UPDATE henvalt.delivery_requests SET provider_claimed_at = NULL WHERE id = v_delivery;
