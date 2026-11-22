@@ -22,6 +22,8 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /TEST_MODE_REQUIRED/);
   assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
   assert.match(migration, /control_plane_get_billing_reconciliation/);
+  assert.match(migration, /control_plane_list_billing_reconciliations/);
+  assert.match(acceptance, /tenant-scoped reconciliation queue did not list the pending case/);
   assert.match(migration, /control_plane_resolve_billing_reconciliation/);
   assert.match(migration, /reconciliation_status = 'MATCHED'/);
   assert.match(migration, /NOT_FOUND_CONFIRMED/);
