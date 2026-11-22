@@ -121,7 +121,7 @@ Deno.serve(async (req: Request) => {
     const started = await rest(
       "shopify_privacy_requests?id=eq." + encodeURIComponent(requestId) +
       "&tenant_id=eq." + encodeURIComponent(tenantId) +
-      "&topic=eq.customers/data_request&status=eq.REVIEW_REQUIRED",
+      "&topic=eq.customers/data_request&status=eq.REVIEW_REQUIRED&result_payload=not.is.null&result_expires_at=gt." + encodeURIComponent(new Date().toISOString()),
       "PATCH",
       {
         result_download_started_at: new Date().toISOString(),
