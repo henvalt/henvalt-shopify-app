@@ -95,6 +95,33 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       }
       apiToken = tokenValue;
 
+      // The credential RPC authorizes and claims a delivery request, but the
+      // caller-supplied HTTP body is not itself an authorization source. Bind
+      // the destination and sender headers back to the claimed tenant record
+      // before allowing any provider egress.
+      const envelopeResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/assert_mailersend_delivery_envelope", {
+        method: "POST",
+        headers: {
+          apikey: serviceRoleKey,
+          authorization: "Bearer " + serviceRoleKey,
+          "content-type": "application/json",
+          accept: "application/json",
+          "accept-profile": "henvalt",
+          "content-profile": "henvalt",
+        },
+        body: JSON.stringify({
+          p_tenant_id: tenantId,
+          p_delivery_request_id: deliveryRequestId,
+          p_to: recipient,
+          p_from_email: sender,
+          p_from_name: fromName,
+          p_reply_to: validEmail(replyTo) ? replyTo : sender,
+        }),
+      });
+      if (!envelopeResponse.ok) return json(409, { error: "delivery_envelope_not_authorized" });
+      const envelopeAuthorized = await envelopeResponse.json().catch(() => false);
+      if (envelopeAuthorized !== true) return json(409, { error: "delivery_envelope_not_authorized" });
+
       const tags = ["tenant:" + tenantId, "delivery:" + deliveryRequestId];
       if (isUuid(body.intervention_id)) tags.push("intervention:" + body.intervention_id);
       if (isUuid(body.correlation_id)) tags.push("correlation:" + body.correlation_id);
