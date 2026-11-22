@@ -258,6 +258,10 @@ DECLARE v_valid boolean := false;
 BEGIN
  IF p_object_id IS NULL THEN RETURN; END IF;
  CASE p_object_table
+  WHEN 'customers' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.customers x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_valid;
   WHEN 'checkouts' THEN
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.checkouts x
      LEFT JOIN henvalt.customers c ON c.id=x.customer_id
@@ -315,7 +319,8 @@ BEGIN
          OR (x.matched_intervention_id IS NOT NULL AND (i.id IS NULL OR i.tenant_id IS DISTINCT FROM p_tenant_id))))
     INTO v_valid;
   ELSE
-   v_valid := true;
+   RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TABLE_NOT_ALLOWED'
+    USING ERRCODE='22023';
  END CASE;
  IF NOT COALESCE(v_valid,false) THEN
   RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_GRAPH_TENANT_MISMATCH'
