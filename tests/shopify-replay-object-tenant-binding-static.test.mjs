@@ -93,6 +93,14 @@ test("disposable PostgreSQL acceptance exercises every tenant relationship edge"
  assert.ok(workflow.includes("shopify-replay-object-tenant-graph-postgres-acceptance.sql"),"graph acceptance is not wired into CI");
 });
 
+test("standalone object graph helper rejects foreign and missing roots",()=>{
+ assert.match(sql,/SHOPIFY_REPLAY_OBJECT_GRAPH_ROOT_TENANT_MISMATCH/);
+ assert.match(sql,/IF NOT COALESCE\(v_root_exists,false\) THEN/);
+ const fixture=readFileSync("tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql","utf8");
+ assert.match(fixture,/expect_replay_graph_rejection\('customers','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'\)/);
+ assert.match(fixture,/expect_replay_graph_rejection\('customers','cccccccc-cccc-4ccc-8ccc-cccccccccc33'\)/);
+});
+
 test("object graph helper fails closed for unknown tables and handles customer roots",()=>{
  assert.match(sql,/WHEN 'customers' THEN[\s\S]*?FROM henvalt\.customers x/);
  assert.match(sql,/ELSE\s+RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TABLE_NOT_ALLOWED'/);
