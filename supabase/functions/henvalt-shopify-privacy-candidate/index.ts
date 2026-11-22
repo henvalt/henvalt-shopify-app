@@ -68,6 +68,8 @@ function asId(value: unknown): string | null {
 
 Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return reply(405, { error: "method_not_allowed" });
+  const contentType = (req.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  if (contentType !== "application/json") return reply(415, { error: "application_json_required" });
   if (!SUPABASE_URL || !SERVICE_ROLE_KEY || !SHOPIFY_API_SECRET) {
     return reply(503, { error: "privacy_handler_not_configured" });
   }
