@@ -110,10 +110,10 @@ test("per-item replay Code nodes return explicit n8n item wrappers", () => {
   const renewal = workflow.nodes.find(n => n.name === "Confirm Replay Lease Renewal");
   assert.equal(envelope.parameters.mode, "runOnceForEachItem");
   assert.equal(renewal.parameters.mode, "runOnceForEachItem");
-  assert.match(envelope.parameters.jsCode, /return \\{ json: \\{/);
-  assert.match(renewal.parameters.jsCode, /return \\{ json: \\{/);
-  assert.match(envelope.parameters.jsCode, /if \\(errors.length\\) return \\{ json: \\{/);
-  assert.match(envelope.parameters.jsCode, /if \\(alreadyProcessed\\) return \\{ json: \\{/);
+  assert.ok(envelope.parameters.jsCode.includes("return { json: {"));
+  assert.ok(renewal.parameters.jsCode.includes("return { json: {"));
+  assert.ok(envelope.parameters.jsCode.includes("if (errors.length) return { json: {"));
+  assert.ok(envelope.parameters.jsCode.includes("if (alreadyProcessed) return { json: {"));
 });
 
 test("generated replay envelope Code node executes valid, processed and invalid rows", () => {
