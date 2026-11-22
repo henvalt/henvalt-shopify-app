@@ -179,7 +179,7 @@ test("billing execution is attached to the existing recovery scheduler in an ina
   const discovery = byName.get("Find Shopify Usage Billing Shops");
   const call = byName.get("Call Shopify Usage Billing Worker");
 
-  assert.equal(workflow.id, "00000000-0000-4000-8000-000000000995");
+  assert.equal(workflow.id, "00000000-0000-4000-8000-999999999995");
   assert.equal(workflow.name, "HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY");
   assert.equal(workflow.active, false);
   assert.equal(workflow.settings.availableInMCP, false);
