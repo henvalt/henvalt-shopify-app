@@ -59,7 +59,7 @@ begin
     union all
     select 1 from henvalt.processing_errors x
     where x.tenant_id=p_tenant_id and (
-      (v_customer_id is not null and x.payload #>> '{customer,id}'=v_customer_id)
+      (v_customer_id is not null and (x.payload #>> '{customer,id}'=v_customer_id or x.payload #>> '{id}'=v_customer_id))
       or (v_email is not null and lower(coalesce(x.payload #>> '{customer,email}',x.payload #>> '{email}',''))=v_email)
     )
     union all
