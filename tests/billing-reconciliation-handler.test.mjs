@@ -55,6 +55,7 @@ function harness({
     id: providerRecordId,
     idempotencyKey,
     price: { amount: "10.00", currencyCode: "USD" },
+    subscriptionLineItem: { id: lineItemId },
   }],
   subscriptionTest = true,
   subscriptionPageInfo = { hasNextPage: false, endCursor: null },
@@ -231,6 +232,7 @@ test("rejects MATCHED when the real Shopify amount or currency differs from the 
       id: providerRecordId,
       idempotencyKey,
       price: { amount: "12.00", currencyCode: "USD" },
+      subscriptionLineItem: { id: lineItemId },
     }],
   });
   const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
@@ -251,6 +253,7 @@ test("MISMATCH records only the provider evidence returned by Shopify", async ()
       id: providerRecordId,
       idempotencyKey,
       price: { amount: "12.00", currencyCode: "USD" },
+      subscriptionLineItem: { id: lineItemId },
     }],
   });
   const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
