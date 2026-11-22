@@ -26,9 +26,11 @@ on:
       - "supabase/migrations/202611220009_mailersend_delivery_envelope_binding.sql"
       - "supabase/migrations/202611220010_promote_confirmed_recovery_ledger.sql"
       - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
+      - "supabase/migrations/202611220012_dashboard_net_revenue_series.sql"
       - "tests/revenue-ledger-attribution-promotion.test.mjs"
       - "tests/revenue-ledger-attribution-promotion-postgres-acceptance.sql"
       - "tests/billing-refund-credit-offsets.test.mjs"
+      - "tests/dashboard-net-revenue.test.mjs"
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/mailersend-delivery-envelope-binding.test.mjs"
@@ -276,6 +278,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
+      - name: Apply dashboard net-revenue series migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220012_dashboard_net_revenue_series.sql
       - name: Apply candidate MailerSend delivery envelope binding migration to disposable PostgreSQL
         env:
           PGPASSWORD: postgres
