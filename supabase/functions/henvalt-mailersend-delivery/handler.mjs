@@ -77,6 +77,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       // database interlock must reject here, before any provider network call.
       const tokenResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/get_mailersend_token_for_delivery", {
         method: "POST",
+        redirect: "error",
         headers: {
           apikey: serviceRoleKey,
           authorization: "Bearer " + serviceRoleKey,
@@ -101,6 +102,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       // before allowing any provider egress.
       const envelopeResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/assert_mailersend_delivery_envelope", {
         method: "POST",
+        redirect: "error",
         headers: {
           apikey: serviceRoleKey,
           authorization: "Bearer " + serviceRoleKey,
@@ -142,6 +144,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       try {
         providerResponse = await fetchImpl("https://api.mailersend.com/v1/email", {
           method: "POST",
+          redirect: "error",
           headers: {
             authorization: "Bearer " + apiToken,
             "content-type": "application/json",
