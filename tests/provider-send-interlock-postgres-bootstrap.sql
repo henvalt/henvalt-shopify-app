@@ -681,3 +681,58 @@ ALTER TABLE henvalt.revenue_ledger
 CREATE UNIQUE INDEX ux_revenue_ledger_one_recovery_per_order
   ON henvalt.revenue_ledger(tenant_id, order_id)
   WHERE entry_type = 'RECOVERY';
+
+
+-- Billing fixtures used by the refund-credit acceptance suite.
+CREATE TABLE henvalt.billing_accounts (
+  tenant_id uuid PRIMARY KEY REFERENCES henvalt.tenants(id),
+  provider text NOT NULL DEFAULT 'SHOPIFY',
+  plan_key text NOT NULL,
+  recurring_amount numeric NOT NULL,
+  henvalt_percentage numeric NOT NULL,
+  usage_cap_amount numeric NOT NULL,
+  currency character(3) NOT NULL DEFAULT 'USD',
+  provider_subscription_id text,
+  usage_line_item_id text,
+  status text NOT NULL DEFAULT 'PENDING',
+  test_mode boolean NOT NULL DEFAULT false,
+  activated_at timestamptz,
+  cancelled_at timestamptz,
+  monthly_email_limit integer NOT NULL DEFAULT 2000,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE henvalt.billing_measurements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES henvalt.tenants(id),
+  billing_period_id uuid NOT NULL,
+  ledger_entry_id uuid,
+  recovered_revenue numeric(18,2) NOT NULL,
+  henvalt_percentage numeric(8,4) NOT NULL,
+  henvalt_fee numeric(18,4) NOT NULL,
+  currency character(3) NOT NULL,
+  status henvalt.billing_status NOT NULL DEFAULT 'MEASURED',
+  paddle_transaction_reference text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE henvalt.billing_usage_charges (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL REFERENCES henvalt.tenants(id),
+  billing_measurement_id uuid NOT NULL UNIQUE REFERENCES henvalt.billing_measurements(id),
+  provider text NOT NULL DEFAULT 'SHOPIFY',
+  idempotency_key text NOT NULL,
+  amount numeric(18,4) NOT NULL,
+  currency character(3) NOT NULL,
+  status text NOT NULL DEFAULT 'PENDING',
+  provider_usage_record_id text,
+  error_code text,
+  error_message text,
+  attempted_at timestamptz,
+  submitted_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  attempt_count integer NOT NULL DEFAULT 0,
+  UNIQUE (tenant_id,idempotency_key)
+);
