@@ -8,7 +8,8 @@ ON CONFLICT (id) DO NOTHING;
 -- object-tenant guard correctly rejects before the legacy-write stub is called.
 INSERT INTO henvalt.opportunities(id,tenant_id,opportunity_type,status)
 VALUES
-  ('11111111-1111-4111-8111-111111111111','cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd','ABANDONED_CHECKOUT','ELIGIBLE')
+  ('11111111-1111-4111-8111-111111111111','cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd','ABANDONED_CHECKOUT','ELIGIBLE'),
+  ('22222222-2222-4222-8222-222222222222','cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd','ABANDONED_CHECKOUT','ELIGIBLE')
 ON CONFLICT (id) DO UPDATE SET tenant_id=EXCLUDED.tenant_id;
 
 INSERT INTO henvalt.orders(id,tenant_id)
