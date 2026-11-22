@@ -38,5 +38,8 @@ test("dashboard inline JavaScript parses after adding the reconciliation panel",
 test("billing review is wired into navigation and escapes untrusted case fields", () => {
   assert.match(html, /if\(page==="billing"\)loadBillingCases\(\)/);
   assert.match(html, /esc\(r\.reason\|\|"—"\)/);
+  assert.match(html, /esc\(r\.status\|\|"—"\)/);
+  assert.match(html, /\["Charge state",result\.status\]/);
+  assert.match(html, /<th>PROVIDER STATE<\/th>/);
   assert.match(html, /esc\(v\?\?"—"\)/);
 });
