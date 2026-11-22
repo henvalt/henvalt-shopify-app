@@ -537,6 +537,8 @@ DECLARE
   v_ledger_entry_id uuid;
   v_new_status text;
   v_safe_evidence jsonb;
+  v_amount_matches boolean := false;
+  v_pages_scanned numeric;
 BEGIN
   IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'Service role required' USING ERRCODE = '42501';
@@ -598,6 +600,19 @@ BEGIN
      AND status = 'ACTIVE'
      AND test_mode = true;
 
+  IF COALESCE(p_evidence->>'amount','') <> ''
+     AND translate(COALESCE(p_evidence->>'amount',''),'0123456789.','') = ''
+     AND replace(COALESCE(p_evidence->>'amount',''),'.','') <> ''
+     AND length(COALESCE(p_evidence->>'amount','')) - length(replace(COALESCE(p_evidence->>'amount',''),'.','')) <= 1
+     AND length(split_part(COALESCE(p_evidence->>'amount',''),'.',2)) <= 4 THEN
+    v_amount_matches := (p_evidence->>'amount')::numeric = v_charge.amount;
+  END IF;
+
+  IF COALESCE(p_evidence->>'pagesScanned','') <> ''
+     AND translate(COALESCE(p_evidence->>'pagesScanned',''),'0123456789','') = '' THEN
+    v_pages_scanned := (p_evidence->>'pagesScanned')::numeric;
+  END IF;
+
   IF p_resolution = 'MATCHED' THEN
     IF left(COALESCE(p_provider_usage_record_id,''),length('gid://shopify/AppUsageRecord/')) <> 'gid://shopify/AppUsageRecord/'
        OR substring(COALESCE(p_provider_usage_record_id,'') from length('gid://shopify/AppUsageRecord/')+1) = ''
@@ -610,15 +625,7 @@ BEGIN
        OR p_evidence->>'idempotencyKey' IS DISTINCT FROM v_charge.idempotency_key
        OR p_evidence->>'lineItemId' IS DISTINCT FROM v_line_item
        OR p_evidence->>'currency' IS DISTINCT FROM v_charge.currency::text
-       OR CASE
-            WHEN COALESCE(p_evidence->>'amount','') <> ''
-             AND translate(COALESCE(p_evidence->>'amount',''),'0123456789.','') = ''
-             AND replace(COALESCE(p_evidence->>'amount',''),'.','') <> ''
-             AND length(COALESCE(p_evidence->>'amount','')) - length(replace(COALESCE(p_evidence->>'amount',''),'.','')) <= 1
-             AND length(split_part(COALESCE(p_evidence->>'amount',''),'.',2)) <= 4
-            THEN (p_evidence->>'amount')::numeric <> v_charge.amount
-            ELSE true
-          END THEN
+       OR v_amount_matches IS DISTINCT FROM true THEN
       RAISE EXCEPTION 'Provider evidence does not match the persisted charge envelope' USING ERRCODE = '22023';
     END IF;
 
@@ -658,12 +665,8 @@ BEGIN
        OR p_evidence->>'subscriptionFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'lineItemFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'matchingCount' IS DISTINCT FROM '0'
-       OR CASE
-            WHEN COALESCE(p_evidence->>'pagesScanned','') <> ''
-             AND translate(COALESCE(p_evidence->>'pagesScanned',''),'0123456789','') = ''
-            THEN (p_evidence->>'pagesScanned')::numeric < 1
-            ELSE true
-          END THEN
+       OR v_pages_scanned IS NULL
+       OR v_pages_scanned < 1 THEN
       RAISE EXCEPTION 'Complete no-match provider lookup evidence is required' USING ERRCODE = '22023';
     END IF;
 
