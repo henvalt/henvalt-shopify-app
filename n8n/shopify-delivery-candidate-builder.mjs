@@ -115,9 +115,19 @@ export function buildDeliveryCandidate(source) {
   // The named MailerSend node is not the only possible provider-egress surface.
   // Fail closed if any remaining HTTP node points outside the candidate-only hosts.
   const allowedHttpHosts = new Set(["supabase-staging.invalid", "reply-ai-staging.invalid"]);
+  const providerNodeType = /\\.(?:emailSend|sendEmail|smtp|sendGrid|mailgun|mailerSend|postmark|resend)$/i;
+  const providerApiHost = /(?:api\\.mailersend\\.com|api\\.sendgrid\\.com|api\\.resend\\.com|api\\.mailgun\\.net|api\\.postmarkapp\\.com)/i;
+  const inlineNetworkCall = /\\bfetch\\s*\\(|\\baxios\\b|\\bXMLHttpRequest\\b|\\bhttps?\\.(?:request|get)\\s*\\(|\\bnet\\.connect\\s*\\(/i;
   for (const node of workflow.nodes) {
-    if (["n8n-nodes-base.emailSend", "n8n-nodes-base.smtp", "n8n-nodes-base.sendGrid"].includes(node.type)) {
+    if (providerNodeType.test(node.type)) {
       throw new Error("Provider egress node type remains in candidate: " + node.type);
+    }
+    const serializedParameters = JSON.stringify(node.parameters || {});
+    if (providerApiHost.test(serializedParameters)) {
+      throw new Error("Provider API endpoint remains in candidate: " + node.name);
+    }
+    if (node.type === "n8n-nodes-base.code" && inlineNetworkCall.test(node.parameters?.jsCode || "")) {
+      throw new Error("Inline network-capable code remains in delivery candidate: " + node.name);
     }
     if (node.type === "n8n-nodes-base.httpRequest") {
       const rawUrl = node.parameters?.url;
