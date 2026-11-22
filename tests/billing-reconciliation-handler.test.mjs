@@ -294,7 +294,8 @@ test("requires Shopify test-mode subscription attestation", async () => {
     resolution: "MATCHED",
     operatorNote: "Test mode mismatch",
   }));
-  assert.equal(result.status, 503);
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "shopify_subscription_is_not_test_mode");
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
 });
 
