@@ -29,6 +29,8 @@ DECLARE
   v_fulfillment_status text;
   v_ordered_at timestamptz;
   v_cancelled_at timestamptz;
+  v_shopify_updated_at timestamptz;
+  v_existing_shopify_updated_at timestamptz;
   v_customer_id uuid;
   v_checkout_uuid uuid;
   v_existing uuid;
@@ -47,7 +49,8 @@ BEGIN
     RAISE EXCEPTION 'Shopify order id missing';
   END IF;
 
-  SELECT id INTO v_existing
+  SELECT id,NULLIF(metadata->>'shopify_updated_at','')::timestamptz
+    INTO v_existing,v_existing_shopify_updated_at
     FROM henvalt.orders
    WHERE tenant_id=v_tenant_id
      AND shopify_order_id=v_order_id
@@ -76,6 +79,7 @@ BEGIN
   v_fulfillment_status := v_payload->>'fulfillment_status';
   v_ordered_at := COALESCE(NULLIF(v_payload->>'created_at','')::timestamptz,now());
   v_cancelled_at := NULLIF(v_payload->>'cancelled_at','')::timestamptz;
+  v_shopify_updated_at := NULLIF(v_payload->>'updated_at','')::timestamptz;
   v_landing_site := COALESCE(
     v_payload->>'landing_site',
     v_payload->>'landing_site_ref',
@@ -109,6 +113,12 @@ BEGIN
   END IF;
 
   IF v_existing IS NOT NULL THEN
+    IF v_shopify_updated_at IS NOT NULL
+       AND v_existing_shopify_updated_at IS NOT NULL
+       AND v_shopify_updated_at < v_existing_shopify_updated_at THEN
+      RETURN v_existing;
+    END IF;
+
     UPDATE henvalt.orders
        SET customer_id=COALESCE(v_customer_id,customer_id),
            checkout_id=COALESCE(v_checkout_uuid,checkout_id),
@@ -125,7 +135,9 @@ BEGIN
              'henvalt_tracking_token',v_tracking_token,
              'landing_site',v_landing_site,
              'last_event_id',p_event_id
-           ),
+           ) || CASE WHEN v_shopify_updated_at IS NOT NULL
+               THEN jsonb_build_object('shopify_updated_at',v_shopify_updated_at)
+               ELSE '{}'::jsonb END,
            updated_at=now()
      WHERE id=v_existing;
     RETURN v_existing;
@@ -143,7 +155,8 @@ BEGIN
       'checkout_token',v_checkout_token,
       'henvalt_tracking_token',v_tracking_token,
       'landing_site',v_landing_site,
-      'source_event_id',p_event_id
+      'source_event_id',p_event_id,
+      'shopify_updated_at',v_shopify_updated_at
     )
   )
   RETURNING id INTO v_existing;
