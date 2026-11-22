@@ -21,7 +21,7 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function verifyHmac(raw: Uint8Array, supplied: string): Promise<boolean> {
+async function verifyHmac(raw: ArrayBuffer, supplied: string): Promise<boolean> {
   if (!SHOPIFY_API_SECRET || !supplied) return false;
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(SHOPIFY_API_SECRET),
@@ -74,7 +74,7 @@ Deno.serve(async (req: Request) => {
     return reply(400, { error: "invalid_compliance_webhook_headers" });
   }
 
-  const raw = new Uint8Array(await req.arrayBuffer());
+  const raw = await req.arrayBuffer();
   if (raw.byteLength > 1_000_000) return reply(413, { error: "payload_too_large" });
   if (!(await verifyHmac(raw, hmac))) return reply(401, { error: "invalid_hmac" });
 
