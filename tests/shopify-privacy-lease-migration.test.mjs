@@ -34,3 +34,9 @@ test("shared PostgreSQL acceptance suites run before the privacy fixture resets 
   assert.ok(providerStep < privacyResetStep, "provider acceptance must run before the privacy fixture drops/recreates henvalt");
   assert.match(privacyBootstrap, /drop schema if exists henvalt cascade/i);
 });
+
+\ntest("handler-facing claim RPC is scoped to the exact inserted request", () => {
+  assert.match(sql, /function henvalt\\.claim_shopify_privacy_request_by_id/i);
+  assert.match(sql, /r\\.id = p_request_id/i);
+  assert.match(sql, /grant execute on function henvalt\\.claim_shopify_privacy_request_by_id\\(uuid, integer\\) to service_role/i);
+});
