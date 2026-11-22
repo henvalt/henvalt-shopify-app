@@ -84,3 +84,7 @@ The worker is database-native because the production project currently has pg_cr
 The OAuth uninstall handler deactivates the shop connection rather than deleting it. Shopify can send `shop/redact` after uninstall, so the candidate handler intentionally resolves the unique connection by shop domain without filtering `active=true`. The signed payload shop ID must still match the stored shop ID. The connection's inactive state must not block legal data deletion; the shop-redaction worker then uses the tenant-scoped legacy deletion RPC and sanitizes the receipt.
 
 A legacy connection whose `shopify_shop_id` is null is not treated as a verified tenant mapping. Its HMAC-authenticated request is retained in REVIEW_REQUIRED with no tenant/customer identifiers rather than being processed against a guessed tenant.
+
+### Retry scheduling
+
+A failed request now receives a persisted `next_attempt_at` using bounded exponential backoff (5 minutes initially, doubling to a six-hour cap). The claim RPC excludes failed rows until that time is due, preventing a poison request from consuming every slot in the same worker batch. Expired PROCESSING leases remain immediately reclaimable, and the eighth failed attempt moves the request to REVIEW_REQUIRED with identifiers minimized. Disposable PostgreSQL acceptance verifies a due retry is attempted exactly once and rescheduled.
