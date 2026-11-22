@@ -114,4 +114,72 @@ begin
   end if;
 end $$;
 
+
+insert into henvalt.shopify_privacy_requests
+  (id,shop_domain,topic,webhook_id,customer_id,payload,status,received_at)
+values
+  ('55555555-5555-4555-8555-555555555555','fixture.myshopify.com',
+   'customers/redact','privacy-retention-pending','12345',
+   '{"customer_email":"old@example.test"}'::jsonb,'PENDING',now()-interval '8 days'),
+  ('66666666-6666-4666-8666-666666666666','fixture.myshopify.com',
+   'customers/redact','privacy-retention-processing','12346',
+   '{"customer_email":"expired@example.test"}'::jsonb,'PROCESSING',now()-interval '8 days'),
+  ('77777777-7777-4777-8777-777777777777','fixture.myshopify.com',
+   'customers/redact','privacy-retention-active','12347',
+   '{"customer_email":"active@example.test"}'::jsonb,'PROCESSING',now()-interval '8 days'),
+  ('88888888-8888-4888-8888-888888888888','fixture.myshopify.com',
+   'customers/data_request','privacy-retention-export',null,
+   '{}'::jsonb,'REVIEW_REQUIRED',now()-interval '40 days');
+
+update henvalt.shopify_privacy_requests
+set lease_expires_at=now()-interval '1 hour', lease_token=gen_random_uuid()
+where id='66666666-6666-4666-8666-666666666666';
+update henvalt.shopify_privacy_requests
+set lease_expires_at=now()+interval '1 hour', lease_token=gen_random_uuid()
+where id='77777777-7777-4777-8777-777777777777';
+update henvalt.shopify_privacy_requests
+set result_payload='{"private":"expired"}'::jsonb,
+    result_expires_at=now()-interval '1 day'
+where id='88888888-8888-4888-8888-888888888888';
+
+do $$
+declare
+  v_result jsonb;
+  v_status text;
+  v_payload jsonb;
+  v_customer text;
+begin
+  v_result := henvalt.purge_stale_shopify_privacy_request_identifiers();
+  if (v_result->>'requests_minimized')::integer <> 2
+     or (v_result->>'exports_expired')::integer <> 1 then
+    raise exception 'privacy retention cleanup counts are incorrect: %',v_result;
+  end if;
+
+  select status,payload,customer_id into v_status,v_payload,v_customer
+  from henvalt.shopify_privacy_requests
+  where id='55555555-5555-4555-8555-555555555555';
+  if v_status <> 'REVIEW_REQUIRED' or v_payload <> '{}'::jsonb or v_customer is not null then
+    raise exception 'stale pending request retained identifiers';
+  end if;
+
+  select status,payload,customer_id into v_status,v_payload,v_customer
+  from henvalt.shopify_privacy_requests
+  where id='66666666-6666-4666-8666-666666666666';
+  if v_status <> 'REVIEW_REQUIRED' or v_payload <> '{}'::jsonb or v_customer is not null then
+    raise exception 'expired processing request retained identifiers';
+  end if;
+
+  select status,payload,customer_id into v_status,v_payload,v_customer
+  from henvalt.shopify_privacy_requests
+  where id='77777777-7777-4777-8777-777777777777';
+  if v_status <> 'PROCESSING' or v_payload = '{}'::jsonb or v_customer is null then
+    raise exception 'retention cleanup interrupted an active lease';
+  end if;
+
+  select result_payload into v_payload
+  from henvalt.shopify_privacy_requests
+  where id='88888888-8888-4888-8888-888888888888';
+  if v_payload is not null then raise exception 'expired export payload was not cleared'; end if;
+end $$;
+
 rollback;
