@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-22",
+  "project_id": "ocyplckdojdubyrsxcxa",
+  "purpose": "Exact deployed Edge Function index.ts source snapshots; audit only, never deploy these snapshots as candidate replacements without review.",
+  "functions": [
+    {
+      "function_id": "71bba32f-d668-4d73-97fd-2face9a96010",
+      "slug": "henvalt-shopify-privacy",
+      "version": 1,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "deployment_artifact_ezbr_sha256": "213af659378fd3da90b8edbfce12347445e4f5ce633ca6bf6705f8d3cae3e5f4",
+      "source_chars": 8918,
+      "source_lines": 198,
+      "source_file": "supabase/audit-baselines/deployed-2026-11-22/henvalt-shopify-privacy-v1.ts",
+      "git_blob_sha": "603495161a2c34a3e3df1c8071dde728e9b223f0"
+    },
+    {
+      "function_id": "6a179828-9013-4a9d-8732-c5c23c5ca31e",
+      "slug": "henvalt-privacy-export",
+      "version": 1,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "deployment_artifact_ezbr_sha256": "708f0d953874f9e4896f433d950d57b823b56cbb33e30e8c0b1f966ec1212d97",
+      "source_chars": 5409,
+      "source_lines": 115,
+      "source_file": "supabase/audit-baselines/deployed-2026-11-22/henvalt-privacy-export-v1.ts",
+      "git_blob_sha": "c3fd50791a9c77a1d7615f27cdbcc7c909bc1a91"
+    },
+    {
+      "function_id": "88901d17-edc3-4ac7-99f0-81e219932830",
+      "slug": "henvalt-merchant-dashboard",
+      "version": 4,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "deployment_artifact_ezbr_sha256": "2cb76c18f7914ef75add999fd94d27f123fffbca1dc51394941e0708a072b44e",
+      "source_chars": 6813,
+      "source_lines": 142,
+      "source_file": "supabase/audit-baselines/deployed-2026-11-22/henvalt-merchant-dashboard-v4.ts",
+      "git_blob_sha": "5032e5bf832a0fcb7f5a50e573e71a9a145159d6"
+    },
+    {
+      "function_id": "32dda4c6-2838-4247-b917-967fb005d2a6",
+      "slug": "henvalt-shopify-oauth",
+      "version": 27,
+      "status": "ACTIVE",
+      "verify_jwt": false,
+      "deployment_artifact_ezbr_sha256": "8a25db8ba98a9ab9844fdd592edfc1da82a588b97518c4bf1d3c664318160b6c",
+      "source_chars": 21536,
+      "source_lines": 387,
+      "source_file": "supabase/audit-baselines/deployed-2026-11-22/henvalt-shopify-oauth-v27.ts",
+      "git_blob_sha": "32d23034763dd1f4713808a83c6b3025e8bd272e"
+    },
+    {
+      "function_id": "1d272aed-f12d-476b-9202-c3c22a386d9a",
+      "slug": "henvalt-mailersend-delivery",
+      "version": 1,
+      "status": "ACTIVE",
+      "verify_jwt": true,
+      "deployment_artifact_ezbr_sha256": "af754befda94057ea429c684d84bb8d9eeed99539b08b95fd3ff666d2f949c4a",
+      "source_chars": 6174,
+      "source_lines": 174,
+      "source_file": "supabase/audit-baselines/deployed-2026-11-22/henvalt-mailersend-delivery-v1.ts",
+      "git_blob_sha": "4fcc80e258d387a10890b1bde7bbfb897b724b7e"
+    }
+  ]
+}
