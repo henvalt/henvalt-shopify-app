@@ -37,6 +37,8 @@ declare
   v_rejected boolean := false;
   v_job_schedule text;
   v_job_command text;
+  v_retry_at timestamptz;
+  v_attempts integer;
 begin
   select schedule,command into v_job_schedule,v_job_command
   from cron.job where jobname='henvalt-shopify-privacy-queue-worker';
@@ -85,11 +87,29 @@ begin
     raise exception 'worker no-match redaction did not move to review and minimize identifiers';
   end if;
 
-  select status,payload,customer_id into v_status,v_payload,v_customer
+  select status,payload,customer_id,next_attempt_at,lease_attempts
+    into v_status,v_payload,v_customer,v_retry_at,v_attempts
   from henvalt.shopify_privacy_requests
   where id='50505050-5050-4050-8050-505050505050';
-  if v_status <> 'FAILED' or v_payload = '{}'::jsonb or v_customer <> 'export-fail' then
-    raise exception 'worker failure did not preserve minimal retry identifiers';
+  if v_status <> 'FAILED' or v_payload = '{}'::jsonb or v_customer <> 'export-fail'
+     or v_retry_at <= now() or v_attempts <> 1 then
+    raise exception 'worker failure did not preserve bounded retry identifiers and delay';
+  end if;
+
+  -- A due retry is processed once; a newly failed request is not immediately reclaimed again.
+  update henvalt.shopify_privacy_requests
+  set next_attempt_at=now()-interval '1 second'
+  where id='50505050-5050-4050-8050-505050505050';
+  v_result := henvalt.process_shopify_privacy_queue(5,120);
+  if (v_result->>'processed')::integer <> 1
+     or (v_result->>'failed')::integer <> 1 then
+    raise exception 'due privacy retry was not processed exactly once: %',v_result;
+  end if;
+  select next_attempt_at,lease_attempts into v_retry_at,v_attempts
+  from henvalt.shopify_privacy_requests
+  where id='50505050-5050-4050-8050-505050505050';
+  if v_retry_at <= now() or v_attempts <> 2 then
+    raise exception 'privacy retry did not schedule the next exponential delay';
   end if;
 
   select count(*) into v_calls from henvalt.privacy_redaction_calls;
