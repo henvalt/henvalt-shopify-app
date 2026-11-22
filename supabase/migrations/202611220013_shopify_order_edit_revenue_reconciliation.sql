@@ -17,7 +17,7 @@ CREATE OR REPLACE FUNCTION henvalt.create_revenue_adjustment(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'henvalt', 'public', 'pg_temp'
+SET search_path = ''
 AS $function$
 DECLARE
   v_tenant_id uuid;
@@ -181,7 +181,7 @@ CREATE OR REPLACE FUNCTION henvalt.process_shopify_order_edit_adjustment(p_event
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO 'henvalt', 'public', 'pg_temp'
+SET search_path = ''
 AS $function$
 DECLARE
   v_event henvalt.canonical_events%ROWTYPE;
