@@ -164,7 +164,7 @@ test("embedded replay envelope enforces the pure helper's missing edge-case guar
     shopify_triggered_at:"2099-11-21T22:59:00.000Z"
   };
   const row = {
-    job_id:job,webhook_id:webhook,tenant_id,source_event_id:"delivery-xyz",
+    job_id:job,webhook_id:webhook,tenant_id:tenant,source_event_id:"delivery-xyz",
     topic:"checkouts/update",payload:{id:42},metadata,processing_status:"PROCESSING",
     webhook_processed:false,correlation_id:correlation,
     lease_expires_at:"2099-11-21T23:00:00.000Z"
