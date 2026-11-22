@@ -27,6 +27,8 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /NOT_FOUND_CONFIRMED/);
   assert.match(migration, /request.jwt.claim.role/);
   assert.match(migration, /v_safe_evidence := jsonb_build_object/);
+  assert.match(migration, /CREATE UNIQUE INDEX billing_usage_charges_provider_record_unique/);
+  assert.match(acceptance, /duplicate provider usage record was attached to a second charge/);
   assert.match(migration, /reconciliation_evidence = v_safe_evidence/);
   assert.match(acceptance, /arbitrary evidence key was persisted/);
   assert.match(acceptance, /matched reconciliation failed/);
