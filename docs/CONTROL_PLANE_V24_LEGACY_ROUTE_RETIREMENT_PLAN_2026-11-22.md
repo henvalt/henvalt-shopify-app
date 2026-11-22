@@ -6,7 +6,7 @@ Captured 2026-11-22 from the active Supabase function `henvalt-control-plane` in
 
 - Deployed version: **24**, status **ACTIVE**
 - Gateway `verify_jwt`: **false**
-- Deployed source SHA-256: `b3975326b8805f7883aedd797c34f8667cd2289ffc56a84765517b373eb90fdf`
+- Supabase deployment-artifact SHA-256 (`ezbr_sha256`): `b3975326b8805f7883aedd797c34f8667cd2289ffc56a84765517b373eb90fdf` (this is deployment metadata, not asserted as a per-file hash)
 - Exact source snapshot: `supabase/audit-baselines/henvalt-control-plane-v24.ts`
 - Machine-readable metadata: `supabase/audit-baselines/henvalt-control-plane-v24.json`
 
