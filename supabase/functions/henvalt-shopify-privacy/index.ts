@@ -7,6 +7,7 @@ import { readBoundedBody } from "./body-limiter.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
+const MAX_BODY_BYTES = 1_000_000;
 
 type Json = Record<string, unknown>;
 
