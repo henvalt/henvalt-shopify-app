@@ -282,10 +282,11 @@ BEGIN
   v_result := henvalt.control_plane_claim_billing_usage('reconcile-match.myshopify.com');
   IF v_result->>'available' <> 'false' THEN RAISE EXCEPTION 'scheduler claim retried a mismatch reconciliation case: %',v_result; END IF;
   v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id,'MATCHED','gid://shopify/AppUsageRecord/reconcile-match-1',
-    jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'providerUsageRecordId','gid://shopify/AppUsageRecord/reconcile-match-1','matchingCount','1','idempotencyKey',(SELECT idempotency_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id),'lineItemId','gid://shopify/AppSubscriptionLineItem/reconcile-match','amount','10','currency','USD','pagesScanned',1),
+    jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'providerUsageRecordId','gid://shopify/AppUsageRecord/reconcile-match-1','matchingCount','1','idempotencyKey',(SELECT idempotency_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id),'lineItemId','gid://shopify/AppSubscriptionLineItem/reconcile-match','amount','10','currency','USD','pagesScanned',1,'accessToken','must-not-persist'),
     'operator-test-1','Verified exact provider idempotency key, amount, currency and line item');
   IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'SUBMITTED' THEN RAISE EXCEPTION 'matched reconciliation failed: %',v_result; END IF;
   IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND status='SUBMITTED' AND reconciliation_status='MATCHED' AND provider_usage_record_id='gid://shopify/AppUsageRecord/reconcile-match-1') THEN RAISE EXCEPTION 'matched charge was not finalized'; END IF;
+  IF EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND reconciliation_evidence ? 'accessToken') THEN RAISE EXCEPTION 'arbitrary evidence key was persisted'; END IF;
   IF NOT EXISTS (SELECT 1 FROM henvalt.billing_measurements WHERE id='dddddddd-dddd-4ddd-8ddd-dddddddd0118' AND status='BILLED') OR NOT EXISTS (SELECT 1 FROM henvalt.revenue_ledger WHERE id='eeeeeeee-eeee-4eee-8eee-eeeeeeee0121' AND billing_status='BILLED') THEN RAISE EXCEPTION 'matched measurement and ledger were not finalized'; END IF;
 
   INSERT INTO henvalt.tenants(id,status,default_currency) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','ACTIVE','USD');
