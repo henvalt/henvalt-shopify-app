@@ -95,7 +95,10 @@ BEGIN
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
     'attacker@example.invalid', 'HENVALT Test', 'support@example.invalid'
-  ) IS TRUE THEN
+  ,
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token') IS TRUE THEN
     RAISE EXCEPTION 'unconfigured sender was authorized';
   END IF;
 
