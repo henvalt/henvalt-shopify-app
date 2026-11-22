@@ -250,6 +250,15 @@ return { json: {
   const replayOrIngress = createNode("Is Replay Entry?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"is-replay-entry",leftValue:"={{ !!$('Validate & Normalize').item.json.replay_context }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
   },[1120,600],2.2);
+  const shopifySource = createNode("Is Shopify Source?","n8n-nodes-base.if",{
+    conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"is-shopify-source",leftValue:"={{ $('Validate & Normalize').item.json.ingest.source === 'shopify' }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
+  },[1320,360],2.2);
+  const unsupportedInternal = createNode("Build Unsupported Internal Source Response","n8n-nodes-base.set",{
+    mode:"manual",assignments:{assignments:[
+      {id:"internal-source-http",name:"__http",type:"number",value:422},
+      {id:"internal-source-body",name:"__body",type:"object",value:"={{ { status: 'unsupported_internal_source', message: 'This ingress endpoint currently accepts authenticated Shopify webhooks only.', correlation_id: $('Validate & Normalize').item.json.correlation_id } }}"}
+    ]},includeOtherFields:true,options:{}
+  },[1540,520],3.4);
   const renewLease = createNode("Renew Replay Lease Before Writes","n8n-nodes-base.httpRequest",{
     method:"POST",url:"https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/renew_shopify_replay_lease",
     authentication:"predefinedCredentialType",nodeCredentialType:"supabaseApi",sendHeaders:true,
@@ -304,8 +313,16 @@ return { json: { ...prior, replay_context: { ...context, lease_expires_at: respo
   workflow.connections["Is Valid"].main[1] = [{node:"Is Rejected Replay?",type:"main",index:0}];
   workflow.connections["Is Replay Entry?"] = {main:[
     [{node:"Classify Result",type:"main",index:0}],
-    [{node:"Supabase Ingest RPC",type:"main",index:0}]
+    [{node:"Is Shopify Source?",type:"main",index:0}]
   ]};
+  // This endpoint is Shopify-specific. Never send internal HENVALT events to
+  // the Shopify HMAC/tenant RPC; reject them explicitly until a separate
+  // authenticated internal-ingress contract is implemented.
+  workflow.connections["Is Shopify Source?"] = {main:[
+    [{node:"Supabase Ingest RPC",type:"main",index:0}],
+    [{node:"Build Unsupported Internal Source Response",type:"main",index:0}]
+  ]};
+  workflow.connections["Build Unsupported Internal Source Response"] = {main:[[{node:"Respond to Shopify",type:"main",index:0}]]};
   workflow.connections["Supabase Ingest RPC"].main = [[{node:"Classify Result",type:"main",index:0}],[{node:"Classify Result",type:"main",index:0}]];
   workflow.connections["Classify Result"].main = [[{node:"Replay Pipeline?",type:"main",index:0}]];
   workflow.connections["Replay Pipeline?"] = {main:[
@@ -347,6 +364,7 @@ return { json: { ...prior, replay_context: { ...context, lease_expires_at: respo
   addNode(workflow,renewLease); addNode(workflow,confirmRenewal);
   addNode(workflow,processedGate); addNode(workflow,deferredGate); addNode(workflow,stopMarker);
   addNode(workflow,stopNotProceedable);
+  addNode(workflow,shopifySource); addNode(workflow,unsupportedInternal);
 
   // n8n graph connections support multiple upstream nodes. Append replay envelope
   // as an additional source for the existing normalizer.
