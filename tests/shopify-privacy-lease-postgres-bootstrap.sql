@@ -33,6 +33,36 @@ create table henvalt.shopify_privacy_requests (
     check (status in ('PENDING','PROCESSING','COMPLETED','FAILED','REVIEW_REQUIRED'))
 );
 
+-- Disposable pg_cron contract for testing migration scheduling without external services.
+do $
+begin
+  if to_regnamespace('cron') is null then
+    execute 'create schema cron';
+    execute 'create table cron.job (jobid bigint generated always as identity primary key, jobname text unique, schedule text, command text)';
+    execute $ddl$
+      create function cron.schedule(text,text,text) returns bigint
+      language plpgsql as $fn$
+      declare v_id bigint;
+      begin
+        insert into cron.job(jobname,schedule,command) values ($1,$2,$3)
+        on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command
+        returning jobid into v_id;
+        return v_id;
+      end
+      $fn$
+    $ddl$;
+    execute $ddl$
+      create function cron.unschedule(bigint) returns boolean
+      language plpgsql as $fn$
+      begin
+        delete from cron.job where jobid=$1;
+        return found;
+      end
+      $fn$
+    $ddl$;
+  end if;
+end $;
+
 -- Minimal tenant-scoped stores required by the candidate customer-redaction preflight.
 create table henvalt.customers (tenant_id uuid, shopify_customer_id text, email text);
 create table henvalt.checkouts (tenant_id uuid, email text);
