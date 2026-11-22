@@ -35,7 +35,16 @@ declare
   v_lease uuid;
   v_calls integer;
   v_rejected boolean := false;
+  v_job_schedule text;
+  v_job_command text;
 begin
+  select schedule,command into v_job_schedule,v_job_command
+  from cron.job where jobname='henvalt-shopify-privacy-queue-worker';
+  if v_job_schedule <> '* * * * *'
+     or v_job_command <> 'select henvalt.process_shopify_privacy_queue(5,120);' then
+    raise exception 'privacy worker cron schedule missing or misconfigured';
+  end if;
+
   v_result := henvalt.process_shopify_privacy_queue(10,120);
   if (v_result->>'processed')::integer <> 5
      or (v_result->>'completed')::integer <> 2
