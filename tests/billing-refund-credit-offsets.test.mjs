@@ -44,4 +44,5 @@ test("concurrent workers serialize on credit rows and re-read the balance after 
   assert.match(concurrency, /worker B incorrectly reused or lost the locked credit/);
   assert.doesNotMatch(concurrency, /\$[0-9]+/);
   assert.match(workflow, /billing-refund-credit-concurrency-postgres\.sh/);
+  assert.match(workflow, /node --test[\s\S]*tests\/billing-refund-credit-offsets\.test\.mjs/);
 });
