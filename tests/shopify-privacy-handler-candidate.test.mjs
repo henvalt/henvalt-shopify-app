@@ -15,7 +15,7 @@ test("privacy candidate authenticates exact raw bytes and signed shop identity",
 
 test("privacy candidate persists only minimal identifiers and acknowledges before processing", () => {
   assert.match(source, /customer_id: verifiedConnection \? customerId : null/);
-  assert.match(source, /payload: connection \? minimalPayload : \{\}/);
+  assert.match(source, /payload: verifiedConnection \\? minimalPayload : \\{\\}/);
   assert.match(source, /customer_email: customerEmail/);
   assert.match(source, /persist_shopify_privacy_request/);
   assert.match(source, /return reply\(200, \{[\s\S]*queued: true/);
