@@ -18,7 +18,7 @@ test("legacy control-plane billing route snapshot records the real deployed auth
     { method: "POST", path: "/v1/billing/usage/claim", rpc: "control_plane_claim_billing_usage" },
     { method: "POST", path: "/v1/billing/usage/result", rpc: "control_plane_record_billing_usage_result" },
   ]);
-  assert.match(audit.control_plane.risk, /late failure can downgrade SUBMITTED/i);
+  assert.match(audit.control_plane.risk, /can downgrade SUBMITTED on a late failure/i);
   assert.match(audit.control_plane.database_acl, /service_role only/i);
 });
 
