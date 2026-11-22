@@ -20,6 +20,7 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /SELECT usage_line_item_id, currency, test_mode/);
   assert.match(migration, /v_test_mode IS DISTINCT FROM TRUE/);
   assert.match(migration, /TEST_MODE_REQUIRED/);
+  assert.equal((migration.match(/'testMode', v_test_mode/g) || []).length, 2);
   assert.match(acceptance, /live-mode subscription was not blocked by default/);
   assert.match(migration, /FULLY_OFFSET_BY_REFUND_CREDIT/);
   assert.match(migration, /amount, currency, status, attempt_count, attempted_at/);
