@@ -2,6 +2,7 @@
 // Requires candidate migrations 202611220001 and 202611220002.
 // Do not deploy until disposable PostgreSQL acceptance and full lifecycle review pass.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { readBoundedBody } from "./body-limiter.mjs";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -21,7 +22,7 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function verifyHmac(raw: ArrayBuffer, supplied: string): Promise<boolean> {
+async function verifyHmac(raw: Uint8Array, supplied: string): Promise<boolean> {
   if (!SHOPIFY_API_SECRET || !supplied) return false;
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(SHOPIFY_API_SECRET),
@@ -85,8 +86,14 @@ Deno.serve(async (req: Request) => {
     return reply(400, { error: "invalid_compliance_webhook_headers" });
   }
 
-  const raw = await req.arrayBuffer();
-  if (raw.byteLength > 1_000_000) return reply(413, { error: "payload_too_large" });
+  let boundedBody: Awaited<ReturnType<typeof readBoundedBody>>;
+  try {
+    boundedBody = await readBoundedBody(req, MAX_BODY_BYTES);
+  } catch {
+    return reply(503, { error: "request_body_read_failed" });
+  }
+  if (!boundedBody.ok) return reply(413, { error: "payload_too_large" });
+  const raw = boundedBody.bytes;
   if (!(await verifyHmac(raw, hmac))) return reply(401, { error: "invalid_hmac" });
 
   let payload: any;
