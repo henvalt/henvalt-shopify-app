@@ -514,6 +514,41 @@ END;
 $function$;
 
 
+
+-- Delivery-envelope binding fixture shape.
+ALTER TABLE henvalt.delivery_requests
+  ADD COLUMN recipient_reference text,
+  ADD COLUMN channel henvalt.channel_type,
+  ADD COLUMN provider text,
+  ADD COLUMN delivery_mode text,
+  ADD COLUMN intervention_id uuid,
+  ADD COLUMN recovery_id uuid,
+  ADD COLUMN opportunity_id uuid,
+  ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
+
+CREATE TABLE henvalt.provider_configs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  channel henvalt.channel_type NOT NULL,
+  provider text NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  configuration jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE henvalt.sending_identities (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  channel henvalt.channel_type NOT NULL,
+  delivery_mode text NOT NULL,
+  provider text NOT NULL,
+  sender_reference text NOT NULL,
+  provider_config_id uuid NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- Minimal relational shape required by the replay object-tenant graph guard.
 -- Keep this disposable bootstrap aligned with the production relationship names.
 ALTER TABLE henvalt.checkouts
