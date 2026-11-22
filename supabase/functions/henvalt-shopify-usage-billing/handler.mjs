@@ -115,6 +115,38 @@ export function createShopifyUsageBillingHandler({
     }
   }
 
+  async function exhaustedDeterministicFailure(shop, chargeId, attempt) {
+    if (Number(attempt) < 5) return null;
+    try {
+      const recorded = await rpc("control_plane_mark_billing_reconciliation_required", {
+        p_shop_domain: shop,
+        p_charge_id: chargeId,
+        p_reason: "SHOPIFY_USAGE_DETERMINISTIC_REJECTION",
+      });
+      if (recorded?.updated !== true || recorded?.status !== "REQUIRED") {
+        throw new Error("BILLING_RECONCILIATION_STATE_NOT_RECORDED");
+      }
+      return json(202, {
+        claimed: true,
+        state: "FAILED",
+        retryable: false,
+        requiresOperatorReview: true,
+        reconciliationStatus: "REQUIRED",
+        reason: "SHOPIFY_USAGE_DETERMINISTIC_REJECTION",
+      });
+    } catch (error) {
+      logger.error("Exhausted deterministic billing rejection could not be persisted for reconciliation", error instanceof Error ? error.message : "unknown");
+      return json(503, {
+        claimed: true,
+        state: "FAILED",
+        retryable: false,
+        requiresOperatorReview: true,
+        reconciliationPersisted: false,
+        reason: "RECONCILIATION_STATE_PERSIST_FAILED",
+      });
+    }
+  }
+
   async function recordResult(shop, chargeId, success, providerId, errorCode, errorMessage) {
     return await rpc(RESULT_RPC, {
       p_shop_domain: shop,
@@ -236,6 +268,8 @@ export function createShopifyUsageBillingHandler({
         logger.error("Deterministic Shopify rejection could not be recorded", error instanceof Error ? error.message : "unknown");
         return json(503, { error: "billing_result_record_failed", retryable: true });
       }
+      const escalated = await exhaustedDeterministicFailure(shop, chargeId, attempt);
+      if (escalated) return escalated;
       return json(422, { claimed: true, state: "FAILED", reason: "SHOPIFY_HTTP_REJECTION" });
     }
 
@@ -285,6 +319,8 @@ export function createShopifyUsageBillingHandler({
         logger.error("Shopify usage rejection could not be recorded", error instanceof Error ? error.message : "unknown");
         return json(503, { error: "billing_result_record_failed", retryable: true });
       }
+      const escalated = await exhaustedDeterministicFailure(shop, chargeId, attempt);
+      if (escalated) return escalated;
       return json(422, { claimed: true, state: "FAILED", reason: "SHOPIFY_USAGE_REJECTED" });
     }
 
