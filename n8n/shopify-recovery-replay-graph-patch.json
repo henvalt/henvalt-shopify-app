@@ -377,9 +377,9 @@
         "workflowInputs": {
           "mappingMode": "defineBelow",
           "value": {
-            "job_id": "={{ $json.job_id }}",
-            "worker_id": "={{ $json.worker_id }}",
-            "lease_id": "={{ $json.lease_id }}"
+            "job_id": "={{ $('Normalize Shopify Replay Claim').item.json.job_id }}",
+            "worker_id": "={{ $('Normalize Shopify Replay Claim').item.json.worker_id }}",
+            "lease_id": "={{ $('Normalize Shopify Replay Claim').item.json.lease_id }}"
           },
           "matchingColumns": [],
           "schema": [
