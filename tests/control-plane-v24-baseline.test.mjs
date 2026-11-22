@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 
 const source = readFileSync(new URL("../supabase/audit-baselines/henvalt-control-plane-v24.ts", import.meta.url), "utf8");
 const metadata = JSON.parse(readFileSync(new URL("../supabase/audit-baselines/henvalt-control-plane-v24.json", import.meta.url), "utf8"));
@@ -11,6 +12,8 @@ test("captured production control-plane baseline is pinned to the inspected depl
   assert.equal(metadata.deployed_status, "ACTIVE");
   assert.equal(metadata.verify_jwt, false);
   assert.match(metadata.deployed_source_sha256, /^[a-f0-9]{64}$/);
+  const actualHash = createHash("sha256").update(source).digest("hex");
+  assert.equal(actualHash, metadata.deployed_source_sha256, "stored source must match the deployed version checksum");
   assert.ok(metadata.evidence_limits.some((item) => /complete set of external callers/i.test(item)));
 });
 
