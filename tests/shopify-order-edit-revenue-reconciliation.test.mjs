@@ -64,7 +64,8 @@ test("billing workflow applies replay lease and fenced-write prerequisites befor
   const ingress = billingWorkflow.indexOf("202611210007_shopify_webhook_single_roundtrip_ingress.sql");
   const lease = billingWorkflow.indexOf("202611210008_shopify_replay_lease_fencing.sql");
   const fenced = billingWorkflow.indexOf("202611210009_shopify_replay_business_write_fencing.sql");
+  const completeFencing = billingWorkflow.indexOf("202611210010_shopify_replay_complete_ingest_write_fencing.sql");
   const heartbeat = billingWorkflow.indexOf("202611210011_shopify_replay_write_lease_heartbeat.sql");
   const orderEdit = billingWorkflow.indexOf("202611220013_shopify_order_edit_revenue_reconciliation.sql");
-  assert.ok(enqueue >= 0 && loader > enqueue && ingress > loader && lease > ingress && fenced > lease && heartbeat > fenced && orderEdit > heartbeat);
+  assert.ok(enqueue >= 0 && loader > enqueue && ingress > loader && lease > ingress && fenced > lease && completeFencing > fenced && heartbeat > completeFencing && orderEdit > heartbeat);
 });
