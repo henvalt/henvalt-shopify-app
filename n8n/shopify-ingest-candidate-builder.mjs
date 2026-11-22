@@ -197,10 +197,12 @@ if (typeof claim.worker_id !== "string" || !claim.worker_id.trim()) errors.push(
 if (!uuid(claim.lease_id) || !uuid(row?.webhook_id) || !uuid(row?.tenant_id)) errors.push("IDENTITY_INVALID");
 if (!row?.payload || typeof row.payload !== "object" || Array.isArray(row.payload)) errors.push("PAYLOAD_INVALID");
 if (row?.metadata?.ingress_hmac_verified !== true) errors.push("INGRESS_NOT_AUTHENTICATED");
-const shop = String(row?.metadata?.shop_domain || "").toLowerCase();
+const shop = typeof row?.metadata?.shop_domain === "string" ? row.metadata.shop_domain.trim().toLowerCase() : "";
 if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop)) errors.push("SHOP_INVALID");
-if (row?.metadata?.shopify_webhook_id !== row?.source_event_id || !row?.source_event_id) errors.push("DELIVERY_ID_INVALID");
-if (!row?.lease_expires_at || Date.parse(row.lease_expires_at) <= Date.now()) errors.push("LEASE_EXPIRED");
+if (typeof row?.source_event_id !== "string" || !row.source_event_id.trim() || row?.metadata?.shopify_webhook_id !== row?.source_event_id) errors.push("DELIVERY_ID_INVALID");
+if (typeof row?.topic !== "string" || !row.topic.trim()) errors.push("TOPIC_INVALID");
+if (row?.correlation_id != null && !uuid(row.correlation_id)) errors.push("CORRELATION_ID_INVALID");
+if (typeof row?.lease_expires_at !== "string" || !Number.isFinite(Date.parse(row.lease_expires_at)) || Date.parse(row.lease_expires_at) <= Date.now()) errors.push("LEASE_EXPIRED");
 const alreadyProcessed = row?.webhook_processed === true || String(row?.processing_status || "").toUpperCase() === "PROCESSED";
 if (!alreadyProcessed && !["PROCESSING","FAILED"].includes(String(row?.processing_status || "").toUpperCase())) errors.push("WEBHOOK_STATE_NOT_REPLAYABLE");
 if (errors.length) return { json: { __replay_invalid: true, __replay_reason: errors.join(",") } };
@@ -217,6 +219,8 @@ const headers = {
   "x-shopify-topic": row.topic,
   "x-shopify-webhook-id": row.source_event_id
 };
+if (typeof row.metadata.shopify_api_version === "string") headers["x-shopify-api-version"] = row.metadata.shopify_api_version;
+if (typeof row.metadata.shopify_triggered_at === "string") headers["x-shopify-triggered-at"] = row.metadata.shopify_triggered_at;
 return { json: {
   body, headers, query: {},
   replay_context: {
