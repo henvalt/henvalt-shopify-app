@@ -1,7 +1,7 @@
+\set ON_ERROR_STOP on
+
 CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
-
-\set ON_ERROR_STOP on
 
 DO $bootstrap$
 BEGIN
