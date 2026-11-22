@@ -51,6 +51,32 @@ begin
   );
   if not v_finished then raise exception 'no-match request did not finish under lease'; end if;
 
+  -- Email-linked delivery attempts must not be reported as no-match when the customer row is absent.
+  insert into henvalt.delivery_requests(tenant_id,recipient_reference)
+  values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','orphan-delivery@example.test');
+  insert into henvalt.delivery_attempts(tenant_id,delivery_request_id)
+  select 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',id
+  from henvalt.delivery_requests
+  where tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+    and recipient_reference='orphan-delivery@example.test';
+  insert into henvalt.shopify_privacy_requests
+    (id,tenant_id,shop_domain,shopify_shop_id,topic,webhook_id,customer_id,payload,status)
+  values
+    ('12121212-1212-4212-8212-121212121212','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+     'fixture.myshopify.com','1','customers/redact','redaction-orphan-delivery',null,
+     '{"customer_email":"orphan-delivery@example.test"}','PENDING');
+  select * into v_claim from henvalt.claim_shopify_privacy_request_by_id(
+    '12121212-1212-4212-8212-121212121212',120
+  );
+  v_result := henvalt.redact_shopify_customer_data_checked_with_lease(v_claim.id,v_claim.lease_token);
+  if v_result->>'matched' <> 'true' then raise exception 'email-linked delivery attempt was missed by redaction preflight'; end if;
+  select count(*) into v_calls from henvalt.privacy_redaction_calls;
+  if v_calls <> 1 then raise exception 'delivery-attempt match did not dispatch redaction exactly once'; end if;
+  v_finished := henvalt.finish_shopify_privacy_request(
+    v_claim.id,v_claim.lease_token,'COMPLETED',null
+  );
+  if not v_finished then raise exception 'orphan delivery request did not finish'; end if;
+
   -- A matching tenant/customer must call the destructive routine exactly once.
   insert into henvalt.customers(tenant_id,shopify_customer_id,email)
   values ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','matched-customer','match@example.test');
