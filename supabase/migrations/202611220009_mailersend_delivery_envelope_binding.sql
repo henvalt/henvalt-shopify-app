@@ -60,13 +60,9 @@ AS $function$
       ON rs.id = dr.recovery_id
      AND rs.tenant_id = dr.tenant_id
      AND rs.opportunity_id = o.id
-    JOIN henvalt.checkouts ck
+    LEFT JOIN henvalt.checkouts ck
       ON ck.id = o.checkout_id
      AND ck.tenant_id = o.tenant_id
-    JOIN henvalt.shopify_connections sc
-      ON sc.tenant_id = ck.tenant_id
-     AND lower(sc.shop_domain) = lower(COALESCE(ck.metadata->>'shop_domain', ''))
-     AND sc.active IS TRUE
     JOIN henvalt.tenants t
       ON t.id = dr.tenant_id
      AND t.status = 'ACTIVE'
@@ -82,15 +78,52 @@ AS $function$
       AND o.status = 'ELIGIBLE'
       AND c.email_consent IS TRUE
       AND lower(COALESCE(c.email, '')) = lower(dr.recipient_reference)
+      AND COALESCE((henvalt.evaluate_opportunity_communication_eligibility(dr.tenant_id, o.id)->>'allowed')::boolean, false)
       AND ri.status = 'SENDING'
       AND rs.status IN ('SCHEDULED', 'ACTIVE')
+      AND EXISTS (
+        SELECT 1
+        FROM henvalt.shopify_connections sc
+        WHERE sc.tenant_id = o.tenant_id
+          AND sc.active IS TRUE
+          AND lower(sc.shop_domain) = lower(COALESCE(o.metadata->>'shop_domain', ck.metadata->>'shop_domain', ''))
+      )
+      AND (
+        CASE o.opportunity_type::text
+          WHEN 'BROWSE_ABANDONMENT' THEN NOT henvalt.browse_opportunity_advanced(
+            o.tenant_id,
+            o.metadata->>'session_reference',
+            o.source_event_id,
+            NULLIF(o.metadata->>'last_activity_at', '')::timestamptz
+          )
+          WHEN 'ABANDONED_CART' THEN NOT EXISTS (
+            SELECT 1
+            FROM henvalt.checkouts cart_checkout
+            WHERE cart_checkout.tenant_id = o.tenant_id
+              AND cart_checkout.customer_id = o.customer_id
+              AND cart_checkout.updated_at >= COALESCE(
+                NULLIF(o.metadata->>'last_activity_at', '')::timestamptz,
+                o.created_at
+              )
+              AND NULLIF(o.metadata->>'cart_token', '') IS NOT NULL
+              AND cart_checkout.metadata->>'cart_token' = o.metadata->>'cart_token'
+          )
+          ELSE true
+        END
+      )
       AND NOT EXISTS (
         SELECT 1
         FROM henvalt.orders ord
         WHERE ord.tenant_id = o.tenant_id
-          AND ord.checkout_id = o.checkout_id
-          AND lower(COALESCE(ord.financial_status, '')) = 'paid'
           AND ord.cancelled_at IS NULL
+          AND lower(COALESCE(ord.financial_status, '')) = 'paid'
+          AND (
+            (o.opportunity_type::text = 'ABANDONED_CHECKOUT' AND ord.checkout_id = o.checkout_id)
+            OR (o.opportunity_type::text = 'ABANDONED_CART' AND ord.customer_id = o.customer_id
+                AND ord.ordered_at >= COALESCE(NULLIF(o.metadata->>'last_activity_at', '')::timestamptz, o.created_at))
+            OR (o.opportunity_type::text = 'BROWSE_ABANDONMENT' AND ord.customer_id = o.customer_id
+                AND ord.ordered_at >= o.created_at)
+          )
       )
       AND NOT EXISTS (
         SELECT 1
