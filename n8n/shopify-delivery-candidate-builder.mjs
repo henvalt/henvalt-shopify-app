@@ -112,6 +112,23 @@ export function buildDeliveryCandidate(source) {
   if (workflow.nodes.some((n) => n.parameters?.url && String(n.parameters.url).includes("/functions/v1/henvalt-mailersend-delivery"))) {
     throw new Error("Provider delivery Edge Function call remains in candidate");
   }
+  // The named MailerSend node is not the only possible provider-egress surface.
+  // Fail closed if any remaining HTTP node points outside the candidate-only hosts.
+  const allowedHttpHosts = new Set(["supabase-staging.invalid", "reply-ai-staging.invalid"]);
+  for (const node of workflow.nodes) {
+    if (["n8n-nodes-base.emailSend", "n8n-nodes-base.smtp", "n8n-nodes-base.sendGrid"].includes(node.type)) {
+      throw new Error("Provider egress node type remains in candidate: " + node.type);
+    }
+    if (node.type === "n8n-nodes-base.httpRequest") {
+      const rawUrl = node.parameters?.url;
+      if (typeof rawUrl !== "string") throw new Error("HTTP node URL must be a literal candidate endpoint: " + node.name);
+      let parsed;
+      try { parsed = new URL(rawUrl); } catch { throw new Error("Invalid HTTP node URL: " + node.name); }
+      if (parsed.protocol !== "https:" || !allowedHttpHosts.has(parsed.hostname) || parsed.username || parsed.password) {
+        throw new Error("Non-candidate HTTP egress remains in delivery candidate: " + node.name + " -> " + parsed.hostname);
+      }
+    }
+  }
   const stub = workflow.nodes.find((n) => n.name === "No-Send Provider Stub");
   if (!stub || stub.type !== "n8n-nodes-base.code" || !stub.parameters.jsCode.includes("no_send_candidate: true")) {
     throw new Error("No-send provider stub is missing or invalid");
