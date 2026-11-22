@@ -68,6 +68,11 @@ DECLARE
   v_recovery_3 uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccc0315';
   v_existing_adjustment uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0318';
   v_backfill_event uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0318';
+  v_order_4 uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0316';
+  v_recovery_4 uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccc0316';
+  v_edit_5 uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0319';
+  v_job uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0320';
+  v_lease uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0321';
   v_result jsonb;
   v_amount numeric;
   v_total numeric;
@@ -80,6 +85,13 @@ BEGIN
   END IF;
   IF NOT has_function_privilege('service_role','henvalt.process_shopify_order_edit_adjustment(uuid)','EXECUTE') THEN
     RAISE EXCEPTION 'service_role must retain order edit adjustment RPC access';
+  END IF;
+  IF has_function_privilege('anon','henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)','EXECUTE')
+     OR has_function_privilege('authenticated','henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'fenced order edit RPC must not be executable by client roles';
+  END IF;
+  IF NOT has_function_privilege('service_role','henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'service_role must retain fenced order edit RPC access';
   END IF;
 
   INSERT INTO henvalt.tenants(id,status,default_currency) VALUES(v_tenant,'ACTIVE','USD');
@@ -241,6 +253,56 @@ BEGIN
    WHERE ledger_entry_id=v_existing_adjustment;
   IF v_fee <> -0.5 THEN
     RAISE EXCEPTION 'idempotent adjustment retry did not backfill its negative fee measurement';
+  END IF;
+
+  -- The replay-only wrapper rejects stale leases before the order-edit mutation
+  -- and permits the same event only with the exact current job/worker/lease tuple.
+  INSERT INTO henvalt.orders(id,tenant_id,shopify_order_id,total_value,currency,metadata)
+  VALUES(v_order_4,v_tenant,'order-edit-fenced',100,'USD','{}');
+  INSERT INTO henvalt.revenue_ledger(
+    id,tenant_id,order_id,entry_type,amount,currency,
+    attribution_confidence,billable,billing_status,metadata
+  ) VALUES(
+    v_recovery_4,v_tenant,v_order_4,'RECOVERY',100,'USD',
+    'CONFIRMED',true,'PENDING','{}'
+  );
+  INSERT INTO henvalt.canonical_events(
+    id,tenant_id,event_type,event_class,source,source_event_id,
+    occurred_at,payload,metadata,idempotency_key
+  ) VALUES(
+    v_edit_5,v_tenant,'orders/updated','ADJUSTMENT','shopify',
+    'order-edit-delivery-fenced',now(),
+    '{"id":"order-edit-fenced","total_price":"100.00","current_total_price":"90.00","currency":"USD"}',
+    '{}','order-edit-idem-fenced'
+  );
+  INSERT INTO henvalt.background_jobs(
+    id,tenant_id,job_type,payload,status,locked_by,lease_id,lease_expires_at
+  ) VALUES(
+    v_job,v_tenant,'process_shopify_webhook','{}','CLAIMED',
+    'order-edit-worker',v_lease,now()+interval '5 minutes'
+  );
+
+  BEGIN
+    PERFORM henvalt.process_shopify_order_edit_adjustment_fenced(
+      v_job,'order-edit-worker','eeeeeeee-eeee-4eee-8eee-eeeeeeee0322',v_edit_5
+    );
+    RAISE EXCEPTION 'stale replay lease unexpectedly allowed an order-edit write';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+
+  IF EXISTS(
+    SELECT 1 FROM henvalt.revenue_ledger
+     WHERE tenant_id=v_tenant AND order_id=v_order_4 AND entry_type='ADJUSTMENT'
+  ) THEN
+    RAISE EXCEPTION 'stale replay lease mutated the order-edit revenue ledger';
+  END IF;
+
+  v_result := henvalt.process_shopify_order_edit_adjustment_fenced(
+    v_job,'order-edit-worker',v_lease,v_edit_5
+  );
+  IF v_result->>'status' <> 'adjusted' OR (v_result->>'amount')::numeric <> 10 THEN
+    RAISE EXCEPTION 'valid replay lease did not permit order-edit reconciliation: %',v_result;
   END IF;
 END;
 $shopify_order_edit_acceptance$;
