@@ -20,12 +20,13 @@
    - `202611220003_shopify_privacy_retention_cron.sql`
    - `202611220004_shopify_privacy_signed_payload_idempotency.sql`
    - `202611220005_shopify_privacy_queue_worker.sql`
+   - `202611220006_shopify_privacy_export_acknowledgement.sql`
 3. Apply only those reviewed migrations, in order, using a controlled SQL migration process. Do not run an unrestricted `supabase db push` for the whole candidate branch: it contains other unrelated candidate migrations that have not been approved for production.
 4. Verify `cron.job` contains exactly one active `henvalt-shopify-privacy-queue-worker` schedule with the expected one-minute cadence and command.
-5. Deploy only the `henvalt-shopify-privacy` function from the candidate source with gateway JWT verification disabled. Do not deploy the audit-baseline file or deploy all functions indiscriminately.
+5. Deploy only the `henvalt-shopify-privacy` and `henvalt-privacy-export` functions from their candidate sources. The first must retain gateway JWT verification disabled because it performs Shopify HMAC verification; the second validates the Supabase bearer token and OWNER/ADMIN membership itself. Do not deploy either audit-baseline file or deploy all functions indiscriminately.
 6. Verify the deployed function source/version and run a signed, non-destructive privacy data-request test against an isolated Shopify development store. Verify invalid HMAC returns 401, valid request persists once, duplicates are idempotent, and the worker processes the queue.
 7. Verify customer-redact against synthetic tenant data in isolated staging, including no-match, customer-ID-only, email-only, delivery-only, and retry cases. Verify shop-redact after uninstall with signed shop identity matching the retained inactive connection.
-8. Verify the owner-authenticated export pull route, expiry, and delivery audit semantics. The current export endpoint marks `result_delivered_at` before response receipt and does not itself prove merchant receipt; keep data requests in review until an acknowledged delivery path is implemented and verified.
+8. Verify the owner-authenticated export pull route, expiry, and client acknowledgement. The candidate export endpoint records download initiation, returns a one-time acknowledgement token, and marks `result_client_acknowledged_at` only after the authenticated dashboard receives the complete response body and posts the token back. This is evidence of client receipt/acknowledgement, not proof the merchant saved or opened the file.
 9. Only after all checks pass, deploy the candidate `shopify.app.toml` configuration so Shopify subscribes to all three mandatory compliance topics. This step changes the Shopify app configuration and must be explicitly approved.
 10. Confirm Shopify webhook delivery logs for all three topics and retain evidence for review.
 
@@ -39,6 +40,6 @@
 ## Outstanding release gates
 
 - Candidate migrations and function must pass the full current CI workflow.
-- Export delivery requires a merchant acknowledgement flow; response initiation is not receipt.
+- Export acknowledgement is now implemented in candidate source and disposable PostgreSQL tests; verify the dashboard integration and actual browser round trip in isolated staging.
 - Full isolated end-to-end lifecycle evidence is still required.
 - Candidate TOML declaration is source-only; production Shopify configuration remains unchanged.
