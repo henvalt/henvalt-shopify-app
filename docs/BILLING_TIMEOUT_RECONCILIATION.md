@@ -91,13 +91,13 @@ Filter the returned line item by exact ID, then match `idempotencyKey`, amount a
 
 ## Required state and authorization work
 
-The candidate migration now adds a durable `reconciliation_status` gate to each billing charge. The worker calls `control_plane_mark_billing_reconciliation_required` when its fifth attempt has an ambiguous outcome. The scheduler discovery query excludes `REQUIRED` and `MISMATCH` charges. A service-role-only read RPC returns a tenant-bound charge envelope without credentials, and a service-role-only resolution RPC records audited operator decisions. These candidate RPCs are not deployed; the following staging and operator-surface work remains:
+The candidate migration now persists a separate `reconciliation_status` on each billing charge. The worker calls `control_plane_mark_billing_reconciliation_required` when its fifth attempt has an ambiguous outcome. The scheduler discovery query excludes `REQUIRED` and `MISMATCH` charges. The migration supplies service-role-only, tenant-bound read and resolution RPCs. A new `henvalt-billing-reconciliation` Edge Function validates the Supabase Auth session, requires exactly one OWNER/ADMIN membership, derives the shop from the active tenant connection, and requires an active test-mode billing account before calling those RPCs. It never accepts a client-supplied tenant or shop as authority and records the authenticated user ID as the operator reference. The service-role key remains server-side. These changes are candidate-only and have not been deployed.
 
-1. A durable `RECONCILIATION_REQUIRED` marker (or equivalent fields) on the charge, set atomically when ambiguous attempts are exhausted.
-2. A service-role-only read RPC that returns the exact tenant-bound charge envelope for reconciliation.
-3. A service-role-only result RPC that accepts only a verified provider usage-record ID and records the reconciliation decision with an audit event and operator note.
-4. A separate `NOT_FOUND_CONFIRMED` resolution that permits a retry only after a complete provider lookup; the retry must reuse the original idempotency key.
-5. A dashboard/operator surface that shows charge ID, shop, amount, currency, idempotency key, attempt history and provider lookup evidence without exposing access tokens.
+1. Validate the candidate migration and Edge Function against isolated Supabase staging with the exact production schema, roles and PostgREST JWT claims.
+2. Add the operator panel to the merchant dashboard and ensure only OWNER/ADMIN users can reach the action.
+3. Exercise all three resolutions (`MATCHED`, `NOT_FOUND_CONFIRMED`, `MISMATCH`) against Shopify development-store evidence.
+4. Add alerts and dashboard visibility for unresolved `REQUIRED` / `MISMATCH` rows.
+5. Complete the timeout-after-acceptance, pagination, concurrent reconciliation and no-duplicate-charge end-to-end scenarios.
 
 No operator action may accept an arbitrary shop/tenant pairing, overwrite a SUBMITTED charge, or replace the persisted idempotency key.
 
