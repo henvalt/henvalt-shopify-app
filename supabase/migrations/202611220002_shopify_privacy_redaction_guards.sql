@@ -224,6 +224,9 @@ begin
   end if;
 
   v_result := henvalt.redact_shopify_shop_data(p_privacy_request_id);
+  update henvalt.shopify_privacy_requests
+  set lease_token = null, lease_expires_at = null
+  where id=p_privacy_request_id and status='COMPLETED';
   return v_result;
 end;
 $function$;
