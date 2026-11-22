@@ -18,6 +18,7 @@ begin
       customer_id = null,
       lease_token = null,
       lease_expires_at = null,
+      next_attempt_at = null,
       last_error = 'privacy_request_retention_expired'
   where r.status in ('PENDING', 'FAILED', 'PROCESSING')
     and r.received_at < now() - interval '7 days'
