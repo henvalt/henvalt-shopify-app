@@ -15,12 +15,41 @@ as $function$
 declare
   v_email text := nullif(lower(trim(p_customer_email)), '');
   v_customer_id text := nullif(trim(p_shopify_customer_id), '');
+  v_customer_ids uuid[] := array[]::uuid[];
+  v_checkout_ids uuid[] := array[]::uuid[];
+  v_opportunity_ids uuid[] := array[]::uuid[];
+  v_session_refs text[] := array[]::text[];
   v_found boolean := false;
   v_result jsonb;
 begin
   if p_tenant_id is null or (v_customer_id is null and v_email is null) then
     raise exception 'tenant_id and a customer identifier are required';
   end if;
+
+  select coalesce(array_agg(c.id), array[]::uuid[])
+    into v_customer_ids
+  from henvalt.customers c
+  where c.tenant_id=p_tenant_id
+    and ((v_customer_id is not null and c.shopify_customer_id=v_customer_id)
+      or (v_email is not null and lower(c.email)=v_email));
+
+  select coalesce(array_agg(x.id), array[]::uuid[])
+    into v_checkout_ids
+  from henvalt.checkouts x
+  where x.tenant_id=p_tenant_id
+    and (x.customer_id=any(v_customer_ids)
+      or (v_email is not null and lower(x.email)=v_email));
+
+  select coalesce(array_agg(o.id), array[]::uuid[])
+    into v_opportunity_ids
+  from henvalt.opportunities o
+  where o.tenant_id=p_tenant_id
+    and (o.customer_id=any(v_customer_ids) or o.checkout_id=any(v_checkout_ids));
+
+  select coalesce(array_agg(distinct x.session_reference) filter (where x.session_reference is not null), array[]::text[])
+    into v_session_refs
+  from henvalt.checkouts x
+  where x.tenant_id=p_tenant_id and x.id=any(v_checkout_ids);
 
   select exists (
     select 1 from henvalt.customers c
