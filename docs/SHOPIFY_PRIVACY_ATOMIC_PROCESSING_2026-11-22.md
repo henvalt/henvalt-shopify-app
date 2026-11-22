@@ -62,3 +62,9 @@ The CI PostgreSQL acceptance now executes the lease and retention migrations aga
 A separate candidate migration adds `henvalt.purge_stale_shopify_privacy_request_identifiers()` and schedules it daily at 03:17 using pg_cron when the `cron` schema is already installed. It moves PENDING/FAILED/expired PROCESSING requests older than seven days to REVIEW_REQUIRED, clears customer identifiers and payload, preserves active unexpired leases, and clears expired export bundles. The routine is also executable by service_role for controlled maintenance.
 
 The deployed project currently has pg_cron 1.6.4 installed, and its privacy request table was empty at the latest read-only check. This does not mean the candidate job is installed: the migration remains un-applied.
+
+## Signed-body idempotency and candidate handler
+
+Migration `202611220004_shopify_privacy_signed_payload_idempotency.sql` adds a SHA-256 digest of the exact HMAC-authenticated request bytes. The persistence RPC deduplicates on (shop domain, topic, signed-body hash), rejects reuse of an already-seen unsigned webhook ID with a different signed body, and handles concurrent insert races by re-reading the unique winner. The candidate handler stores only the signed shop ID, customer ID, request ID, and the normalized customer email required by tenant-scoped export/redaction; it does not store the raw inbound JSON or trust the unsigned shop-ID header.
+
+Disposable PostgreSQL acceptance now checks same-ID replay, same-body/different-ID replay, conflicting body under a reused ID, and distinct-body persistence. The offline Deno check type-checks the candidate handler. These are candidate-only changes; deployed function code and production schema remain unchanged.
