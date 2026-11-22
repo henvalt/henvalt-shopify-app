@@ -283,7 +283,7 @@ CREATE INDEX billing_usage_charges_reconciliation_queue_idx
   ON henvalt.billing_usage_charges (tenant_id, reconciliation_required_at, created_at)
   WHERE reconciliation_status IN ('REQUIRED','MISMATCH');
 
-REVOKE ALL ON TABLE henvalt.billing_usage_charges FROM anon, authenticated;
+REVOKE ALL ON TABLE henvalt.billing_usage_charges FROM PUBLIC, anon, authenticated;
 
 CREATE OR REPLACE FUNCTION henvalt.control_plane_mark_billing_reconciliation_required(
   p_shop_domain text,
