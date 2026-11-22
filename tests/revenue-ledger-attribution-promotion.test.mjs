@@ -16,6 +16,8 @@ const acceptance = readFileSync(
 );
 
 test("recovery ledger promotion is monotonic and only confirmed attribution is billable", () => {
+  assert.match(migration, /oa\.attribution_confidence::text/);
+  assert.match(migration, /rl\.attribution_confidence::text/);
   assert.match(migration, /v_confidence NOT IN \('CONFIRMED', 'PROBABLE'\)/);
   assert.match(migration, /v_confidence = 'CONFIRMED'/);
   assert.match(migration, /attribution_confidence = 'CONFIRMED'/);
