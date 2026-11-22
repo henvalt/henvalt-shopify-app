@@ -11,6 +11,7 @@ test("privacy runbook applies only the five ordered candidate migrations", () =>
     "202611220003_shopify_privacy_retention_cron.sql",
     "202611220004_shopify_privacy_signed_payload_idempotency.sql",
     "202611220005_shopify_privacy_queue_worker.sql",
+    "202611220006_shopify_privacy_export_acknowledgement.sql",
   ];
   let last = -1;
   for (const migration of migrations) {
