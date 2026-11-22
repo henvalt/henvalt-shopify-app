@@ -35,8 +35,8 @@ test("PostgreSQL acceptance covers refunds plus edits, retries, incremental delt
 test("offline INGEST candidate routes order edit reconciliation after ledger posting", () => {
   assert.match(builder, /Process Shopify Order Edit Adjustment/);
   assert.match(builder, /process_shopify_order_edit_adjustment/);
-  assert.match(candidateTest, /Post Recovery To Ledger.*Process Shopify Order Edit Adjustment/);
-  assert.match(candidateTest, /Process Shopify Order Edit Adjustment.*Mark Webhook Processed/);
+  assert.match(candidateTest, /Post Recovery To Ledger[\\s\\S]*Process Shopify Order Edit Adjustment/);
+  assert.match(candidateTest, /Process Shopify Order Edit Adjustment[\\s\\S]*Mark Webhook Processed/);
 });
 
 test("safety CI executes this regression suite and applies the isolated SQL acceptance", () => {
