@@ -19,7 +19,7 @@ test("order updates prefer current Shopify totals and only create incremental do
   assert.match(migration, /lower\(v_event\.event_type\) <> 'orders\/updated'/);
   assert.match(migration, /process_shopify_order_edit_adjustment_fenced/);
   assert.match(migration, /assert_shopify_replay_lease_for_write\(p_job_id,p_worker_id,p_lease_id\)/);
-  assert.equal((migration.match(/SET search_path = ''/g) || []).length, 3);
+  assert.equal((migration.match(/SET search_path = ''/g) || []).length, 4);
   assert.match(acceptance, /stale replay lease unexpectedly allowed an order-edit write/);
   assert.match(acceptance, /valid replay lease did not permit order-edit reconciliation/);
 });
