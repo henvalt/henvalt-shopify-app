@@ -55,7 +55,7 @@ These files are candidate-only. Static Node contract tests are wired into the pu
 - Export result persistence is performed inside the same lease-fenced database function. A no-match retry clears any prior export bundle instead of leaving stale personal data.
 - Shop deletion clears lease metadata after the existing tenant-deletion routine completes.
 
-These refinements still require disposable PostgreSQL execution tests. The current CI acceptance covers claim serialization, request-specific claim, retry retention, attempt-eight escalation, and terminal minimization. It does not yet execute the new wrappers against a full disposable copy of the HENVALT schema.
+The CI PostgreSQL acceptance now executes the lease and retention migrations against PostgreSQL 17, and executes the redaction/export wrapper migration against a disposable schema with minimal tenant-scoped table fixtures and stubbed legacy RPCs. It covers no-match behavior, matched redaction dispatch, stale-token rejection, export persistence/expiry, stale export clearing, shop-redaction completion, retry retention, attempt-eight escalation, and terminal minimization. This validates wrapper control flow but does not prove the legacy production redaction routine covers every production table; that still needs a full-schema review and integration test.
 
 ## Scheduled retention
 
