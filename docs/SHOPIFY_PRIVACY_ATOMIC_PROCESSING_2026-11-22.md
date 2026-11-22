@@ -78,3 +78,7 @@ The deployed customer-redaction RPC was inspected read-only with `pg_get_functio
 Shopify requires a 2xx webhook response within five seconds and recommends queuing long-running work. The candidate handler now performs HMAC verification, signed-shop validation, and durable receipt persistence, then returns 200 without running exports or multi-table redaction inline. Migration `202611220005_shopify_privacy_queue_worker.sql` adds a bounded (maximum 20, scheduled at 5) SQL worker using the atomic lease claim RPC. It handles all three compliance topics and is scheduled every minute through pg_cron when available. Failed work remains retryable through the lease state machine; export bundles remain REVIEW_REQUIRED pending secure merchant delivery.
 
 The worker is database-native because the production project currently has pg_cron but not pg_net. This avoids adding a network extension or another n8n workflow. The migration and worker remain candidate-only until CI and full production lifecycle checks pass.
+
+## Post-uninstall shop resolution
+
+The OAuth uninstall handler deactivates the shop connection rather than deleting it. Shopify can send `shop/redact` after uninstall, so the privacy candidate intentionally resolves the unique connection by shop domain without filtering `active=true`. The signed payload shop ID must still match the stored shop ID. The connection's inactive state must not block legal data deletion; the shop-redaction worker then uses the tenant-scoped legacy deletion RPC and sanitizes the receipt.
