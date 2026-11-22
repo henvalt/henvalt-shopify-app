@@ -53,8 +53,13 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.replay_job_id\)/);
   const orderEdit = findNode(w,"Process Shopify Order Edit Adjustment");
   assert.ok(orderEdit);
-  assert.equal(orderEdit.parameters.url,"https://supabase-staging.invalid/rest/v1/rpc/process_shopify_order_edit_adjustment");
+  assert.match(orderEdit.parameters.url,/https:\/\/supabase-staging\.invalid\/rest\/v1\/rpc\//);
+  assert.match(orderEdit.parameters.url,/process_shopify_order_edit_adjustment_fenced/);
+  assert.match(orderEdit.parameters.url,/process_shopify_order_edit_adjustment/);
   assert.match(orderEdit.parameters.jsonBody,/p_event_id/);
+  assert.match(orderEdit.parameters.jsonBody,/p_job_id/);
+  assert.match(orderEdit.parameters.jsonBody,/p_worker_id/);
+  assert.match(orderEdit.parameters.jsonBody,/p_lease_id/);
   assert.equal(w.connections["Post Recovery To Ledger"].main[0][0].node,"Process Shopify Order Edit Adjustment");
   assert.equal(w.connections["Process Shopify Order Edit Adjustment"].main[0][0].node,"Mark Webhook Processed");
   assert.equal(w.connections["Process Shopify Order Edit Adjustment"].main[1][0].node,"Capture Error");
