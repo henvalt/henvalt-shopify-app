@@ -117,7 +117,7 @@ export function buildDeliveryCandidate(source) {
   const allowedHttpHosts = new Set(["supabase-staging.invalid", "reply-ai-staging.invalid"]);
   const providerNodeType = /\.(?:emailSend|sendEmail|smtp|sendGrid|mailgun|mailerSend|postmark|resend)$/i;
   const providerApiHost = /(?:api\.mailersend\.com|api\.sendgrid\.com|api\.resend\.com|api\.mailgun\.net|api\.postmarkapp\.com)/i;
-  const inlineNetworkCall = /\bfetch\s*\(|\baxios\b|\bXMLHttpRequest\b|\bhttps?\.(?:request|get)\s*\(|\bnet\.connect\s*\(/i;
+  const inlineNetworkCall = /\bfetch\s*\(|\baxios\b|\bXMLHttpRequest\b|\bhttps?\.(?:request|get)\s*\(|\bnet\.connect\s*\(|(?:this\.)?helpers\.httpRequest\b|\$http\b|\b(?:got|superagent|undici)\s*\(/i;
   for (const node of workflow.nodes) {
     if (providerNodeType.test(node.type)) {
       throw new Error("Provider egress node type remains in candidate: " + node.type);
