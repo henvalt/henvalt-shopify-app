@@ -6,6 +6,7 @@ on:
       - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
       - "supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql"
       - "supabase/migrations/202611220015_billing_claim_subscription_lock.sql"
+      - "supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql"
       - "tests/billing-refund-credit-offsets.test.mjs"
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/billing-refund-credit-concurrency-postgres.sh"
@@ -75,6 +76,10 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
+      - name: Apply deterministic billing failure reconciliation migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql
       - name: Exercise billing isolation, reconciliation repair and monotonic results
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
