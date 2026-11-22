@@ -15,13 +15,13 @@ DECLARE
   v_order_id uuid;
   v_recovery_id uuid;
   v_opportunity_id uuid;
-  v_confidence henvalt.attribution_confidence;
+  v_confidence text;
   v_amount numeric(18,2);
   v_currency char(3);
   v_financial_status text;
   v_cancelled_at timestamptz;
   v_existing_id uuid;
-  v_existing_confidence henvalt.attribution_confidence;
+  v_existing_confidence text;
   v_existing_billable boolean;
   v_ledger_id uuid;
 BEGIN
@@ -137,7 +137,7 @@ BEGIN
     'RECOVERY',
     v_amount,
     v_currency,
-    v_confidence,
+    v_confidence::henvalt.attribution_confidence,
     v_confidence = 'CONFIRMED',
     'PENDING',
     jsonb_build_object(
