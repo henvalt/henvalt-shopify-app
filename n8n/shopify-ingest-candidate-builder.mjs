@@ -203,21 +203,21 @@ if (row?.metadata?.shopify_webhook_id !== row?.source_event_id || !row?.source_e
 if (!row?.lease_expires_at || Date.parse(row.lease_expires_at) <= Date.now()) errors.push("LEASE_EXPIRED");
 const alreadyProcessed = row?.webhook_processed === true || String(row?.processing_status || "").toUpperCase() === "PROCESSED";
 if (!alreadyProcessed && !["PROCESSING","FAILED"].includes(String(row?.processing_status || "").toUpperCase())) errors.push("WEBHOOK_STATE_NOT_REPLAYABLE");
-if (errors.length) return { __replay_invalid: true, __replay_reason: errors.join(",") };
+if (errors.length) return { json: { __replay_invalid: true, __replay_reason: errors.join(",") } };
 const replayContext = {
   job_id: claim.job_id, worker_id: claim.worker_id.trim(), lease_id: claim.lease_id,
   lease_expires_at: row.lease_expires_at, tenant_id: row.tenant_id,
   webhook_id: row.webhook_id, correlation_id: row.correlation_id || null,
   source_event_id: row.source_event_id, ingress_hmac_verified: true
 };
-if (alreadyProcessed) return { __replay_already_processed: true, replay_context: replayContext, mark_webhook_processed: true };
+if (alreadyProcessed) return { json: { __replay_already_processed: true, replay_context: replayContext, mark_webhook_processed: true } };
 const body = { ...row.payload, event_id: row.source_event_id, correlation_id: row.correlation_id || undefined };
 const headers = {
   "x-shopify-shop-domain": shop,
   "x-shopify-topic": row.topic,
   "x-shopify-webhook-id": row.source_event_id
 };
-return {
+return { json: {
   body, headers, query: {},
   replay_context: {
     job_id: claim.job_id, worker_id: claim.worker_id.trim(), lease_id: claim.lease_id,
@@ -225,7 +225,7 @@ return {
     webhook_id: row.webhook_id, correlation_id: row.correlation_id || null,
     source_event_id: row.source_event_id, ingress_hmac_verified: true
   }
-};`
+} };`
   },[-660,900],2);
   const envelopeValid = createNode("Replay Envelope Valid?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"replay-envelope-valid",leftValue:"={{ $json.replay_context !== undefined && !$json.__replay_invalid }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
@@ -261,7 +261,7 @@ const context = $("Validate & Normalize").item.json.replay_context;
 if (response.error || response.statusCode < 200 || response.statusCode >= 300 || !response.body) {
   throw new Error("SHOPIFY_REPLAY_LEASE_RENEWAL_NOT_CONFIRMED");
 }
-return { ...prior, replay_context: { ...context, lease_expires_at: response.body } };`
+return { json: { ...prior, replay_context: { ...context, lease_expires_at: response.body } } };`
   },[896,880],2);
   const replayPipeline = createNode("Replay Pipeline?","n8n-nodes-base.if",{
     conditions:{options:{caseSensitive:true,leftValue:"",typeValidation:"strict",version:2},combinator:"and",conditions:[{id:"replay-pipeline",leftValue:"={{ $json.__replay === true }}",rightValue:true,operator:{type:"boolean",operation:"true",singleValue:true}}]},options:{}
