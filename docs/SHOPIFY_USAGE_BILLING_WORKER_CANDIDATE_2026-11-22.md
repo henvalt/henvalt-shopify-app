@@ -8,7 +8,8 @@ This candidate adds a separately testable Supabase Edge Function handler. It is 
 
 ## Execution contract
 
-1. Deploy the function with Supabase JWT verification disabled only because the handler enforces its own dedicated bearer secret; do not expose the endpoint without `HENVALT_BILLING_WORKER_TOKEN` configured.\n2. An internal caller POSTs `{"shop":"<shop>.myshopify.com"}` with the dedicated `HENVALT_BILLING_WORKER_TOKEN`.
+1. Deploy the function with Supabase JWT verification disabled only because the handler enforces its own dedicated bearer secret; do not expose the endpoint without `HENVALT_BILLING_WORKER_TOKEN` configured.
+2. An internal caller POSTs `{"shop":"<shop>.myshopify.com"}` with the dedicated `HENVALT_BILLING_WORKER_TOKEN`.
 3. The handler obtains the shop's offline Shopify token through the service-role-only `get_shopify_access_token_for_control_plane` RPC.
 4. It calls `control_plane_claim_billing_usage` once. No eligible measurement is a successful no-op.
 5. It validates the durable charge envelope and submits Shopify's `appUsageRecordCreate` mutation with the database-persisted `idempotencyKey`.
