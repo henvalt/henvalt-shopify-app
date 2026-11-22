@@ -4,18 +4,18 @@ import { readFileSync } from "node:fs";
 
 const sql=readFileSync("supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql","utf8");
 const wrappers=[
- ["resolve_identity_fenced","canonical_events"],
- ["upsert_checkout_fenced","customers"],
- ["create_opportunity_idempotent_fenced","canonical_events"],
- ["apply_eligibility_fenced","opportunities"],
- ["create_recovery_sequence_fenced","opportunities"],
- ["create_intervention_and_enqueue_fenced","recovery_sequences"],
- ["project_order_from_event_fenced","canonical_events"],
- ["evaluate_order_attribution_fenced","orders"],
- ["create_revenue_adjustment_fenced","orders"],
- ["process_shopify_revenue_adjustment_fenced","canonical_events"],
- ["stop_recovery_after_order_fenced","order_attributions"],
- ["post_recovery_to_ledger_and_measure_billing_fenced","order_attributions"]
+ ["resolve_identity_fenced","canonical_events","henvalt.resolve_identity("],
+ ["upsert_checkout_fenced","customers","henvalt.upsert_checkout("],
+ ["create_opportunity_idempotent_fenced","canonical_events","henvalt.create_opportunity_idempotent("],
+ ["apply_eligibility_fenced","opportunities","henvalt.apply_eligibility("],
+ ["create_recovery_sequence_fenced","opportunities","henvalt.create_recovery_sequence("],
+ ["create_intervention_and_enqueue_fenced","recovery_sequences","henvalt.create_intervention_and_enqueue("],
+ ["project_order_from_event_fenced","canonical_events","henvalt.project_order_from_event("],
+ ["evaluate_order_attribution_fenced","orders","henvalt.evaluate_order_attribution("],
+ ["create_revenue_adjustment_fenced","orders","henvalt.create_revenue_adjustment("],
+ ["process_shopify_revenue_adjustment_fenced","canonical_events","henvalt.process_shopify_revenue_adjustment("],
+ ["stop_recovery_after_order_fenced","order_attributions","henvalt.stop_recovery_after_order("],
+ ["post_recovery_to_ledger_and_measure_billing_fenced","order_attributions","henvalt.post_recovery_to_ledger_and_measure_billing("]
 ];
 
 test("object tenant guard uses explicit allow-listed tenant-owned tables",()=>{
@@ -26,13 +26,16 @@ test("object tenant guard uses explicit allow-listed tenant-owned tables",()=>{
 });
 
 test("every UUID-only fenced business wrapper validates its target ownership before legacy mutation",()=>{
- for(const [name,table] of wrappers){
+ for(const [name,table,mutation] of wrappers){
   const start=sql.indexOf("CREATE OR REPLACE FUNCTION henvalt."+name+"(");
   assert.ok(start>=0,"missing "+name);
   const end=sql.indexOf("$function$;",start);
   const body=sql.slice(start,end);
-  assert.ok(body.includes("assert_shopify_replay_object_tenant"),name+" missing object tenant check");
-  assert.ok(body.indexOf("assert_shopify_replay_object_tenant") < body.indexOf("RETURN henvalt."),name+" guard must precede mutation");
+  const guardAt=body.indexOf("assert_shopify_replay_object_tenant");
+  const mutationAt=body.indexOf(mutation);
+  assert.ok(guardAt>=0,name+" missing object tenant check");
+  assert.ok(mutationAt>=0,name+" missing expected legacy mutation "+mutation);
+  assert.ok(guardAt<mutationAt,name+" guard must precede mutation");
  }
 });
 
@@ -58,10 +61,10 @@ test("object graph checks reject cross-tenant foreign-key edges, not only root r
  for(const table of ["customers","checkouts","canonical_events","opportunities","orders","order_attributions","recovery_sequences","recovery_interventions"])
   assert.ok(sql.includes("WHEN '"+table+"'"),"missing graph branch "+table);
  assert.match(sql,/SHOPIFY_REPLAY_OBJECT_GRAPH_TENANT_MISMATCH/);
- assert.match(sql,/LEFT JOIN henvalt\\.orders o ON o\\.id=x\\.order_id/);
- assert.match(sql,/LEFT JOIN henvalt\\.webhook_events w ON w\\.id=x\\.webhook_event_id/);
- assert.match(sql,/LEFT JOIN henvalt\\.recovery_sequences s ON s\\.id=x\\.recovery_id/);
- assert.match(sql,/LEFT JOIN henvalt\\.recovery_interventions i ON i\\.id=x\\.matched_intervention_id/);
+ assert.match(sql,/LEFT JOIN henvalt\.orders o ON o\.id=x\.order_id/);
+ assert.match(sql,/LEFT JOIN henvalt\.webhook_events w ON w\.id=x\.webhook_event_id/);
+ assert.match(sql,/LEFT JOIN henvalt\.recovery_sequences s ON s\.id=x\.recovery_id/);
+ assert.match(sql,/LEFT JOIN henvalt\.recovery_interventions i ON i\.id=x\.matched_intervention_id/);
 });
 
 test("all replay mutation-map RPCs have a candidate fenced implementation",()=>{
@@ -77,7 +80,6 @@ test("all replay mutation-map RPCs have a candidate fenced implementation",()=>{
  }
 });
 
-
 test("disposable PostgreSQL acceptance exercises every tenant relationship edge",()=>{
  const fixture=readFileSync("tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql","utf8");
  for(const table of ["checkouts","canonical_events","opportunities","orders","recovery_sequences","recovery_interventions","order_attributions"])
@@ -85,4 +87,10 @@ test("disposable PostgreSQL acceptance exercises every tenant relationship edge"
  assert.match(fixture,/SHOPIFY_REPLAY_OBJECT_TENANT_GRAPH_ACCEPTANCE_PASSED/);
  const workflow=readFileSync(".github/workflows/provider-send-interlock-static.yml","utf8");
  assert.ok(workflow.includes("shopify-replay-object-tenant-graph-postgres-acceptance.sql"),"graph acceptance is not wired into CI");
+});
+
+test("object graph helper fails closed for unknown tables and handles customer roots",()=>{
+ assert.match(sql,/WHEN 'customers' THEN[\s\S]*?FROM henvalt\.customers x/);
+ assert.match(sql,/ELSE\s+RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TABLE_NOT_ALLOWED'/);
+ assert.doesNotMatch(sql,/ELSE\s+v_valid := true/);
 });
