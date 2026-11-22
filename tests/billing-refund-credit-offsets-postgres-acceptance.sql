@@ -402,6 +402,74 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'exhausted charge repair was not audited';
   END IF;
+
+  -- A late success is authoritative, but a later timeout/failure must not
+  -- downgrade the submitted charge or its billed measurement/ledger.
+  INSERT INTO henvalt.tenants(id,status,default_currency)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0117','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0117','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0117',true,'late-result.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0117','SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/late-result','ACTIVE',true,now()-interval '1 day',2000);
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
+  VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0124','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0117','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
+  VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddd0121','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0117',gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0124',100,10,10,'USD','MEASURED',now());
+  v_result := henvalt.control_plane_claim_billing_usage('late-result.myshopify.com');
+  v_charge_id := (v_result->>'chargeId')::uuid;
+  UPDATE henvalt.billing_usage_charges SET attempt_count=5,attempted_at=now()-interval '5 minutes' WHERE id=v_charge_id;
+  v_result := henvalt.control_plane_mark_billing_reconciliation_required('late-result.myshopify.com',v_charge_id,'SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN');
+  IF v_result->>'updated' <> 'true' THEN RAISE EXCEPTION 'late-result reconciliation marker failed: %',v_result; END IF;
+
+  IF has_function_privilege('anon','henvalt.control_plane_record_billing_usage_result(text,uuid,boolean,text,text,text)','EXECUTE')
+     OR has_function_privilege('authenticated','henvalt.control_plane_record_billing_usage_result(text,uuid,boolean,text,text,text)','EXECUTE')
+     OR NOT has_function_privilege('service_role','henvalt.control_plane_record_billing_usage_result(text,uuid,boolean,text,text,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'billing result RPC ACL is not service-role-only';
+  END IF;
+
+  v_result := henvalt.control_plane_record_billing_usage_result(
+    'late-result.myshopify.com',v_charge_id,true,
+    'gid://shopify/AppUsageRecord/late-result-1',NULL,NULL
+  );
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'SUBMITTED' THEN
+    RAISE EXCEPTION 'late provider success did not settle the charge: %',v_result;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.billing_usage_charges
+     WHERE id=v_charge_id AND status='SUBMITTED'
+       AND reconciliation_status='MATCHED'
+       AND provider_usage_record_id='gid://shopify/AppUsageRecord/late-result-1'
+  ) THEN
+    RAISE EXCEPTION 'late success did not resolve the durable ambiguity';
+  END IF;
+
+  v_result := henvalt.control_plane_record_billing_usage_result(
+    'late-result.myshopify.com',v_charge_id,false,NULL,'SHOPIFY_TIMEOUT','late failure after success'
+  );
+  IF v_result->>'updated' <> 'false' OR v_result->>'reason' <> 'CHARGE_ALREADY_SUBMITTED' THEN
+    RAISE EXCEPTION 'late failure was allowed to downgrade a submitted charge: %',v_result;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.billing_usage_charges
+     WHERE id=v_charge_id AND status='SUBMITTED'
+       AND provider_usage_record_id='gid://shopify/AppUsageRecord/late-result-1'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM henvalt.billing_measurements
+     WHERE id='dddddddd-dddd-4ddd-8ddd-dddddddd0121' AND status='BILLED'
+  ) OR NOT EXISTS (
+    SELECT 1 FROM henvalt.revenue_ledger
+     WHERE id='eeeeeeee-eeee-4eee-8eee-eeeeeeee0124' AND billing_status='BILLED'
+  ) THEN
+    RAISE EXCEPTION 'late failure corrupted submitted billing state';
+  END IF;
+
+  v_result := henvalt.control_plane_record_billing_usage_result(
+    'late-result.myshopify.com',v_charge_id,true,
+    'gid://shopify/AppUsageRecord/late-result-1',NULL,NULL
+  );
+  IF v_result->>'updated' <> 'true' OR v_result->>'idempotent' <> 'true' THEN
+    RAISE EXCEPTION 'duplicate success result was not idempotent: %',v_result;
+  END IF;
 END;
 $billing_refund_credit_acceptance$;
 
