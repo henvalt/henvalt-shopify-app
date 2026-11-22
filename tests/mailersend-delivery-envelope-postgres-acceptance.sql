@@ -12,6 +12,7 @@ DECLARE
   v_recovery uuid := gen_random_uuid();
   v_intervention uuid := gen_random_uuid();
   v_message uuid := gen_random_uuid();
+  v_reply_token text;
   v_result boolean;
   v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text,text,text,text)'::regprocedure;
 BEGIN
@@ -70,6 +71,46 @@ BEGIN
   ) INTO v_result;
   IF v_result IS NOT TRUE THEN
     RAISE EXCEPTION 'valid tenant delivery envelope was rejected';
+  END IF;
+
+  v_reply_token := encode(
+    extensions.hmac(
+      convert_to(v_tenant::text || ':' || v_delivery::text, 'UTF8'),
+      convert_to('synthetic-reply-routing-secret-0123456789abcdef', 'UTF8'),
+      'sha256'
+    ),
+    'hex'
+  );
+  INSERT INTO henvalt.customer_conversations(
+    tenant_id, delivery_request_id, customer_id, opportunity_id, recovery_id,
+    intervention_id, reply_token_hash, status
+  ) VALUES (
+    v_tenant, v_delivery, v_customer, v_opportunity, v_recovery,
+    v_intervention,
+    encode(extensions.digest(convert_to(v_reply_token, 'UTF8'), 'sha256'), 'hex'),
+    'OPEN'
+  );
+
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test',
+    'reply+' || v_reply_token || '@inbound.henvalt.com',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'valid HENVALT reply-routing address was rejected';
+  END IF;
+
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test',
+    'reply+' || repeat('0', 64) || '@inbound.henvalt.com',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'unbound HENVALT reply-routing token was authorized';
   END IF;
 
   IF henvalt.assert_mailersend_delivery_envelope(
