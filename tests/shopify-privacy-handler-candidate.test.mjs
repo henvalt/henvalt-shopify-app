@@ -58,3 +58,8 @@ test("privacy handler requires JSON webhook bodies", () => {
   assert.match(source, /application_json_required/);
   assert.match(source, /contentType !== "application\/json"/);
 });
+
+test("privacy handler returns 401 when the Shopify HMAC header is missing", () => {
+  assert.match(source, /if \(!hmac\) return reply\(401, \{ error: "invalid_hmac" \}\)/);
+  assert.match(source, /if \(!\(await verifyHmac\(raw, hmac\)\)\) return reply\(401/);
+});
