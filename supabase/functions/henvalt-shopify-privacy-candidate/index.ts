@@ -199,10 +199,9 @@ Deno.serve(async (req: Request) => {
     }
 
     if (topic === "customers/redact") {
-      const redacted = await rpc("redact_shopify_customer_data_checked", {
-        p_tenant_id: claim.tenant_id,
-        p_shopify_customer_id: customerId,
-        p_customer_email: customerEmail,
+      const redacted = await rpc("redact_shopify_customer_data_checked_with_lease", {
+        p_privacy_request_id: claim.id,
+        p_lease_token: claim.lease_token,
       });
       if (!redacted.ok) {
         await finish("FAILED", "customer_redaction_failed");
