@@ -20,7 +20,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(result.graphAudit.node_count,71);
   assert.equal(result.graphAudit.unique_node_ids,71);
   assert.equal(result.graphAudit.unique_node_names,71);
-  assert.equal(result.audit.fenced_mutation_nodes,18);
+  assert.equal(result.audit.fenced_mutation_nodes,19);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
   const normalizer=findNode(w,"Validate & Normalize");
@@ -74,7 +74,7 @@ test("non-Shopify events cannot enter the Shopify HMAC ingress RPC", () => {
   assert.equal(w.connections["Build Unsupported Internal Source Response"].main[0][0].node,"Respond to Shopify");
 });
 
-test("all 18 write paths are lease-fenced and every connection resolves", () => {
+test("all 19 write paths are lease-fenced and every connection resolves", () => {
   const w=buildCandidate(source,map,pinned).workflow;
   const byName=new Map(w.nodes.map(n=>[n.name,n]));
   for (const entry of map.replay_mutations) {
