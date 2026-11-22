@@ -78,6 +78,7 @@ begin
 end $$;
 
 -- Full relationship surface referenced by the deployed customer-redaction routine and candidate preflight.
+alter table henvalt.customers add column id uuid default gen_random_uuid();
 alter table henvalt.checkouts add column id uuid default gen_random_uuid();
 alter table henvalt.checkouts add column customer_id uuid;
 alter table henvalt.checkouts add column session_reference text;
@@ -103,6 +104,7 @@ create table henvalt.opportunities (
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid,
   customer_id uuid,
+  checkout_id uuid,
   metadata jsonb default '{}'::jsonb
 );
 create table henvalt.orders (
