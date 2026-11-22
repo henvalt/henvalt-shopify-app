@@ -93,6 +93,17 @@ test("builder produces a separate inactive candidate with all 18 fenced mutation
   }
 });
 
+test("fenced lease tuple cannot be overridden by original RPC arguments", () => {
+  const workflow = buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
+  for (const entry of map.replay_mutations) {
+    if (entry.node === "Deactivate Shopify Connection") continue;
+    const node = workflow.nodes.find(n => n.name === entry.node);
+    const body = node.parameters.jsonBody;
+    assert.match(body, /return \\{ \\.\\.\\.p, p_job_id: r\\.job_id, p_worker_id: r\\.worker_id, p_lease_id: r\\.lease_id/);
+    assert.doesNotMatch(body, /p_job_id: r\\.job_id, p_worker_id: r\\.worker_id, p_lease_id: r\\.lease_id, \\.\\.\\.p/);
+  }
+});
+
 test("candidate fixes Shopify delivery identity and preserves trusted replay context", () => {
   const workflow=buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
   const normalizer=workflow.nodes.find(n=>n.name==="Validate & Normalize");
