@@ -25,6 +25,7 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
 
 test("PostgreSQL acceptance covers partial, full, exhausted and retry-safe refund credits", () => {
   assert.match(acceptance, /BILLING_REFUND_CREDIT_OFFSETS_ACCEPTANCE_PASSED/);
+  assert.match(acceptance, /billing usage claim RPC must not be executable by client roles/);\n  assert.match(acceptance, /billing credit allocations must have row-level security enabled/);
   assert.match(acceptance, /expected net \$7 charge/);
   assert.match(acceptance, /retry duplicated refund credit allocation/);
   assert.match(acceptance, /fully credited measurement was not voided/);
