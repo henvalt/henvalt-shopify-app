@@ -1389,9 +1389,13 @@ COMMIT;
     RETURN jsonb_build_object('updated', false, 'reason', 'CHARGE_NOT_FOUND');
   END IF;
 
+  IF v_existing_reconciliation_status = 'MISMATCH' THEN
+    RETURN jsonb_build_object('updated',false,'reason','MISMATCH_REQUIRES_OPERATOR');
+  END IF;
+
   IF v_existing_status = 'SUBMITTED' THEN
     IF p_success IS TRUE AND v_existing_provider_record_id = p_provider_usage_record_id THEN
-      IF v_existing_reconciliation_status IN ('REQUIRED','MISMATCH','NOT_FOUND_CONFIRMED') THEN
+      IF v_existing_reconciliation_status IN ('REQUIRED','NOT_FOUND_CONFIRMED') THEN
         UPDATE henvalt.billing_usage_charges
            SET reconciliation_status = 'MATCHED',
                reconciliation_resolved_at = now(),
@@ -1433,15 +1437,15 @@ COMMIT;
          error_message = CASE WHEN p_success THEN NULL ELSE left(coalesce(p_error_message, 'Usage charge failed'), 1000) END,
          submitted_at = CASE WHEN p_success THEN coalesce(submitted_at, now()) ELSE submitted_at END,
          reconciliation_status = CASE
-           WHEN p_success AND v_existing_reconciliation_status IN ('REQUIRED','MISMATCH','NOT_FOUND_CONFIRMED') THEN 'MATCHED'
+           WHEN p_success AND v_existing_reconciliation_status IN ('REQUIRED','NOT_FOUND_CONFIRMED') THEN 'MATCHED'
            ELSE reconciliation_status
          END,
          reconciliation_resolved_at = CASE
-           WHEN p_success AND v_existing_reconciliation_status IN ('REQUIRED','MISMATCH','NOT_FOUND_CONFIRMED') THEN now()
+           WHEN p_success AND v_existing_reconciliation_status IN ('REQUIRED','NOT_FOUND_CONFIRMED') THEN now()
            ELSE reconciliation_resolved_at
          END,
          reconciliation_evidence = CASE
-           WHEN p_success AND v_existing_reconciliation_status IN ('REQUIRED','MISMATCH','NOT_FOUND_CONFIRMED') THEN jsonb_build_object(
+           WHEN p_success AND v_existing_reconciliation_status IN ('REQUIRED','NOT_FOUND_CONFIRMED') THEN jsonb_build_object(
              'source','billing_worker_result',
              'providerUsageRecordId',p_provider_usage_record_id,
              'idempotencyKey',v_idempotency_key,
@@ -1469,7 +1473,7 @@ COMMIT;
       )
         AND rl.tenant_id = v_tenant_id;
 
-    IF v_existing_reconciliation_status IN ('REQUIRED','MISMATCH','NOT_FOUND_CONFIRMED') THEN
+    IF v_existing_reconciliation_status IN ('REQUIRED','NOT_FOUND_CONFIRMED') THEN
       INSERT INTO henvalt.audit_log(
         tenant_id,event_name,entity_type,entity_id,actor_type,actor_reference,payload
       ) VALUES (
