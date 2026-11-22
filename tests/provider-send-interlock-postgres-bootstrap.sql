@@ -648,14 +648,14 @@ ALTER TABLE henvalt.order_attributions
   ALTER COLUMN attribution_confidence TYPE henvalt.attribution_confidence
   USING attribution_confidence::henvalt.attribution_confidence;
 ALTER TABLE henvalt.order_attributions
-  ADD COLUMN recovery_id uuid,
-  ADD COLUMN matched_intervention_id uuid,
-  ADD COLUMN attribution_method text,
-  ADD COLUMN tracking_token_matched boolean NOT NULL DEFAULT false,
-  ADD COLUMN checkout_matched boolean NOT NULL DEFAULT false,
-  ADD COLUMN cart_matched boolean NOT NULL DEFAULT false,
-  ADD COLUMN customer_matched boolean NOT NULL DEFAULT false,
-  ADD COLUMN metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+  ADD COLUMN IF NOT EXISTS recovery_id uuid,
+  ADD COLUMN IF NOT EXISTS matched_intervention_id uuid,
+  ADD COLUMN IF NOT EXISTS attribution_method text,
+  ADD COLUMN IF NOT EXISTS tracking_token_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS checkout_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS cart_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS customer_matched boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 ALTER TABLE henvalt.orders
   ADD COLUMN total_value numeric(18,2),
