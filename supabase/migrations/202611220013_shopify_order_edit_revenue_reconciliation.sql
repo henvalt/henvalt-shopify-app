@@ -334,4 +334,29 @@ REVOKE ALL ON FUNCTION henvalt.process_shopify_order_edit_adjustment(uuid)
 GRANT EXECUTE ON FUNCTION henvalt.process_shopify_order_edit_adjustment(uuid)
   TO service_role;
 
+
+CREATE OR REPLACE FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(
+  p_job_id uuid,
+  p_worker_id text,
+  p_lease_id uuid,
+  p_event_id uuid
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO ''
+AS $function$
+BEGIN
+  PERFORM henvalt.assert_shopify_replay_lease_for_write(
+    p_job_id,p_worker_id,p_lease_id
+  );
+  RETURN henvalt.process_shopify_order_edit_adjustment(p_event_id);
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(uuid,text,uuid,uuid)
+  TO service_role;
+
 COMMIT;
