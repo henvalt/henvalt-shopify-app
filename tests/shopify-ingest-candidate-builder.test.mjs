@@ -99,8 +99,8 @@ test("fenced lease tuple cannot be overridden by original RPC arguments", () => 
     if (entry.node === "Deactivate Shopify Connection") continue;
     const node = workflow.nodes.find(n => n.name === entry.node);
     const body = node.parameters.jsonBody;
-    assert.match(body, /return \\{ \\.\\.\\.p, p_job_id: r\\.job_id, p_worker_id: r\\.worker_id, p_lease_id: r\\.lease_id/);
-    assert.doesNotMatch(body, /p_job_id: r\\.job_id, p_worker_id: r\\.worker_id, p_lease_id: r\\.lease_id, \\.\\.\\.p/);
+    assert.ok(body.includes("return { ...p, p_job_id: r.job_id, p_worker_id: r.worker_id, p_lease_id: r.lease_id"));
+    assert.equal(body.includes("p_lease_id: r.lease_id, ...p"), false);
   }
 });
 
