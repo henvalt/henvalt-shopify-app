@@ -1,5 +1,9 @@
 \set ON_ERROR_STOP on
 
+-- The interlock itself is covered by the next acceptance script. Disable only
+-- this one trigger while seeding a claimed row in this isolated no-egress fixture.
+ALTER TABLE henvalt.delivery_requests DISABLE TRIGGER delivery_requests_provider_send_interlock;
+
 DO $envelope_acceptance$
 DECLARE
   v_tenant uuid := gen_random_uuid();
@@ -26,10 +30,6 @@ DECLARE
   v_result boolean;
   v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text,text,text,text)'::regprocedure;
 BEGIN
-  -- This is an isolated disposable database with no provider network. Open
-  -- only the SQL interlock needed to construct a claimed fixture row.
-  PERFORM henvalt.set_provider_sending_enabled(true, 'isolated disposable PostgreSQL acceptance fixture');
-
   INSERT INTO henvalt.tenants(id, status) VALUES
     (v_tenant, 'ACTIVE'),
     (v_other_tenant, 'ACTIVE');
@@ -326,8 +326,9 @@ BEGIN
     RAISE EXCEPTION 'delivery envelope RPC grants are not restricted to service_role';
   END IF;
 
-  PERFORM henvalt.set_provider_sending_enabled(false, 'close after isolated disposable PostgreSQL acceptance fixture');
 END
 $envelope_acceptance$;
+
+ALTER TABLE henvalt.delivery_requests ENABLE TRIGGER delivery_requests_provider_send_interlock;
 
 SELECT 'MAILERSEND_DELIVERY_ENVELOPE_ACCEPTANCE_PASSED' AS result;
