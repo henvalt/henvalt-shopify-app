@@ -63,6 +63,7 @@ on:
       - "supabase/functions/henvalt-shopify-privacy/index.ts"
       - "tests/shopify-privacy-handler-candidate.test.mjs"
       - "supabase/functions/henvalt-privacy-export/index.ts"
+      - "supabase/functions/henvalt-merchant-dashboard/index.ts"
       - "supabase/audit-baselines/henvalt-privacy-export-v1.ts"
       - "shopify.app.toml"
       - "tests/token-refresh-window-static.test.mjs"
@@ -238,6 +239,8 @@ jobs:
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-privacy/index.ts
       - name: Type-check merchant privacy export Edge Function at deployment path
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-privacy-export/index.ts
+      - name: Type-check merchant dashboard Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-merchant-dashboard/index.ts
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
