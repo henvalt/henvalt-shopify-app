@@ -18,3 +18,7 @@ test("privacy queue worker has bounded batches and a one-minute cron schedule", 
   assert.match(sql, /henvalt-shopify-privacy-queue-worker/);
   assert.match(sql, /to service_role/);
 });
+
+test("privacy worker never swallows a lost lease while recording a failure", () => {
+  assert.match(sql, /if not v_finished then\s+raise exception 'privacy worker could not finalize failed request under its lease'/);
+});
