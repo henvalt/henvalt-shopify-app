@@ -358,6 +358,50 @@ BEGIN
   IF NOT has_function_privilege('service_role','henvalt.control_plane_list_billing_reconciliations(text,integer)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot list reconciliation cases'; END IF;
   IF NOT has_function_privilege('service_role','henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)','EXECUTE') OR NOT has_function_privilege('service_role','henvalt.control_plane_get_billing_reconciliation(text,uuid)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot access reconciliation marker or read RPC'; END IF;
   IF NOT has_function_privilege('service_role','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot execute reconciliation resolution'; END IF;
+
+  -- If the first attempt to persist REQUIRED failed, the next scheduled claim
+  -- must repair the exhausted pending charge and expose it to the operator queue.
+  INSERT INTO henvalt.tenants(id,status,default_currency)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0116','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0116','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0116',true,'repair-exhausted.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0116','SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/repair-exhausted','ACTIVE',true,now()-interval '1 day',2000);
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
+  VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0123','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0116','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
+  VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddd0120','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0116',gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0123',100,10,10,'USD','MEASURED',now());
+  v_result := henvalt.control_plane_claim_billing_usage('repair-exhausted.myshopify.com');
+  v_charge_id := (v_result->>'chargeId')::uuid;
+  UPDATE henvalt.billing_usage_charges
+     SET attempt_count=5,attempted_at=now()-interval '5 minutes'
+   WHERE id=v_charge_id;
+  v_result := henvalt.control_plane_claim_billing_usage('repair-exhausted.myshopify.com');
+  IF v_result->>'available' <> 'false'
+     OR v_result->>'reason' <> 'NO_PENDING_USAGE_CHARGE' THEN
+    RAISE EXCEPTION 'exhausted charge was claimed again instead of repaired: %',v_result;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.billing_usage_charges
+     WHERE id=v_charge_id
+       AND status='PENDING'
+       AND reconciliation_status='REQUIRED'
+       AND reconciliation_reason='BILLING_RETRY_BUDGET_EXHAUSTED'
+  ) THEN
+    RAISE EXCEPTION 'exhausted pending charge was not repaired into reconciliation';
+  END IF;
+  v_result := henvalt.control_plane_list_billing_reconciliations('repair-exhausted.myshopify.com',50);
+  IF (v_result->>'count')::integer <> 1 THEN
+    RAISE EXCEPTION 'repaired exhausted charge did not reach operator reconciliation queue';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.audit_log
+     WHERE tenant_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0116'
+       AND event_name='BILLING_RECONCILIATION_REQUIRED'
+       AND entity_id=v_charge_id
+  ) THEN
+    RAISE EXCEPTION 'exhausted charge repair was not audited';
+  END IF;
 END;
 $billing_refund_credit_acceptance$;
 
