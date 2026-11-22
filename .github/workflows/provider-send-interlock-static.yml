@@ -114,6 +114,7 @@ on:
       - "supabase/functions/henvalt-shopify-oauth/webhook-specs.mjs"
       - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
       - "supabase/functions/henvalt-mailersend-delivery/index.ts"
+      - "supabase/functions/henvalt-mailersend-setup/index.ts"
       - "tests/fixtures/n8n-delivery-route-snapshot.json"
       - "tests/pixel-consent-static.test.mjs"
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
@@ -223,6 +224,8 @@ jobs:
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
       - name: Type-check MailerSend delivery Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
+      - name: Type-check MailerSend provider setup Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-setup/index.ts
       - name: Type-check Shopify privacy Edge Function at deployment path
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-privacy/index.ts
       - name: Type-check merchant privacy export Edge Function at deployment path
