@@ -34,12 +34,13 @@ declare
   v_status text;
   v_hash text;
 begin
-  if p_shop_domain !~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com$'
-    or p_topic not in ('customers/data_request','customers/redact','shop/redact')
+  if p_shop_domain is null or p_shop_domain !~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com$'
+    or p_topic is null or p_topic not in ('customers/data_request','customers/redact','shop/redact')
+    or p_shopify_shop_id is null or length(p_shopify_shop_id) < 1
     or p_webhook_id is null or length(p_webhook_id) < 1 or length(p_webhook_id) > 128
-    or p_signed_payload_hash !~ '^[a-f0-9]{64}$'
+    or p_signed_payload_hash is null or p_signed_payload_hash !~ '^[a-f0-9]{64}$'
     or p_payload is null
-    or p_status not in ('PENDING','REVIEW_REQUIRED')
+    or p_status is null or p_status not in ('PENDING','REVIEW_REQUIRED')
   then
     raise exception 'invalid privacy receipt';
   end if;
