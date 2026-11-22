@@ -25,6 +25,7 @@ on:
       - "tests/shopify-privacy-lease-postgres-bootstrap.sql"
       - "tests/shopify-privacy-lease-postgres-acceptance.sql"
       - "tests/shopify-privacy-redaction-postgres-acceptance.sql"
+      - "tests/shopify-privacy-idempotency-postgres-acceptance.sql"
       - "docs/SHOPIFY_PRIVACY_ATOMIC_PROCESSING_2026-11-22.md"
       - "tests/shopify-privacy-tenant-index-bootstrap.sql"
       - "tests/shopify-privacy-tenant-index-acceptance.sql"
@@ -356,6 +357,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql
+      - name: Exercise signed-payload privacy webhook idempotency
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-idempotency-postgres-acceptance.sql
       - name: Exercise privacy lease fencing and PII minimization
         env:
           PGPASSWORD: postgres
