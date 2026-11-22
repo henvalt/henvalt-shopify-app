@@ -22,8 +22,10 @@ on:
       - "supabase/migrations/202611220005_shopify_privacy_queue_worker.sql"
       - "supabase/migrations/202611220006_shopify_privacy_export_acknowledgement.sql"
       - "supabase/migrations/202611220007_shopify_replay_tenant_binding.sql"
+      - "supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql"
+      - "tests/shopify-replay-object-tenant-binding-static.test.mjs"
       - "tests/shopify-replay-tenant-binding-postgres-acceptance.sql"
-      - "tests/shopify-replay-tenant-binding-static.test.mjs"
+      - "tests/shopify-replay-tenant-binding-static.test.mjs tests/shopify-replay-object-tenant-binding-static.test.mjs"
       - "tests/shopify-privacy-queue-worker.test.mjs"
       - "tests/shopify-privacy-export-ack.test.mjs"
       - "tests/shopify-privacy-export-ack-postgres-acceptance.sql"
@@ -328,6 +330,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220007_shopify_replay_tenant_binding.sql
+      - name: Apply replay object-tenant binding migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql
       - name: Exercise cross-tenant replay write rejection
         env:
           PGPASSWORD: postgres
