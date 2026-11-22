@@ -77,7 +77,7 @@ function preserveReplayContext(normalizer) {
   const priorEventTypeReplacement = "const eventType = source === 'shopify' ? shopifyTopic : (body.event_type || body.type || null);";
   if (code.includes(eventTypeLine)) code = code.replace(eventTypeLine, eventTypeReplacement);
   else if (code.includes(priorEventTypeReplacement)) code = code.replace(priorEventTypeReplacement, eventTypeReplacement);
-  else if (code.includes(eventIdLine)) code = code.replace(eventIdLine, eventIdLine + "\\n" + eventTypeReplacement);
+  else if (code.includes(eventIdLine)) code = code.replace(eventIdLine, eventIdLine + "\n" + eventTypeReplacement);
   if (!code.includes(eventTypeReplacement)) throw new Error("Could not enforce authoritative Shopify topic header");
   if (code.includes(eventIdLine)) code = code.replace(eventIdLine, "const eventId = source === 'shopify' ? (shopifyWebhookId || null) : (body.event_id || shopifyEventId || shopifyWebhookId || body.id || null);");
   if (!code.includes("const eventId = source === 'shopify' ? (shopifyWebhookId || null)")) throw new Error("Could not enforce Shopify delivery ID as event identity");
