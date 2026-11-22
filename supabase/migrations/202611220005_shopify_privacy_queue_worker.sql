@@ -35,7 +35,7 @@ begin
     select * into v_claim
     from henvalt.claim_shopify_privacy_request(p_lease_seconds);
 
-    if v_claim.id is null then
+    if not found or v_claim.id is null then
       exit;
     end if;
 
