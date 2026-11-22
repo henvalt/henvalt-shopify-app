@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createShopifyUsageBillingHandler } from "../supabase/functions/henvalt-shopify-usage-billing/handler.mjs";
+import { readFileSync } from "node:fs";
+import { buildRecoveryBillingCandidate } from "../n8n/shopify-recovery-billing-candidate-builder.mjs";
 
 const shop = "billing-test.myshopify.com";
 const charge = {
@@ -164,4 +166,44 @@ test("surfaces operator reconciliation when the final ambiguous attempt is exhau
   assert.equal(body.requiresOperatorReview, true);
   assert.equal(body.state, "PENDING");
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")), false);
+});
+
+
+test("billing execution is attached to the existing recovery scheduler in an inactive staging-only candidate", () => {
+  const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-recovery-active-2026-11-21.sanitized.json", "utf8"));
+  const manifest = JSON.parse(readFileSync("n8n/shopify-recovery-replay-graph-patch.json", "utf8"));
+  const normalizer = readFileSync("n8n/shopify-replay-claim-normalizer-node-candidate.js", "utf8");
+  const result = buildRecoveryBillingCandidate(fixture.workflow, manifest, normalizer);
+  const workflow = result.workflow;
+  const byName = new Map(workflow.nodes.map((node) => [node.name, node]));
+  const discovery = byName.get("Find Shopify Usage Billing Shops");
+  const call = byName.get("Call Shopify Usage Billing Worker");
+
+  assert.equal(workflow.id, "00000000-0000-4000-8000-000000000995");
+  assert.equal(workflow.name, "HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY");
+  assert.equal(workflow.active, false);
+  assert.equal(workflow.settings.availableInMCP, false);
+  assert.equal(workflow.nodes.length, 62);
+  assert.equal(result.audit.workflow_count, 3);
+  assert.equal(result.audit.maximum_shops_per_tick, 10);
+  assert.ok(discovery.parameters.query.includes("rl.entry_type = 'RECOVERY'"));
+  assert.ok(discovery.parameters.query.includes("rl.attribution_confidence = 'CONFIRMED'"));
+  assert.ok(discovery.parameters.query.includes("buc.attempt_count < 5"));
+  assert.ok(discovery.parameters.query.includes("LIMIT 10"));
+  assert.equal(call.parameters.url, "https://supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing");
+  assert.equal(call.parameters.authentication, "genericCredentialType");
+  assert.equal(call.parameters.genericAuthType, "httpHeaderAuth");
+  assert.equal(call.parameters.jsonBody, "={{ { shop: $json.shop_domain } }}");
+  assert.equal(call.parameters.options.timeout, 30000);
+  assert.equal(call.onError, "continueRegularOutput");
+  assert.equal(call.credentials, undefined);
+
+  const scheduled = workflow.connections["Every Minute"].main[0].map((item) => item.node);
+  assert.ok(scheduled.includes("Reconcile Deferred Payment Webhooks"));
+  assert.ok(scheduled.includes("Find Shopify Usage Billing Shops"));
+  assert.equal(workflow.connections["Find Shopify Usage Billing Shops"].main[0][0].node, "Call Shopify Usage Billing Worker");
+  assert.equal(workflow.connections["Call Shopify Usage Billing Worker"].main[0].length, 0);
+  assert.equal(result.audit.worker_endpoint_is_staging_placeholder, true);
+  assert.equal(JSON.stringify(workflow).includes("ocyplckdojdubyrsxcxa.supabase.co"), false);
+  assert.equal(JSON.stringify(workflow).includes("service-role-test-secret"), false);
 });
