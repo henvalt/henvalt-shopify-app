@@ -21,7 +21,7 @@ test("public App Store privacy compliance remains an explicit release blocker un
     "The current ingest graph must not be mistaken for a privacy request handler");
   for (const topic of mandatory) assert.ok(blocker.includes(topic), "Missing documented blocker: " + topic);
   assert.match(blocker, /NO-GO/);
-  assert.match(blocker, /candidate handler must be deployed and verified before the app configuration is deployed/i);
+  assert.match(blocker, /must be deployed and verified before running `shopify app deploy`/i);
   assert.match(blocker, /required `jsonb` column/i);
   assert.ok(blocker.includes("does **not** update `shopify_privacy_requests`"), "Customer redaction must not be represented as complete while its original privacy queue payload remains unsanitized");
   assert.match(blocker, /post-redaction queue sanitization/i);
