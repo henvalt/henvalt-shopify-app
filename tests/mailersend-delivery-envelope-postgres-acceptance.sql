@@ -6,6 +6,11 @@ DECLARE
   v_other_tenant uuid := gen_random_uuid();
   v_config uuid := gen_random_uuid();
   v_delivery uuid := gen_random_uuid();
+  v_customer uuid := gen_random_uuid();
+  v_checkout uuid := gen_random_uuid();
+  v_opportunity uuid := gen_random_uuid();
+  v_recovery uuid := gen_random_uuid();
+  v_intervention uuid := gen_random_uuid();
   v_result boolean;
   v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text)'::regprocedure;
 BEGIN
@@ -29,12 +34,26 @@ BEGIN
     '{"from_name":"HENVALT Test","reply_to":"support@example.invalid"}'::jsonb
   );
 
+  INSERT INTO henvalt.customers(id, tenant_id, shopify_customer_id, email, email_consent)
+  VALUES (v_customer, v_tenant, 'synthetic-customer', 'customer@example.invalid', true);
+  INSERT INTO henvalt.checkouts(id, tenant_id, customer_id, session_reference, created_at, updated_at, metadata)
+  VALUES (v_checkout, v_tenant, v_customer, 'synthetic-session', now(), now(),
+          '{"shop_domain":"envelope-fixture.myshopify.com"}'::jsonb);
+  INSERT INTO henvalt.shopify_connections(id, tenant_id, active, shop_domain)
+  VALUES (gen_random_uuid(), v_tenant, true, 'envelope-fixture.myshopify.com');
+  INSERT INTO henvalt.opportunities(
+    id, tenant_id, customer_id, checkout_id, opportunity_type, status
+  ) VALUES (v_opportunity, v_tenant, v_customer, v_checkout, 'ABANDONED_CHECKOUT', 'ELIGIBLE');
+  INSERT INTO henvalt.recovery_sequences(id, tenant_id, opportunity_id, status)
+  VALUES (v_recovery, v_tenant, v_opportunity, 'SCHEDULED');
+  INSERT INTO henvalt.recovery_interventions(id, tenant_id, opportunity_id, sequence_id, status)
+  VALUES (v_intervention, v_tenant, v_opportunity, v_recovery, 'SENDING');
   INSERT INTO henvalt.delivery_requests(
     id, tenant_id, status, recipient_reference, channel, provider,
-    delivery_mode, provider_claimed_at
+    delivery_mode, provider_claimed_at, opportunity_id, recovery_id, intervention_id
   ) VALUES (
     v_delivery, v_tenant, 'UNKNOWN', 'customer@example.invalid',
-    'EMAIL', 'mailersend', 'HENVALT_MANAGED', now()
+    'EMAIL', 'mailersend', 'HENVALT_MANAGED', now(), v_opportunity, v_recovery, v_intervention
   );
 
   SELECT henvalt.assert_mailersend_delivery_envelope(
@@ -89,6 +108,31 @@ BEGIN
   END IF;
 
   UPDATE henvalt.delivery_requests SET provider_claimed_at = now() WHERE id = v_delivery;
+  UPDATE henvalt.customers SET email_consent = false WHERE id = v_customer;
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'revoked email consent was authorized';
+  END IF;
+  UPDATE henvalt.customers SET email_consent = true WHERE id = v_customer;
+  INSERT INTO henvalt.email_suppressions(tenant_id, customer_id, email_normalized, active)
+  VALUES (v_tenant, v_customer, 'customer@example.invalid', true);
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'suppressed recipient was authorized';
+  END IF;
+  DELETE FROM henvalt.email_suppressions WHERE tenant_id = v_tenant;
+  UPDATE henvalt.opportunities SET status = 'SUPPRESSED' WHERE id = v_opportunity;
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'ineligible opportunity was authorized';
+  END IF;
+  UPDATE henvalt.opportunities SET status = 'ELIGIBLE' WHERE id = v_opportunity;
   UPDATE henvalt.tenants SET status = 'SUSPENDED' WHERE id = v_tenant;
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'customer@example.invalid',
