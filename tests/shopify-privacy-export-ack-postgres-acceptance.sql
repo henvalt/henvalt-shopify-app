@@ -22,12 +22,14 @@ declare
   v_hash text;
   v_expires timestamptz;
   v_delivered timestamptz;
+  v_schedule text;
+  v_command text;
   v_function text := 'henvalt.acknowledge_shopify_privacy_export_download(uuid,uuid,text)';
 begin
-  select schedule,command into strict v_hash,v_delivered
+  select schedule,command into strict v_schedule,v_command
   from cron.job where jobname='henvalt-shopify-privacy-export-ack-cleanup';
-  if v_hash <> '*/15 * * * *'
-     or v_delivered::text <> 'select henvalt.purge_expired_shopify_privacy_export_ack_tokens();' then
+  if v_schedule <> '*/15 * * * *'
+     or v_command <> 'select henvalt.purge_expired_shopify_privacy_export_ack_tokens();' then
     raise exception 'privacy export acknowledgement cleanup schedule missing';
   end if;
 
