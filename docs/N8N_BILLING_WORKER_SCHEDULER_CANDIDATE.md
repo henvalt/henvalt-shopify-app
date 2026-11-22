@@ -12,6 +12,8 @@ Candidate branch:
 2. `Call Shopify Usage Billing Worker` sends only the shop domain to the dedicated Edge Function. The worker itself claims exactly one charge through `control_plane_claim_billing_usage`, allocates refund credits transactionally, calls Shopify's `appUsageRecordCreate` with the persisted idempotency key, and records a confirmed result.
 3. The worker HTTP node is terminal. No email/delivery node is called by this billing branch.
 
+The discovery query also requires `billing_accounts.test_mode = true`. The candidate claim RPC independently rejects every non-test subscription with `TEST_MODE_REQUIRED`; the worker therefore cannot create a live merchant charge through this candidate migration. Enabling live billing must be a separate reviewed migration and cutover.
+
 The discovery query is deliberately read-only. It does not allocate credits, create usage charges, or change billing state. The claim RPC remains the sole authority for charge creation and refund-credit allocation. The query mirrors the worker's retry windows so the scheduler does not repeatedly call shops whose charges are not yet due.
 
 ## Credential and endpoint gate
