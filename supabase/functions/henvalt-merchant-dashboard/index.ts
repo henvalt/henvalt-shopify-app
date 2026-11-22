@@ -73,6 +73,10 @@ Deno.serve(async (req: Request) => {
     if (to < from || Date.parse(to) - Date.parse(from) > 366 * 86400000) {
       return reply(400, { error: "invalid_date_range" });
     }
+    const requestedGranularity = u.searchParams.get("granularity");
+    const granularity = ["day", "week", "month"].includes(requestedGranularity ?? "")
+      ? requestedGranularity!
+      : "day";
 
     const summaryResponse = await fetch(SUPABASE_URL + "/rest/v1/rpc/control_plane_dashboard_summary", {
       method: "POST",
@@ -108,7 +112,7 @@ Deno.serve(async (req: Request) => {
         p_shop_domain: connections[0].shop_domain,
         p_from: from + "T00:00:00.000Z",
         p_to: to + "T00:00:00.000Z",
-        p_granularity: "day",
+        p_granularity: granularity,
       }),
     });
     if (!seriesResponse.ok) throw new Error("REVENUE_SERIES_QUERY_FAILED");
@@ -141,7 +145,7 @@ Deno.serve(async (req: Request) => {
         previousFrom: revenue?.previous_from ?? null,
         previousTo: revenue?.previous_to ?? null,
       },
-      range: { from, to, granularity: "day" },
+      range: { from, to, granularity },
       generatedAt: new Date().toISOString(),
     });
   } catch {
