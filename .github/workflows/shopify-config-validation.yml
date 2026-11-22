@@ -32,6 +32,12 @@ jobs:
           assert "write_pixels" in app["access_scopes"]["scopes"].split(","), "Missing write_pixels scope"
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
           assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
+          subscriptions = app["webhooks"]["subscriptions"]
+          compliance = [topic for subscription in subscriptions for topic in subscription.get("compliance_topics", [])]
+          assert set(compliance) == {"customers/data_request", "customers/redact", "shop/redact"}, "Missing or duplicate mandatory privacy compliance topics"
+          privacy_subscriptions = [s for s in subscriptions if s.get("compliance_topics")]
+          assert len(privacy_subscriptions) == 1, "Expected one dedicated privacy compliance subscription"
+          assert privacy_subscriptions[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy", "Privacy webhook endpoint must match the registered Supabase function"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
