@@ -23,6 +23,8 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /TEST_MODE_REQUIRED/);
   assert.match(migration, /SINGLE_ACTIVE_SHOP_REQUIRED/);
   assert.match(migration, /v_active_shop_count <> 1/);
+  assert.match(migration, /FOR UPDATE OF sc/);
+  assert.match(migration, /FROM henvalt\.tenants[\s\S]*?FOR UPDATE/);
   assert.match(acceptance, /billing claim did not fail closed for multiple active shops/);
   assert.ok(bootstrap.includes("plan_key text NOT NULL CHECK (plan_key IN ('STARTER','GROWTH'))"));
   assert.ok(!acceptance.includes("'PERFORMANCE'"));
