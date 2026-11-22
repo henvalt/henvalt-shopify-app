@@ -10,6 +10,10 @@ const workflow = readFileSync(
   new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url),
   "utf8",
 );
+const acceptance = readFileSync(
+  new URL("./revenue-ledger-attribution-promotion-postgres-acceptance.sql", import.meta.url),
+  "utf8",
+);
 
 test("recovery ledger promotion is monotonic and only confirmed attribution is billable", () => {
   assert.match(migration, /v_confidence NOT IN \('CONFIRMED', 'PROBABLE'\)/);
@@ -27,5 +31,5 @@ test("recovery ledger promotion is monotonic and only confirmed attribution is b
 test("CI applies the migration and runs its disposable PostgreSQL acceptance", () => {
   assert.match(workflow, /202611220010_promote_confirmed_recovery_ledger\.sql/);
   assert.match(workflow, /revenue-ledger-attribution-promotion-postgres-acceptance\.sql/);
-  assert.match(workflow, /REVENUE_LEDGER_CONFIRMED_PROMOTION_ACCEPTANCE_PASSED/);
+  assert.match(acceptance, /REVENUE_LEDGER_CONFIRMED_PROMOTION_ACCEPTANCE_PASSED/);
 });
