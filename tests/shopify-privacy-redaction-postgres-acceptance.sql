@@ -15,6 +15,24 @@ declare
   v_expiry timestamptz;
   v_rejected boolean;
 begin
+  -- Null legacy lease metadata must never authorize a destructive operation.
+  insert into henvalt.shopify_privacy_requests
+    (id,tenant_id,shop_domain,shopify_shop_id,topic,webhook_id,customer_id,payload,status)
+  values
+    ('00000000-0000-4000-8000-000000000001','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+     'fixture.myshopify.com','1','customers/redact','redaction-null-lease','missing-customer','{}','PROCESSING');
+  v_rejected := false;
+  begin
+    perform henvalt.redact_shopify_customer_data_checked_with_lease(
+      '00000000-0000-4000-8000-000000000001',gen_random_uuid()
+    );
+  exception when others then
+    v_rejected := true;
+  end;
+  if not v_rejected then raise exception 'null legacy lease metadata was accepted'; end if;
+  select count(*) into v_calls from henvalt.privacy_redaction_calls;
+  if v_calls <> 0 then raise exception 'null legacy lease reached destructive redaction'; end if;
+
   -- No-match requests must not call the destructive customer-redaction routine.
   insert into henvalt.shopify_privacy_requests
     (id,tenant_id,shop_domain,shopify_shop_id,topic,webhook_id,customer_id,payload,status)
