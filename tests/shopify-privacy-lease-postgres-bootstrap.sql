@@ -77,3 +77,65 @@ begin
   return jsonb_build_object('completed',true,'stubbed',true);
 end $$;
 
+-- Full relationship surface referenced by the deployed customer-redaction routine and candidate preflight.
+alter table henvalt.checkouts add column id uuid default gen_random_uuid();
+alter table henvalt.checkouts add column customer_id uuid;
+alter table henvalt.checkouts add column session_reference text;
+alter table henvalt.delivery_requests add column id uuid default gen_random_uuid();
+alter table henvalt.delivery_requests add column opportunity_id uuid;
+alter table henvalt.messages add column intervention_id uuid;
+alter table henvalt.email_suppressions add column customer_id uuid;
+alter table henvalt.provider_events add column delivery_request_id uuid;
+alter table henvalt.recovery_interventions add column id uuid default gen_random_uuid();
+alter table henvalt.recovery_interventions add column opportunity_id uuid;
+alter table henvalt.canonical_events add column id uuid default gen_random_uuid();
+alter table henvalt.webhook_events add column id uuid default gen_random_uuid();
+alter table henvalt.webhook_events add column metadata jsonb default '{}'::jsonb;
+alter table henvalt.processing_errors add column id uuid default gen_random_uuid();
+alter table henvalt.processing_errors add column entity_id uuid;
+alter table henvalt.processing_errors add column error_message text;
+alter table henvalt.background_jobs add column id uuid default gen_random_uuid();
+alter table henvalt.background_jobs add column last_error text;
+alter table henvalt.audit_log add column id uuid default gen_random_uuid();
+alter table henvalt.audit_log add column actor_reference text;
+alter table henvalt.audit_log add column entity_id uuid;
+create table henvalt.opportunities (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  customer_id uuid,
+  metadata jsonb default '{}'::jsonb
+);
+create table henvalt.orders (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  customer_id uuid,
+  checkout_id uuid,
+  session_reference text,
+  tracking_token text,
+  metadata jsonb default '{}'::jsonb,
+  updated_at timestamptz default now()
+);
+create table henvalt.sessions (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  customer_id uuid,
+  session_reference text,
+  metadata jsonb default '{}'::jsonb
+);
+create table henvalt.customer_conversations (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  customer_id uuid,
+  delivery_request_id uuid
+);
+create table henvalt.tracking_tokens (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  intervention_id uuid
+);
+create table henvalt.delivery_attempts (
+  id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
+  delivery_request_id uuid,
+  provider_response jsonb default '{}'::jsonb
+);
