@@ -182,4 +182,36 @@ begin
   if v_payload is not null then raise exception 'expired export payload was not cleared'; end if;
 end $$;
 
+
+insert into henvalt.shopify_privacy_requests
+  (id,shop_domain,topic,webhook_id,customer_id,payload,status,lease_attempts,lease_expires_at)
+values
+  ('99999999-9999-4999-8999-999999999999','fixture.myshopify.com',
+   'customers/redact','privacy-legacy-processing','legacy-9988',
+   '{"customer_email":"legacy@example.test"}'::jsonb,'PROCESSING',0,null);
+
+do $$
+declare
+  v_claim record;
+  v_finished boolean;
+  v_payload jsonb;
+  v_customer text;
+begin
+  select * into v_claim from henvalt.claim_shopify_privacy_request_by_id(
+    '99999999-9999-4999-8999-999999999999',120
+  );
+  if v_claim.id is null or v_claim.lease_token is null or v_claim.lease_attempts <> 1 then
+    raise exception 'legacy processing row without lease metadata was not safely reclaimed';
+  end if;
+  v_finished := henvalt.finish_shopify_privacy_request(
+    v_claim.id,v_claim.lease_token,'REVIEW_REQUIRED','legacy_recovery_test'
+  );
+  if not v_finished then raise exception 'reclaimed legacy row could not be finalized'; end if;
+  select payload,customer_id into v_payload,v_customer
+  from henvalt.shopify_privacy_requests where id=v_claim.id;
+  if v_payload <> '{}'::jsonb or v_customer is not null then
+    raise exception 'reclaimed legacy row retained customer identifiers';
+  end if;
+end $$;
+
 rollback;
