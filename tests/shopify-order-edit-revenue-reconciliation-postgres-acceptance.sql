@@ -64,6 +64,10 @@ DECLARE
   v_order_2 uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0314';
   v_recovery_2 uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccc0314';
   v_edit_4 uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0317';
+  v_order_3 uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0315';
+  v_recovery_3 uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccc0315';
+  v_existing_adjustment uuid := 'eeeeeeee-eeee-4eee-8eee-eeeeeeee0318';
+  v_backfill_event uuid := 'dddddddd-dddd-4ddd-8ddd-dddddddd0318';
   v_result jsonb;
   v_amount numeric;
   v_total numeric;
@@ -203,6 +207,40 @@ BEGIN
   END IF;
   IF EXISTS(SELECT 1 FROM henvalt.billing_measurements WHERE ledger_entry_id=(v_result->>'adjustment_id')::uuid) THEN
     RAISE EXCEPTION 'unbilled original recovery incorrectly generated a fee credit';
+  END IF;
+
+  -- Existing pre-migration adjustments are repaired on an idempotent retry,
+  -- but only if their original confirmed recovery had a measured positive fee.
+  INSERT INTO henvalt.orders(id,tenant_id,shopify_order_id,total_value,currency,metadata)
+  VALUES(v_order_3,v_tenant,'order-edit-backfill',100,'USD','{}');
+  INSERT INTO henvalt.revenue_ledger(
+    id,tenant_id,order_id,entry_type,amount,currency,
+    attribution_confidence,billable,billing_status,metadata
+  ) VALUES(
+    v_recovery_3,v_tenant,v_order_3,'RECOVERY',100,'USD',
+    'CONFIRMED',true,'MEASURED','{}'
+  );
+  INSERT INTO henvalt.billing_measurements(
+    tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,
+    henvalt_percentage,henvalt_fee,currency,status
+  ) VALUES(
+    v_tenant,gen_random_uuid(),v_recovery_3,100,10,10,'USD','MEASURED'
+  );
+  INSERT INTO henvalt.revenue_ledger(
+    id,tenant_id,order_id,entry_type,amount,currency,
+    attribution_confidence,billable,billing_status,metadata
+  ) VALUES(
+    v_existing_adjustment,v_tenant,v_order_3,'ADJUSTMENT',-5,'USD',
+    'CONFIRMED',true,'PENDING',
+    jsonb_build_object('source_event_id',v_backfill_event::text,'reason','LEGACY_REFUND')
+  );
+  PERFORM henvalt.create_revenue_adjustment(
+    v_order_3,1,'USD','LEGACY_REFUND_RETRY',v_backfill_event
+  );
+  SELECT henvalt_fee INTO v_fee FROM henvalt.billing_measurements
+   WHERE ledger_entry_id=v_existing_adjustment;
+  IF v_fee <> -0.5 THEN
+    RAISE EXCEPTION 'idempotent adjustment retry did not backfill its negative fee measurement';
   END IF;
 END;
 $shopify_order_edit_acceptance$;
