@@ -125,6 +125,14 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
 
       if (req.method === "GET") {
         const chargeId = new URL(req.url).searchParams.get("chargeId");
+        if (chargeId === null) {
+          const result = await rpc("control_plane_list_billing_reconciliations", {
+            p_shop_domain: access.shop,
+            p_limit: 50,
+          });
+          if (!Array.isArray(result?.cases)) throw new Error("INVALID_RECONCILIATION_LIST");
+          return reply(200, result);
+        }
         if (!validUuid(chargeId)) return reply(400, { error: "valid_charge_id_required" });
         const result = await rpc(RECONCILIATION_READ_RPC, {
           p_shop_domain: access.shop,
