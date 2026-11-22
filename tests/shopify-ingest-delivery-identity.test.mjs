@@ -29,6 +29,23 @@ test("Shopify event uses the unique delivery ID even when body/event IDs differ"
   assert.equal(result.ingest.metadata.shopify_webhook_id, "delivery-A");
 });
 
+test("Shopify topic header overrides conflicting event_type and type fields in the signed payload", () => {
+  const result = run({
+    "x-shopify-shop-domain": "synthetic.myshopify.com",
+    "x-shopify-topic": "orders/paid",
+    "x-shopify-webhook-id": "delivery-topic-001",
+  }, {
+    id: "order-123",
+    event_type: "internal/fake",
+    type: "orders/cancelled",
+  });
+
+  assert.equal(result.__valid, true);
+  assert.equal(result.event.event_type, "orders/paid");
+  assert.equal(result.ingest.topic, "orders/paid");
+  assert.equal(result.ingest.metadata.shopify_topic, "orders/paid");
+});
+
 test("separate Shopify deliveries sharing an event correlation ID remain distinct", () => {
   const headers = {
     "x-shopify-shop-domain": "synthetic.myshopify.com",
