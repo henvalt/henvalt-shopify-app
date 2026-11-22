@@ -24,7 +24,7 @@ on:
       - "supabase/migrations/202611220007_shopify_replay_tenant_binding.sql"
       - "supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql"
       - "tests/shopify-replay-object-tenant-binding-static.test.mjs"
-      - "tests/shopify-replay-tenant-binding-postgres-acceptance.sql"
+      - "tests/shopify-replay-tenant-binding-postgres-acceptance.sql"\n      - "tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql"
       - "tests/shopify-replay-tenant-binding-static.test.mjs tests/shopify-replay-object-tenant-binding-static.test.mjs"
       - "tests/shopify-privacy-queue-worker.test.mjs"
       - "tests/shopify-privacy-export-ack.test.mjs"
@@ -342,6 +342,13 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-replay-tenant-binding-postgres-acceptance.sql
+
+      - name: Exercise cross-tenant replay object graph rejection
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql
       - name: Exercise complete active-ingest fencing and transactional lease heartbeat
         env:
           PGPASSWORD: postgres
