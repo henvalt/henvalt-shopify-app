@@ -40,3 +40,9 @@ test("privacy handler resolves inactive connections for post-uninstall complianc
   assert.match(source, /shop_domain=eq/);
   assert.doesNotMatch(source, /active=eq/);
 });
+
+test("privacy candidate fails closed for legacy connections without a signed shop ID mapping", () => {
+  assert.match(source, /const verifiedConnection = connection\?\.shopify_shop_id/);
+  assert.match(source, /p_tenant_id: verifiedConnection\?\.tenant_id \?\? null/);
+  assert.match(source, /initialStatus = verifiedConnection \? "PENDING" : "REVIEW_REQUIRED"/);
+});
