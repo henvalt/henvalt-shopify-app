@@ -34,6 +34,8 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
   assert.match(migration, /control_plane_record_billing_usage_result/);
   assert.match(migration, /CHARGE_ALREADY_SUBMITTED/);
+  assert.match(migration, /MISMATCH_REQUIRES_OPERATOR/);
+  assert.match(acceptance, /worker result bypassed an operator-confirmed mismatch/);
   assert.match(acceptance, /late failure was allowed to downgrade a submitted charge/);
   assert.match(acceptance, /billing result RPC ACL is not service-role-only/);
   const recordStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_record_billing_usage_result");
