@@ -13,7 +13,7 @@ DECLARE
   v_intervention uuid := gen_random_uuid();
   v_message uuid := gen_random_uuid();
   v_result boolean;
-  v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text)'::regprocedure;
+  v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text,text,text,text)'::regprocedure;
 BEGIN
   INSERT INTO henvalt.tenants(id, status) VALUES
     (v_tenant, 'ACTIVE'),
@@ -74,14 +74,20 @@ BEGIN
 
   IF henvalt.assert_mailersend_delivery_envelope(
     v_tenant, v_delivery, 'attacker@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'mismatched recipient was authorized';
   END IF;
 
   IF henvalt.assert_mailersend_delivery_envelope(
     v_other_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid'
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'cross-tenant delivery envelope was authorized';
   END IF;
