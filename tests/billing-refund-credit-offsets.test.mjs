@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const migration = readFileSync(new URL("../supabase/migrations/202611220011_billing_refund_credit_offsets.sql", import.meta.url), "utf8");
 const resultMigration = readFileSync(new URL("../supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql", import.meta.url), "utf8");
+const claimLockMigration = readFileSync(new URL("../supabase/migrations/202611220015_billing_claim_subscription_lock.sql", import.meta.url), "utf8");
 const acceptance = readFileSync(new URL("./billing-refund-credit-offsets-postgres-acceptance.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
 const billingWorkflow = readFileSync(new URL("../.github/workflows/billing-result-lock-safety.yml", import.meta.url), "utf8");
@@ -21,6 +22,11 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /crl\.attribution_confidence = 'CONFIRMED'/);
   assert.match(migration, /v_remaining := v_remaining - v_apply/);
   assert.match(migration, /SELECT usage_line_item_id, currency, test_mode/);
+  assert.match(claimLockMigration, /FOR UPDATE;/);
+  assert.match(claimLockMigration, /Serialize claim against subscription cancellation/);
+  assert.match(claimLockMigration, /control_plane_claim_billing_usage/);
+  assert.match(acceptance, /cancelled subscription was still eligible for a billing claim/);
+  assert.match(concurrency, /claim proceeded on a subscription cancelled while waiting for the account lock/);
   assert.match(migration, /v_test_mode IS DISTINCT FROM TRUE/);
   assert.match(migration, /TEST_MODE_REQUIRED/);
   assert.match(migration, /SINGLE_ACTIVE_SHOP_REQUIRED/);
@@ -87,6 +93,7 @@ test("safety CI applies and exercises the refund-credit migration", () => {
   assert.match(workflow, /202611220011_billing_refund_credit_offsets\.sql/);
   assert.match(workflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
   assert.match(billingWorkflow, /202611220014_billing_result_lock_order_and_monotonicity\.sql/);
+  assert.match(billingWorkflow, /202611220015_billing_claim_subscription_lock\.sql/);
   assert.match(billingWorkflow, /billing-refund-credit-offsets-postgres-acceptance\.sql/);
 });
 
