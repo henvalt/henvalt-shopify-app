@@ -16,6 +16,9 @@ test("order updates prefer current Shopify totals and only create incremental do
   assert.match(migration, /GREATEST\(v_original_amount - LEAST\(v_current_total, v_original_amount\), 0\)/);
   assert.match(migration, /GREATEST\(v_target_adjustment - v_previously_adjusted, 0\)/);
   assert.match(migration, /Upward edits are deliberately not re-billed/);
+  assert.match(migration, /v_event_updated_at < v_existing_shopify_updated_at/);
+  assert.match(migration, /stale_shopify_order_update/);
+  assert.match(acceptance, /older order snapshot was not rejected/);
   assert.match(migration, /lower\(v_event\.event_type\) <> 'orders\/updated'/);
   assert.match(migration, /process_shopify_order_edit_adjustment_fenced/);
   assert.match(migration, /assert_shopify_replay_lease_for_write\(p_job_id,p_worker_id,p_lease_id\)/);
