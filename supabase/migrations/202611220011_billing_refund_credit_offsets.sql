@@ -37,6 +37,7 @@ DECLARE
   v_tenant_id uuid;
   v_line_item text;
   v_currency char(3);
+  v_test_mode boolean;
   v_charge henvalt.billing_usage_charges%ROWTYPE;
   v_measurement henvalt.billing_measurements%ROWTYPE;
   v_credit record;
@@ -61,14 +62,20 @@ BEGIN
     RETURN jsonb_build_object('available', false, 'reason', 'SHOP_NOT_ACTIVE');
   END IF;
 
-  SELECT usage_line_item_id, currency
-    INTO v_line_item, v_currency
+  SELECT usage_line_item_id, currency, test_mode
+    INTO v_line_item, v_currency, v_test_mode
     FROM henvalt.billing_accounts
    WHERE tenant_id = v_tenant_id
      AND status = 'ACTIVE';
 
   IF v_line_item IS NULL THEN
     RETURN jsonb_build_object('available', false, 'reason', 'BILLING_SUBSCRIPTION_NOT_ACTIVE');
+  END IF;
+
+  -- This candidate worker is deliberately locked to Shopify test subscriptions.
+  -- Live merchant charges require a separate reviewed migration and cutover.
+  IF v_test_mode IS DISTINCT FROM TRUE THEN
+    RETURN jsonb_build_object('available', false, 'reason', 'TEST_MODE_REQUIRED');
   END IF;
 
   -- Lock one positive, confirmed, measured recovery. A pre-existing charge is
