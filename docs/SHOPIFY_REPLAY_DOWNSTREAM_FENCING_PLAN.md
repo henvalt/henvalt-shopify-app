@@ -169,3 +169,17 @@ A row-level tenant match alone can still hide a cross-tenant edge when the datab
 - order attribution → order, recovery sequence, opportunity and matched intervention.
 
 The tenant guard rejects a broken or foreign-tenant edge before the wrapped SECURITY DEFINER mutation runs. A new disposable PostgreSQL acceptance fixture now builds real tenant-A and tenant-B rows and exercises 14 foreign-edge cases across all seven relationship-bearing object types: checkout (1), canonical event (1), opportunity (3), order (2), recovery sequence (1), recovery intervention (2), and order attribution (4). It also builds a fully linked same-tenant graph and runs allow-controls across all seven relationship-bearing object types, so the tests check both rejection and legitimate-path compatibility. The CI bootstrap adds only the minimal relationship columns/tables needed to execute the production-shaped graph joins; these are disposable test objects, not production changes. The fixture is wired into the safety workflow, and a static assertion prevents the graph acceptance from silently being removed from CI. The complete result remains subject to the current exact-head CI run.
+
+
+## Concurrent replay lease reclamation acceptance — 2026-11-22
+
+The write guard in migration 011 validates the current unexpired lease with SELECT ... FOR UPDATE, then renews it in the same transaction as the downstream business write. The claim function in migration 008 considers expired leases and uses FOR UPDATE SKIP LOCKED. Static inspection is not enough to prove these two behaviors compose correctly under concurrent sessions.
+
+A new two-session disposable PostgreSQL harness now tests the actual race:
+1. Create and claim a deterministic replay job.
+2. Set its committed lease expiry to five seconds.
+3. In session A, call the real write-lease guard and hold the transaction open for twelve seconds. The guard's heartbeat remains uncommitted while the original committed lease expires.
+4. In session B, attempt to claim the expired job while session A still holds the row lock. The claim must skip the locked job and return no lease.
+5. After session A commits, verify its renewed lease is visible; then expire it explicitly and prove a different worker can reclaim it with a fresh lease.
+
+The harness is wired into the PostgreSQL safety workflow and has a companion static test for the lock/heartbeat/claim contract. It is a disposable database test only. Its first exact-head run is still required before this concurrency property can be marked verified; production remains untouched.
