@@ -16,10 +16,10 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.equal(w.settings.availableInMCP,false);
   assert.equal(w.id,"00000000-0000-4000-8000-999999999999");
   assert.equal(w.name,"HENVALT_INGEST_CANDIDATE_NO_SEND");
-  assert.equal(w.nodes.length,70);
-  assert.equal(result.graphAudit.node_count,70);
-  assert.equal(result.graphAudit.unique_node_ids,70);
-  assert.equal(result.graphAudit.unique_node_names,70);
+  assert.equal(w.nodes.length,71);
+  assert.equal(result.graphAudit.node_count,71);
+  assert.equal(result.graphAudit.unique_node_ids,71);
+  assert.equal(result.graphAudit.unique_node_names,71);
   assert.equal(result.audit.fenced_mutation_nodes,18);
   assert.equal(result.audit.active_workflow_modified,false);
   assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
@@ -51,6 +51,13 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.match(findNode(w,"Supabase Ingest RPC").parameters.jsonBody,/p_hmac/);
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.webhook_id\)/);
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.replay_job_id\)/);
+  const orderEdit = findNode(w,"Process Shopify Order Edit Adjustment");
+  assert.ok(orderEdit);
+  assert.equal(orderEdit.parameters.url,"https://supabase-staging.invalid/rest/v1/rpc/process_shopify_order_edit_adjustment");
+  assert.match(orderEdit.parameters.jsonBody,/p_event_id/);
+  assert.equal(w.connections["Post Recovery To Ledger"].main[0][0].node,"Process Shopify Order Edit Adjustment");
+  assert.equal(w.connections["Process Shopify Order Edit Adjustment"].main[0][0].node,"Mark Webhook Processed");
+  assert.equal(w.connections["Process Shopify Order Edit Adjustment"].main[1][0].node,"Capture Error");
   assert.ok(w.nodes.every(n=>!/(MailerSend|send email|provider send)/i.test(n.name)));
 });
 
