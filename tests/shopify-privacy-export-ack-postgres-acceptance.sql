@@ -28,6 +28,7 @@ declare
   v_schedule text;
   v_command text;
   v_function text := 'henvalt.acknowledge_shopify_privacy_export_download(uuid,uuid,text)';
+  v_begin_function text := 'henvalt.begin_shopify_privacy_export_download(uuid,uuid,text,timestamp with time zone)';
 begin
   select schedule,command into strict v_schedule,v_command
   from cron.job where jobname='henvalt-shopify-privacy-export-ack-cleanup';
@@ -99,8 +100,11 @@ begin
 
   if not has_function_privilege('service_role',v_function,'EXECUTE')
      or has_function_privilege('anon',v_function,'EXECUTE')
-     or has_function_privilege('authenticated',v_function,'EXECUTE') then
-    raise exception 'export acknowledgement RPC privileges are not restricted';
+     or has_function_privilege('authenticated',v_function,'EXECUTE')
+     or not has_function_privilege('service_role',v_begin_function,'EXECUTE')
+     or has_function_privilege('anon',v_begin_function,'EXECUTE')
+     or has_function_privilege('authenticated',v_begin_function,'EXECUTE') then
+    raise exception 'export acknowledgement/download-claim RPC privileges are not restricted';
   end if;
 end
 $ack$;
