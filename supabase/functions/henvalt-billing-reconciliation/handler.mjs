@@ -27,7 +27,7 @@ function decimalEqual(a, b) {
     const raw = String(value ?? "");
     if (!/^[0-9]+(?:[.][0-9]+)?$/.test(raw)) return null;
     const [whole, fraction = ""] = raw.split(".");
-    const integer = whole.replace(/^0+(?=\\d)/, "");
+    const integer = whole.replace(/^0+(?=\d)/, "");
     const decimals = fraction.replace(/0+$/, "");
     return integer + (decimals ? "." + decimals : "");
   };
