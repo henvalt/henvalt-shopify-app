@@ -240,7 +240,9 @@ jobs:
         run: node --test tests/shopify-privacy-compliance-blocker.test.mjs tests/shopify-privacy-deployed-baseline.test.mjs
       - name: Type-check Shopify OAuth Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
-      - name: Type-check Shopify usage billing Edge Function\n        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-usage-billing/index.ts\n      - name: Type-check MailerSend delivery Edge Function
+      - name: Type-check Shopify usage billing Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-usage-billing/index.ts
+      - name: Type-check MailerSend delivery Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
       - name: Type-check MailerSend provider setup Edge Function
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-setup/index.ts
