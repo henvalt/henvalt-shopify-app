@@ -413,6 +413,9 @@ BEGIN
   IF v_attempt < 5 THEN
     RETURN jsonb_build_object('updated', false, 'reason', 'RETRY_BUDGET_NOT_EXHAUSTED');
   END IF;
+  IF v_status = 'MISMATCH' THEN
+    RETURN jsonb_build_object('updated', false, 'reason', 'MISMATCH_REQUIRES_OPERATOR');
+  END IF;
   IF v_status = 'MATCHED' OR v_status = 'NOT_FOUND_CONFIRMED' THEN
     RETURN jsonb_build_object('updated', false, 'reason', 'RECONCILIATION_ALREADY_RESOLVED');
   END IF;
