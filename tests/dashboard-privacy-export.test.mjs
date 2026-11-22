@@ -25,3 +25,9 @@ test("dashboard revokes the temporary object URL and never labels acknowledgemen
   assert.match(dashboard, /URL\.revokeObjectURL\(url\)/);
   assert.match(dashboard, /does not prove the file was saved or opened/);
 });
+
+test("dashboard inline JavaScript parses before browser execution", () => {
+  const scripts = [...dashboard.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)];
+  assert.ok(scripts.length > 0, "dashboard script block missing");
+  for (const script of scripts) assert.doesNotThrow(() => new Function(script[1]));
+});
