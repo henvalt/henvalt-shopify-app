@@ -1,5 +1,9 @@
 const RECONCILIATION_READ_RPC = "control_plane_get_billing_reconciliation";
 const RECONCILIATION_RESOLVE_RPC = "control_plane_resolve_billing_reconciliation";
+const SHOPIFY_TOKEN_RPC = "get_shopify_access_token_for_control_plane";
+const SHOPIFY_API_VERSION = "2026-10";
+const SUBSCRIPTIONS_QUERY = `query HenvaltReconciliationSubscriptions($first: Int!, $after: String) { currentAppInstallation { allSubscriptions(first: $first, after: $after) { edges { node { id test lineItems { id } } } pageInfo { hasNextPage endCursor } } } }`;
+const USAGE_RECORDS_QUERY = `query HenvaltReconciliationUsageRecords($subscriptionId: ID!, $first: Int!, $after: String) { node(id: $subscriptionId) { ... on AppSubscription { id test lineItems { id usageRecords(first: $first, after: $after, reverse: true, sortKey: CREATED_AT) { edges { node { id idempotencyKey createdAt price { amount currencyCode } } } pageInfo { hasNextPage endCursor } } } } } }`;
 
 const cors = {
   "content-type": "application/json; charset=utf-8",
@@ -53,6 +57,140 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
 
   async function rpc(name, args) {
     return await serviceRequest("rpc/" + name, "POST", args);
+  }
+
+  async function shopifyGraphQL(shop, accessToken, query, variables) {
+    const response = await fetchImpl(
+      "https://" + shop + "/admin/api/" + SHOPIFY_API_VERSION + "/graphql.json",
+      {
+        method: "POST",
+        redirect: "error",
+        headers: {
+          "content-type": "application/json",
+          "x-shopify-access-token": accessToken,
+        },
+        body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(15000),
+      },
+    );
+    if (!response.ok) throw new Error("SHOPIFY_RECONCILIATION_LOOKUP_FAILED");
+    const payload = await response.json();
+    if (!payload || (Array.isArray(payload.errors) && payload.errors.length > 0)) {
+      throw new Error("SHOPIFY_RECONCILIATION_LOOKUP_INCOMPLETE");
+    }
+    return payload.data;
+  }
+
+  async function lookupShopifyUsageRecords(shop, charge) {
+    const tokenResult = await rpc(SHOPIFY_TOKEN_RPC, { p_shop_domain: shop });
+    const accessToken = typeof tokenResult === "string"
+      ? tokenResult
+      : (typeof tokenResult?.access_token === "string" ? tokenResult.access_token : "");
+    if (accessToken.length < 20) throw new Error("SHOPIFY_RECONCILIATION_TOKEN_UNAVAILABLE");
+
+    let subscriptionAfter = null;
+    let subscriptionPages = 0;
+    const lineItemMatches = [];
+    let subscriptionsComplete = false;
+    while (subscriptionPages < 25) {
+      const data = await shopifyGraphQL(shop, accessToken, SUBSCRIPTIONS_QUERY, {
+        first: 50,
+        after: subscriptionAfter,
+      });
+      const connection = data?.currentAppInstallation?.allSubscriptions;
+      if (!connection || !Array.isArray(connection.edges) || !connection.pageInfo) {
+        throw new Error("SHOPIFY_SUBSCRIPTION_LOOKUP_INCOMPLETE");
+      }
+      subscriptionPages += 1;
+      for (const edge of connection.edges) {
+        const subscription = edge?.node;
+        if (!subscription || !Array.isArray(subscription.lineItems)) continue;
+        for (const lineItem of subscription.lineItems) {
+          if (lineItem?.id === charge.subscriptionLineItemId) {
+            lineItemMatches.push({
+              subscriptionId: subscription.id,
+              test: subscription.test === true,
+              lineItemId: lineItem.id,
+            });
+          }
+        }
+      }
+      if (connection.pageInfo.hasNextPage !== true) {
+        subscriptionsComplete = true;
+        break;
+      }
+      if (typeof connection.pageInfo.endCursor !== "string" || !connection.pageInfo.endCursor) {
+        throw new Error("SHOPIFY_SUBSCRIPTION_PAGINATION_INCOMPLETE");
+      }
+      subscriptionAfter = connection.pageInfo.endCursor;
+    }
+    if (!subscriptionsComplete) throw new Error("SHOPIFY_SUBSCRIPTION_PAGE_LIMIT_REACHED");
+    if (lineItemMatches.length !== 1) {
+      return {
+        lookupComplete: true,
+        subscriptionFound: false,
+        lineItemFound: false,
+        matchingCount: 0,
+        pagesScanned: 0,
+        matches: [],
+      };
+    }
+    if (lineItemMatches[0].test !== true) {
+      throw new Error("SHOPIFY_SUBSCRIPTION_IS_NOT_TEST_MODE");
+    }
+
+    let usageAfter = null;
+    let usagePages = 0;
+    let usageComplete = false;
+    const matches = [];
+    while (usagePages < 100) {
+      const data = await shopifyGraphQL(shop, accessToken, USAGE_RECORDS_QUERY, {
+        subscriptionId: lineItemMatches[0].subscriptionId,
+        first: 50,
+        after: usageAfter,
+      });
+      const subscription = data?.node;
+      if (!subscription || subscription.id !== lineItemMatches[0].subscriptionId ||
+          subscription.test !== true || !Array.isArray(subscription.lineItems)) {
+        throw new Error("SHOPIFY_USAGE_RECORD_LOOKUP_INCOMPLETE");
+      }
+      const lineItem = subscription.lineItems.find((item) => item?.id === charge.subscriptionLineItemId);
+      if (!lineItem || !lineItem.usageRecords ||
+          !Array.isArray(lineItem.usageRecords.edges) || !lineItem.usageRecords.pageInfo) {
+        throw new Error("SHOPIFY_USAGE_RECORD_CONNECTION_MISSING");
+      }
+      usagePages += 1;
+      for (const edge of lineItem.usageRecords.edges) {
+        const record = edge?.node;
+        if (record?.idempotencyKey === charge.idempotencyKey) {
+          matches.push({
+            id: record.id,
+            idempotencyKey: record.idempotencyKey,
+            amount: record.price?.amount,
+            currency: record.price?.currencyCode,
+          });
+        }
+      }
+      if (lineItem.usageRecords.pageInfo.hasNextPage !== true) {
+        usageComplete = true;
+        break;
+      }
+      if (typeof lineItem.usageRecords.pageInfo.endCursor !== "string" ||
+          !lineItem.usageRecords.pageInfo.endCursor) {
+        throw new Error("SHOPIFY_USAGE_RECORD_PAGINATION_INCOMPLETE");
+      }
+      usageAfter = lineItem.usageRecords.pageInfo.endCursor;
+    }
+    if (!usageComplete) throw new Error("SHOPIFY_USAGE_RECORD_PAGE_LIMIT_REACHED");
+
+    return {
+      lookupComplete: true,
+      subscriptionFound: true,
+      lineItemFound: true,
+      matchingCount: matches.length,
+      pagesScanned: usagePages,
+      matches,
+    };
   }
 
   async function authorize(req) {
@@ -165,17 +303,53 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
       if (note.length < 1 || note.length > 1000) {
         return reply(400, { error: "operator_note_required" });
       }
-      const providerId = body.providerUsageRecordId == null ? null : body.providerUsageRecordId;
-      if (providerId !== null && typeof providerId !== "string") {
-        return reply(400, { error: "invalid_provider_usage_record_id" });
+
+      // Never trust browser-supplied provider evidence. Read the persisted charge
+      // envelope, then independently query Shopify using its stored idempotency key.
+      const charge = await rpc(RECONCILIATION_READ_RPC, {
+        p_shop_domain: access.shop,
+        p_charge_id: body.chargeId,
+      });
+      if (charge?.available !== true) {
+        return reply(409, { error: "reconciliation_state_changed" });
+      }
+      const lookup = await lookupShopifyUsageRecords(access.shop, charge);
+      if (lookup.lookupComplete !== true || lookup.subscriptionFound !== true ||
+          lookup.lineItemFound !== true) {
+        return reply(409, { error: "shopify_subscription_line_item_not_found" });
+      }
+
+      const matches = lookup.matches;
+      const record = matches.length === 1 ? matches[0] : null;
+      const evidence = {
+        lookupComplete: true,
+        subscriptionFound: true,
+        lineItemFound: true,
+        providerUsageRecordId: record?.id ?? null,
+        matchingCount: String(matches.length),
+        idempotencyKey: charge.idempotencyKey,
+        lineItemId: charge.subscriptionLineItemId,
+        amount: record?.amount ?? null,
+        currency: record?.currency ?? null,
+        pagesScanned: lookup.pagesScanned,
+      };
+
+      if (body.resolution === "MATCHED") {
+        if (matches.length !== 1 || !record?.id ||
+            record.amount !== String(charge.amount) ||
+            record.currency !== charge.currency) {
+          return reply(409, { error: "shopify_record_does_not_match_charge" });
+        }
+      } else if (body.resolution === "NOT_FOUND_CONFIRMED" && matches.length !== 0) {
+        return reply(409, { error: "shopify_record_exists_use_matched_or_mismatch" });
       }
 
       const result = await rpc(RECONCILIATION_RESOLVE_RPC, {
         p_shop_domain: access.shop,
         p_charge_id: body.chargeId,
         p_resolution: body.resolution,
-        p_provider_usage_record_id: providerId,
-        p_evidence: body.evidence,
+        p_provider_usage_record_id: body.resolution === "MATCHED" ? record.id : null,
+        p_evidence: evidence,
         p_operator_reference: access.userId,
         p_operator_note: note,
       });
