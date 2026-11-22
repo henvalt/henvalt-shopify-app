@@ -658,11 +658,11 @@ ALTER TABLE henvalt.order_attributions
   ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 ALTER TABLE henvalt.orders
-  ADD COLUMN total_value numeric(18,2),
-  ADD COLUMN currency character(3),
-  ADD COLUMN financial_status text,
-  ADD COLUMN cancelled_at timestamptz,
-  ADD COLUMN ordered_at timestamptz;
+  ADD COLUMN IF NOT EXISTS total_value numeric(18,2),
+  ADD COLUMN IF NOT EXISTS currency character(3),
+  ADD COLUMN IF NOT EXISTS financial_status text,
+  ADD COLUMN IF NOT EXISTS cancelled_at timestamptz,
+  ADD COLUMN IF NOT EXISTS ordered_at timestamptz;
 
 ALTER TABLE henvalt.revenue_ledger
   ADD COLUMN IF NOT EXISTS recovery_id uuid,
