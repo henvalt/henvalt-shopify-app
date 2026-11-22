@@ -243,17 +243,6 @@ BEGIN
     RAISE EXCEPTION 'ineligible opportunity was authorized';
   END IF;
   UPDATE henvalt.opportunities SET status = 'ELIGIBLE' WHERE id = v_opportunity;
-  UPDATE henvalt.tenants SET status = 'SUSPENDED' WHERE id = v_tenant;
-  IF henvalt.assert_mailersend_delivery_envelope(
-    v_tenant, v_delivery, 'customer@example.invalid',
-    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
-    'Synthetic delivery test',
-    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
-    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
-  ) IS TRUE THEN
-    RAISE EXCEPTION 'suspended tenant delivery was authorized';
-  END IF;
-
   -- Browse and cart opportunities may legitimately have no checkout row.
   -- Final send authorization must not accidentally disable those event types.
   INSERT INTO henvalt.opportunities(
@@ -318,6 +307,17 @@ BEGIN
     'Cart message. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS NOT TRUE THEN
     RAISE EXCEPTION 'valid abandoned-cart delivery without checkout was rejected';
+  END IF;
+
+  UPDATE henvalt.tenants SET status = 'SUSPENDED' WHERE id = v_tenant;
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Synthetic delivery test',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS TRUE THEN
+    RAISE EXCEPTION 'suspended tenant delivery was authorized';
   END IF;
 
   IF has_function_privilege('anon', v_signature, 'EXECUTE')
