@@ -197,10 +197,11 @@ begin
       lease_token = v_token,
       lease_expires_at = now() + make_interval(secs => p_lease_seconds),
       lease_attempts = r.lease_attempts + 1,
+      next_attempt_at = null,
       last_error = null
   where r.id = p_request_id
     and (r.status = 'PENDING'
-      or (r.status = 'FAILED' and r.lease_attempts < 8)
+      or (r.status = 'FAILED' and r.lease_attempts < 8 and (r.next_attempt_at is null or r.next_attempt_at <= now()))
       or (r.status = 'PROCESSING' and r.lease_attempts < 8 and (r.lease_expires_at is null or r.lease_expires_at <= now())))
     and (r.lease_expires_at is null or r.lease_expires_at <= now())
   returning r.id, r.tenant_id, r.shop_domain, r.shopify_shop_id, r.topic,
