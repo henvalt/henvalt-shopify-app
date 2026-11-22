@@ -328,7 +328,15 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
       if (charge?.available !== true) {
         return reply(409, { error: "reconciliation_state_changed" });
       }
-      const lookup = await lookupShopifyUsageRecords(access.shop, charge);
+      let lookup;
+      try {
+        lookup = await lookupShopifyUsageRecords(access.shop, charge);
+      } catch (error) {
+        if (error instanceof Error && error.message === "SHOPIFY_SUBSCRIPTION_IS_NOT_TEST_MODE") {
+          return reply(409, { error: "shopify_subscription_is_not_test_mode" });
+        }
+        throw error;
+      }
       if (lookup.lookupComplete !== true || lookup.subscriptionFound !== true ||
           lookup.lineItemFound !== true) {
         return reply(409, { error: "shopify_subscription_line_item_not_found" });
