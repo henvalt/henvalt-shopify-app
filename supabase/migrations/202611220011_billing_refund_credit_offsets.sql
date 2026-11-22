@@ -45,7 +45,8 @@ DECLARE
   v_credit_remaining numeric(18,4);
   v_apply numeric(18,4);
 BEGIN
-  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$' THEN
+  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com'
+     OR v_shop <> (split_part(v_shop,'.',1) || '.myshopify.com') THEN
     RAISE EXCEPTION 'Invalid Shopify shop domain' USING ERRCODE = '22023';
   END IF;
 
@@ -304,11 +305,8 @@ BEGIN
   IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'Service role required' USING ERRCODE = '42501';
   END IF;
-  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com
-  'Immutable tenant/currency-scoped allocations of negative refund/cancellation fee measurements against future positive Shopify usage charges.';
-
-COMMIT;
-
+  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com'
+     OR v_shop <> (split_part(v_shop,'.',1) || '.myshopify.com')
      OR p_charge_id IS NULL
      OR p_reason IS NULL
      OR p_reason NOT IN (
@@ -394,11 +392,9 @@ BEGIN
   IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'Service role required' USING ERRCODE = '42501';
   END IF;
-  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com
-  'Immutable tenant/currency-scoped allocations of negative refund/cancellation fee measurements against future positive Shopify usage charges.';
-
-COMMIT;
- OR p_charge_id IS NULL THEN
+  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com'
+     OR v_shop <> (split_part(v_shop,'.',1) || '.myshopify.com')
+     OR p_charge_id IS NULL THEN
     RAISE EXCEPTION 'Invalid reconciliation lookup' USING ERRCODE = '22023';
   END IF;
 
@@ -466,11 +462,8 @@ BEGIN
   IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'Service role required' USING ERRCODE = '42501';
   END IF;
-  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com
-  'Immutable tenant/currency-scoped allocations of negative refund/cancellation fee measurements against future positive Shopify usage charges.';
-
-COMMIT;
-
+  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com'
+     OR v_shop <> (split_part(v_shop,'.',1) || '.myshopify.com')
      OR p_charge_id IS NULL
      OR p_resolution IS NULL
      OR p_resolution NOT IN ('MATCHED','NOT_FOUND_CONFIRMED','MISMATCH')
@@ -529,11 +522,9 @@ COMMIT;
      AND test_mode = true;
 
   IF p_resolution = 'MATCHED' THEN
-    IF COALESCE(p_provider_usage_record_id,'') !~ '^gid://shopify/AppUsageRecord/[A-Za-z0-9_-]+
-  'Immutable tenant/currency-scoped allocations of negative refund/cancellation fee measurements against future positive Shopify usage charges.';
-
-COMMIT;
-
+    IF left(COALESCE(p_provider_usage_record_id,''),length('gid://shopify/AppUsageRecord/')) <> 'gid://shopify/AppUsageRecord/'
+       OR substring(COALESCE(p_provider_usage_record_id,'') from length('gid://shopify/AppUsageRecord/')+1) = ''
+       OR translate(substring(COALESCE(p_provider_usage_record_id,'') from length('gid://shopify/AppUsageRecord/')+1),'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-','') <> ''
        OR p_evidence->>'lookupComplete' IS DISTINCT FROM 'true'
        OR p_evidence->>'subscriptionFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'lineItemFound' IS DISTINCT FROM 'true'
@@ -542,11 +533,11 @@ COMMIT;
        OR p_evidence->>'idempotencyKey' IS DISTINCT FROM v_charge.idempotency_key
        OR p_evidence->>'lineItemId' IS DISTINCT FROM v_line_item
        OR p_evidence->>'currency' IS DISTINCT FROM v_charge.currency::text
-       OR COALESCE(p_evidence->>'amount','') !~ '^(0|[1-9][0-9]*)([.][0-9]{1,4})?
-  'Immutable tenant/currency-scoped allocations of negative refund/cancellation fee measurements against future positive Shopify usage charges.';
-
-COMMIT;
-
+       OR COALESCE(p_evidence->>'amount','') = ''
+       OR translate(COALESCE(p_evidence->>'amount',''),'0123456789.','') <> ''
+       OR replace(COALESCE(p_evidence->>'amount',''),'.','') = ''
+       OR length(COALESCE(p_evidence->>'amount','')) - length(replace(COALESCE(p_evidence->>'amount',''),'.','')) > 1
+       OR length(split_part(COALESCE(p_evidence->>'amount',''),'.',2)) > 4
        OR (p_evidence->>'amount')::numeric <> v_charge.amount THEN
       RAISE EXCEPTION 'Provider evidence does not match the persisted charge envelope' USING ERRCODE = '22023';
     END IF;
@@ -587,11 +578,9 @@ COMMIT;
        OR p_evidence->>'subscriptionFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'lineItemFound' IS DISTINCT FROM 'true'
        OR p_evidence->>'matchingCount' IS DISTINCT FROM '0'
-       OR COALESCE(p_evidence->>'pagesScanned','') !~ '^[1-9][0-9]*
-  'Immutable tenant/currency-scoped allocations of negative refund/cancellation fee measurements against future positive Shopify usage charges.';
-
-COMMIT;
- THEN
+       OR COALESCE(p_evidence->>'pagesScanned','') = ''
+       OR translate(COALESCE(p_evidence->>'pagesScanned',''),'0123456789','') <> ''
+       OR (p_evidence->>'pagesScanned')::numeric < 1 THEN
       RAISE EXCEPTION 'Complete no-match provider lookup evidence is required' USING ERRCODE = '22023';
     END IF;
 
