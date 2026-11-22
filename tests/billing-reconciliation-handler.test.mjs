@@ -211,6 +211,27 @@ test("verifies the exact Shopify usage record before settling a matched charge",
   assert.equal(args.p_evidence.currency, "USD");
 });
 
+test("rejects a provider record whose own subscriptionLineItem ID differs from the stored line item", async () => {
+  const h = harness({
+    usageRecords: [{
+      id: providerRecordId,
+      idempotencyKey,
+      price: { amount: "10.00", currencyCode: "USD" },
+      subscriptionLineItem: { id: "gid://shopify/AppSubscriptionLineItem/wrong" },
+    }],
+  });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MATCHED",
+    operatorNote: "Verify line item identity",
+  }));
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "shopify_record_does_not_match_charge");
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
+});
+
 test("does not accept browser-supplied evidence when Shopify has no matching record", async () => {
   const h = harness({ usageRecords: [] });
   const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
