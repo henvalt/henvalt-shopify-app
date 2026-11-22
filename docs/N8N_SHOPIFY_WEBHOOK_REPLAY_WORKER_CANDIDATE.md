@@ -227,7 +227,7 @@ The migration 008 implementation returns `SETOF henvalt.background_jobs`, so the
 
 ### Active mutation inventory and fenced-wrapper signature audit
 
-The sanitized active-ingest snapshot now records all 18 observed mutating RPC nodes from version `6368d539-708f-494a-8be8-b9601d0e8607`. CI requires an exact one-to-one match between that inventory and the replay write map. It also parses every mapped SQL wrapper definition and verifies that the exact `job_id, worker_id, lease_id` arguments are first, and that the transaction-local lease guard executes before the wrapped legacy mutation (or the direct webhook status update). This is still static source validation; it does not prove the live workflow has been rewired.
+The sanitized active-ingest snapshot still records 18 observed mutating RPC nodes from version `6368d539-708f-494a-8be8-b9601d0e8607`. The candidate replay write map now covers those 18 active mutations plus one candidate-only `process_shopify_order_edit_adjustment` mutation. CI verifies the active inventory is fully mapped, the candidate-only entry is explicitly identified, and every mapped SQL wrapper takes the exact `job_id, worker_id, lease_id` tuple first and validates the lease before the underlying mutation. This remains static candidate validation; it does not prove the live workflow has been rewired.
 
 
 ## Recovery graph patch manifest — inspected topology correction
