@@ -59,6 +59,7 @@ test("object graph checks reject cross-tenant foreign-key edges, not only root r
   assert.ok(sql.includes("WHEN '"+table+"'"),"missing graph branch "+table);
  assert.match(sql,/SHOPIFY_REPLAY_OBJECT_GRAPH_TENANT_MISMATCH/);
  assert.match(sql,/LEFT JOIN henvalt\\.orders o ON o\\.id=x\\.order_id/);
+ assert.match(sql,/LEFT JOIN henvalt\\.webhook_events w ON w\\.id=x\\.webhook_event_id/);
  assert.match(sql,/LEFT JOIN henvalt\\.recovery_sequences s ON s\\.id=x\\.recovery_id/);
  assert.match(sql,/LEFT JOIN henvalt\\.recovery_interventions i ON i\\.id=x\\.matched_intervention_id/);
 });
