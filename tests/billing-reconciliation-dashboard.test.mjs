@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 
 const html = await readFile(new URL("../dashboard/index.html", import.meta.url), "utf8");
@@ -24,6 +25,14 @@ test("billing decisions cannot submit browser-created provider evidence", () => 
   assert.match(html, /action:"resolve",chargeId,resolution,operatorNote:/);
   assert.match(html, /retrieves the stored Shopify access token server-side/);
   assert.match(html, /Every decision is attributed to your authenticated HENVALT account/);
+});
+
+test("dashboard inline JavaScript parses after adding the reconciliation panel", () => {
+  const scripts = [...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)]
+    .map((match) => match[1])
+    .filter((source) => source.includes("async function init()"));
+  assert.equal(scripts.length, 1);
+  assert.doesNotThrow(() => new vm.Script(scripts[0], { filename: "dashboard/index.html" }));
 });
 
 test("billing review is wired into navigation and escapes untrusted case fields", () => {
