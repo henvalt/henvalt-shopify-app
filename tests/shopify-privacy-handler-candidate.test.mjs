@@ -6,7 +6,8 @@ const source = readFileSync("supabase/functions/henvalt-shopify-privacy/index.ts
 const oauthSource = readFileSync("supabase/functions/henvalt-shopify-oauth/index.ts", "utf8");
 
 test("privacy candidate authenticates exact raw bytes and signed shop identity", () => {
-  assert.match(source, /req\.arrayBuffer\(\)/);
+  assert.match(source, /readBoundedBody\(req, MAX_BODY_BYTES\)/);
+  assert.match(source, /payload_too_large/);
   assert.match(source, /verifyHmac\(raw, hmac\)/);
   assert.match(source, /asId\(payload\?\.shop_id\)/);
   assert.match(source, /signed_shop_identity_mismatch/);
