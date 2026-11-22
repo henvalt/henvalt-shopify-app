@@ -125,8 +125,8 @@ BEGIN
     v_order,20,'USD','SUCCESSFUL_SHOPIFY_REFUND',v_refund_event
   );
 
-  -- current_total_price must win over stale total_price (100). Existing refund
-  -- credit of 20 means only the additional 10 downward edit is posted.
+  -- current_total_price must win over stale total_price (100) during the
+  -- order projection itself, before attribution/ledger posting can read the total.
   INSERT INTO henvalt.canonical_events(
     id,tenant_id,event_type,event_class,source,source_event_id,
     occurred_at,payload,metadata,idempotency_key
@@ -136,6 +136,12 @@ BEGIN
     '{"id":"order-edit-100","total_price":"100.00","current_total_price":"70.00","currency":"USD","current_total_price_set":{"shop_money":{"amount":"70.00","currency_code":"USD"}}}',
     '{}','order-edit-idem-1'
   );
+  PERFORM henvalt.project_order_from_event(v_edit_1);
+  SELECT total_value INTO v_total FROM henvalt.orders WHERE id=v_order;
+  IF v_total <> 70 THEN
+    RAISE EXCEPTION 'order projection did not prefer current_total_price over stale total_price';
+  END IF;
+
   v_result := henvalt.process_shopify_order_edit_adjustment(v_edit_1);
   IF v_result->>'status' <> 'adjusted' OR (v_result->>'amount')::numeric <> 10 THEN
     RAISE EXCEPTION 'expected incremental 10 order-edit adjustment after existing refund, got %',v_result;
