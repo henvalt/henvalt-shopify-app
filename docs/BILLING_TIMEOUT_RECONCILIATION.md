@@ -110,6 +110,9 @@ No operator action may accept an arbitrary shop/tenant pairing, overwrite a SUBM
 - Pagination crosses the original charge timestamp and does not falsely report NOT_FOUND.
 - Two concurrent reconcilers cannot double-record or overwrite the charge.
 - The operator resolution is tenant-bound, audited and cannot rewrite a submitted charge.
+- Incomplete no-match evidence is rejected without changing the charge.
+- A wrong-shop lookup cannot read or resolve another tenant's charge.
+- `MISMATCH` remains excluded from scheduler retries.
 - An incomplete no-match lookup is rejected and leaves the charge in `REQUIRED`.
 - A wrong-shop lookup cannot read or resolve another tenant's charge.
 - `MISMATCH` remains excluded from scheduler retries until a new audited resolution is recorded.
