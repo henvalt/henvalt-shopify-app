@@ -35,6 +35,27 @@ AS $function$
      AND pc.channel = dr.channel
      AND pc.active IS TRUE
      AND lower(pc.provider) = lower(si.provider)
+    JOIN henvalt.opportunities o
+      ON o.id = dr.opportunity_id
+     AND o.tenant_id = dr.tenant_id
+    JOIN henvalt.customers c
+      ON c.id = o.customer_id
+     AND c.tenant_id = o.tenant_id
+    JOIN henvalt.recovery_interventions ri
+      ON ri.id = dr.intervention_id
+     AND ri.tenant_id = dr.tenant_id
+     AND ri.opportunity_id = o.id
+    JOIN henvalt.recovery_sequences rs
+      ON rs.id = dr.recovery_id
+     AND rs.tenant_id = dr.tenant_id
+     AND rs.opportunity_id = o.id
+    JOIN henvalt.checkouts ck
+      ON ck.id = o.checkout_id
+     AND ck.tenant_id = o.tenant_id
+    JOIN henvalt.shopify_connections sc
+      ON sc.tenant_id = ck.tenant_id
+     AND lower(sc.shop_domain) = lower(COALESCE(ck.metadata->>'shop_domain', ''))
+     AND sc.active IS TRUE
     JOIN henvalt.tenants t
       ON t.id = dr.tenant_id
      AND t.status = 'ACTIVE'
@@ -47,6 +68,26 @@ AS $function$
       AND lower(si.provider) = 'mailersend'
       AND pc.configuration->>'credential_validated' = 'true'
       AND NULLIF(btrim(pc.configuration->>'verified_domain'), '') IS NOT NULL
+      AND o.status = 'ELIGIBLE'
+      AND c.email_consent IS TRUE
+      AND lower(COALESCE(c.email, '')) = lower(dr.recipient_reference)
+      AND ri.status = 'SENDING'
+      AND rs.status IN ('SCHEDULED', 'ACTIVE')
+      AND NOT EXISTS (
+        SELECT 1
+        FROM henvalt.orders ord
+        WHERE ord.tenant_id = o.tenant_id
+          AND ord.checkout_id = o.checkout_id
+          AND lower(COALESCE(ord.financial_status, '')) = 'paid'
+          AND ord.cancelled_at IS NULL
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM henvalt.email_suppressions es
+        WHERE es.tenant_id = o.tenant_id
+          AND es.active IS TRUE
+          AND (es.customer_id = c.id OR lower(es.email_normalized) = lower(dr.recipient_reference))
+      )
       AND (
         lower(split_part(si.sender_reference, '@', 2)) = lower(pc.configuration->>'verified_domain')
         OR lower(split_part(si.sender_reference, '@', 2)) LIKE '%.' || lower(pc.configuration->>'verified_domain')
