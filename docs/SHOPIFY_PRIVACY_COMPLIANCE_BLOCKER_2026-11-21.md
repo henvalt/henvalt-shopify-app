@@ -33,18 +33,18 @@ Read-only production catalog inspection found `henvalt.shopify_privacy_requests`
 - `henvalt.redact_shopify_shop_data(uuid)` exists and is service-role-only. It consumes a queued `shop/redact` request and deletes the tenant after sanitizing the queue receipt.
 - `henvalt.purge_expired_shopify_privacy_exports()` exists.
 - The production pg_cron catalog shows the export-purge job active every 15 minutes. This only proves expiry cleanup is scheduled; it does not implement the missing request ingestion or customer-data export.
-- Correction from the 2026-11-21 Edge Function inspection: an active `henvalt-shopify-privacy` production Edge Function exists (version 1, `verify_jwt=false`). It receives the three compliance topics, verifies HMAC over the raw request body, inserts into `shopify_privacy_requests`, and calls export/redaction RPCs synchronously. It is not yet a proven end-to-end compliance implementation: the data export awaits secure merchant delivery, the queue is not atomically claimed, and the edge function source is absent from this Git branch.
+- Correction from the 2026-11-21 Edge Function inspection: an active `henvalt-shopify-privacy` production Edge Function exists (version 1, `verify_jwt=false`). It receives the three compliance topics, verifies HMAC over the raw request body, inserts into `shopify_privacy_requests`, and calls export/redaction RPCs synchronously. It is not yet a proven end-to-end compliance implementation: the data export awaits secure merchant delivery, the queue is not atomically claimed, and the deployed v1 source has now been captured as an immutable audit baseline while a hardened replacement is staged at the exact Supabase function deployment path.
 
 The presence of a queue table and isolated redaction functions is not evidence that Shopify's incoming compliance webhooks are accepted, acknowledged, completed or retried correctly.
 
 ## Required implementation before deploying the TOML subscriptions
 
-1. Bring the deployed `henvalt-shopify-privacy` v1 source under version control, then harden it. It already verifies HMAC over exact raw bytes; additionally bind the signed payload `shop_id`/`shop_domain` to the resolved `shopify_connections` row, and never trust the unsigned `x-shopify-shop-id` header as identity.
-2. Replace read-then-process queue handling with an atomic claim/lease transition. The current function inserts idempotently by webhook ID but does not change `PENDING` to `PROCESSING` before doing work, so concurrent duplicate deliveries can race. Preserve retryable failures and explicit unknown-shop handling.
+1. Preserve the deployed `henvalt-shopify-privacy` v1 source as an immutable audit baseline (done) and stage the hardened replacement at `supabase/functions/henvalt-shopify-privacy/index.ts` (candidate only). The replacement verifies HMAC over exact raw bytes, compares the signed payload `shop_id` with the stored shop connection, and never trusts the unsigned `x-shopify-shop-id` header as identity.
+2. Replace read-then-process queue handling with an atomic claim/lease transition. Candidate migration `202611220001` adds fenced leases; `202611220004` binds replay identity to the signed payload hash; and `202611220005` adds a bounded scheduled worker. These are not production-applied.
 3. Complete `customers/data_request`: the current handler calls `export_shopify_customer_data` and stores a 30-day result, but marks it `REVIEW_REQUIRED` with `export_ready_for_secure_merchant_delivery`; no secure merchant delivery is performed in the inspected handler. Implement and test that controlled, auditable delivery.
-4. Harden `customers/redact`: the handler calls the tenant-scoped redaction RPC, but that RPC returns `matched: true` even when no customer or related rows match, making the handler's no-match review branch ineffective. Add a real affected-record/no-match result and test customer-ID-only and email-only requests.
+4. Harden `customers/redact`: candidate migration `202611220002` adds a tenant-scoped preflight across the deployed redaction graph and returns a true no-match result before calling the legacy destructive RPC. Disposable PostgreSQL acceptance covers matched and unmatched requests, including email-linked delivery attempts. The legacy production RPC is unchanged.
 5. Verify `shop/redact`: the current handler invokes the tenant deletion RPC. Prove shop identity binding, tenant-wide send/processing stop, deletion scope, backups, provider logs and n8n execution-data treatment in isolated staging.
-6. Add a lease-bound worker with retries, terminal/dead-letter states, append-only audit evidence, strict tenant isolation and no raw payload leakage to n8n execution history.
+6. Candidate migration `202611220005` adds a lease-bound worker with bounded batches, retry/dead-letter handling and service-role-only execution. It runs in PostgreSQL rather than n8n, avoiding raw privacy payloads in n8n execution history. The cron schedule is tested in a disposable fixture and is not production-installed.
 7. Test duplicates, invalid HMAC, unknown shops, service/database outage, partial failure, retry, customer-id-only and email-only payloads, completed replay, legal-hold exceptions, and full shop deletion in isolated staging.
 8. The candidate `shopify.app.toml` now declares all three `compliance_topics` against the existing Supabase privacy endpoint. Before deploying that configuration, deploy the candidate privacy handler and durable queue worker, verify the endpoint end-to-end, then validate the actual Shopify app configuration. Do not point production compliance subscriptions at an implementation that has not passed the lifecycle tests.
 
@@ -60,7 +60,7 @@ The presence of a queue table and isolated redaction functions is not evidence t
 - [ ] Isolated end-to-end acceptance evidence exists.
 - [ ] Shopify app configuration validation and App Store security checks pass.
 
-**Current status: PARTIALLY IMPLEMENTED / NOT CONFIGURED / NO-GO.** A production v1 handler exists, but critical identity, concurrency, retention and export-delivery controls remain unproven. Keep the current app configuration unchanged.
+**Current status: PARTIALLY IMPLEMENTED / SOURCE CONFIGURED / PRODUCTION NO-GO.** The candidate TOML declares the mandatory topics, and a hardened handler plus lease-backed queue worker are staged and under CI. Critical export delivery and full lifecycle staging remain unproven. Keep production app configuration and deployments unchanged.
 
 ## Additional production catalog evidence — 2026-11-21 (second read-only catalog pass)
 
@@ -82,7 +82,7 @@ This is a distinct privacy-retention defect, not just the missing webhook receiv
 
 ### Release-gate consequence
 
-Do not describe the existing customer-redaction RPC as end-to-end Shopify compliance. The function is a useful tenant-scoped primitive, but request ingestion, request lifecycle, durable worker orchestration, customer-data export, and post-redaction queue sanitization are still incomplete. Do not add `compliance_topics` to TOML until those paths have been implemented and tested in an isolated environment.
+Do not describe the existing customer-redaction RPC as end-to-end Shopify compliance. The function is a useful tenant-scoped primitive, but request ingestion, request lifecycle, durable worker orchestration, customer-data export, and post-redaction queue sanitization are still incomplete. Do not deploy the candidate `compliance_topics` declaration until the hardened handler, durable worker, and end-to-end lifecycle have been verified in an isolated environment.
 
 
 ## Correction and additional live evidence — 2026-11-21 (production function read-only inspection)
@@ -151,7 +151,7 @@ A separate ACTIVE Supabase Edge Function was found and captured in the candidate
 - CORS allows any origin, although the endpoint still requires a bearer token validated by Supabase Auth and an owner/admin membership. Review this against the dashboard's actual deployment origins.
 - The endpoint's independent authentication is a positive control; do not turn on gateway JWT verification without validating the dashboard's token forwarding and deployment behavior.
 
-Both deployed v1 functions are now preserved under `supabase/functions/` as **AUDIT BASELINES ONLY**. These files are not remediations and must not be deployed unchanged. Their source hashes are pinned in-file. Production remains unchanged.
+The deployed `henvalt-shopify-privacy` v1 source is preserved byte-for-byte at `supabase/audit-baselines/henvalt-shopify-privacy-v1.ts` as an **AUDIT BASELINE ONLY**. The deployed `henvalt-privacy-export` v1 source remains at `supabase/functions/henvalt-privacy-export/index.ts` as an **AUDIT BASELINE ONLY**. Their source hashes are pinned in-file. The hardened privacy replacement is staged at the exact deployable path `supabase/functions/henvalt-shopify-privacy/index.ts`. Production remains unchanged.
 
 
 ### Latest queue-state and privilege verification — 2026-11-21 (read-only)
