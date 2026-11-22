@@ -67,10 +67,10 @@ return {
   };
 }
 
-test("builder produces a separate inactive candidate with all 18 fenced mutation routes", () => {
+test("builder produces a separate inactive candidate with all 19 fenced mutation routes", () => {
   const result = buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607");
   const workflow = result.workflow;
-  assert.equal(result.audit.fenced_mutation_nodes,18);
+  assert.equal(result.audit.fenced_mutation_nodes,19);
   assert.equal(result.graphAudit.node_count,workflow.nodes.length);
   assert.equal(result.graphAudit.unique_node_ids,workflow.nodes.length);
   assert.equal(result.graphAudit.unique_node_names,workflow.nodes.length);
