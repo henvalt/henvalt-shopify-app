@@ -78,9 +78,10 @@ Deno.serve(async (req: Request) => {
   const shop = (req.headers.get("x-shopify-shop-domain") ?? "").toLowerCase();
   const webhookId = req.headers.get("x-shopify-webhook-id") ?? "";
   const hmac = req.headers.get("x-shopify-hmac-sha256") ?? "";
+  if (!hmac) return reply(401, { error: "invalid_hmac" });
   if (!["customers/data_request", "customers/redact", "shop/redact"].includes(topic) ||
       !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ||
-      !/^[a-zA-Z0-9_-]{1,128}$/.test(webhookId) || !hmac) {
+      !/^[a-zA-Z0-9_-]{1,128}$/.test(webhookId)) {
     return reply(400, { error: "invalid_compliance_webhook_headers" });
   }
 
