@@ -37,6 +37,8 @@ export function buildShopifyReplayEnvelope(claim, loaded, now = Date.now()) {
 
   // Never mutate the stored JSON object; only add the canonical delivery ID.
   const body = { ...r.payload, event_id: r.source_event_id };
+  if (r.correlation_id) body.correlation_id = r.correlation_id;
+  else delete body.correlation_id;
   const headers = {
     "x-shopify-shop-domain": shop,
     "x-shopify-topic": r.topic,
