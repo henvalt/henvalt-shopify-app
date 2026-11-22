@@ -46,3 +46,9 @@ test("privacy candidate fails closed for legacy connections without a signed sho
   assert.match(source, /p_tenant_id: verifiedConnection\?\.tenant_id \?\? null/);
   assert.match(source, /initialStatus = verifiedConnection \? "PENDING" : "REVIEW_REQUIRED"/);
 });
+
+test("privacy webhook bounds database waits and fails retryably", () => {
+  assert.match(source, /AbortSignal\.timeout\(1800\)/);
+  assert.match(source, /database_unavailable/);
+  assert.match(source, /connectionResponse\.json\(\)\.catch\(\(\) => null\)/);
+});
