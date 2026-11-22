@@ -20,6 +20,9 @@ test("provider egress is downstream of database-bound delivery envelope authoriz
   assert.ok(providerSend > envelopeCheck);
   assert.match(handler, /envelopeAuthorized !== true/);
   assert.match(handler, /delivery_envelope_not_authorized/);
+  assert.match(handler, /p_subject: subject/);
+  assert.match(handler, /p_html_body:/);
+  assert.match(handler, /p_text_body:/);
 });
 
 test("envelope authorization binds tenant, claimed delivery, recipient and configured sender identity", () => {
@@ -36,6 +39,12 @@ test("envelope authorization binds tenant, claimed delivery, recipient and confi
   assert.match(migration, /metadata->>'from_name'[\s\S]*?p_from_name/i);
   assert.match(migration, /metadata->>'reply_to'[\s\S]*?p_reply_to/i);
   assert.match(migration, /t\.status = 'ACTIVE'/i);
+  assert.match(migration, /evaluate_opportunity_communication_eligibility/i);
+  assert.match(migration, /LEFT JOIN henvalt\.checkouts/i);
+  assert.match(migration, /BROWSE_ABANDONMENT/i);
+  assert.match(migration, /ABANDONED_CART/i);
+  assert.match(migration, /customer_conversations cc/i);
+  assert.match(migration, /reply_token_hash = encode/i);
   assert.match(migration, /pc\.configuration->>'credential_validated' = 'true'/i);
   assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.assert_mailersend_delivery_envelope[\s\S]*?PUBLIC, anon, authenticated/i);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.assert_mailersend_delivery_envelope[\s\S]*?service_role/i);
