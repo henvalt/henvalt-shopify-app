@@ -20,6 +20,14 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /SELECT usage_line_item_id, currency, test_mode/);
   assert.match(migration, /v_test_mode IS DISTINCT FROM TRUE/);
   assert.match(migration, /TEST_MODE_REQUIRED/);
+  assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
+  assert.match(migration, /control_plane_get_billing_reconciliation/);
+  assert.match(migration, /control_plane_resolve_billing_reconciliation/);
+  assert.match(migration, /reconciliation_status = 'MATCHED'/);
+  assert.match(migration, /NOT_FOUND_CONFIRMED/);
+  assert.match(migration, /request.jwt.claim.role/);
+  assert.match(acceptance, /matched reconciliation failed/);
+  assert.match(acceptance, /retry did not preserve original charge identity and idempotency key/);
   assert.equal((migration.match(/'testMode', v_test_mode/g) || []).length, 2);
   assert.match(acceptance, /live-mode subscription was not blocked by default/);
   assert.match(migration, /FULLY_OFFSET_BY_REFUND_CREDIT/);
