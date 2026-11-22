@@ -13,6 +13,16 @@ DECLARE
   v_intervention uuid := gen_random_uuid();
   v_message uuid := gen_random_uuid();
   v_reply_token text;
+  v_browse_opportunity uuid := gen_random_uuid();
+  v_browse_recovery uuid := gen_random_uuid();
+  v_browse_intervention uuid := gen_random_uuid();
+  v_browse_message uuid := gen_random_uuid();
+  v_browse_delivery uuid := gen_random_uuid();
+  v_cart_opportunity uuid := gen_random_uuid();
+  v_cart_recovery uuid := gen_random_uuid();
+  v_cart_intervention uuid := gen_random_uuid();
+  v_cart_message uuid := gen_random_uuid();
+  v_cart_delivery uuid := gen_random_uuid();
   v_result boolean;
   v_signature regprocedure := 'henvalt.assert_mailersend_delivery_envelope(uuid,uuid,text,text,text,text,text,text,text)'::regprocedure;
 BEGIN
@@ -242,6 +252,72 @@ BEGIN
     'Hello customer. Unsubscribe: https://unsubscribe.example.invalid/token'
   ) IS TRUE THEN
     RAISE EXCEPTION 'suspended tenant delivery was authorized';
+  END IF;
+
+  -- Browse and cart opportunities may legitimately have no checkout row.
+  -- Final send authorization must not accidentally disable those event types.
+  INSERT INTO henvalt.opportunities(
+    id, tenant_id, customer_id, checkout_id, opportunity_type, status, metadata
+  ) VALUES (
+    v_browse_opportunity, v_tenant, v_customer, NULL, 'BROWSE_ABANDONMENT', 'ELIGIBLE',
+    '{"shop_domain":"envelope-fixture.myshopify.com","session_reference":"browse-session"}'::jsonb
+  );
+  INSERT INTO henvalt.recovery_sequences(id, tenant_id, opportunity_id, status)
+  VALUES (v_browse_recovery, v_tenant, v_browse_opportunity, 'SCHEDULED');
+  INSERT INTO henvalt.recovery_interventions(id, tenant_id, opportunity_id, sequence_id, status)
+  VALUES (v_browse_intervention, v_tenant, v_browse_opportunity, v_browse_recovery, 'SENDING');
+  INSERT INTO henvalt.messages(id, tenant_id, intervention_id, recipient, subject, body, metadata)
+  VALUES (v_browse_message, v_tenant, v_browse_intervention, 'customer@example.invalid',
+          'Browse recovery', 'Browse message. Unsubscribe: https://unsubscribe.example.invalid/token',
+          '{"unsubscribe_url":"https://unsubscribe.example.invalid/token"}'::jsonb);
+  INSERT INTO henvalt.delivery_requests(
+    id, tenant_id, status, recipient_reference, channel, provider,
+    delivery_mode, provider_claimed_at, opportunity_id, recovery_id, intervention_id, message_reference
+  ) VALUES (
+    v_browse_delivery, v_tenant, 'UNKNOWN', 'customer@example.invalid',
+    'EMAIL', 'mailersend', 'HENVALT_MANAGED', now(), v_browse_opportunity,
+    v_browse_recovery, v_browse_intervention, v_browse_message
+  );
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_browse_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Browse recovery',
+    'Browse message. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Browse message. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'valid browse-abandonment delivery without checkout was rejected';
+  END IF;
+
+  INSERT INTO henvalt.opportunities(
+    id, tenant_id, customer_id, checkout_id, opportunity_type, status, metadata
+  ) VALUES (
+    v_cart_opportunity, v_tenant, v_customer, NULL, 'ABANDONED_CART', 'ELIGIBLE',
+    jsonb_build_object('shop_domain','envelope-fixture.myshopify.com','cart_token','synthetic-cart-token','last_activity_at',now()::text)
+  );
+  INSERT INTO henvalt.recovery_sequences(id, tenant_id, opportunity_id, status)
+  VALUES (v_cart_recovery, v_tenant, v_cart_opportunity, 'SCHEDULED');
+  INSERT INTO henvalt.recovery_interventions(id, tenant_id, opportunity_id, sequence_id, status)
+  VALUES (v_cart_intervention, v_tenant, v_cart_opportunity, v_cart_recovery, 'SENDING');
+  INSERT INTO henvalt.messages(id, tenant_id, intervention_id, recipient, subject, body, metadata)
+  VALUES (v_cart_message, v_tenant, v_cart_intervention, 'customer@example.invalid',
+          'Cart recovery', 'Cart message. Unsubscribe: https://unsubscribe.example.invalid/token',
+          '{"unsubscribe_url":"https://unsubscribe.example.invalid/token"}'::jsonb);
+  INSERT INTO henvalt.delivery_requests(
+    id, tenant_id, status, recipient_reference, channel, provider,
+    delivery_mode, provider_claimed_at, opportunity_id, recovery_id, intervention_id, message_reference
+  ) VALUES (
+    v_cart_delivery, v_tenant, 'UNKNOWN', 'customer@example.invalid',
+    'EMAIL', 'mailersend', 'HENVALT_MANAGED', now(), v_cart_opportunity,
+    v_cart_recovery, v_cart_intervention, v_cart_message
+  );
+  IF henvalt.assert_mailersend_delivery_envelope(
+    v_tenant, v_cart_delivery, 'customer@example.invalid',
+    'recovery@example.invalid', 'HENVALT Test', 'support@example.invalid',
+    'Cart recovery',
+    'Cart message. Unsubscribe: https://unsubscribe.example.invalid/token',
+    'Cart message. Unsubscribe: https://unsubscribe.example.invalid/token'
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'valid abandoned-cart delivery without checkout was rejected';
   END IF;
 
   IF has_function_privilege('anon', v_signature, 'EXECUTE')
