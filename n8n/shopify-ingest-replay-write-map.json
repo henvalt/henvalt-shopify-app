@@ -92,6 +92,11 @@
       "node": "Mark Webhook Failed",
       "current_rpc": "mark_webhook_failed",
       "fenced_rpc": "mark_webhook_failed_fenced"
+    },
+    {
+      "node": "Process Shopify Order Edit Adjustment",
+      "current_rpc": "process_shopify_order_edit_adjustment",
+      "fenced_rpc": "process_shopify_order_edit_adjustment_fenced"
     }
   ],
   "read_only_operations": [
