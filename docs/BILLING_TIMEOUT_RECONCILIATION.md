@@ -91,7 +91,7 @@ Filter the returned line item by exact ID, then match `idempotencyKey`, amount a
 
 ## Required state and authorization work
 
-The current worker returns `requiresOperatorReview` on an exhausted ambiguous attempt, but this is not yet a durable reconciliation state. Before production, implement:
+The candidate migration now adds a durable `reconciliation_status` gate to each billing charge. The worker calls `control_plane_mark_billing_reconciliation_required` when its fifth attempt has an ambiguous outcome. The scheduler discovery query excludes `REQUIRED` and `MISMATCH` charges. A service-role-only read RPC returns a tenant-bound charge envelope without credentials, and a service-role-only resolution RPC records audited operator decisions. These candidate RPCs are not deployed; the following staging and operator-surface work remains:
 
 1. A durable `RECONCILIATION_REQUIRED` marker (or equivalent fields) on the charge, set atomically when ambiguous attempts are exhausted.
 2. A service-role-only read RPC that returns the exact tenant-bound charge envelope for reconciliation.
@@ -110,6 +110,9 @@ No operator action may accept an arbitrary shop/tenant pairing, overwrite a SUBM
 - Pagination crosses the original charge timestamp and does not falsely report NOT_FOUND.
 - Two concurrent reconcilers cannot double-record or overwrite the charge.
 - The operator resolution is tenant-bound, audited and cannot rewrite a submitted charge.
+- An incomplete no-match lookup is rejected and leaves the charge in `REQUIRED`.
+- A wrong-shop lookup cannot read or resolve another tenant's charge.
+- `MISMATCH` remains excluded from scheduler retries until a new audited resolution is recorded.
 
 ## Release boundary
 
