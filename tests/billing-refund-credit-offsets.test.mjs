@@ -22,6 +22,9 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /v_test_mode IS DISTINCT FROM TRUE/);
   assert.match(migration, /TEST_MODE_REQUIRED/);
   assert.match(migration, /SINGLE_ACTIVE_SHOP_REQUIRED/);
+  assert.match(migration, /BILLING_RETRY_BUDGET_EXHAUSTED/);
+  assert.match(migration, /billing_claim_repair/);
+  assert.match(acceptance, /exhausted pending charge was not repaired into reconciliation/);
   assert.match(migration, /v_active_shop_count <> 1/);
   assert.match(migration, /FOR UPDATE OF sc/);
   assert.match(migration, /FROM henvalt\.tenants[\s\S]*?FOR UPDATE/);
