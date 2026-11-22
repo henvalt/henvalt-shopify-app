@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync("supabase/functions/henvalt-shopify-privacy-candidate/index.ts", "utf8");
+const source = readFileSync("supabase/functions/henvalt-shopify-privacy/index.ts", "utf8");
 const oauthSource = readFileSync("supabase/functions/henvalt-shopify-oauth/index.ts", "utf8");
 
 test("privacy candidate authenticates exact raw bytes and signed shop identity", () => {
