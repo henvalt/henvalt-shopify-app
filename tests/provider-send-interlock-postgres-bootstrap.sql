@@ -512,3 +512,36 @@ BEGIN
   RETURN true;
 END;
 $function$;
+
+
+-- Minimal relational shape required by the replay object-tenant graph guard.
+-- Keep this disposable bootstrap aligned with the production relationship names.
+ALTER TABLE henvalt.checkouts
+  ADD COLUMN IF NOT EXISTS id uuid NOT NULL DEFAULT gen_random_uuid(),
+  ADD COLUMN IF NOT EXISTS customer_id uuid;
+CREATE UNIQUE INDEX IF NOT EXISTS checkouts_replay_test_id_uidx ON henvalt.checkouts(id);
+
+ALTER TABLE henvalt.opportunities
+  ADD COLUMN IF NOT EXISTS customer_id uuid,
+  ADD COLUMN IF NOT EXISTS checkout_id uuid,
+  ADD COLUMN IF NOT EXISTS source_event_id uuid;
+
+ALTER TABLE henvalt.recovery_interventions
+  ADD COLUMN IF NOT EXISTS sequence_id uuid;
+
+ALTER TABLE henvalt.order_attributions
+  ADD COLUMN IF NOT EXISTS recovery_id uuid,
+  ADD COLUMN IF NOT EXISTS matched_intervention_id uuid;
+
+CREATE TABLE IF NOT EXISTS henvalt.orders (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  customer_id uuid,
+  checkout_id uuid
+);
+
+CREATE TABLE IF NOT EXISTS henvalt.recovery_sequences (
+  id uuid PRIMARY KEY,
+  tenant_id uuid NOT NULL,
+  opportunity_id uuid NOT NULL
+);
