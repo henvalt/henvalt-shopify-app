@@ -380,6 +380,81 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION henvalt.control_plane_list_billing_reconciliations(
+  p_shop_domain text,
+  p_limit integer DEFAULT 50
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, pg_temp
+AS $function$
+DECLARE
+  v_shop text := lower(btrim(coalesce(p_shop_domain, '')));
+  v_cases jsonb;
+BEGIN
+  IF current_setting('request.jwt.claim.role', true) IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'Service role required' USING ERRCODE = '42501';
+  END IF;
+  IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com'
+     OR v_shop <> (split_part(v_shop,'.',1) || '.myshopify.com')
+     OR p_limit IS NULL
+     OR p_limit < 1
+     OR p_limit > 100 THEN
+    RAISE EXCEPTION 'Invalid reconciliation list request' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'chargeId',q.id,
+        'shop',v_shop,
+        'status',q.status,
+        'reconciliationStatus',q.reconciliation_status,
+        'reason',q.reconciliation_reason,
+        'amount',q.amount,
+        'currency',q.currency,
+        'idempotencyKey',q.idempotency_key,
+        'subscriptionLineItemId',q.usage_line_item_id,
+        'attemptCount',q.attempt_count,
+        'requiredAt',q.reconciliation_required_at,
+        'attemptedAt',q.attempted_at,
+        'evidence',q.reconciliation_evidence
+      )
+      ORDER BY q.reconciliation_required_at NULLS LAST,q.created_at
+    ),
+    '[]'::jsonb
+  )
+    INTO v_cases
+    FROM (
+      SELECT buc.*,ba.usage_line_item_id
+        FROM henvalt.billing_usage_charges buc
+        JOIN henvalt.shopify_connections sc
+          ON sc.tenant_id = buc.tenant_id
+         AND lower(sc.shop_domain) = v_shop
+         AND sc.active = true
+        JOIN henvalt.tenants t
+          ON t.id = buc.tenant_id
+         AND t.status = 'ACTIVE'
+        JOIN henvalt.billing_accounts ba
+          ON ba.tenant_id = buc.tenant_id
+         AND ba.status = 'ACTIVE'
+         AND ba.test_mode = true
+       WHERE buc.provider = 'SHOPIFY'
+         AND buc.status = 'PENDING'
+         AND buc.reconciliation_status IN ('REQUIRED','MISMATCH')
+       ORDER BY buc.reconciliation_required_at NULLS LAST,buc.created_at
+       LIMIT p_limit
+    ) q;
+
+  RETURN jsonb_build_object(
+    'cases',v_cases,
+    'count',jsonb_array_length(v_cases),
+    'shop',v_shop
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION henvalt.control_plane_get_billing_reconciliation(
   p_shop_domain text,
   p_charge_id uuid
@@ -646,11 +721,15 @@ $function$;
 
 REVOKE ALL ON FUNCTION henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)
   FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION henvalt.control_plane_list_billing_reconciliations(text,integer)
+  FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION henvalt.control_plane_get_billing_reconciliation(text,uuid)
   FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.control_plane_mark_billing_reconciliation_required(text,uuid,text)
+  TO service_role;
+GRANT EXECUTE ON FUNCTION henvalt.control_plane_list_billing_reconciliations(text,integer)
   TO service_role;
 GRANT EXECUTE ON FUNCTION henvalt.control_plane_get_billing_reconciliation(text,uuid)
   TO service_role;
