@@ -129,6 +129,9 @@ values
    '{"customer_email":"active@example.test"}'::jsonb,'PROCESSING',now()-interval '8 days'),
   ('88888888-8888-4888-8888-888888888888','fixture.myshopify.com',
    'customers/data_request','privacy-retention-export',null,
+   '{}'::jsonb,'REVIEW_REQUIRED',now()-interval '40 days');,
+  ('aaaaaaaa-1111-4111-8111-111111111111','fixture.myshopify.com',
+   'customers/data_request','privacy-retention-export-null-expiry',null,
    '{}'::jsonb,'REVIEW_REQUIRED',now()-interval '40 days');
 
 update henvalt.shopify_privacy_requests
@@ -141,6 +144,10 @@ update henvalt.shopify_privacy_requests
 set result_payload='{"private":"expired"}'::jsonb,
     result_expires_at=now()-interval '1 day'
 where id='88888888-8888-4888-8888-888888888888';
+update henvalt.shopify_privacy_requests
+set result_payload='{"private":"missing-expiry"}'::jsonb,
+    result_expires_at=null
+where id='aaaaaaaa-1111-4111-8111-111111111111';
 
 do $$
 declare
@@ -151,7 +158,7 @@ declare
 begin
   v_result := henvalt.purge_stale_shopify_privacy_request_identifiers();
   if (v_result->>'requests_minimized')::integer <> 2
-     or (v_result->>'exports_expired')::integer <> 1 then
+     or (v_result->>'exports_expired')::integer <> 2 then
     raise exception 'privacy retention cleanup counts are incorrect: %',v_result;
   end if;
 
@@ -180,6 +187,10 @@ begin
   from henvalt.shopify_privacy_requests
   where id='88888888-8888-4888-8888-888888888888';
   if v_payload is not null then raise exception 'expired export payload was not cleared'; end if;
+  select result_payload into v_payload
+  from henvalt.shopify_privacy_requests
+  where id='aaaaaaaa-1111-4111-8111-111111111111';
+  if v_payload is not null then raise exception 'export payload with missing expiry was not cleared'; end if;
 end $$;
 
 
