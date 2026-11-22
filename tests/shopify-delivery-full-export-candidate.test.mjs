@@ -57,6 +57,11 @@ test("delivery candidate rejects provider calls hidden inside code nodes", () =>
     'return await fetch("https://api.mailersend.com/v1/email");';
   assert.throws(() => buildDeliveryCandidate(hiddenFetch), /Inline network-capable code/);
 
+  const hiddenHelperRequest = structuredClone(fixture.workflow);
+  hiddenHelperRequest.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
+    'return await this.helpers.httpRequest({ method: "POST", url: "https://api.mailersend.com/v1/email" });';
+  assert.throws(() => buildDeliveryCandidate(hiddenHelperRequest), /Inline network-capable code/);
+
   const hiddenProviderHost = structuredClone(fixture.workflow);
   hiddenProviderHost.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
     'const provider = "https://api.sendgrid.com/v3/mail/send"; return { provider };';
