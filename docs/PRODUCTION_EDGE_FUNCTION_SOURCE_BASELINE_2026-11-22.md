@@ -29,3 +29,12 @@ This is not automatically evidence that the live functions are broken. It means 
 The captured sources were checked for common literal secret/token/private-key patterns before storage. No such values were found. Runtime environment values, Vault contents, customer data, and request logs are not included.
 
 This is a read-only audit capture. No Edge Function was deployed, no environment variable was changed, and no production data or configuration was modified.
+
+## Candidate-versus-production contract differences requiring staging review
+
+- The live `henvalt-merchant-dashboard` v4 returns `ledger`, `revenueComparison`, and caller-selected `day|week|month` granularity in addition to the summary and revenue series. The current candidate source returns the summary and daily series but omits those additional fields. The current first-party dashboard HTML does not reference `ledger` or `revenueComparison`, but external consumers have not been inventoried. Preserve the existing response contract or explicitly approve and test the contract change before replacing v4.
+- The live `henvalt-shopify-oauth` v27 hard-codes the prior Worker origins and redirects to the Lovable dashboard. The candidate intentionally switches to `SHOPIFY_WEBHOOK_INGRESS_BASE_URL`, `SHOPIFY_PIXEL_COLLECTOR_URL`, and the Pages dashboard URL. This is a desired infrastructure migration, but it will fail closed with `oauth_configuration_missing` unless both Worker URL variables resolve to valid HTTPS URLs. Do not deploy until the exact new Worker origins are deployed, verified, and supplied to the staging function environment.
+- The candidate OAuth config requires the webhook ingress base URL to be an HTTPS origin with no path/query/fragment and the pixel collector URL to be an HTTPS URL whose path is exactly `/v1/events`. The candidate app completion URL defaults to `https://henvalt-dashboard.pages.dev`; verify it against the Shopify Dev Dashboard application URL and staging/production domain plan.
+- The live MailerSend delivery v1 source is a bundled 174-line entrypoint; the repository now separates the handler module from a short entrypoint. Compare the built deployment artifact and provider-egress contract, not line count alone.
+
+These differences are compatibility/deployment gates, not proof that either the live or candidate implementation is correct. No production function was changed.
