@@ -6,6 +6,7 @@ const summary = readFileSync(new URL("../supabase/migrations/202611210003_dashbo
 const series = readFileSync(new URL("../supabase/migrations/202611220012_dashboard_net_revenue_series.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
 const merchantDashboard = readFileSync(new URL("../supabase/functions/henvalt-merchant-dashboard/index.ts", import.meta.url), "utf8");
+const dashboardHtml = readFileSync(new URL("../dashboard/index.html", import.meta.url), "utf8");
 
 test("dashboard summary and activity amounts include confirmed refunds as negative revenue", () => {
   assert.match(summary, /entry_type IN \('RECOVERY', 'ADJUSTMENT'\)/);
@@ -39,4 +40,10 @@ test("merchant dashboard API supplies the series consumed by the chart", () => {
 
 test("credentialed dashboard API requests reject unexpected redirects", () => {
   assert.equal((merchantDashboard.match(/redirect: "error"/g) || []).length, 4);
+});
+
+test("dashboard chart scales around zero so negative refund days stay visible", () => {
+  assert.match(dashboardHtml, /Math\.min\(\.\.\.vals,0\)/);
+  assert.match(dashboardHtml, /Math\.max\(\.\.\.vals,0\)/);
+  assert.match(dashboardHtml, /zeroY/);
 });
