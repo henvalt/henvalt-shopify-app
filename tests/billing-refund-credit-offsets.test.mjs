@@ -20,6 +20,9 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.match(migration, /SELECT usage_line_item_id, currency, test_mode/);
   assert.match(migration, /v_test_mode IS DISTINCT FROM TRUE/);
   assert.match(migration, /TEST_MODE_REQUIRED/);
+  assert.match(migration, /SINGLE_ACTIVE_SHOP_REQUIRED/);
+  assert.match(migration, /v_active_shop_count <> 1/);
+  assert.match(acceptance, /billing claim did not fail closed for multiple active shops/);
   assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
   assert.match(migration, /control_plane_get_billing_reconciliation/);
   assert.match(migration, /control_plane_list_billing_reconciliations/);
