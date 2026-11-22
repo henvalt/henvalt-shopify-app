@@ -32,6 +32,18 @@ test("refund fee credits are tenant-scoped, currency-scoped, locked and allocate
   assert.ok(bootstrap.includes("plan_key text NOT NULL CHECK (plan_key IN ('STARTER','GROWTH'))"));
   assert.ok(!acceptance.includes("'PERFORMANCE'"));
   assert.match(migration, /control_plane_mark_billing_reconciliation_required/);
+  assert.match(migration, /control_plane_record_billing_usage_result/);
+  assert.match(migration, /CHARGE_ALREADY_SUBMITTED/);
+  assert.match(acceptance, /late failure was allowed to downgrade a submitted charge/);
+  assert.match(acceptance, /billing result RPC ACL is not service-role-only/);
+  const recordStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_record_billing_usage_result");
+  const recordEnd = migration.indexOf("REVOKE ALL ON FUNCTION henvalt.control_plane_record_billing_usage_result", recordStart);
+  const recordFunction = migration.slice(recordStart, recordEnd);
+  assert.ok(recordFunction.indexOf("FROM henvalt.billing_measurements") < recordFunction.indexOf("SELECT status, provider_usage_record_id"));
+  assert.ok(recordFunction.indexOf("FOR UPDATE;") < recordFunction.indexOf("SELECT status, provider_usage_record_id"));
+  const resolveStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.control_plane_resolve_billing_reconciliation");
+  const resolveFunction = migration.slice(resolveStart);
+  assert.ok(resolveFunction.indexOf("FROM henvalt.billing_measurements") < resolveFunction.indexOf("FOR UPDATE OF buc"));
   assert.match(migration, /control_plane_get_billing_reconciliation/);
   assert.match(migration, /control_plane_list_billing_reconciliations/);
   assert.match(acceptance, /tenant-scoped reconciliation queue did not list the pending case/);
