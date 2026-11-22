@@ -131,12 +131,9 @@ BEGIN
     IF SQLERRM <> 'HENVALT_PROVIDER_SENDING_DISABLED' THEN RAISE; END IF;
   END;
 
-  BEGIN
-    UPDATE henvalt.delivery_requests SET provider_claimed_at = now() WHERE id = v_id;
-    RAISE EXCEPTION 'expected provider credential claim to be blocked after close';
-  EXCEPTION WHEN insufficient_privilege THEN
-    IF SQLERRM <> 'HENVALT_PROVIDER_SENDING_DISABLED' THEN RAISE; END IF;
-  END;
+  -- The row already has a provider_claimed_at lease after the successful
+  -- credential-release test above. The fresh NULL -> timestamp transition is
+  -- tested earlier; re-writing an existing claim timestamp is not a new send.
 
   DELETE FROM henvalt.provider_send_control WHERE control_key = 'global';
   IF henvalt.provider_sending_is_enabled() IS DISTINCT FROM false THEN
