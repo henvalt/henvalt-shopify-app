@@ -57,7 +57,7 @@ BEGIN
   SELECT coalesce(sum(rl.amount), 0) INTO v_revenue
   FROM henvalt.revenue_ledger rl
   WHERE rl.tenant_id = v_tenant.id
-    AND rl.entry_type = 'RECOVERY' AND rl.billable IS TRUE AND rl.attribution_confidence = 'CONFIRMED'
+    AND rl.entry_type IN ('RECOVERY', 'ADJUSTMENT') AND rl.billable IS TRUE AND rl.attribution_confidence = 'CONFIRMED'
     AND rl.created_at >= p_from AND rl.created_at < p_to + interval '1 day';
 
   SELECT COALESCE(
@@ -69,7 +69,7 @@ BEGIN
     (SELECT NULLIF(btrim(rl.currency::text), '')
        FROM henvalt.revenue_ledger rl
       WHERE rl.tenant_id = v_tenant.id
-        AND rl.entry_type = 'RECOVERY' AND rl.billable IS TRUE AND rl.attribution_confidence = 'CONFIRMED'
+        AND rl.entry_type IN ('RECOVERY', 'ADJUSTMENT') AND rl.billable IS TRUE AND rl.attribution_confidence = 'CONFIRMED'
       ORDER BY rl.created_at DESC
       LIMIT 1),
     NULLIF(btrim(v_tenant.default_currency::text), ''),
@@ -115,7 +115,15 @@ BEGIN
             AND oa.opportunity_id = o.id
             AND oa.attribution_confidence = 'CONFIRMED'
         ) AS has_confirmed_attribution,
-        (SELECT oa.attributed_value
+        (SELECT oa.attributed_value + COALESCE((
+             SELECT sum(rl.amount)
+               FROM henvalt.revenue_ledger rl
+              WHERE rl.tenant_id = oa.tenant_id
+                AND rl.order_id = oa.order_id
+                AND rl.entry_type = 'ADJUSTMENT'
+                AND rl.billable IS TRUE
+                AND rl.attribution_confidence = 'CONFIRMED'
+           ), 0)
            FROM henvalt.order_attributions oa
           WHERE oa.tenant_id = o.tenant_id
             AND oa.opportunity_id = o.id
@@ -179,7 +187,7 @@ BEGIN
            ON o.id = rl.opportunity_id AND o.tenant_id = rl.tenant_id
         WHERE rl.tenant_id = v_tenant.id
           AND o.opportunity_type::text = any(m.db_types)
-          AND rl.entry_type = 'RECOVERY' AND rl.billable IS TRUE AND rl.attribution_confidence = 'CONFIRMED'
+          AND rl.entry_type IN ('RECOVERY', 'ADJUSTMENT') AND rl.billable IS TRUE AND rl.attribution_confidence = 'CONFIRMED'
           AND rl.created_at >= p_from AND rl.created_at < p_to + interval '1 day') AS revenue_recovered
     FROM (VALUES
       ('abandoned_checkout', ARRAY['ABANDONED_CHECKOUT']::text[]),
