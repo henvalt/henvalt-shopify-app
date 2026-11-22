@@ -63,3 +63,16 @@ test("object graph checks reject cross-tenant foreign-key edges, not only root r
  assert.match(sql,/LEFT JOIN henvalt\\.recovery_sequences s ON s\\.id=x\\.recovery_id/);
  assert.match(sql,/LEFT JOIN henvalt\\.recovery_interventions i ON i\\.id=x\\.matched_intervention_id/);
 });
+
+test("all replay mutation-map RPCs have a candidate fenced implementation",()=>{
+ const map=JSON.parse(readFileSync("n8n/shopify-ingest-replay-write-map.json","utf8"));
+ const sources=[
+  "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql",
+  "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql",
+  "supabase/migrations/202611220007_shopify_replay_tenant_binding.sql",
+  "supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql"
+ ].map(path=>readFileSync(path,"utf8")).join("\\n");
+ for(const item of map.replay_mutations){
+  assert.ok(sources.includes("FUNCTION henvalt."+item.fenced_rpc+"("),"missing fenced RPC "+item.fenced_rpc);
+ }
+});
