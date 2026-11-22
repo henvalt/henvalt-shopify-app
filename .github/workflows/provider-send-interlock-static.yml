@@ -33,6 +33,11 @@ on:
       - "tests/dashboard-net-revenue.test.mjs"
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/billing-refund-credit-concurrency-postgres.sh"
+      - "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql"
+      - "tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql"
+      - "tests/shopify-order-edit-revenue-reconciliation.test.mjs"
+      - "n8n/shopify-ingest-candidate-builder.mjs"
+      - "tests/shopify-ingest-full-export-candidate.test.mjs"
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/mailersend-delivery-envelope-binding.test.mjs"
       - "tests/mailersend-delivery-envelope-postgres-acceptance.sql"
@@ -136,7 +141,7 @@ on:
       - "tests/shopify-replay-business-write-fencing-postgres-acceptance.sql"
       - "tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql"
       - "tests/shopify-replay-business-write-fencing-static.test.mjs"
-      - "tests/active-workflow-cutover-contract-static.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs"
+      - "tests/active-workflow-cutover-contract-static.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs tests/shopify-order-edit-revenue-reconciliation.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs"
       - "tests/shopify-replay-worker-spec-static.test.mjs"
       - "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md"
       - "docs/N8N_SHOPIFY_INGEST_REPLAY_ENTRY_CANDIDATE.md"
@@ -287,6 +292,18 @@ jobs:
           PGPASSWORD: postgres
         run: |
           bash tests/billing-refund-credit-concurrency-postgres.sh
+      - name: Apply Shopify order-edit revenue reconciliation migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql
+      - name: Exercise Shopify order-edit revenue and fee reconciliation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql
       - name: Apply dashboard net-revenue series migration to disposable PostgreSQL
         env:
           PGPASSWORD: postgres
