@@ -17,3 +17,7 @@ test("privacy retention cron is daily and idempotently named", () => {
   assert.match(sql, /'17 3 \* \* \*'/);
   assert.match(sql, /cron\.schedule/);
 });
+
+test("privacy retention also clears export payloads with missing expiry metadata", () => {
+  assert.match(sql, /result_expires_at is null or r\.result_expires_at <= now\(\)/i);
+});
