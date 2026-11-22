@@ -118,36 +118,34 @@ Deno.serve(async (req: Request) => {
     return reply(400, { error: "customer_identifier_missing" });
   }
 
-  // Persist only the identifiers required for the operation, never the raw webhook body.
-  // Email is retained only for the data-request/redaction operation and cleared at terminal state.
-  const minimalPayload = customerEmail ? { customer_email: customerEmail } : {};
-  const tenantId = connection?.tenant_id ?? null;
-  const initialStatus = connection ? "PENDING" : "REVIEW_REQUIRED";
-  const inserted = await db("/rest/v1/shopify_privacy_requests?on_conflict=webhook_id", {
-    method: "POST",
-    headers: { prefer: "resolution=ignore-duplicates,return=minimal" },
-    body: JSON.stringify({
-      tenant_id: tenantId,
-      shop_domain: shop,
-      shopify_shop_id: signedShopId,
-      topic,
-      webhook_id: webhookId,
-      customer_id: connection ? customerId : null,
-      request_id: requestId,
-      payload: connection ? minimalPayload : {},
-      status: initialStatus,
-    }),
-  });
-  if (!inserted.ok) return reply(503, { error: "privacy_request_persistence_failed" });
+  // Hash the HMAC-covered bytes: webhook ID is an unsigned header and cannot be the sole replay key.
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", raw));
+  const signedPayloadHash = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
 
-  const lookup = await db(
-    "/rest/v1/shopify_privacy_requests?select=id,status&webhook_id=eq." +
-    encodeURIComponent(webhookId) + "&limit=1",
-  );
-  if (!lookup.ok) return reply(503, { error: "privacy_request_lookup_failed" });
-  const storedRows = await lookup.json().catch(() => []);
-  const stored = Array.isArray(storedRows) ? storedRows[0] : null;
+  // Persist only minimal identifiers. The database RPC deduplicates by signed payload hash
+  // and also rejects reuse of one webhook ID with a different signed body.
+  const initialStatus = connection ? "PENDING" : "REVIEW_REQUIRED";
+  const persisted = await rpc("persist_shopify_privacy_request", {
+    p_tenant_id: connection?.tenant_id ?? null,
+    p_shop_domain: shop,
+    p_shopify_shop_id: signedShopId,
+    p_topic: topic,
+    p_webhook_id: webhookId,
+    p_signed_payload_hash: signedPayloadHash,
+    p_customer_id: connection ? customerId : null,
+    p_request_id: requestId,
+    p_payload: connection ? minimalPayload : {},
+    p_status: initialStatus,
+  });
+  if (!persisted.ok) {
+    return reply(persisted.status === 400 ? 409 : 503, {
+      error: persisted.status === 400 ? "privacy_webhook_id_payload_conflict" : "privacy_request_persistence_failed",
+    });
+  }
+  const persistedRows = await persisted.json().catch(() => []);
+  const stored = Array.isArray(persistedRows) ? persistedRows[0] : null;
   if (!stored?.id) return reply(503, { error: "privacy_request_record_missing" });
+
   if (stored.status === "COMPLETED") {
     return reply(200, { received: true, processed: true, duplicate: true, topic });
   }
