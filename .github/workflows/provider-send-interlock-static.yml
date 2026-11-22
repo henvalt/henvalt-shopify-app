@@ -244,13 +244,13 @@ jobs:
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220009_mailersend_delivery_envelope_binding.sql
       - name: Exercise MailerSend delivery envelope authorization
         env:
           PGPASSWORD: postgres
         run: |
-          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \\
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/mailersend-delivery-envelope-postgres-acceptance.sql
       - name: Apply candidate pixel consent migration to disposable PostgreSQL
         env:
