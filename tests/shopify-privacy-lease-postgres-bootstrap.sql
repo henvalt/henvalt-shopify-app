@@ -34,34 +34,30 @@ create table henvalt.shopify_privacy_requests (
 );
 
 -- Disposable pg_cron contract for testing migration scheduling without external services.
-do $
+create schema if not exists cron;
+create table if not exists cron.job (
+  jobid bigint generated always as identity primary key,
+  jobname text unique,
+  schedule text,
+  command text
+);
+create or replace function cron.schedule(text,text,text)
+returns bigint language plpgsql as $function$
+declare v_id bigint;
 begin
-  if to_regnamespace('cron') is null then
-    execute 'create schema cron';
-    execute 'create table cron.job (jobid bigint generated always as identity primary key, jobname text unique, schedule text, command text)';
-    execute $ddl$
-      create function cron.schedule(text,text,text) returns bigint
-      language plpgsql as $fn$
-      declare v_id bigint;
-      begin
-        insert into cron.job(jobname,schedule,command) values ($1,$2,$3)
-        on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command
-        returning jobid into v_id;
-        return v_id;
-      end
-      $fn$
-    $ddl$;
-    execute $ddl$
-      create function cron.unschedule(bigint) returns boolean
-      language plpgsql as $fn$
-      begin
-        delete from cron.job where jobid=$1;
-        return found;
-      end
-      $fn$
-    $ddl$;
-  end if;
-end $;
+  insert into cron.job(jobname,schedule,command) values ($1,$2,$3)
+  on conflict(jobname) do update set schedule=excluded.schedule,command=excluded.command
+  returning jobid into v_id;
+  return v_id;
+end;
+$function$;
+create or replace function cron.unschedule(bigint)
+returns boolean language plpgsql as $function$
+begin
+  delete from cron.job where jobid=$1;
+  return found;
+end;
+$function$;
 
 -- Minimal tenant-scoped stores required by the candidate customer-redaction preflight.
 create table henvalt.customers (tenant_id uuid, shopify_customer_id text, email text);
