@@ -9,7 +9,10 @@ CREATE OR REPLACE FUNCTION henvalt.assert_mailersend_delivery_envelope(
   p_to text,
   p_from_email text,
   p_from_name text,
-  p_reply_to text
+  p_reply_to text,
+  p_subject text,
+  p_html_body text,
+  p_text_body text
 )
 RETURNS boolean
 LANGUAGE sql
@@ -22,7 +25,11 @@ AS $function$
       dr.recipient_reference,
       si.sender_reference,
       si.metadata,
-      pc.configuration
+      pc.configuration,
+      t.settings AS tenant_settings,
+      m.recipient AS message_recipient,
+      m.subject AS message_subject,
+      m.body AS message_body
     FROM henvalt.delivery_requests dr
     JOIN henvalt.sending_identities si
       ON si.tenant_id = dr.tenant_id
@@ -35,6 +42,10 @@ AS $function$
      AND pc.channel = dr.channel
      AND pc.active IS TRUE
      AND lower(pc.provider) = lower(si.provider)
+    JOIN henvalt.messages m
+      ON m.id = dr.message_reference
+     AND m.tenant_id = dr.tenant_id
+     AND m.intervention_id = dr.intervention_id
     JOIN henvalt.opportunities o
       ON o.id = dr.opportunity_id
      AND o.tenant_id = dr.tenant_id
@@ -109,12 +120,12 @@ AS $function$
   );
 $function$;
 
-REVOKE ALL ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text)
+REVOKE ALL ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text)
   FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text)
+GRANT EXECUTE ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text)
   TO service_role;
 
-COMMENT ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text) IS
+COMMENT ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text) IS
   'Returns true only when the HTTP recipient and sender headers exactly match the claimed tenant delivery request and its active verified MailerSend identity.';
 
 COMMIT;
