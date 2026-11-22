@@ -393,11 +393,14 @@ CREATE TABLE henvalt.customers (
   tenant_id uuid NOT NULL,
   shopify_customer_id text NOT NULL,
   email text,
-  email_consent boolean
+  email_consent boolean,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE TABLE henvalt.checkouts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
+  shopify_checkout_id text,
   session_reference text,
   created_at timestamptz NOT NULL,
   updated_at timestamptz NOT NULL,
@@ -655,6 +658,9 @@ ALTER TABLE henvalt.order_attributions
   ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 ALTER TABLE henvalt.orders
+  ADD COLUMN IF NOT EXISTS order_number text,
+  ADD COLUMN IF NOT EXISTS fulfillment_status text,
+  ADD COLUMN IF NOT EXISTS tracking_token text,
   ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now(),
   ADD COLUMN IF NOT EXISTS shopify_order_id text,
   ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
