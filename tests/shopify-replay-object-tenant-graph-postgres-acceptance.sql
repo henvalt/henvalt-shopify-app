@@ -13,7 +13,8 @@ ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.checkouts(id,tenant_id,customer_id,created_at,updated_at)
 VALUES
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',now(),now())
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',now(),now()),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',now(),now())
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.webhook_events(id,tenant_id,source_event_id,topic,idempotency_key,payload)
@@ -24,42 +25,45 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO henvalt.canonical_events(
  id,tenant_id,webhook_event_id,event_type,event_class,source,source_event_id,
  occurred_at,payload,metadata,idempotency_key
-) VALUES (
- 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa31',
- 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
- 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3',
- 'orders/create','OTHER','shopify','graph-event-a',now(),'{}'::jsonb,'{}'::jsonb,'graph-event-a'
-) ON CONFLICT (id) DO NOTHING;
+) VALUES
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa31','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3','orders/create','OTHER','shopify','graph-event-a',now(),'{}'::jsonb,'{}'::jsonb,'graph-event-a'),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb5','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',NULL,'orders/create','OTHER','shopify','graph-event-b',now(),'{}'::jsonb,'{}'::jsonb,'graph-event-b')
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.opportunities(id,tenant_id,opportunity_type,status,customer_id,checkout_id,source_event_id)
 VALUES
  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa41','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','ABANDONED_CHECKOUT','ELIGIBLE','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',NULL,NULL),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa42','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','ABANDONED_CHECKOUT','ELIGIBLE',NULL,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21',NULL),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa43','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','ABANDONED_CHECKOUT','ELIGIBLE',NULL,NULL,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa31')
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa42','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','ABANDONED_CHECKOUT','ELIGIBLE',NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4',NULL),
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa43','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','ABANDONED_CHECKOUT','ELIGIBLE',NULL,NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb5'),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','ABANDONED_CHECKOUT','ELIGIBLE',NULL,NULL,NULL)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.orders(id,tenant_id,customer_id,checkout_id)
 VALUES
  ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',NULL),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa52','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',NULL,'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21')
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa52','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb4'),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',NULL,NULL)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.recovery_sequences(id,tenant_id,opportunity_id)
-VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa61','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2')
+VALUES
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa61','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6'),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb8','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,status,sequence_id)
 VALUES
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa41','PENDING','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa72','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','PENDING',NULL)
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa71','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa41','PENDING','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb8'),
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa72','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6','PENDING',NULL),
+ ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb9','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6','PENDING',NULL)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO henvalt.order_attributions(id,tenant_id,order_id,attribution_confidence,opportunity_id,recovery_id,matched_intervention_id)
 VALUES
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa81','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','HIGH',NULL,NULL,NULL),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa82','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','HIGH','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',NULL,NULL),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa83','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','HIGH',NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',NULL),
- ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa84','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','HIGH',NULL,NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2')
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa81','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb7','HIGH',NULL,NULL,NULL),
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa82','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','HIGH','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb6',NULL,NULL),
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa83','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','HIGH',NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb8',NULL),
+ ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa84','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa51','HIGH',NULL,NULL,'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb9')
 ON CONFLICT (id) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION pg_temp.expect_replay_graph_rejection(p_table text,p_id uuid)
