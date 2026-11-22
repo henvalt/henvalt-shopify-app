@@ -34,6 +34,8 @@ on:
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/billing-refund-credit-concurrency-postgres.sh"
       - "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql"
+      - "supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql"
+      - "supabase/migrations/202611220015_billing_claim_subscription_lock.sql"
       - "supabase/functions/henvalt-shopify-usage-billing/handler.mjs"
       - "supabase/functions/henvalt-shopify-usage-billing/index.ts"
       - "supabase/functions/henvalt-billing-reconciliation/handler.mjs"
@@ -311,17 +313,6 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220011_billing_refund_credit_offsets.sql
-      - name: Exercise refund credit allocation and retry idempotency
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
-      - name: Exercise concurrent refund credit allocation
-        env:
-          PGPASSWORD: postgres
-        run: |
-          bash tests/billing-refund-credit-concurrency-postgres.sh
       - name: Apply dashboard net-revenue series migration to disposable PostgreSQL
         env:
           PGPASSWORD: postgres
@@ -430,6 +421,29 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql
+      - name: Apply billing result lock-order migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql
+      - name: Apply billing claim subscription lock migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
+      - name: Exercise billing reconciliation, monotonic results and refund credits
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
+      - name: Exercise concurrent refund credit allocation and subscription cancellation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          bash tests/billing-refund-credit-concurrency-postgres.sh
       - name: Apply complete active-ingest mutation fencing migration to disposable PostgreSQL
         env:
           PGPASSWORD: postgres
