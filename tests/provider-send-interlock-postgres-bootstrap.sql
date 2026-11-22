@@ -49,6 +49,19 @@ CREATE TABLE henvalt.tenants (
 );
 ALTER TABLE henvalt.tenants ADD COLUMN settings jsonb NOT NULL DEFAULT '{}'::jsonb;
 
+CREATE TABLE henvalt.audit_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid REFERENCES henvalt.tenants(id) ON DELETE SET NULL,
+  event_name text NOT NULL,
+  entity_type text,
+  entity_id uuid,
+  correlation_id uuid,
+  actor_type text,
+  actor_reference text,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TYPE henvalt.job_status AS ENUM ('QUEUED', 'CLAIMED', 'RUNNING', 'RETRY_WAIT', 'SUCCEEDED', 'DEAD_LETTER');
 
 CREATE TABLE henvalt.webhook_events (
