@@ -59,12 +59,16 @@ end $$;
 
 create or replace function henvalt.export_shopify_customer_data(
   p_tenant_id uuid, p_shopify_customer_id text, p_customer_email text default null
-) returns jsonb language sql security definer set search_path=henvalt,pg_temp as $$
-  select jsonb_build_object(
+) returns jsonb language plpgsql security definer set search_path=henvalt,pg_temp as $
+begin
+  if p_shopify_customer_id = 'export-fail' then
+    raise exception 'fixture export failure';
+  end if;
+  return jsonb_build_object(
     'found', p_shopify_customer_id = 'export-yes',
     'fixture', true
   );
-$$;
+end $;
 
 create or replace function henvalt.redact_shopify_shop_data(
   p_privacy_request_id uuid
