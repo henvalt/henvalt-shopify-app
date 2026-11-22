@@ -122,10 +122,6 @@ export function buildDeliveryCandidate(source) {
     if (providerNodeType.test(node.type)) {
       throw new Error("Provider egress node type remains in candidate: " + node.type);
     }
-    const serializedParameters = JSON.stringify(node.parameters || {});
-    if (providerApiHost.test(serializedParameters)) {
-      throw new Error("Provider API endpoint remains in candidate: " + node.name);
-    }
     if (node.type === "n8n-nodes-base.code" && inlineNetworkCall.test(node.parameters?.jsCode || "")) {
       throw new Error("Inline network-capable code remains in delivery candidate: " + node.name);
     }
@@ -137,6 +133,10 @@ export function buildDeliveryCandidate(source) {
       if (parsed.protocol !== "https:" || !allowedHttpHosts.has(parsed.hostname) || parsed.username || parsed.password) {
         throw new Error("Non-candidate HTTP egress remains in delivery candidate: " + node.name + " -> " + parsed.hostname);
       }
+    }
+    const serializedParameters = JSON.stringify(node.parameters || {});
+    if (providerApiHost.test(serializedParameters)) {
+      throw new Error("Provider API endpoint remains in candidate: " + node.name);
     }
   }
   const stub = workflow.nodes.find((n) => n.name === "No-Send Provider Stub");
