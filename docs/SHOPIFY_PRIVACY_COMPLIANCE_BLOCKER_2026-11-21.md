@@ -19,7 +19,7 @@ Shopify requires these subscriptions to be declared in the app configuration TOM
 
 ### App configuration
 
-The current `shopify.app.toml` contains a webhook API version but no `[[webhooks.subscriptions]]` entry with `compliance_topics`. The OAuth code's immutable operational webhook list contains 12 business topics and no compliance topics. This is not a substitute for the TOML compliance declaration.
+The candidate `shopify.app.toml` now contains one `[[webhooks.subscriptions]]` entry declaring all three `compliance_topics` against the existing Supabase privacy endpoint. The OAuth code's immutable operational webhook list contains 12 business topics and no compliance topics; that is correct because mandatory compliance topics belong in TOML, not the per-shop GraphQL registration loop. The configuration is not deployed.
 
 ### Receiving path
 
