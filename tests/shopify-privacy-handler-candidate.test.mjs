@@ -20,8 +20,8 @@ test("privacy candidate persists minimal data and claims only its own request", 
 });
 
 test("privacy candidate routes each compliance topic through guarded operations", () => {
-  assert.match(source, /export_shopify_customer_data/);
-  assert.match(source, /redact_shopify_customer_data_checked/);
+  assert.match(source, /export_shopify_customer_data_with_lease/);
+  assert.match(source, /redact_shopify_customer_data_checked_with_lease/);
   assert.match(source, /redact_shopify_shop_data_with_lease/);
   assert.match(source, /finish_shopify_privacy_request/);
 });
