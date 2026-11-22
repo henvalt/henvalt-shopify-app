@@ -19,6 +19,13 @@ INSERT INTO henvalt.tenants(id,status)
 VALUES ('$tenant_id','ACTIVE')
 ON CONFLICT (id) DO NOTHING;
 
+UPDATE henvalt.background_jobs
+   SET status='SUCCEEDED',locked_by=NULL,locked_at=NULL,lease_id=NULL,
+       lease_expires_at=NULL,completed_at=clock_timestamp(),next_run_at=NULL
+ WHERE job_type='process_shopify_webhook'
+   AND id <> '$job_id'
+   AND status <> 'SUCCEEDED';
+
 INSERT INTO henvalt.webhook_events(
   id,tenant_id,source,source_event_id,topic,idempotency_key,
   payload,metadata,processing_status
