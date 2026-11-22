@@ -114,9 +114,58 @@ begin
 end;
 $function$;
 
+create or replace function henvalt.claim_shopify_privacy_request_by_id(
+  p_request_id uuid,
+  p_lease_seconds integer default 120
+)
+returns table (
+  id uuid,
+  tenant_id uuid,
+  shop_domain text,
+  shopify_shop_id text,
+  topic text,
+  webhook_id text,
+  customer_id text,
+  request_id text,
+  payload jsonb,
+  lease_token uuid,
+  lease_expires_at timestamptz,
+  lease_attempts integer
+)
+language plpgsql
+security definer
+set search_path = henvalt, pg_temp
+as $function$
+declare
+  v_token uuid := gen_random_uuid();
+begin
+  if p_request_id is null then
+    raise exception 'request_id is required';
+  end if;
+  if p_lease_seconds is null or p_lease_seconds < 15 or p_lease_seconds > 300 then
+    raise exception 'lease_seconds must be between 15 and 300';
+  end if;
+
+  return query
+  update henvalt.shopify_privacy_requests r
+  set status = 'PROCESSING',
+      lease_token = v_token,
+      lease_expires_at = now() + make_interval(secs => p_lease_seconds),
+      lease_attempts = r.lease_attempts + 1,
+      last_error = null
+  where r.id = p_request_id
+    and (r.status in ('PENDING', 'FAILED')
+      or (r.status = 'PROCESSING' and r.lease_expires_at <= now()))
+    and (r.lease_expires_at is null or r.lease_expires_at <= now())
+  returning r.id, r.tenant_id, r.shop_domain, r.shopify_shop_id, r.topic,
+    r.webhook_id, r.customer_id, r.request_id, r.payload,
+    r.lease_token, r.lease_expires_at, r.lease_attempts;
+end;
+$function$;
+
 revoke all on function henvalt.claim_shopify_privacy_request(integer) from public, anon, authenticated;
-revoke all on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) from public, anon, authenticated;
+revoke all on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) from public, anon, authenticated;\nrevoke all on function henvalt.claim_shopify_privacy_request_by_id(uuid, integer) from public, anon, authenticated;
 grant execute on function henvalt.claim_shopify_privacy_request(integer) to service_role;
-grant execute on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) to service_role;
+grant execute on function henvalt.finish_shopify_privacy_request(uuid, uuid, text, text) to service_role;\ngrant execute on function henvalt.claim_shopify_privacy_request_by_id(uuid, integer) to service_role;
 
 commit;
