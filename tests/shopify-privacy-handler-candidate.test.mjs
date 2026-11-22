@@ -16,6 +16,7 @@ test("privacy candidate persists minimal data and claims only its own request", 
   assert.match(source, /claim_shopify_privacy_request_by_id/);
   assert.match(source, /customer_id: connection \? customerId : null/);
   assert.match(source, /payload: connection \? minimalPayload : \{\}/);
+  assert.match(source, /customer_email: customerEmail/);
   assert.doesNotMatch(source, /body: JSON\.stringify\(payload\)/);
 });
 
