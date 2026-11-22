@@ -59,9 +59,23 @@ BEGIN
      AND sc.active = true
      AND sc.reauth_required_at IS NULL
      AND t.status = 'ACTIVE'
-   LIMIT 1;
+   LIMIT 1
+   FOR UPDATE OF sc;
 
   IF v_tenant_id IS NULL THEN
+    RETURN jsonb_build_object('available', false, 'reason', 'SHOP_NOT_ACTIVE');
+  END IF;
+
+  -- Lock the tenant row before counting active shops. A concurrent insert into
+  -- shopify_connections must take a foreign-key KEY SHARE lock on this tenant,
+  -- so it cannot create a second active shop between this check and the claim.
+  PERFORM 1
+    FROM henvalt.tenants
+   WHERE id = v_tenant_id
+     AND status = 'ACTIVE'
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
     RETURN jsonb_build_object('available', false, 'reason', 'SHOP_NOT_ACTIVE');
   END IF;
 
