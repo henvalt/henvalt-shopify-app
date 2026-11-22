@@ -158,6 +158,53 @@ test("records explicit Shopify userErrors as a failed usage attempt", async () =
   assert.equal(JSON.parse(call.init.body).p_success, false);
 });
 
+test("escalates a deterministic Shopify userError after the fifth failed attempt", async () => {
+  const h = harness({ claim: { ...charge, attempt: 5 }, shopify: response({ data: { appUsageRecordCreate: {
+    appUsageRecord: null,
+    userErrors: [{ field: ["price"], message: "Usage exceeds the capped amount." }],
+  } } }) });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 202);
+  assert.equal(body.state, "FAILED");
+  assert.equal(body.retryable, false);
+  assert.equal(body.requiresOperatorReview, true);
+  assert.equal(body.reconciliationStatus, "REQUIRED");
+  const marker = h.calls.find((call) => call.url.includes("/control_plane_mark_billing_reconciliation_required"));
+  assert.ok(marker);
+  assert.equal(JSON.parse(marker.init.body).p_reason, "SHOPIFY_USAGE_DETERMINISTIC_REJECTION");
+});
+
+test("escalates a deterministic Shopify HTTP rejection after the fifth failed attempt", async () => {
+  const h = harness({ claim: { ...charge, attempt: 5 }, shopify: response({ errors: [{ message: "Forbidden" }] }, 403) });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 202);
+  assert.equal(body.state, "FAILED");
+  assert.equal(body.reconciliationStatus, "REQUIRED");
+  assert.ok(h.calls.some((call) => call.url.includes("/control_plane_mark_billing_reconciliation_required")));
+});
+
+test("reports when deterministic-failure reconciliation could not be persisted", async () => {
+  const h = harness({
+    claim: { ...charge, attempt: 5 },
+    shopify: response({ data: { appUsageRecordCreate: {
+      appUsageRecord: null,
+      userErrors: [{ field: ["price"], message: "Usage exceeds the capped amount." }],
+    } } }),
+    failReconciliation: true,
+  });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 503);
+  assert.equal(body.state, "FAILED");
+  assert.equal(body.reconciliationPersisted, false);
+  assert.equal(body.requiresOperatorReview, true);
+});
+
 test("uses the same persisted idempotency key if Shopify accepted but local result recording failed", async () => {
   const h = harness({ failResult: true });
   const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
@@ -244,6 +291,7 @@ test("billing execution is attached to the existing recovery scheduler in an ina
   assert.ok(discovery.parameters.query.includes(") = 1"));
   assert.ok(discovery.parameters.query.includes("reconciliation_status IN ('NONE','NOT_FOUND_CONFIRMED')"));
   assert.ok(discovery.parameters.query.includes("buc.attempt_count >= 5"));
+  assert.ok(discovery.parameters.query.includes("buc.status IN ('PENDING','FAILED')"));
   assert.ok(discovery.parameters.query.includes("buc.reconciliation_status = 'NONE'"));
   assert.ok(discovery.parameters.query.includes("LIMIT 10"));
   assert.doesNotMatch(discovery.parameters.query, /\b(?:INSERT|UPDATE|DELETE|MERGE)\b/i);
