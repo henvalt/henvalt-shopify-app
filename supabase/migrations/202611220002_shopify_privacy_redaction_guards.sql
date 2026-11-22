@@ -29,7 +29,63 @@ begin
         or (v_email is not null and lower(c.email)=v_email))
     union all
     select 1 from henvalt.checkouts x
-    where x.tenant_id=p_tenant_id and v_email is not null and lower(x.email)=v_email
+    where x.tenant_id=p_tenant_id and (
+      (v_email is not null and lower(x.email)=v_email)
+      or x.customer_id=any(v_customer_ids)
+    )
+    union all
+    select 1 from henvalt.opportunities x
+    where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)
+    union all
+    select 1 from henvalt.orders x
+    where x.tenant_id=p_tenant_id and (
+      x.customer_id=any(v_customer_ids)
+      or x.checkout_id in (
+        select cc.id from henvalt.checkouts cc
+        where cc.tenant_id=p_tenant_id and (
+          cc.customer_id=any(v_customer_ids)
+          or (v_email is not null and lower(cc.email)=v_email)
+        )
+      )
+    )
+    union all
+    select 1 from henvalt.sessions x
+    where x.tenant_id=p_tenant_id and (
+      x.customer_id=any(v_customer_ids)
+      or x.session_reference in (
+        select cc.session_reference from henvalt.checkouts cc
+        where cc.tenant_id=p_tenant_id and cc.id in (
+          select c2.id from henvalt.checkouts c2
+          where c2.tenant_id=p_tenant_id and (
+            c2.customer_id=any(v_customer_ids)
+            or (v_email is not null and lower(c2.email)=v_email)
+          )
+        )
+      )
+    )
+    union all
+    select 1 from henvalt.customer_conversations x
+    where x.tenant_id=p_tenant_id and x.customer_id=any(v_customer_ids)
+    union all
+    select 1 from henvalt.delivery_attempts x
+    where x.tenant_id=p_tenant_id and x.delivery_request_id in (
+      select dr.id from henvalt.delivery_requests dr
+      where dr.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(dr.recipient_reference)=v_email)
+        or dr.opportunity_id in (select o.id from henvalt.opportunities o where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids))
+        or dr.id in (select cc.delivery_request_id from henvalt.customer_conversations cc where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids))
+      )
+    )
+    union all
+    select 1 from henvalt.tracking_tokens x
+    where x.tenant_id=p_tenant_id and x.intervention_id in (
+      select ri.id from henvalt.recovery_interventions ri
+      left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
+      where ri.tenant_id=p_tenant_id and (
+        (v_email is not null and lower(ri.recipient_reference)=v_email)
+        or o.customer_id=any(v_customer_ids)
+      )
+    )
     union all
     select 1 from henvalt.canonical_events x
     where x.tenant_id=p_tenant_id
@@ -41,23 +97,56 @@ begin
         or (v_email is not null and lower(x.email)=v_email))
     union all
     select 1 from henvalt.delivery_requests x
-    where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_reference)=v_email
+    where x.tenant_id=p_tenant_id and (
+      (v_email is not null and lower(x.recipient_reference)=v_email)
+      or x.opportunity_id in (select o.id from henvalt.opportunities o where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids))
+      or x.id in (
+        select cc.delivery_request_id from henvalt.customer_conversations cc
+        where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids)
+      )
+    )
     union all
     select 1 from henvalt.messages x
-    where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient)=v_email
+    where x.tenant_id=p_tenant_id and (
+      (v_email is not null and lower(x.recipient)=v_email)
+      or x.intervention_id in (
+        select ri.id from henvalt.recovery_interventions ri
+        left join henvalt.opportunities o on o.id=ri.opportunity_id and o.tenant_id=p_tenant_id
+        where ri.tenant_id=p_tenant_id and (
+          (v_email is not null and lower(ri.recipient_reference)=v_email)
+          or o.customer_id=any(v_customer_ids)
+        )
+      )
+    )
     union all
     select 1 from henvalt.conversation_messages x
     where x.tenant_id=p_tenant_id and v_email is not null
       and (lower(x.sender_email)=v_email or lower(x.recipient_email)=v_email)
     union all
     select 1 from henvalt.email_suppressions x
-    where x.tenant_id=p_tenant_id and v_email is not null and lower(x.email_normalized)=v_email
+    where x.tenant_id=p_tenant_id and (
+      (v_email is not null and lower(x.email_normalized)=v_email)
+      or x.customer_id=any(v_customer_ids)
+    )
     union all
     select 1 from henvalt.provider_events x
-    where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_email)=v_email
+    where x.tenant_id=p_tenant_id and (
+      (v_email is not null and lower(x.recipient_email)=v_email)
+      or x.delivery_request_id in (
+        select dr.id from henvalt.delivery_requests dr
+        where dr.tenant_id=p_tenant_id and (
+          (v_email is not null and lower(dr.recipient_reference)=v_email)
+          or dr.opportunity_id in (select o.id from henvalt.opportunities o where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids))
+          or dr.id in (select cc.delivery_request_id from henvalt.customer_conversations cc where cc.tenant_id=p_tenant_id and cc.customer_id=any(v_customer_ids))
+        )
+      )
+    )
     union all
     select 1 from henvalt.recovery_interventions x
-    where x.tenant_id=p_tenant_id and v_email is not null and lower(x.recipient_reference)=v_email
+    where x.tenant_id=p_tenant_id and (
+      (v_email is not null and lower(x.recipient_reference)=v_email)
+      or x.opportunity_id in (select o.id from henvalt.opportunities o where o.tenant_id=p_tenant_id and o.customer_id=any(v_customer_ids))
+    )
     union all
     select 1 from henvalt.webhook_events x
     where x.tenant_id=p_tenant_id and (
