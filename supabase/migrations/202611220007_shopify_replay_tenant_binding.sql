@@ -140,6 +140,7 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $function$
 BEGIN
   PERFORM henvalt.assert_shopify_replay_tenant_for_write(p_job_id,p_worker_id,p_lease_id,p_tenant_id);
+  PERFORM henvalt.assert_shopify_replay_webhook_for_write(p_job_id,p_worker_id,p_lease_id,p_webhook_event_id);
   RETURN QUERY SELECT * FROM henvalt.upsert_canonical_event(
     p_tenant_id,p_webhook_event_id,p_event_type,p_event_class,p_source,p_source_event_id,
     p_customer_reference,p_email,p_anonymous_reference,p_session_reference,p_occurred_at,
