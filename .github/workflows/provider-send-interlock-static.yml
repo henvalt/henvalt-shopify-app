@@ -26,7 +26,7 @@ on:
       - "tests/shopify-replay-object-tenant-binding-static.test.mjs"
       - "tests/shopify-replay-tenant-binding-postgres-acceptance.sql"
       - "tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql"
-      - "tests/shopify-replay-tenant-binding-static.test.mjs tests/shopify-replay-object-tenant-binding-static.test.mjs"
+      - "tests/shopify-replay-tenant-binding-static.test.mjs tests/shopify-replay-object-tenant-binding-static.test.mjs tests/shopify-replay-object-tenant-binding-static.test.mjs"
       - "tests/shopify-privacy-queue-worker.test.mjs"
       - "tests/shopify-privacy-export-ack.test.mjs"
       - "tests/shopify-privacy-export-ack-postgres-acceptance.sql"
