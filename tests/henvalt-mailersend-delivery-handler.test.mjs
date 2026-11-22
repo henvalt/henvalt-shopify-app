@@ -175,3 +175,27 @@ test("provider transport failure is marked ambiguous and not retried automatical
   assert.deepEqual(await response.json(), { error: "provider_transport_ambiguous" });
   assert.equal(providerCalls, 1);
 });
+
+
+test("all credential, authorization and provider requests refuse redirects", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+        return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
+      }
+      return new Response("", { status: 302, headers: { location: "https://attacker.invalid/collect" } });
+    },
+  });
+  const response = await handler(request(validBody()));
+  assert.equal(response.status, 302);
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((call) => call.init.redirect === "error"));
+  assert.equal(calls[2].url, "https://api.mailersend.com/v1/email");
+});
