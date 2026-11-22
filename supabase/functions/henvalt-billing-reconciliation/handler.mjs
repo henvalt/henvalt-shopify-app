@@ -157,7 +157,7 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
     let usagePages = 0;
     let usageComplete = false;
     const matches = [];
-    while (usagePages < 100) {
+    while (usagePages < 20) {
       const data = await shopifyGraphQL(shop, accessToken, USAGE_RECORDS_QUERY, {
         subscriptionId: lineItemMatches[0].subscriptionId,
         first: 50,
@@ -184,6 +184,12 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
             currency: record.price?.currencyCode,
           });
         }
+      }
+      // Shopify idempotency makes the exact key the decisive match. A positive
+      // match can stop early; a no-match decision must exhaust the connection.
+      if (matches.length > 0) {
+        usageComplete = true;
+        break;
       }
       if (lineItem.usageRecords.pageInfo.hasNextPage !== true) {
         usageComplete = true;
