@@ -37,6 +37,20 @@ test("both provider-send entry points are blocked and one-off test branch is rem
   assert.ok(!w.nodes.some((n) => n.parameters?.url && String(n.parameters.url).includes("/functions/v1/henvalt-mailersend-delivery")));
 });
 
+test("delivery candidate rejects alternate provider egress hidden in an ordinary HTTP node", () => {
+  const directProvider = structuredClone(fixture.workflow);
+  directProvider.nodes.find((n) => n.name === "Authorize & Context").parameters.url = "https://api.mailersend.com/v1/email";
+  assert.throws(() => buildDeliveryCandidate(directProvider), /Non-candidate HTTP egress/);
+
+  const unknownExternal = structuredClone(fixture.workflow);
+  unknownExternal.nodes.find((n) => n.name === "Authorize & Context").parameters.url = "https://example.invalid/send";
+  assert.throws(() => buildDeliveryCandidate(unknownExternal), /Non-candidate HTTP egress/);
+
+  const smtpNode = structuredClone(fixture.workflow);
+  smtpNode.nodes.find((n) => n.name === "Authorize & Context").type = "n8n-nodes-base.emailSend";
+  assert.throws(() => buildDeliveryCandidate(smtpNode), /Provider egress node type/);
+});
+
 test("no-send response is rejected and is never persisted as a provider result", () => {
   const w = buildDeliveryCandidate(fixture.workflow).workflow;
   const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
