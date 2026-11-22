@@ -94,6 +94,18 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220012_dashboard_net_revenue_series.sql
+      - name: Apply Shopify webhook replay enqueue migration for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql
+      - name: Apply Shopify webhook replay loader migration for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210006_shopify_webhook_replay_load.sql
+      - name: Apply atomic Shopify webhook ingress migration for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql
       - name: Apply Shopify replay lease foundation for fenced order-edit acceptance
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
