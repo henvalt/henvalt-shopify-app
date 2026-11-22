@@ -291,6 +291,13 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql
+      - name: Exercise deny, allow, audit, consent and fail-closed paths
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-acceptance.sql
+
       - name: Bootstrap isolated Shopify privacy queue index fixture
         env:
           PGPASSWORD: postgres
@@ -327,9 +334,3 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-privacy-lease-postgres-acceptance.sql
-      - name: Exercise deny, allow, audit, consent and fail-closed paths
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
-            -f tests/provider-send-interlock-postgres-acceptance.sql
