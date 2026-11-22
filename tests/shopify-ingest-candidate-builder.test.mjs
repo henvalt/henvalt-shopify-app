@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildCandidate } from "../n8n/shopify-ingest-candidate-builder.mjs";
+import { buildShopifyReplayEnvelope } from "../n8n/shopify-ingest-replay-envelope-candidate.mjs";
 
 const map = JSON.parse(readFileSync("n8n/shopify-ingest-replay-write-map.json", "utf8"));
 const baseNode = (name,type,parameters={}) => ({id:"fixture-"+name,name,type,typeVersion:1,position:[0,0],parameters});
@@ -146,6 +147,42 @@ test("generated replay envelope Code node executes valid, processed and invalid 
   const invalid = run({statusCode:200,body:{...row,metadata:{...row.metadata,ingress_hmac_verified:false}}});
   assert.equal(invalid.json.__replay_invalid,true);
   assert.match(invalid.json.__replay_reason,/INGRESS_NOT_AUTHENTICATED/);
+});
+
+test("embedded replay envelope enforces the pure helper's missing edge-case guards", () => {
+  const workflow = buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
+  const node = workflow.nodes.find(n => n.name === "Build Shopify Replay Envelope");
+  const job = "11111111-1111-4111-8111-111111111111";
+  const lease = "22222222-2222-4222-8222-222222222222";
+  const webhook = "33333333-3333-4333-8333-333333333333";
+  const tenant = "44444444-4444-4444-8444-444444444444";
+  const correlation = "55555555-5555-4555-8555-555555555555";
+  const claim = {job_id:job,worker_id:"worker",lease_id:lease};
+  const metadata = {
+    ingress_hmac_verified:true,shop_domain:" demo.myshopify.com ",
+    shopify_webhook_id:"delivery-xyz",shopify_api_version:"2026-10",
+    shopify_triggered_at:"2099-11-21T22:59:00.000Z"
+  };
+  const row = {
+    job_id:job,webhook_id:webhook,tenant_id,source_event_id:"delivery-xyz",
+    topic:"checkouts/update",payload:{id:42},metadata,processing_status:"PROCESSING",
+    webhook_processed:false,correlation_id:correlation,
+    lease_expires_at:"2099-11-21T23:00:00.000Z"
+  };
+  const execute = (value) => new Function("$","$json",node.parameters.jsCode)(
+    () => ({item:{json:claim}}),{statusCode:200,body:value}
+  ).json;
+  const embedded = execute(row);
+  const helper = buildShopifyReplayEnvelope(claim,row,Date.now());
+  assert.equal(helper.ok,true);
+  assert.equal(embedded.body.event_id,helper.envelope.body.event_id);
+  assert.deepEqual(embedded.headers,helper.envelope.headers);
+  assert.equal(embedded.headers["x-shopify-api-version"],"2026-10");
+  assert.equal(embedded.headers["x-shopify-triggered-at"],"2099-11-21T22:59:00.000Z");
+  assert.match(execute({...row,correlation_id:"not-a-uuid"}).__replay_reason,/CORRELATION_ID_INVALID/);
+  assert.match(execute({...row,topic:"   "}).__replay_reason,/TOPIC_INVALID/);
+  assert.match(execute({...row,lease_expires_at:"not-a-date"}).__replay_reason,/LEASE_EXPIRED/);
+  assert.match(execute({...row,source_event_id:123}).__replay_reason,/DELIVERY_ID_INVALID/);
 });
 
 test("generated lease renewal Code node preserves the exact trusted context", () => {
