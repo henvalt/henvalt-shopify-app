@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync("supabase/functions/henvalt-shopify-privacy-candidate/index.ts", "utf8");
+const oauthSource = readFileSync("supabase/functions/henvalt-shopify-oauth/index.ts", "utf8");
 
 test("privacy candidate authenticates exact raw bytes and signed shop identity", () => {
   assert.match(source, /req\.arrayBuffer\(\)/);
@@ -32,4 +33,10 @@ test("privacy request replay identity comes from signed bytes, not unsigned webh
   assert.match(source, /persist_shopify_privacy_request/);
   assert.match(source, /p_signed_payload_hash: signedPayloadHash/);
   assert.doesNotMatch(source, /on_conflict=webhook_id/);
+});
+
+test("privacy handler resolves inactive connections for post-uninstall compliance", () => {
+  assert.match(oauthSource, /active: false/);
+  assert.match(source, /shop_domain=eq/);
+  assert.doesNotMatch(source, /active=eq\\.true/);
 });
