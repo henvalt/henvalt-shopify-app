@@ -51,6 +51,18 @@ test("delivery candidate rejects alternate provider egress hidden in an ordinary
   assert.throws(() => buildDeliveryCandidate(smtpNode), /Provider egress node type/);
 });
 
+test("delivery candidate rejects provider calls hidden inside code nodes", () => {
+  const hiddenFetch = structuredClone(fixture.workflow);
+  hiddenFetch.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
+    'return await fetch("https://api.mailersend.com/v1/email");';
+  assert.throws(() => buildDeliveryCandidate(hiddenFetch), /Inline network-capable code/);
+
+  const hiddenProviderHost = structuredClone(fixture.workflow);
+  hiddenProviderHost.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
+    'const provider = "https://api.sendgrid.com/v3/mail/send"; return { provider };';
+  assert.throws(() => buildDeliveryCandidate(hiddenProviderHost), /Provider API endpoint/);
+});
+
 test("no-send response is rejected and is never persisted as a provider result", () => {
   const w = buildDeliveryCandidate(fixture.workflow).workflow;
   const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
