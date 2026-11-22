@@ -3,7 +3,7 @@ const RECONCILIATION_RESOLVE_RPC = "control_plane_resolve_billing_reconciliation
 const SHOPIFY_TOKEN_RPC = "get_shopify_access_token_for_control_plane";
 const SHOPIFY_API_VERSION = "2026-10";
 const SUBSCRIPTIONS_QUERY = `query HenvaltReconciliationSubscriptions($first: Int!, $after: String) { currentAppInstallation { allSubscriptions(first: $first, after: $after) { edges { node { id test lineItems { id } } } pageInfo { hasNextPage endCursor } } } }`;
-const USAGE_RECORDS_QUERY = `query HenvaltReconciliationUsageRecords($subscriptionId: ID!, $first: Int!, $after: String) { node(id: $subscriptionId) { ... on AppSubscription { id test lineItems { id usageRecords(first: $first, after: $after, reverse: true, sortKey: CREATED_AT) { edges { node { id idempotencyKey createdAt price { amount currencyCode } } } pageInfo { hasNextPage endCursor } } } } } }`;
+const USAGE_RECORDS_QUERY = `query HenvaltReconciliationUsageRecords($subscriptionId: ID!, $first: Int!, $after: String) { node(id: $subscriptionId) { ... on AppSubscription { id test lineItems { id usageRecords(first: $first, after: $after, reverse: true, sortKey: CREATED_AT) { edges { node { id idempotencyKey createdAt price { amount currencyCode } subscriptionLineItem { id } } } pageInfo { hasNextPage endCursor } } } } } }`;
 
 const cors = {
   "content-type": "application/json; charset=utf-8",
@@ -182,6 +182,7 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
             idempotencyKey: record.idempotencyKey,
             amount: record.price?.amount,
             currency: record.price?.currencyCode,
+            lineItemId: record.subscriptionLineItem?.id,
           });
         }
       }
@@ -351,7 +352,7 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
         providerUsageRecordId: record?.id ?? null,
         matchingCount: String(matches.length),
         idempotencyKey: charge.idempotencyKey,
-        lineItemId: charge.subscriptionLineItemId,
+        lineItemId: record?.lineItemId ?? charge.subscriptionLineItemId,
         amount: record?.amount ?? null,
         currency: record?.currency ?? null,
         pagesScanned: lookup.pagesScanned,
@@ -359,6 +360,7 @@ export function createBillingReconciliationHandler({ env, fetchImpl = fetch }) {
 
       if (body.resolution === "MATCHED") {
         if (matches.length !== 1 || !record?.id ||
+            record.lineItemId !== charge.subscriptionLineItemId ||
             !decimalEqual(record.amount, charge.amount) ||
             record.currency !== charge.currency) {
           return reply(409, { error: "shopify_record_does_not_match_charge" });
