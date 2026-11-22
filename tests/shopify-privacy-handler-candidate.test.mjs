@@ -52,3 +52,9 @@ test("privacy webhook bounds database waits and fails retryably", () => {
   assert.match(source, /database_unavailable/);
   assert.match(source, /connectionResponse\.json\(\)\.catch\(\(\) => null\)/);
 });
+
+test("privacy handler requires JSON webhook bodies", () => {
+  assert.match(source, /content-type/);
+  assert.match(source, /application\/json_required/);
+  assert.match(source, /contentType !== "application\/json"/);
+});
