@@ -306,7 +306,7 @@ return { json: { ...prior, replay_context: { ...context, lease_expires_at: respo
   workflow.connections["Engine Config"] = {main:[[{node:"Is Trusted Replay?",type:"main",index:0}]]};
   workflow.connections["Is Trusted Replay?"] = {main:[
     [{node:"Resolve Shopify Tenant",type:"main",index:0}],
-    [{node:"Supabase Ingest RPC",type:"main",index:0}]
+    [{node:"Is Shopify Source?",type:"main",index:0}]
   ]};
   workflow.connections["Bind Tenant Context"].main = [[{node:"Is Valid",type:"main",index:0}]];
   workflow.connections["Is Valid"].main[0] = [{node:"Is Replay Entry?",type:"main",index:0}];
