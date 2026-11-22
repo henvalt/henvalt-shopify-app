@@ -83,6 +83,38 @@ export function createShopifyUsageBillingHandler({
     return text ? JSON.parse(text) : null;
   }
 
+  async function ambiguousOutcome(shop, chargeId, reason, attempt) {
+    if (Number(attempt) < 5) return ambiguous(reason, attempt);
+    try {
+      const recorded = await rpc("control_plane_mark_billing_reconciliation_required", {
+        p_shop_domain: shop,
+        p_charge_id: chargeId,
+        p_reason: reason,
+      });
+      if (recorded?.updated !== true || recorded?.status !== "REQUIRED") {
+        throw new Error("BILLING_RECONCILIATION_STATE_NOT_RECORDED");
+      }
+      return json(202, {
+        claimed: true,
+        state: "PENDING",
+        retryable: false,
+        requiresOperatorReview: true,
+        reconciliationStatus: "REQUIRED",
+        reason,
+      });
+    } catch (error) {
+      logger.error("Exhausted billing outcome could not be persisted for reconciliation", error instanceof Error ? error.message : "unknown");
+      return json(503, {
+        claimed: true,
+        state: "PENDING",
+        retryable: false,
+        requiresOperatorReview: true,
+        reconciliationPersisted: false,
+        reason: "RECONCILIATION_STATE_PERSIST_FAILED",
+      });
+    }
+  }
+
   async function recordResult(shop, chargeId, success, providerId, errorCode, errorMessage) {
     return await rpc(RESULT_RPC, {
       p_shop_domain: shop,
@@ -190,11 +222,11 @@ export function createShopifyUsageBillingHandler({
       // The provider may have accepted the charge before the connection failed.
       // Keep the durable charge PENDING and retry with the same Shopify idempotency key.
       logger.error("Shopify usage outcome is ambiguous", error instanceof Error ? error.message : "unknown");
-      return ambiguous("SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN", attempt);
+      return await ambiguousOutcome(shop, chargeId, "SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN", attempt);
     }
 
     if (upstream.status === 429 || upstream.status >= 500) {
-      return ambiguous("SHOPIFY_TRANSIENT_HTTP_" + upstream.status, attempt);
+      return await ambiguousOutcome(shop, chargeId, "SHOPIFY_TRANSIENT_HTTP", attempt);
     }
     if (!upstream.ok) {
       try {
@@ -211,11 +243,11 @@ export function createShopifyUsageBillingHandler({
     try {
       payload = await upstream.json();
     } catch {
-      return ambiguous("SHOPIFY_RESPONSE_NOT_JSON", attempt);
+      return await ambiguousOutcome(shop, chargeId, "SHOPIFY_RESPONSE_NOT_JSON", attempt);
     }
     if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
       // Top-level GraphQL errors do not prove whether the mutation committed.
-      return ambiguous("SHOPIFY_GRAPHQL_OUTCOME_UNKNOWN", attempt);
+      return await ambiguousOutcome(shop, chargeId, "SHOPIFY_GRAPHQL_OUTCOME_UNKNOWN", attempt);
     }
 
     const result = payload?.data?.appUsageRecordCreate;
@@ -232,6 +264,7 @@ export function createShopifyUsageBillingHandler({
       } catch (error) {
         // Retrying the same mutation is safe: Shopify receives the same key and parameters.
         logger.error("Accepted Shopify usage record could not be committed locally", error instanceof Error ? error.message : "unknown");
+        if (attempt >= 5) return await ambiguousOutcome(shop, chargeId, "LOCAL_RESULT_COMMIT_UNKNOWN", attempt);
         return json(503, { claimed: true, state: "PENDING", retryable: true, reason: "LOCAL_RESULT_COMMIT_UNKNOWN" });
       }
       return json(200, { claimed: true, state: "SUBMITTED", providerUsageRecordId: providerId });
@@ -241,7 +274,7 @@ export function createShopifyUsageBillingHandler({
       String(item?.code ?? "").toUpperCase() === "IDEMPOTENCY_CONCURRENT_REQUEST" ||
       /same idempotency key is being processed|currently in progress/i.test(String(item?.message ?? ""))
     );
-    if (concurrent) return ambiguous("SHOPIFY_IDEMPOTENCY_REQUEST_IN_PROGRESS", attempt);
+    if (concurrent) return await ambiguousOutcome(shop, chargeId, "SHOPIFY_IDEMPOTENCY_REQUEST_IN_PROGRESS", attempt);
 
     if (userErrors.length > 0) {
       const message = userErrors.map((item) => String(item?.message ?? "Shopify user error")).join("; ").slice(0, 900);
@@ -255,6 +288,6 @@ export function createShopifyUsageBillingHandler({
       return json(422, { claimed: true, state: "FAILED", reason: "SHOPIFY_USAGE_REJECTED" });
     }
 
-    return ambiguous("SHOPIFY_USAGE_RESPONSE_INCOMPLETE", attempt);
+    return await ambiguousOutcome(shop, chargeId, "SHOPIFY_USAGE_RESPONSE_INCOMPLETE", attempt);
   };
 }
