@@ -665,10 +665,19 @@ ALTER TABLE henvalt.orders
   ADD COLUMN ordered_at timestamptz;
 
 ALTER TABLE henvalt.revenue_ledger
-  ADD COLUMN recovery_id uuid,
-  ADD COLUMN attribution_id uuid,
-  ADD COLUMN billing_status text NOT NULL DEFAULT 'PENDING',
-  ADD COLUMN metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+  ADD COLUMN IF NOT EXISTS recovery_id uuid,
+  ADD COLUMN IF NOT EXISTS attribution_id uuid,
+  ADD COLUMN IF NOT EXISTS billing_status text NOT NULL DEFAULT 'PENDING',
+  ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+CREATE TYPE henvalt.ledger_entry_type AS ENUM ('RECOVERY', 'ADJUSTMENT');
+CREATE TYPE henvalt.billing_status AS ENUM ('PENDING', 'MEASURED', 'BILLED', 'VOIDED');
+ALTER TABLE henvalt.revenue_ledger
+  ALTER COLUMN attribution_confidence TYPE henvalt.attribution_confidence
+    USING NULLIF(attribution_confidence, '')::henvalt.attribution_confidence,
+  ALTER COLUMN entry_type TYPE henvalt.ledger_entry_type
+    USING entry_type::henvalt.ledger_entry_type,
+  ALTER COLUMN billing_status TYPE henvalt.billing_status
+    USING billing_status::henvalt.billing_status;
 CREATE UNIQUE INDEX ux_revenue_ledger_one_recovery_per_order
   ON henvalt.revenue_ledger(tenant_id, order_id)
   WHERE entry_type = 'RECOVERY';
