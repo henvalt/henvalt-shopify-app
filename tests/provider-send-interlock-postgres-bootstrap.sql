@@ -29,6 +29,11 @@ CREATE TABLE henvalt.messages (
   tenant_id uuid NOT NULL,
   metadata jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+ALTER TABLE henvalt.messages
+  ADD COLUMN intervention_id uuid,
+  ADD COLUMN recipient text,
+  ADD COLUMN subject text,
+  ADD COLUMN body text;
 
 CREATE TYPE henvalt.event_class AS ENUM ('RECOVERABLE', 'CONVERSION', 'ADJUSTMENT', 'OTHER');
 CREATE TYPE henvalt.opportunity_type AS ENUM ('ABANDONED_CART', 'ABANDONED_CHECKOUT', 'PAYMENT_FAILURE', 'PAYMENT_DECLINED', 'BROWSE_ABANDONMENT');
@@ -39,6 +44,7 @@ CREATE TABLE henvalt.tenants (
   status text NOT NULL,
   default_currency character(3) NOT NULL DEFAULT 'USD'
 );
+ALTER TABLE henvalt.tenants ADD COLUMN settings jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TYPE henvalt.job_status AS ENUM ('QUEUED', 'CLAIMED', 'RUNNING', 'RETRY_WAIT', 'SUCCEEDED', 'DEAD_LETTER');
 
@@ -597,3 +603,8 @@ CREATE TABLE henvalt.email_suppressions (
   email_normalized text NOT NULL,
   active boolean NOT NULL DEFAULT true
 );
+
+CREATE OR REPLACE FUNCTION henvalt.render_sender_identity_footer(p_tenant_id uuid, p_html text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $function$ SELECT p_html $function$;
+CREATE OR REPLACE FUNCTION henvalt.render_email_plain_text(p_html text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $function$ SELECT p_html $function$;
