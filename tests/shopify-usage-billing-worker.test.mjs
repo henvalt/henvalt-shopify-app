@@ -10,6 +10,7 @@ const charge = {
   amount: "7.25",
   currency: "USD",
   idempotencyKey: "henvalt-recovery-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  attempt: 1,
 };
 const env = {
   SUPABASE_URL: "https://supabase.invalid",
@@ -151,4 +152,16 @@ test("rejects malformed charge envelopes without contacting Shopify", async () =
   const result = await handler(request());
   assert.equal(result.status, 503);
   assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
+});
+
+test("surfaces operator reconciliation when the final ambiguous attempt is exhausted", async () => {
+  const h = harness({ claim: { ...charge, attempt: 5 }, failShopify: true });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 202);
+  assert.equal(body.retryable, false);
+  assert.equal(body.requiresOperatorReview, true);
+  assert.equal(body.state, "PENDING");
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")), false);
 });
