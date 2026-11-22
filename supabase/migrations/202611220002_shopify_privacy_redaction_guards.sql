@@ -85,6 +85,102 @@ begin
 end;
 $function$;
 
+create or replace function henvalt.redact_shopify_customer_data_checked_with_lease(
+  p_privacy_request_id uuid,
+  p_lease_token uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = henvalt, pg_temp
+as $function$
+declare
+  v_request henvalt.shopify_privacy_requests%rowtype;
+  v_email text;
+begin
+  if p_privacy_request_id is null or p_lease_token is null then
+    raise exception 'request id and lease token are required';
+  end if;
+
+  select * into v_request
+  from henvalt.shopify_privacy_requests
+  where id=p_privacy_request_id
+  for update;
+
+  if not found
+    or v_request.topic <> 'customers/redact'
+    or v_request.status <> 'PROCESSING'
+    or v_request.lease_token <> p_lease_token
+    or v_request.lease_expires_at <= now()
+    or v_request.tenant_id is null
+  then
+    raise exception 'privacy request lease is not current';
+  end if;
+
+  v_email := nullif(lower(trim(v_request.payload->>'customer_email')), '');
+  return henvalt.redact_shopify_customer_data_checked(
+    v_request.tenant_id, v_request.customer_id, v_email
+  );
+end;
+$function$;
+
+create or replace function henvalt.export_shopify_customer_data_with_lease(
+  p_privacy_request_id uuid,
+  p_lease_token uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = henvalt, pg_temp
+as $function$
+declare
+  v_request henvalt.shopify_privacy_requests%rowtype;
+  v_email text;
+  v_result jsonb;
+  v_updated integer;
+begin
+  if p_privacy_request_id is null or p_lease_token is null then
+    raise exception 'request id and lease token are required';
+  end if;
+
+  select * into v_request
+  from henvalt.shopify_privacy_requests
+  where id=p_privacy_request_id
+  for update;
+
+  if not found
+    or v_request.topic <> 'customers/data_request'
+    or v_request.status <> 'PROCESSING'
+    or v_request.lease_token <> p_lease_token
+    or v_request.lease_expires_at <= now()
+    or v_request.tenant_id is null
+  then
+    raise exception 'privacy request lease is not current';
+  end if;
+
+  v_email := nullif(lower(trim(v_request.payload->>'customer_email')), '');
+  v_result := henvalt.export_shopify_customer_data(
+    v_request.tenant_id, v_request.customer_id, v_email
+  );
+
+  if v_result->>'found' = 'true' then
+    update henvalt.shopify_privacy_requests
+    set result_payload = v_result,
+        result_expires_at = now() + interval '30 days'
+    where id=p_privacy_request_id
+      and status='PROCESSING'
+      and lease_token=p_lease_token
+      and lease_expires_at > now();
+    get diagnostics v_updated = row_count;
+    if v_updated <> 1 then
+      raise exception 'privacy request lease expired while saving export';
+    end if;
+  end if;
+
+  return v_result;
+end;
+$function$;
+
 create or replace function henvalt.redact_shopify_shop_data_with_lease(
   p_privacy_request_id uuid,
   p_lease_token uuid
@@ -123,7 +219,11 @@ $function$;
 
 revoke all on function henvalt.redact_shopify_customer_data_checked(uuid,text,text) from public, anon, authenticated;
 revoke all on function henvalt.redact_shopify_shop_data_with_lease(uuid,uuid) from public, anon, authenticated;
+revoke all on function henvalt.redact_shopify_customer_data_checked_with_lease(uuid,uuid) from public, anon, authenticated;
+revoke all on function henvalt.export_shopify_customer_data_with_lease(uuid,uuid) from public, anon, authenticated;
 grant execute on function henvalt.redact_shopify_customer_data_checked(uuid,text,text) to service_role;
 grant execute on function henvalt.redact_shopify_shop_data_with_lease(uuid,uuid) to service_role;
+grant execute on function henvalt.redact_shopify_customer_data_checked_with_lease(uuid,uuid) to service_role;
+grant execute on function henvalt.export_shopify_customer_data_with_lease(uuid,uuid) to service_role;
 
 commit;
