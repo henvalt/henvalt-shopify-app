@@ -126,6 +126,10 @@ ON CONFLICT (id) DO NOTHING;
 
 DO $graph_acceptance$
 BEGIN
+  -- The graph helper is service-role callable on its own, so it must reject
+  -- a foreign/missing root even when there are no foreign child edges.
+  PERFORM pg_temp.expect_replay_graph_rejection('customers','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2');
+  PERFORM pg_temp.expect_replay_graph_rejection('customers','cccccccc-cccc-4ccc-8ccc-cccccccccc33');
   PERFORM pg_temp.expect_replay_graph_rejection('checkouts','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa21');
   PERFORM pg_temp.expect_replay_graph_rejection('canonical_events','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa31');
   PERFORM pg_temp.expect_replay_graph_rejection('opportunities','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaa41');
