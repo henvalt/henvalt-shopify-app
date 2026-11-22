@@ -24,6 +24,7 @@ test("dashboard revenue series is net of confirmed refund and cancellation adjus
 test("safety CI tracks the dashboard net-revenue migration", () => {
   assert.match(workflow, /202611220012_dashboard_net_revenue_series\.sql/);
   assert.match(workflow, /dashboard-net-revenue\.test\.mjs/);
+  assert.match(workflow, /node --test[\s\S]*tests\/dashboard-net-revenue\.test\.mjs/);
 });
 
 test("net revenue chart retains negative adjustment amounts rather than dropping refunds", () => {
