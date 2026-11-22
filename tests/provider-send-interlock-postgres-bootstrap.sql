@@ -580,3 +580,20 @@ CREATE TABLE IF NOT EXISTS henvalt.recovery_sequences (
   tenant_id uuid NOT NULL,
   opportunity_id uuid NOT NULL
 );
+
+-- Additional relationships rechecked immediately before provider egress.
+ALTER TABLE henvalt.opportunities
+  ADD COLUMN IF NOT EXISTS customer_id uuid,
+  ADD COLUMN IF NOT EXISTS checkout_id uuid;
+ALTER TABLE henvalt.recovery_sequences
+  ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'SCHEDULED';
+ALTER TABLE henvalt.orders
+  ADD COLUMN IF NOT EXISTS financial_status text,
+  ADD COLUMN IF NOT EXISTS cancelled_at timestamptz;
+CREATE TABLE henvalt.email_suppressions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  customer_id uuid,
+  email_normalized text NOT NULL,
+  active boolean NOT NULL DEFAULT true
+);
