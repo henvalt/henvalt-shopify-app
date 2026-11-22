@@ -10,37 +10,66 @@ Shopify's Admin GraphQL `AppUsageRecord` exposes `idempotencyKey`, and `AppSubsc
 
 ## Provider lookup
 
-For a claimed charge, use the exact stored `subscriptionLineItemId` and `idempotencyKey`:
+The stored charge contains the exact `subscriptionLineItemId`, but Shopify's `AppSubscriptionLineItem` is not a `Node` type. Do not query it directly through `node(id:)`. Resolve the parent subscription first through the app installation, then query that `AppSubscription` node.
+
+First, find the subscription that owns the stored line-item ID:
+
+```graphql
+query HENVALTFindUsageSubscription($first: Int!, $after: String) {
+  currentAppInstallation {
+    allSubscriptions(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          status
+          lineItems {
+            id
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
+```
+
+Paginate `allSubscriptions` until the exact stored `subscriptionLineItemId` is found. Then query the parent `AppSubscription` by its ID:
 
 ```graphql
 query HENVALTUsageRecordReconciliation(
-  $lineItemId: ID!
+  $subscriptionId: ID!
   $first: Int!
   $after: String
 ) {
-  node(id: $lineItemId) {
-    ... on AppSubscriptionLineItem {
+  node(id: $subscriptionId) {
+    ... on AppSubscription {
       id
-      usageRecords(
-        first: $first
-        after: $after
-        reverse: true
-        sortKey: CREATED_AT
-      ) {
-        edges {
-          node {
-            id
-            idempotencyKey
-            createdAt
-            price {
-              amount
-              currencyCode
+      lineItems {
+        id
+        usageRecords(
+          first: $first
+          after: $after
+          reverse: true
+          sortKey: CREATED_AT
+        ) {
+          edges {
+            node {
+              id
+              idempotencyKey
+              createdAt
+              price {
+                amount
+                currencyCode
+              }
             }
           }
-        }
-        pageInfo {
-          hasNextPage
-          endCursor
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
     }
@@ -48,7 +77,7 @@ query HENVALTUsageRecordReconciliation(
 }
 ```
 
-Use a bounded page size (up to Shopify's GraphQL connection limit), continue with `endCursor` while needed, and stop only when the target charge's creation window has been fully covered or the connection is exhausted. If pagination, throttling, or transport fails, the result is inconclusive.
+Filter the returned line item by exact ID, then match `idempotencyKey`, amount and currency. Paginate the usage-record connection until the target charge's creation window is covered or the connection is exhausted. If subscription lookup, pagination, throttling, or transport fails, the result is inconclusive.
 
 ## Reconciliation decision table
 
