@@ -44,3 +44,6 @@ The candidate does not set a real URL, credential ID, token, or production proje
 No live n8n workflow was modified or published. No Edge Function was deployed. No SQL migration was applied. No Shopify usage record or email was created. The candidate graph remains inactive, has no credentials, and targets an invalid staging hostname.
 
 Remaining staging acceptance: full-schema migration replay, development-store billing approval, normal charge, refund-credit offsets, duplicate claim race, timeout after Shopify acceptance, and operator reconciliation.
+
+
+The database claim is authoritative and performs the final eligibility check. The discovery query also includes exhausted `FAILED` charges with `reconciliation_status = 'NONE'`, so if the worker records a deterministic Shopify rejection but the subsequent reconciliation marker write fails, the next scheduler tick reaches the database repair path. That claim repairs the row into `REQUIRED` and returns without another provider call. After a complete operator-side no-match lookup, the resolver resets the attempt budget and preserves the same charge ID and idempotency key for a controlled retry.
