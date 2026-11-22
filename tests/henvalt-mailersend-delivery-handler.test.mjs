@@ -190,11 +190,12 @@ test("all credential, authorization and provider requests refuse redirects", asy
       if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
         return new Response("true", { status: 200 });
       }
-      return new Response("", { status: 302, headers: { location: "https://attacker.invalid/collect" } });
+      throw new TypeError("redirect mode error: provider attempted a redirect");
     },
   });
   const response = await handler(request(validBody()));
-  assert.equal(response.status, 302);
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), { error: "provider_transport_ambiguous" });
   assert.equal(calls.length, 3);
   assert.ok(calls.every((call) => call.init.redirect === "error"));
   assert.equal(calls[2].url, "https://api.mailersend.com/v1/email");
