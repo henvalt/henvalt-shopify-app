@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const privacy = readFileSync("supabase/functions/henvalt-shopify-privacy/index.ts", "utf8");
+const privacy = readFileSync("supabase/audit-baselines/henvalt-shopify-privacy-v1.ts", "utf8");
 const exportEndpoint = readFileSync("supabase/functions/henvalt-privacy-export/index.ts", "utf8");
 const blocker = readFileSync("docs/SHOPIFY_PRIVACY_COMPLIANCE_BLOCKER_2026-11-21.md", "utf8");
 
-test("deployed privacy handler is pinned as an audit baseline, not represented as remediated", () => {
+test("deployed privacy handler v1 is pinned as an audit baseline, not represented as remediated", () => {
   assert.match(privacy, /AUDIT BASELINE ONLY/);
   assert.match(privacy, /213af659378fd3da90b8edbfce12347445e4f5ce633ca6bf6705f8d3cae3e5f4/);
   assert.match(privacy, /x-shopify-shop-id/);
