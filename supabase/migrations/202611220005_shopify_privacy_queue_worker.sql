@@ -96,6 +96,9 @@ begin
       v_finished := henvalt.finish_shopify_privacy_request(
         v_claim.id, v_claim.lease_token, 'FAILED', v_error
       );
+      if not v_finished then
+        raise exception 'privacy worker could not finalize failed request under its lease';
+      end if;
       v_failed := v_failed + 1;
     end;
   end loop;
