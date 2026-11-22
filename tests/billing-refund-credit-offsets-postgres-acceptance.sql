@@ -19,6 +19,7 @@ DECLARE
   v_status henvalt.billing_status;
   v_offsets numeric;
   v_offset_rows integer;
+  v_original_key text;
 BEGIN
   IF has_function_privilege('anon','henvalt.control_plane_claim_billing_usage(text)','EXECUTE')
      OR has_function_privilege('authenticated','henvalt.control_plane_claim_billing_usage(text)','EXECUTE') THEN
@@ -255,6 +256,53 @@ BEGIN
     RAISE EXCEPTION 'live-mode subscription created a usage charge despite the test-mode gate';
   END IF;
 
+  -- Durable reconciliation: exact-match finalization and confirmed no-match retry.
+  PERFORM set_config('request.jwt.claim.role','service_role',true);
+  INSERT INTO henvalt.tenants(id,status,default_currency) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0114','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114',true,'reconcile-match.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','SHOPIFY','PERFORMANCE',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/reconcile-match','ACTIVE',true,now()-interval '1 day',2000);
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
+  VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0121','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
+  VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddd0118','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0114',gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0121',100,10,10,'USD','MEASURED',now());
+  v_result := henvalt.control_plane_claim_billing_usage('reconcile-match.myshopify.com');
+  v_charge_id := (v_result->>'chargeId')::uuid;
+  UPDATE henvalt.billing_usage_charges SET attempt_count=5,attempted_at=now()-interval '5 minutes' WHERE id=v_charge_id;
+  v_result := henvalt.control_plane_mark_billing_reconciliation_required('reconcile-match.myshopify.com',v_charge_id,'SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN');
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'REQUIRED' THEN RAISE EXCEPTION 'durable reconciliation marker failed: %',v_result; END IF;
+  v_result := henvalt.control_plane_get_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id);
+  IF v_result->>'available' <> 'true' OR v_result->>'idempotencyKey' IS NULL OR v_result ? 'accessToken' THEN RAISE EXCEPTION 'safe reconciliation envelope invalid: %',v_result; END IF;
+  v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-match.myshopify.com',v_charge_id,'MATCHED','gid://shopify/AppUsageRecord/reconcile-match-1',
+    jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'providerUsageRecordId','gid://shopify/AppUsageRecord/reconcile-match-1','matchingCount','1','idempotencyKey',(SELECT idempotency_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id),'lineItemId','gid://shopify/AppSubscriptionLineItem/reconcile-match','amount','10','currency','USD','pagesScanned',1),
+    'operator-test-1','Verified exact provider idempotency key, amount, currency and line item');
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'SUBMITTED' THEN RAISE EXCEPTION 'matched reconciliation failed: %',v_result; END IF;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND status='SUBMITTED' AND reconciliation_status='MATCHED' AND provider_usage_record_id='gid://shopify/AppUsageRecord/reconcile-match-1') THEN RAISE EXCEPTION 'matched charge was not finalized'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.billing_measurements WHERE id='dddddddd-dddd-4ddd-8ddd-dddddddd0118' AND status='BILLED') OR NOT EXISTS (SELECT 1 FROM henvalt.revenue_ledger WHERE id='eeeeeeee-eeee-4eee-8eee-eeeeeeee0121' AND billing_status='BILLED') THEN RAISE EXCEPTION 'matched measurement and ledger were not finalized'; END IF;
+
+  INSERT INTO henvalt.tenants(id,status,default_currency) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0115','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115',true,'reconcile-retry.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','SHOPIFY','PERFORMANCE',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/reconcile-retry','ACTIVE',true,now()-interval '1 day',2000);
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
+  VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0122','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
+  VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddd0119','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0115',gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0122',100,10,10,'USD','MEASURED',now());
+  v_result := henvalt.control_plane_claim_billing_usage('reconcile-retry.myshopify.com');
+  v_charge_id := (v_result->>'chargeId')::uuid;
+  SELECT idempotency_key INTO v_original_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id;
+  UPDATE henvalt.billing_usage_charges SET attempt_count=5,attempted_at=now()-interval '5 minutes' WHERE id=v_charge_id;
+  PERFORM henvalt.control_plane_mark_billing_reconciliation_required('reconcile-retry.myshopify.com',v_charge_id,'SHOPIFY_RESPONSE_NOT_JSON');
+  v_result := henvalt.control_plane_resolve_billing_reconciliation('reconcile-retry.myshopify.com',v_charge_id,'NOT_FOUND_CONFIRMED',NULL,
+    jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'matchingCount','0','pagesScanned',3),
+    'operator-test-2','Complete paginated lookup found no record for the original key');
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'FAILED_RETRY_ALLOWED' THEN RAISE EXCEPTION 'confirmed no-match did not authorize retry: %',v_result; END IF;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND status='FAILED' AND attempt_count=0 AND reconciliation_status='NOT_FOUND_CONFIRMED') THEN RAISE EXCEPTION 'confirmed no-match retry gate incorrect'; END IF;
+  v_result := henvalt.control_plane_claim_billing_usage('reconcile-retry.myshopify.com');
+  IF (v_result->>'chargeId')::uuid <> v_charge_id OR v_result->>'idempotencyKey' <> v_original_key OR (v_result->>'attempt')::integer <> 1 THEN RAISE EXCEPTION 'retry did not preserve original charge identity and idempotency key: %',v_result; END IF;
+  IF NOT EXISTS (SELECT 1 FROM henvalt.billing_usage_charges WHERE id=v_charge_id AND reconciliation_status='NONE') THEN RAISE EXCEPTION 'retry did not clear resolved reconciliation gate'; END IF;
+  IF has_function_privilege('anon','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') OR has_function_privilege('authenticated','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') THEN RAISE EXCEPTION 'client roles can execute reconciliation resolution'; END IF;
+  IF NOT has_function_privilege('service_role','henvalt.control_plane_resolve_billing_reconciliation(text,uuid,text,text,jsonb,text,text)','EXECUTE') THEN RAISE EXCEPTION 'service_role cannot execute reconciliation resolution'; END IF;
 END;
 $billing_refund_credit_acceptance$;
 
