@@ -110,6 +110,10 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
+      - name: Apply deterministic billing failure reconciliation migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql
       - name: Exercise billing reconciliation, monotonic result and refund-credit acceptance
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
