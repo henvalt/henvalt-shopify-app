@@ -46,8 +46,14 @@ function validMoney(value) {
   return /^(?:0|[1-9]\d{0,13})(?:\.\d{1,4})?$/.test(amount) && Number(amount) > 0;
 }
 
-function ambiguous(reason) {
-  return json(202, { claimed: true, state: "PENDING", retryable: true, reason });
+function ambiguous(reason, attempt) {
+  return json(202, {
+    claimed: true,
+    state: "PENDING",
+    retryable: Number(attempt) < 5,
+    requiresOperatorReview: Number(attempt) >= 5,
+    reason,
+  });
 }
 
 export function createShopifyUsageBillingHandler({
@@ -143,7 +149,8 @@ export function createShopifyUsageBillingHandler({
     const idempotencyKey = typeof claim.idempotencyKey === "string" ? claim.idempotencyKey : "";
     const currency = typeof claim.currency === "string" ? claim.currency.trim().toUpperCase() : "";
     const amount = claim.amount;
-    if (!/^[0-9a-f-]{36}$/i.test(chargeId) ||
+    const attempt = Number(claim.attempt);
+    if (!Number.isInteger(attempt) || attempt < 1 || attempt > 5 || !/^[0-9a-f-]{36}$/i.test(chargeId) ||
         !/^gid:\/\/shopify\/AppSubscriptionLineItem\/[A-Za-z0-9?=&_-]+$/.test(lineItem) ||
         !idempotencyKey || idempotencyKey.length > 255 ||
         !/^[A-Z]{3}$/.test(currency) || !validMoney(amount)) {
@@ -176,11 +183,11 @@ export function createShopifyUsageBillingHandler({
       // The provider may have accepted the charge before the connection failed.
       // Keep the durable charge PENDING and retry with the same Shopify idempotency key.
       logger.error("Shopify usage outcome is ambiguous", error instanceof Error ? error.message : "unknown");
-      return ambiguous("SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN");
+      return ambiguous("SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN", attempt);
     }
 
     if (upstream.status === 429 || upstream.status >= 500) {
-      return ambiguous("SHOPIFY_TRANSIENT_HTTP_" + upstream.status);
+      return ambiguous("SHOPIFY_TRANSIENT_HTTP_" + upstream.status, attempt);
     }
     if (!upstream.ok) {
       try {
@@ -197,11 +204,11 @@ export function createShopifyUsageBillingHandler({
     try {
       payload = await upstream.json();
     } catch {
-      return ambiguous("SHOPIFY_RESPONSE_NOT_JSON");
+      return ambiguous("SHOPIFY_RESPONSE_NOT_JSON", attempt);
     }
     if (Array.isArray(payload?.errors) && payload.errors.length > 0) {
       // Top-level GraphQL errors do not prove whether the mutation committed.
-      return ambiguous("SHOPIFY_GRAPHQL_OUTCOME_UNKNOWN");
+      return ambiguous("SHOPIFY_GRAPHQL_OUTCOME_UNKNOWN", attempt);
     }
 
     const result = payload?.data?.appUsageRecordCreate;
@@ -227,7 +234,7 @@ export function createShopifyUsageBillingHandler({
       String(item?.code ?? "").toUpperCase() === "IDEMPOTENCY_CONCURRENT_REQUEST" ||
       /same idempotency key is being processed|currently in progress/i.test(String(item?.message ?? ""))
     );
-    if (concurrent) return ambiguous("SHOPIFY_IDEMPOTENCY_REQUEST_IN_PROGRESS");
+    if (concurrent) return ambiguous("SHOPIFY_IDEMPOTENCY_REQUEST_IN_PROGRESS", attempt);
 
     if (userErrors.length > 0) {
       const message = userErrors.map((item) => String(item?.message ?? "Shopify user error")).join("; ").slice(0, 900);
@@ -241,6 +248,6 @@ export function createShopifyUsageBillingHandler({
       return json(422, { claimed: true, state: "FAILED", reason: "SHOPIFY_USAGE_REJECTED" });
     }
 
-    return ambiguous("SHOPIFY_USAGE_RESPONSE_INCOMPLETE");
+    return ambiguous("SHOPIFY_USAGE_RESPONSE_INCOMPLETE", attempt);
   };
 }
