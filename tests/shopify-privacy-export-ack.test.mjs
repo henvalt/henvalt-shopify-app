@@ -7,7 +7,10 @@ const migration = readFileSync("supabase/migrations/202611220006_shopify_privacy
 
 test("privacy export download records initiation separately from client acknowledgement", () => {
   assert.match(source, /result_download_started_at/);
+  assert.match(source, /begin_shopify_privacy_export_download/);
+  assert.match(source, /export_download_already_in_progress_or_expired/);
   assert.match(source, /result_delivery_ack_token_hash/);
+  assert.doesNotMatch(source, /"PATCH"[\\s\\S]*result_delivery_ack_token_hash/);
   assert.match(source, /x-henvalt-delivery-ack-token/);
   assert.match(source, /acknowledge_shopify_privacy_export_download/);
   assert.doesNotMatch(source, /result_delivered_at:\s*new Date\(\)\.toISOString\(\)/);
