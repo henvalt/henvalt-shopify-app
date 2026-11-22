@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const sql=readFileSync("supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql","utf8");
+const sql=readFileSync("supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql",
+  "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql","utf8");
 const wrappers=[
  ["resolve_identity_fenced","henvalt.resolve_identity(",["'canonical_events',p_event_id"]],
  ["upsert_checkout_fenced","henvalt.upsert_checkout(",["'customers',p_customer_id"]],
