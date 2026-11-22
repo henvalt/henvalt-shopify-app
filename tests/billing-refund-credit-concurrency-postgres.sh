@@ -63,11 +63,11 @@ pid_b=$!
 wait "$pid_b"
 wait "$pid_a"
 
-if ! grep -Eq '"amount":7([.]0+)?' "$tmp_a"; then
+if ! grep -Eq '"amount":[[:space:]]*7([.]0+)?' "$tmp_a"; then
   echo "worker A did not receive the 3-unit credit offset: $(cat "$tmp_a")" >&2
   exit 1
 fi
-if ! grep -Eq '"amount":10([.]0+)?' "$tmp_b"; then
+if ! grep -Eq '"amount":[[:space:]]*10([.]0+)?' "$tmp_b"; then
   echo "worker B incorrectly reused or lost the locked credit: $(cat "$tmp_b")" >&2
   exit 1
 fi
