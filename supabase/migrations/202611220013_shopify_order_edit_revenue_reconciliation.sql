@@ -344,7 +344,7 @@ CREATE OR REPLACE FUNCTION henvalt.process_shopify_order_edit_adjustment_fenced(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path TO ''
+SET search_path = ''
 AS $function$
 BEGIN
   PERFORM henvalt.assert_shopify_replay_lease_for_write(p_job_id,p_worker_id,p_lease_id);
