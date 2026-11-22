@@ -20,7 +20,10 @@ on:
       - "supabase/migrations/202611220003_shopify_privacy_retention_cron.sql"
       - "supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql"
       - "supabase/migrations/202611220005_shopify_privacy_queue_worker.sql"
+      - "supabase/migrations/202611220006_shopify_privacy_export_acknowledgement.sql"
       - "tests/shopify-privacy-queue-worker.test.mjs"
+      - "tests/shopify-privacy-export-ack.test.mjs"
+      - "tests/shopify-privacy-export-ack-postgres-acceptance.sql"
       - "tests/shopify-privacy-retention.test.mjs"
       - "tests/shopify-privacy-redaction-guards.test.mjs"
       - "tests/shopify-privacy-lease-migration.test.mjs"
@@ -40,6 +43,7 @@ on:
       - "supabase/functions/henvalt-shopify-privacy/index.ts"
       - "tests/shopify-privacy-handler-candidate.test.mjs"
       - "supabase/functions/henvalt-privacy-export/index.ts"
+      - "supabase/audit-baselines/henvalt-privacy-export-v1.ts"
       - "shopify.app.toml"
       - "tests/token-refresh-window-static.test.mjs"
       - "dashboard/index.html"
@@ -144,7 +148,7 @@ jobs:
         with:
           node-version: 22
       - name: Verify static safety and pixel consent invariants
-        run: node --test tests/shopify-privacy-deployment-runbook.test.mjs tests/shopify-privacy-lease-migration.test.mjs tests/shopify-privacy-redaction-guards.test.mjs tests/shopify-privacy-handler-candidate.test.mjs tests/shopify-privacy-retention.test.mjs tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/n8n-shopify-ingest-route-snapshot.test.mjs tests/n8n-recovery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-webhook-contract.test.mjs tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs tests/shopify-replay-business-write-fencing-static.test.mjs tests/shopify-recovery-replay-branch-contract.test.mjs tests/shopify-recovery-replay-graph-patch-static.test.mjs tests/shopify-replay-claim-normalizer.test.mjs tests/shopify-replay-claim-normalizer-node-static.test.mjs tests/shopify-ingest-replay-envelope.test.mjs tests/shopify-ingest-ack-classifier-candidate.test.mjs tests/shopify-ingest-replay-entry-static.test.mjs tests/shopify-ingest-candidate-builder.test.mjs tests/shopify-ingest-full-export-candidate.test.mjs tests/active-workflow-cutover-contract-static.test.mjs
+        run: node --test tests/shopify-privacy-deployment-runbook.test.mjs tests/shopify-privacy-export-ack.test.mjs tests/shopify-privacy-lease-migration.test.mjs tests/shopify-privacy-redaction-guards.test.mjs tests/shopify-privacy-handler-candidate.test.mjs tests/shopify-privacy-retention.test.mjs tests/provider-send-interlock-static.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/n8n-shopify-ingest-route-snapshot.test.mjs tests/n8n-recovery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-webhook-contract.test.mjs tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs tests/shopify-replay-business-write-fencing-static.test.mjs tests/shopify-recovery-replay-branch-contract.test.mjs tests/shopify-recovery-replay-graph-patch-static.test.mjs tests/shopify-replay-claim-normalizer.test.mjs tests/shopify-replay-claim-normalizer-node-static.test.mjs tests/shopify-ingest-replay-envelope.test.mjs tests/shopify-ingest-ack-classifier-candidate.test.mjs tests/shopify-ingest-replay-entry-static.test.mjs tests/shopify-ingest-candidate-builder.test.mjs tests/shopify-ingest-full-export-candidate.test.mjs tests/active-workflow-cutover-contract-static.test.mjs
       - name: Generate full offline no-send HENVALT_INGEST candidate export
         run: node n8n/shopify-ingest-candidate-builder.mjs n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json 6368d539-708f-494a-8be8-b9601d0e8607
       - name: Upload offline no-send workflow candidate
@@ -206,6 +210,8 @@ jobs:
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
       - name: Type-check Shopify privacy Edge Function at deployment path
         run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-privacy/index.ts
+      - name: Type-check merchant privacy export Edge Function at deployment path
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-privacy-export/index.ts
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
@@ -379,6 +385,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220005_shopify_privacy_queue_worker.sql
+      - name: Apply candidate Shopify export acknowledgement migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220006_shopify_privacy_export_acknowledgement.sql
       - name: Exercise signed-payload privacy webhook idempotency
         env:
           PGPASSWORD: postgres
@@ -391,6 +403,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-privacy-queue-worker-postgres-acceptance.sql
+      - name: Exercise owner export download acknowledgement
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-export-ack-postgres-acceptance.sql
       - name: Exercise privacy lease fencing and PII minimization
         env:
           PGPASSWORD: postgres
