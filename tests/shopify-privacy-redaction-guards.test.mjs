@@ -26,3 +26,11 @@ test("shop deletion requires the exact active processing lease", () => {
   assert.match(sql, /v_request\.lease_expires_at <= now\(\)/i);
   assert.match(sql, /grant execute on function henvalt\.redact_shopify_shop_data_with_lease\(uuid,uuid\) to service_role/i);
 });
+
+test("customer redaction and export side effects are fenced by request leases", () => {
+  assert.match(sql, /redact_shopify_customer_data_checked_with_lease/);
+  assert.match(sql, /export_shopify_customer_data_with_lease/);
+  assert.match(sql, /v_request\.lease_token <> p_lease_token/i);
+  assert.match(sql, /v_request\.lease_expires_at <= now\(\)/i);
+  assert.match(sql, /result_payload = null, result_expires_at = null/i);
+});
