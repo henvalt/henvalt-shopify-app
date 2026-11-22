@@ -28,7 +28,7 @@ test("billing decisions cannot submit browser-created provider evidence", () => 
 });
 
 test("dashboard inline JavaScript parses after adding the reconciliation panel", () => {
-  const scripts = [...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/g)]
+  const scripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
     .map((match) => match[1])
     .filter((source) => source.includes("async function init()"));
   assert.equal(scripts.length, 1);
