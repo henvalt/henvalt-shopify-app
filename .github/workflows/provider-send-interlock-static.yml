@@ -23,6 +23,7 @@ on:
       - "tests/shopify-privacy-lease-migration.test.mjs"
       - "tests/shopify-privacy-lease-postgres-bootstrap.sql"
       - "tests/shopify-privacy-lease-postgres-acceptance.sql"
+      - "tests/shopify-privacy-redaction-postgres-acceptance.sql"
       - "docs/SHOPIFY_PRIVACY_ATOMIC_PROCESSING_2026-11-22.md"
       - "tests/shopify-privacy-tenant-index-bootstrap.sql"
       - "tests/shopify-privacy-tenant-index-acceptance.sql"
@@ -336,6 +337,12 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611220001_shopify_privacy_claim_and_minimization.sql
+      - name: Apply candidate Shopify privacy redaction guard migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220002_shopify_privacy_redaction_guards.sql
       - name: Apply candidate Shopify privacy retention migration
         env:
           PGPASSWORD: postgres
@@ -348,3 +355,9 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/shopify-privacy-lease-postgres-acceptance.sql
+      - name: Exercise privacy redaction and export lease wrappers
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-redaction-postgres-acceptance.sql
