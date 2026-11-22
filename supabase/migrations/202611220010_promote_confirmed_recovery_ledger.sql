@@ -31,7 +31,7 @@ BEGIN
     oa.order_id,
     oa.recovery_id,
     oa.opportunity_id,
-    oa.attribution_confidence,
+    oa.attribution_confidence::text,
     oa.attributed_value,
     o.currency,
     o.financial_status,
@@ -74,7 +74,7 @@ BEGIN
 
   SELECT
     rl.id,
-    rl.attribution_confidence,
+    rl.attribution_confidence::text,
     rl.billable
   INTO
     v_existing_id,
@@ -157,7 +157,7 @@ BEGIN
 
   -- A concurrent insert won the unique order/recovery key. Re-read under
   -- lock and apply the same monotonic promotion rule.
-  SELECT rl.id, rl.attribution_confidence, rl.billable
+  SELECT rl.id, rl.attribution_confidence::text, rl.billable
     INTO v_existing_id, v_existing_confidence, v_existing_billable
     FROM henvalt.revenue_ledger rl
    WHERE rl.tenant_id = v_tenant_id
