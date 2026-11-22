@@ -113,12 +113,35 @@ Deno.serve(async (req: Request) => {
     });
     if (!seriesResponse.ok) throw new Error("REVENUE_SERIES_QUERY_FAILED");
     const revenue = await seriesResponse.json();
-    const revenueSeries = Array.isArray(revenue?.series) ? revenue.series : [];
+
+    // Preserve the deployed v4 response contract while returning the corrected
+    // confirmed-attribution summary and range-aware revenue series.
+    const toExclusive = new Date(Date.parse(to + "T00:00:00.000Z") + 86400000).toISOString();
+    const ledgerQuery = new URLSearchParams({
+      select: "id,order_id,amount,currency,created_at,attribution_confidence,billable,billing_status,order:orders!revenue_ledger_order_id_fkey(shopify_order_id,order_number,total_value),attribution:order_attributions!revenue_ledger_attribution_id_fkey(attribution_method,attribution_confidence),billing:billing_measurements!billing_measurements_ledger_entry_id_fkey(henvalt_percentage,henvalt_fee,status)",
+      tenant_id: "eq." + tenantId,
+      entry_type: "eq.RECOVERY",
+      attribution_confidence: "eq.CONFIRMED",
+      created_at: "gte." + from + "T00:00:00.000Z",
+      and: "(created_at.lt." + toExclusive + ")",
+      order: "created_at.desc",
+      limit: "50",
+    });
+    const ledger = await rest("revenue_ledger?" + ledgerQuery.toString());
+    if (!Array.isArray(ledger)) throw new Error("REVENUE_LEDGER_INVALID_RESPONSE");
 
     return reply(200, {
       ...summary,
-      revenueSeries,
-      range: { from, to },
+      ledger,
+      revenueSeries: Array.isArray(revenue?.series) ? revenue.series : [],
+      revenueComparison: {
+        currentRevenue: revenue?.current_revenue ?? summary.metrics?.revenueRecovered ?? 0,
+        previousRevenue: revenue?.previous_revenue ?? 0,
+        changePercent: revenue?.change_percent ?? null,
+        previousFrom: revenue?.previous_from ?? null,
+        previousTo: revenue?.previous_to ?? null,
+      },
+      range: { from, to, granularity: "day" },
       generatedAt: new Date().toISOString(),
     });
   } catch {
