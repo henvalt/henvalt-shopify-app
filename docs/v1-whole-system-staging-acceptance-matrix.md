@@ -87,10 +87,12 @@
 | REV-03 | Refund/cancellation | Revenue ledger reversal/adjustment idempotent |
 | REV-04 | Attribution confidence promotion | A prior PROBABLE ledger row is promoted in place to billable CONFIRMED after exact tracked-click evidence; no duplicate row and no downgrade on later weaker evidence |
 | REV-05 | Net recovered revenue | Confirmed refund/cancellation adjustment rows reduce dashboard totals, event breakdowns, activity amounts and daily revenue series; negative daily net values remain visible |
+| REV-06 | Shopify order edits | `current_total_price` wins over stale `total_price`; downward edits create only the incremental negative adjustment, reconcile with existing refunds, replay idempotently and never increase attributed value above the original recovery |
 | BILL-01 | Fee measurement | Calculated only from confirmed recovered revenue |
 | BILL-02 | Billing period/charge | No charge until a verified measurement and explicit billing policy |
 | BILL-03 | Uninstall/cancel | Sending and billing entitlements stop; retained records follow documented policy |
 | BILL-04 | Refund fee credit | Negative confirmed adjustment fees offset later positive Shopify usage charges exactly once; partial credits reduce charges, full credits void them, and retries preserve the original net amount |
+| BILL-05 | Adjustment fee measurement | A negative fee measurement is created only when the original confirmed recovery has a positive measured fee; unmeasured recoveries cannot generate future credits |
 
 ## Privacy, retention and operations
 | ID | Test | Expected evidence |
