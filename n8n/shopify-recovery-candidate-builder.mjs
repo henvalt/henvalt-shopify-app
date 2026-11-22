@@ -76,7 +76,20 @@ function buildNodes(manifest, normalizerSource) {
     {
       id: id[7], name: "Call HENVALT_INGEST Replay Entry", type: "n8n-nodes-base.executeWorkflow", typeVersion: 1.4,
       position: [6140, 400],
-      parameters: { ...manifest.executable_node_contracts["Call HENVALT_INGEST Replay Entry"].parameters, workflowId: { __rl: true, mode: "id", value: "00000000-0000-4000-8000-999999999999" } },
+      parameters: {
+        ...manifest.executable_node_contracts["Call HENVALT_INGEST Replay Entry"].parameters,
+        // The loader returns the webhook row but deliberately omits worker_id and lease_id.
+        // Preserve the exact trusted claim tuple across the subworkflow boundary.
+        workflowInputs: {
+          ...manifest.executable_node_contracts["Call HENVALT_INGEST Replay Entry"].parameters.workflowInputs,
+          value: {
+            job_id: "={{ $('Normalize Shopify Replay Claim').item.json.job_id }}",
+            worker_id: "={{ $('Normalize Shopify Replay Claim').item.json.worker_id }}",
+            lease_id: "={{ $('Normalize Shopify Replay Claim').item.json.lease_id }}"
+          }
+        },
+        workflowId: { __rl: true, mode: "id", value: "00000000-0000-4000-8000-999999999999" }
+      },
       onError: "continueErrorOutput"
     },
     ifNode("Replay Ingest Processed?", id[8],
