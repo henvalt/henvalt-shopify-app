@@ -90,7 +90,33 @@ Deno.serve(async (req: Request) => {
     if (!summaryResponse.ok) throw new Error("SUMMARY_QUERY_FAILED");
     const summary = await summaryResponse.json();
     if (!summary || summary.linked !== true) return reply(409, { error: "shop_not_connected" });
-    return reply(200, { ...summary, range: { from, to }, generatedAt: new Date().toISOString() });
+
+    const seriesResponse = await fetch(SUPABASE_URL + "/rest/v1/rpc/control_plane_revenue_series", {
+      method: "POST",
+      headers: {
+        apikey: SERVICE_ROLE_KEY,
+        authorization: "Bearer " + SERVICE_ROLE_KEY,
+        "content-type": "application/json",
+        "accept-profile": "henvalt",
+        "content-profile": "henvalt",
+      },
+      body: JSON.stringify({
+        p_shop_domain: connections[0].shop_domain,
+        p_from: from + "T00:00:00.000Z",
+        p_to: to + "T00:00:00.000Z",
+        p_granularity: "day",
+      }),
+    });
+    if (!seriesResponse.ok) throw new Error("REVENUE_SERIES_QUERY_FAILED");
+    const revenue = await seriesResponse.json();
+    const revenueSeries = Array.isArray(revenue?.series) ? revenue.series : [];
+
+    return reply(200, {
+      ...summary,
+      revenueSeries,
+      range: { from, to },
+      generatedAt: new Date().toISOString(),
+    });
   } catch {
     return reply(500, { error: "dashboard_unavailable" });
   }
