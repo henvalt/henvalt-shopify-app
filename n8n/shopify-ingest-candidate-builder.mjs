@@ -72,8 +72,12 @@ function preserveReplayContext(normalizer) {
     code = code.replace("return {\n  __valid:", "return {\n  replay_context: replayContext,\n  __valid:");
   }
   const eventIdLine = "const eventId = body.event_id || shopifyEventId || shopifyWebhookId || body.id || null;";
+  const eventTypeLine = "const eventType = body.event_type || shopifyTopic || body.type || null;";
+  if (code.includes(eventTypeLine)) code = code.replace(eventTypeLine, "const eventType = source === 'shopify' ? shopifyTopic : (body.event_type || body.type || null);");
+  if (!code.includes("const eventType = source === 'shopify' ? shopifyTopic : (body.event_type || body.type || null);")) throw new Error("Could not enforce authoritative Shopify topic header");
   if (code.includes(eventIdLine)) code = code.replace(eventIdLine, "const eventId = source === 'shopify' ? (shopifyWebhookId || null) : (body.event_id || shopifyEventId || shopifyWebhookId || body.id || null);");
   if (!code.includes("const eventId = source === 'shopify' ? (shopifyWebhookId || null)")) throw new Error("Could not enforce Shopify delivery ID as event identity");
+  if (!code.includes("const eventType = source === 'shopify' ? shopifyTopic : (body.event_type || body.type || null);")) throw new Error("Could not enforce Shopify topic header as event identity");
   if (!code.includes("replay_context: replayContext")) throw new Error("Could not preserve replay context in normalizer");
   normalizer.parameters.jsCode = code;
   if (!code.includes("replay_context: replayContext")) throw new Error("Could not preserve replay context in normalizer");
