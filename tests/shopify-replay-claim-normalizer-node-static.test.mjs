@@ -79,7 +79,7 @@ test("inline Code node executes against actual background_jobs claim-row shape",
     job_type: "process_shopify_webhook",
     payload: { webhook_id: "22222222-2222-4222-8222-222222222222" },
     lease_id: "33333333-3333-4333-8333-333333333333",
-    lease_expires_at: "2026-11-21T23:00:00.000Z",
+    lease_expires_at: "2099-11-21T23:00:00.000Z",
     tenant_id: "44444444-4444-4444-8444-444444444444",
     locked_by: "replay-worker-1",
     customer_email: "must-not-escape@example.invalid"
@@ -128,7 +128,7 @@ test("inline Code node rejects a mismatched database owner and expired lease", (
     job_type: "process_shopify_webhook",
     payload: { webhook_id: "22222222-2222-4222-8222-222222222222" },
     lease_id: "33333333-3333-4333-8333-333333333333",
-    lease_expires_at: "2026-11-21T23:00:00.000Z",
+    lease_expires_at: "2099-11-21T23:00:00.000Z",
     locked_by: "replay-worker-1"
   };
   const wrongOwner = runNode({ ...base, locked_by: "another-worker" });
