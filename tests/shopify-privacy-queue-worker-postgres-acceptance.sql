@@ -18,7 +18,10 @@ values
    '{"shop_id":"1"}'::jsonb,'PENDING'),
   ('40404040-4040-4040-8040-404040404040','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
    'fixture.myshopify.com','1','customers/redact','worker-customer-no-match','absent-customer',
-   '{"shop_id":"1","customer_email":"absent@example.test"}'::jsonb,'PENDING');
+   '{"shop_id":"1","customer_email":"absent@example.test"}'::jsonb,'PENDING'),
+  ('50505050-5050-4050-8050-505050505050','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   'fixture.myshopify.com','1','customers/data_request','worker-export-failure','export-fail',
+   '{"shop_id":"1","customer_email":"export-fail@example.test"}'::jsonb,'PENDING');
 
 do $$
 declare
@@ -34,10 +37,10 @@ declare
   v_rejected boolean := false;
 begin
   v_result := henvalt.process_shopify_privacy_queue(10,120);
-  if (v_result->>'processed')::integer <> 4
+  if (v_result->>'processed')::integer <> 5
      or (v_result->>'completed')::integer <> 2
      or (v_result->>'review_required')::integer <> 2
-     or (v_result->>'failed')::integer <> 0 then
+     or (v_result->>'failed')::integer <> 1 then
     raise exception 'privacy queue worker metrics are incorrect: %',v_result;
   end if;
 
@@ -71,6 +74,13 @@ begin
   where id='40404040-4040-4040-8040-404040404040';
   if v_status <> 'REVIEW_REQUIRED' or v_payload <> '{}'::jsonb or v_customer is not null then
     raise exception 'worker no-match redaction did not move to review and minimize identifiers';
+  end if;
+
+  select status,payload,customer_id into v_status,v_payload,v_customer
+  from henvalt.shopify_privacy_requests
+  where id='50505050-5050-4050-8050-505050505050';
+  if v_status <> 'FAILED' or v_payload = '{}'::jsonb or v_customer <> 'export-fail' then
+    raise exception 'worker failure did not preserve minimal retry identifiers';
   end if;
 
   select count(*) into v_calls from henvalt.privacy_redaction_calls;
