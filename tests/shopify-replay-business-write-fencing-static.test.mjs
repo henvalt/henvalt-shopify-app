@@ -10,6 +10,10 @@ const completionMigration = readFileSync(
   "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql",
   "utf8",
 );
+const orderEditMigration = readFileSync(
+  "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql",
+  "utf8",
+);
 const workerSpec = readFileSync(
   "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md",
   "utf8",
@@ -51,6 +55,7 @@ test("replay write wrappers cover every discovered active-ingest mutation family
     "mark_webhook_processed_fenced",
     "mark_webhook_failed_fenced",
   ];
+  const migration013Names = ["process_shopify_order_edit_adjustment_fenced"];
   const migration010Names = [
     "apply_eligibility_fenced",
     "create_recovery_sequence_fenced",
@@ -59,6 +64,10 @@ test("replay write wrappers cover every discovered active-ingest mutation family
   ];
   for (const name of migration009Names) {
     assert.match(migration, new RegExp("FUNCTION henvalt\\." + name + "\\("), name);
+    assert.match(workerSpec, new RegExp(name), "worker spec must document " + name);
+  }
+  for (const name of migration013Names) {
+    assert.match(orderEditMigration, new RegExp("FUNCTION henvalt\\." + name + "\\("), name);
     assert.match(workerSpec, new RegExp(name), "worker spec must document " + name);
   }
   for (const name of migration010Names) {
@@ -150,14 +159,18 @@ test("the live active-ingest mutation inventory is exactly covered by the replay
   const active = activeIngestSnapshot.activeMutationInventory;
   assert.ok(Array.isArray(active) && active.length === 18);
   const mapped = writeMap.replay_mutations;
-  assert.equal(mapped.length, active.length);
+  assert.equal(mapped.length, active.length + 1);
   const mapByRpc = new Map(mapped.map((item) => [item.current_rpc, item]));
   for (const item of active) {
     const mappedItem = mapByRpc.get(item.rpc);
     assert.ok(mappedItem, "active mutating RPC is missing from replay map: " + item.rpc);
     assert.equal(mappedItem.node, item.node);
   }
-  assert.equal(mapByRpc.size, active.length, "replay map must not contain duplicate or unobserved RPCs");
+  assert.equal(mapByRpc.size, mapped.length, "replay map must not contain duplicate RPCs");
+  const candidateOnly = mapped.find((item) => item.current_rpc === "process_shopify_order_edit_adjustment");
+  assert.equal(candidateOnly?.node, "Process Shopify Order Edit Adjustment");
+  assert.ok(!active.some((item) => item.rpc === candidateOnly?.current_rpc),
+    "new order-edit mutation is candidate-only and must not be misrepresented as active inventory");
 });
 
 test("fenced write wrappers are SECURITY DEFINER with a pinned empty search path and service-role-only ACL", () => {
