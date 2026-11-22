@@ -255,26 +255,40 @@ CREATE OR REPLACE FUNCTION henvalt.assert_shopify_replay_object_graph_tenant(
 ) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''
 AS $function$
 DECLARE v_valid boolean := false;
+        v_root_exists boolean := false;
 BEGIN
- IF p_object_id IS NULL THEN RETURN; END IF;
+ IF p_tenant_id IS NULL OR p_object_id IS NULL THEN
+  RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_GRAPH_ARGUMENTS_INVALID'
+   USING ERRCODE='22023';
+ END IF;
  CASE p_object_table
   WHEN 'customers' THEN
    SELECT EXISTS (SELECT 1 FROM henvalt.customers x
      WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
-    INTO v_valid;
+    INTO v_root_exists;
+   v_valid := v_root_exists;
   WHEN 'checkouts' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.checkouts x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.checkouts x
      LEFT JOIN henvalt.customers c ON c.id=x.customer_id
      WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
        AND x.customer_id IS NOT NULL AND (c.id IS NULL OR c.tenant_id IS DISTINCT FROM p_tenant_id))
     INTO v_valid;
   WHEN 'canonical_events' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.canonical_events x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.canonical_events x
      LEFT JOIN henvalt.webhook_events w ON w.id=x.webhook_event_id
      WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
        AND x.webhook_event_id IS NOT NULL AND (w.id IS NULL OR w.tenant_id IS DISTINCT FROM p_tenant_id))
     INTO v_valid;
   WHEN 'opportunities' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.opportunities x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.opportunities x
      LEFT JOIN henvalt.customers c ON c.id=x.customer_id
      LEFT JOIN henvalt.checkouts co ON co.id=x.checkout_id
@@ -285,6 +299,9 @@ BEGIN
          OR (x.source_event_id IS NOT NULL AND (e.id IS NULL OR e.tenant_id IS DISTINCT FROM p_tenant_id))))
     INTO v_valid;
   WHEN 'orders' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.orders x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.orders x
      LEFT JOIN henvalt.customers c ON c.id=x.customer_id
      LEFT JOIN henvalt.checkouts co ON co.id=x.checkout_id
@@ -293,12 +310,18 @@ BEGIN
          OR (x.checkout_id IS NOT NULL AND (co.id IS NULL OR co.tenant_id IS DISTINCT FROM p_tenant_id))))
     INTO v_valid;
   WHEN 'recovery_sequences' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.recovery_sequences x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.recovery_sequences x
      LEFT JOIN henvalt.opportunities o ON o.id=x.opportunity_id
      WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id
        AND (o.id IS NULL OR o.tenant_id IS DISTINCT FROM p_tenant_id))
     INTO v_valid;
   WHEN 'recovery_interventions' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.recovery_interventions x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.recovery_interventions x
      LEFT JOIN henvalt.recovery_sequences s ON s.id=x.sequence_id
      LEFT JOIN henvalt.opportunities o ON o.id=x.opportunity_id
@@ -307,6 +330,9 @@ BEGIN
          OR (x.opportunity_id IS NOT NULL AND (o.id IS NULL OR o.tenant_id IS DISTINCT FROM p_tenant_id))))
     INTO v_valid;
   WHEN 'order_attributions' THEN
+   SELECT EXISTS (SELECT 1 FROM henvalt.order_attributions x
+     WHERE x.id=p_object_id AND x.tenant_id=p_tenant_id)
+    INTO v_root_exists;
    SELECT NOT EXISTS (SELECT 1 FROM henvalt.order_attributions x
      LEFT JOIN henvalt.orders o ON o.id=x.order_id
      LEFT JOIN henvalt.recovery_sequences s ON s.id=x.recovery_id
@@ -322,6 +348,10 @@ BEGIN
    RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_TABLE_NOT_ALLOWED'
     USING ERRCODE='22023';
  END CASE;
+ IF NOT COALESCE(v_root_exists,false) THEN
+  RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_GRAPH_ROOT_TENANT_MISMATCH'
+   USING ERRCODE='42501';
+ END IF;
  IF NOT COALESCE(v_valid,false) THEN
   RAISE EXCEPTION 'SHOPIFY_REPLAY_OBJECT_GRAPH_TENANT_MISMATCH'
    USING ERRCODE='42501';
