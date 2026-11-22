@@ -491,6 +491,87 @@ BEGIN
   IF v_result->>'updated' <> 'true' OR v_result->>'idempotent' <> 'true' THEN
     RAISE EXCEPTION 'duplicate success result was not idempotent: %',v_result;
   END IF;
+
+  -- Exhausted deterministic provider rejection remains FAILED but must enter
+  -- the operator queue and can only retry after a complete no-match lookup.
+  INSERT INTO henvalt.tenants(id,status,default_currency)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0118','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0118','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0118',true,'deterministic-failure.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0118','SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/deterministic-failure','ACTIVE',true,now()-interval '1 day',2000);
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
+  VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0125','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0118','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
+  VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddd0122','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0118',gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0125',100,10,10,'USD','MEASURED',now());
+  v_result := henvalt.control_plane_claim_billing_usage('deterministic-failure.myshopify.com');
+  v_charge_id := (v_result->>'chargeId')::uuid;
+  SELECT idempotency_key INTO v_original_key FROM henvalt.billing_usage_charges WHERE id=v_charge_id;
+  UPDATE henvalt.billing_usage_charges
+     SET status='FAILED',attempt_count=5,attempted_at=now()-interval '5 minutes',
+         error_code='SHOPIFY_USAGE_USER_ERROR'
+   WHERE id=v_charge_id;
+  v_result := henvalt.control_plane_mark_billing_reconciliation_required(
+    'deterministic-failure.myshopify.com',v_charge_id,'SHOPIFY_USAGE_DETERMINISTIC_REJECTION'
+  );
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'REQUIRED' THEN
+    RAISE EXCEPTION 'exhausted deterministic rejection did not enter reconciliation: %',v_result;
+  END IF;
+  v_result := henvalt.control_plane_list_billing_reconciliations('deterministic-failure.myshopify.com',50);
+  IF (v_result->>'count')::integer <> 1
+     OR v_result->'cases'->0->>'status' <> 'FAILED' THEN
+    RAISE EXCEPTION 'exhausted deterministic failure was not visible in operator queue: %',v_result;
+  END IF;
+  v_result := henvalt.control_plane_get_billing_reconciliation('deterministic-failure.myshopify.com',v_charge_id);
+  IF v_result->>'available' <> 'true' OR v_result->>'status' <> 'FAILED' THEN
+    RAISE EXCEPTION 'failed deterministic charge could not be opened for reconciliation: %',v_result;
+  END IF;
+  v_result := henvalt.control_plane_resolve_billing_reconciliation(
+    'deterministic-failure.myshopify.com',v_charge_id,'NOT_FOUND_CONFIRMED',NULL,
+    jsonb_build_object('lookupComplete',true,'subscriptionFound',true,'lineItemFound',true,'matchingCount','0','pagesScanned',2),
+    'operator-deterministic-test','Complete Shopify lookup found no usage record for the rejected request'
+  );
+  IF v_result->>'updated' <> 'true' OR v_result->>'status' <> 'FAILED_RETRY_ALLOWED' THEN
+    RAISE EXCEPTION 'deterministic rejection no-match did not allow controlled retry: %',v_result;
+  END IF;
+  v_result := henvalt.control_plane_claim_billing_usage('deterministic-failure.myshopify.com');
+  IF (v_result->>'chargeId')::uuid <> v_charge_id
+     OR v_result->>'idempotencyKey' <> v_original_key
+     OR (v_result->>'attempt')::integer <> 1 THEN
+    RAISE EXCEPTION 'deterministic rejection retry changed charge identity or idempotency key: %',v_result;
+  END IF;
+
+  -- If the first REQUIRED write fails, the scheduler claim must also repair
+  -- an exhausted FAILED deterministic rejection, not only an ambiguous PENDING one.
+  INSERT INTO henvalt.tenants(id,status,default_currency)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0119','ACTIVE','USD');
+  INSERT INTO henvalt.shopify_connections(id,tenant_id,active,shop_domain)
+  VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbb0119','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0119',true,'repair-failed.myshopify.com');
+  INSERT INTO henvalt.billing_accounts(tenant_id,provider,plan_key,recurring_amount,henvalt_percentage,usage_cap_amount,currency,usage_line_item_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0119','SHOPIFY','STARTER',0,10,100,'USD','gid://shopify/AppSubscriptionLineItem/repair-failed','ACTIVE',true,now()-interval '1 day',2000);
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,entry_type,amount,currency,attribution_confidence,billable,billing_status,metadata)
+  VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeee0126','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0119','RECOVERY',100,'USD','CONFIRMED',true,'MEASURED','{}');
+  INSERT INTO henvalt.billing_measurements(id,tenant_id,billing_period_id,ledger_entry_id,recovered_revenue,henvalt_percentage,henvalt_fee,currency,status,created_at)
+  VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddd0123','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaa0119',gen_random_uuid(),'eeeeeeee-eeee-4eee-8eee-eeeeeeee0126',100,10,10,'USD','MEASURED',now());
+  v_result := henvalt.control_plane_claim_billing_usage('repair-failed.myshopify.com');
+  v_charge_id := (v_result->>'chargeId')::uuid;
+  UPDATE henvalt.billing_usage_charges
+     SET status='FAILED',attempt_count=5,attempted_at=now()-interval '5 minutes',
+         error_code='SHOPIFY_USAGE_USER_ERROR'
+   WHERE id=v_charge_id;
+  v_result := henvalt.control_plane_claim_billing_usage('repair-failed.myshopify.com');
+  IF v_result->>'available' <> 'false'
+     OR v_result->>'reason' <> 'NO_PENDING_USAGE_CHARGE' THEN
+    RAISE EXCEPTION 'exhausted FAILED charge was retried instead of repaired: %',v_result;
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.billing_usage_charges
+     WHERE id=v_charge_id AND status='FAILED'
+       AND attempt_count=5 AND reconciliation_status='REQUIRED'
+       AND reconciliation_reason='BILLING_RETRY_BUDGET_EXHAUSTED'
+  ) THEN
+    RAISE EXCEPTION 'exhausted FAILED deterministic charge was not repaired into reconciliation';
+  END IF;
 END;
 $billing_refund_credit_acceptance$;
 
