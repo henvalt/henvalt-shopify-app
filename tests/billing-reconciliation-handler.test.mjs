@@ -271,6 +271,31 @@ test("rejects MATCHED when the real Shopify amount or currency differs from the 
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_resolve_billing_reconciliation")), false);
 });
 
+test("matches equivalent decimal strings with leading zeroes and trailing fractional zeroes", async () => {
+  const h = harness({
+    readResult: {
+      available: true,
+      chargeId,
+      shop,
+      amount: "00010.0000",
+      currency: "USD",
+      idempotencyKey,
+      subscriptionLineItemId: lineItemId,
+    },
+  });
+  const handler = createBillingReconciliationHandler({ env, fetchImpl: h.fetchImpl });
+  const result = await handler(request("POST", {
+    action: "resolve",
+    chargeId,
+    resolution: "MATCHED",
+    operatorNote: "Verify decimal normalization",
+  }));
+  assert.equal(result.status, 200);
+  const call = h.calls.find((item) => item.url.includes("/control_plane_resolve_billing_reconciliation"));
+  assert.ok(call);
+  assert.equal(JSON.parse(call.init.body).p_evidence.amount, "10.00");
+});
+
 test("MISMATCH records only the provider evidence returned by Shopify", async () => {
   const h = harness({
     usageRecords: [{
