@@ -37,6 +37,7 @@ The candidate does not set a real URL, credential ID, token, or production proje
 - The HTTP node does not enable blind node-level retries. Ambiguous transport outcomes stay PENDING in the database and are retried only through the worker's persisted attempt/backoff rules.
 - The worker's 202 response indicates an ambiguous pending outcome, not a successful charge.
 - Exhausted ambiguous attempts require operator reconciliation; they must not be rewritten to FAILED solely because the client timed out.
+- If the first attempt to persist the reconciliation marker itself fails, the scheduler continues selecting the exhausted PENDING row while its marker is still NONE. The next claim RPC repairs it to REQUIRED and writes an audit event before it can claim another charge; the same row then drops out of the scheduler query and appears in the operator queue.
 
 ## Release boundary
 
