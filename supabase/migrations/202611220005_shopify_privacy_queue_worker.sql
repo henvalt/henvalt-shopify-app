@@ -117,18 +117,19 @@ do $$
 declare
   v_job_id bigint;
 begin
-  if to_regnamespace('cron') is not null then
-    execute 'select jobid from cron.job where jobname = $1 limit 1'
-      into v_job_id using 'henvalt-shopify-privacy-queue-worker';
-    if v_job_id is not null then
-      execute 'select cron.unschedule($1)' using v_job_id;
-    end if;
-    perform cron.schedule(
-      'henvalt-shopify-privacy-queue-worker',
-      '* * * * *',
-      'select henvalt.process_shopify_privacy_queue(5,120);'
-    );
+  if to_regnamespace('cron') is null then
+    raise exception 'pg_cron is required for the privacy queue worker; refusing to leave accepted requests unprocessed';
   end if;
-end $$;
+  execute 'select jobid from cron.job where jobname = $1 limit 1'
+    into v_job_id using 'henvalt-shopify-privacy-queue-worker';
+  if v_job_id is not null then
+    execute 'select cron.unschedule($1)' using v_job_id;
+  end if;
+  perform cron.schedule(
+    'henvalt-shopify-privacy-queue-worker',
+    '* * * * *',
+    'select henvalt.process_shopify_privacy_queue(5,120);'
+  );
+end $;
 
 commit;
