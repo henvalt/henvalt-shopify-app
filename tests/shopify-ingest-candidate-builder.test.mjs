@@ -104,6 +104,18 @@ test("fenced lease tuple cannot be overridden by original RPC arguments", () => 
   }
 });
 
+test("per-item replay Code nodes return explicit n8n item wrappers", () => {
+  const workflow = buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
+  const envelope = workflow.nodes.find(n => n.name === "Build Shopify Replay Envelope");
+  const renewal = workflow.nodes.find(n => n.name === "Confirm Replay Lease Renewal");
+  assert.equal(envelope.parameters.mode, "runOnceForEachItem");
+  assert.equal(renewal.parameters.mode, "runOnceForEachItem");
+  assert.match(envelope.parameters.jsCode, /return \\{ json: \\{/);
+  assert.match(renewal.parameters.jsCode, /return \\{ json: \\{/);
+  assert.match(envelope.parameters.jsCode, /if \\(errors.length\\) return \\{ json: \\{/);
+  assert.match(envelope.parameters.jsCode, /if \\(alreadyProcessed\\) return \\{ json: \\{/);
+});
+
 test("candidate fixes Shopify delivery identity and preserves trusted replay context", () => {
   const workflow=buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
   const normalizer=workflow.nodes.find(n=>n.name==="Validate & Normalize");
