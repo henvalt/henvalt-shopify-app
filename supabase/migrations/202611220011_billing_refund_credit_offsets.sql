@@ -624,6 +624,7 @@ AS $function$
 DECLARE
   v_shop text := lower(btrim(coalesce(p_shop_domain, '')));
   v_charge henvalt.billing_usage_charges%ROWTYPE;
+  v_measurement_id uuid;
   v_line_item text;
   v_ledger_entry_id uuid;
   v_new_status text;
@@ -644,6 +645,42 @@ BEGIN
      OR length(btrim(COALESCE(p_operator_reference,''))) NOT BETWEEN 1 AND 128
      OR length(btrim(COALESCE(p_operator_note,''))) NOT BETWEEN 1 AND 1000 THEN
     RAISE EXCEPTION 'Invalid reconciliation resolution' USING ERRCODE = '22023';
+  END IF;
+
+  -- Read the measurement identity first, then lock measurement -> charge.
+  -- This matches claim and worker-result commits, preventing a charge/measurement
+  -- lock inversion when a late provider response races operator reconciliation.
+  SELECT buc.*
+    INTO v_charge
+    FROM henvalt.billing_usage_charges buc
+    JOIN henvalt.shopify_connections sc
+      ON sc.tenant_id = buc.tenant_id
+     AND lower(sc.shop_domain) = v_shop
+     AND sc.active = true
+    JOIN henvalt.tenants t
+      ON t.id = buc.tenant_id
+     AND t.status = 'ACTIVE'
+    JOIN henvalt.billing_accounts ba
+      ON ba.tenant_id = buc.tenant_id
+     AND ba.status = 'ACTIVE'
+     AND ba.test_mode = true
+   WHERE buc.id = p_charge_id
+     AND buc.provider = 'SHOPIFY'
+     AND buc.status = 'PENDING'
+     AND buc.reconciliation_status IN ('REQUIRED','MISMATCH');
+
+  IF v_charge.id IS NULL THEN
+    RETURN jsonb_build_object('updated',false,'reason','CHARGE_NOT_ELIGIBLE');
+  END IF;
+
+  v_measurement_id := v_charge.billing_measurement_id;
+  PERFORM 1
+    FROM henvalt.billing_measurements
+   WHERE id = v_measurement_id
+     AND tenant_id = v_charge.tenant_id
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('updated',false,'reason','MEASUREMENT_NOT_FOUND');
   END IF;
 
   SELECT buc.*
