@@ -389,31 +389,34 @@ return { json: { ...prior, replay_context: { ...context, lease_expires_at: respo
 }
 
 function addOrderEditRevenueReconciliation(workflow) {
+  const existing = workflow.nodes.find((entry) => entry.name === "Process Shopify Order Edit Adjustment");
   const template = workflow.nodes.find((entry) => entry.name === "Process Shopify Revenue Adjustment");
-  const node = template
-    ? structuredClone(template)
-    : createNode("Process Shopify Order Edit Adjustment","n8n-nodes-base.httpRequest",{
-        method:"POST",
-        url:"https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/process_shopify_order_edit_adjustment",
-        authentication:"predefinedCredentialType",
-        nodeCredentialType:"supabaseApi",
-        sendHeaders:true,
-        headerParameters:{parameters:[
-          {name:"Content-Type",value:"application/json"},
-          {name:"Content-Profile",value:"henvalt"}
-        ]},
-        sendBody:true,
-        specifyBody:"json",
-        jsonBody:"={{ { p_event_id: [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}",
-        options:{response:{response:{fullResponse:true,neverError:false,responseFormat:"json"}},timeout:15000}
-      },[0,0],4.2);
+  const node = existing
+    ? existing
+    : template
+      ? structuredClone(template)
+      : createNode("Process Shopify Order Edit Adjustment","n8n-nodes-base.httpRequest",{
+          method:"POST",
+          url:"https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/process_shopify_order_edit_adjustment",
+          authentication:"predefinedCredentialType",
+          nodeCredentialType:"supabaseApi",
+          sendHeaders:true,
+          headerParameters:{parameters:[
+            {name:"Content-Type",value:"application/json"},
+            {name:"Content-Profile",value:"henvalt"}
+          ]},
+          sendBody:true,
+          specifyBody:"json",
+          jsonBody:"={{ { p_event_id: [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}",
+          options:{response:{response:{fullResponse:true,neverError:false,responseFormat:"json"}},timeout:15000}
+        },[0,0],4.2);
 
-  node.id = id("process-shopify-order-edit-adjustment");
+  node.id = existing ? node.id : id("process-shopify-order-edit-adjustment");
   node.name = "Process Shopify Order Edit Adjustment";
-  node.position = template ? [template.position[0] + 240, template.position[1] + 180] : [0,0];
+  if (!existing) node.position = template ? [template.position[0] + 240, template.position[1] + 180] : [0,0];
   node.parameters.url = "https://ocyplckdojdubyrsxcxa.supabase.co/rest/v1/rpc/process_shopify_order_edit_adjustment";
   node.parameters.jsonBody = "={{ { p_event_id: [].concat($('Upsert Canonical Event').item.json.body)[0].event_id } }}";
-  addNode(workflow, node);
+  if (!existing) addNode(workflow, node);
 
   // The complete pinned workflow has this edge. Minimal builder fixtures may
   // omit business nodes, so preserve graph validity without fabricating them.
