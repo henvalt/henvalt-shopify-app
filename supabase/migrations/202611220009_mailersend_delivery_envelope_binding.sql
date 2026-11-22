@@ -120,8 +120,64 @@ AS $function$
           NULLIF(s.metadata->>'from_name', ''),
           'HENVALT'
         ) = COALESCE(p_from_name, '')
-        AND lower(COALESCE(s.metadata->>'reply_to', s.sender_reference, '')) =
-            lower(COALESCE(p_reply_to, ''))
+        AND (
+          lower(COALESCE(s.metadata->>'reply_to', s.sender_reference, '')) = lower(COALESCE(p_reply_to, ''))
+          OR EXISTS (
+            SELECT 1
+            FROM henvalt.customer_conversations cc
+            WHERE cc.tenant_id = p_tenant_id
+              AND cc.delivery_request_id = p_delivery_request_id
+              AND cc.status NOT IN ('OPTED_OUT', 'CLOSED')
+              AND p_reply_to ~* '^reply\\+[0-9a-f]{64}@inbound\\.henvalt\\.com
+        AND s.message_subject = p_subject
+        AND henvalt.render_sender_identity_footer(p_tenant_id, s.message_body) = p_html_body
+        AND henvalt.render_email_plain_text(
+          henvalt.render_sender_identity_footer(p_tenant_id, s.message_body)
+        ) = p_text_body
+    ),
+    false
+  );
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text)
+  TO service_role;
+
+COMMENT ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text) IS
+  'Returns true only when the HTTP recipient and sender headers exactly match the claimed tenant delivery request and its active verified MailerSend identity.';
+
+COMMIT;
+
+              AND cc.reply_token_hash = encode(
+                extensions.digest(
+                  convert_to(substring(p_reply_to FROM '(?i)^reply\\+([0-9a-f]{64})@inbound\\.henvalt\\.com
+        AND s.message_subject = p_subject
+        AND henvalt.render_sender_identity_footer(p_tenant_id, s.message_body) = p_html_body
+        AND henvalt.render_email_plain_text(
+          henvalt.render_sender_identity_footer(p_tenant_id, s.message_body)
+        ) = p_text_body
+    ),
+    false
+  );
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text)
+  TO service_role;
+
+COMMENT ON FUNCTION henvalt.assert_mailersend_delivery_envelope(uuid, uuid, text, text, text, text, text, text, text) IS
+  'Returns true only when the HTTP recipient and sender headers exactly match the claimed tenant delivery request and its active verified MailerSend identity.';
+
+COMMIT;
+), 'UTF8'),
+                  'sha256'
+                ),
+                'hex'
+              )
+          )
+        )
         AND s.message_subject = p_subject
         AND henvalt.render_sender_identity_footer(p_tenant_id, s.message_body) = p_html_body
         AND henvalt.render_email_plain_text(
