@@ -11,7 +11,15 @@ DECLARE
   v_job uuid;
   v_claim record;
   v_rejected boolean;
+  v_customer_a uuid;
+  v_customer_b uuid;
 BEGIN
+  INSERT INTO henvalt.customers(tenant_id,shopify_customer_id,email,email_consent)
+  VALUES ('edededed-eded-4ded-8ded-edededededed','tenant-a-customer','a@example.invalid',true)
+  RETURNING id INTO v_customer_a;
+  INSERT INTO henvalt.customers(tenant_id,shopify_customer_id,email,email_consent)
+  VALUES ('fefefefe-fefe-4efe-8efe-fefefefefefe','tenant-b-customer','b@example.invalid',true)
+  RETURNING id INTO v_customer_b;
   INSERT INTO henvalt.webhook_events(tenant_id,source,source_event_id,topic,idempotency_key,payload,metadata,processing_status)
   VALUES ('edededed-eded-4ded-8ded-edededededed','shopify','tenant-bind-a','checkouts/update','tenant-bind-a',
     '{"id":"tenant-a","test":true}'::jsonb,'{"ingress_hmac_verified":true}'::jsonb,'PROCESSING')
@@ -53,6 +61,21 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM henvalt.webhook_events WHERE id=v_webhook_b AND processing_status='PROCESSING') THEN
     RAISE EXCEPTION 'CROSS_TENANT_WEBHOOK_STATE_CHANGED';
   END IF;
+
+  v_rejected := false;
+  BEGIN
+    PERFORM henvalt.assert_shopify_replay_object_tenant(
+      v_job,'tenant-binding-worker',v_claim.lease_id,
+      'edededed-eded-4ded-8ded-edededededed','customers',v_customer_b
+    );
+  EXCEPTION WHEN insufficient_privilege THEN v_rejected := true;
+  END;
+  IF NOT v_rejected THEN RAISE EXCEPTION 'CROSS_TENANT_OBJECT_WRITE_GUARD_WAS_ALLOWED'; END IF;
+
+  PERFORM henvalt.assert_shopify_replay_object_tenant(
+    v_job,'tenant-binding-worker',v_claim.lease_id,
+    'edededed-eded-4ded-8ded-edededededed','customers',v_customer_a
+  );
 
   -- Exercise the positive authorization path without depending on a
   -- business-RPC fixture unrelated to the tenant guard itself.
