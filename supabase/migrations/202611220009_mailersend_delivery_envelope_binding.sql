@@ -111,10 +111,22 @@ AS $function$
       SELECT 1
       FROM selected_identity s
       WHERE lower(COALESCE(s.recipient_reference, '')) = lower(COALESCE(p_to, ''))
+        AND lower(COALESCE(s.message_recipient, '')) = lower(COALESCE(p_to, ''))
         AND lower(COALESCE(s.sender_reference, '')) = lower(COALESCE(p_from_email, ''))
-        AND COALESCE(s.metadata->>'from_name', '') = COALESCE(p_from_name, '')
+        AND COALESCE(
+          NULLIF(CASE WHEN COALESCE((s.tenant_settings #>> '{messaging_compliance,sender_profile,merchant_confirmed}')::boolean, false)
+            THEN s.tenant_settings #>> '{messaging_compliance,sender_profile,legal_business_name}' END, ''),
+          NULLIF(s.tenant_settings #>> '{messaging_compliance,sender_profile_suggestion,shop_name}', ''),
+          NULLIF(s.metadata->>'from_name', ''),
+          'HENVALT'
+        ) = COALESCE(p_from_name, '')
         AND lower(COALESCE(s.metadata->>'reply_to', s.sender_reference, '')) =
             lower(COALESCE(p_reply_to, ''))
+        AND s.message_subject = p_subject
+        AND henvalt.render_sender_identity_footer(p_tenant_id, s.message_body) = p_html_body
+        AND henvalt.render_email_plain_text(
+          henvalt.render_sender_identity_footer(p_tenant_id, s.message_body)
+        ) = p_text_body
     ),
     false
   );
