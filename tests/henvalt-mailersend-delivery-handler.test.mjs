@@ -24,6 +24,7 @@ function validBody() {
     from_email: "recovery@example.invalid",
     from_name: "HENVALT Test",
     subject: "Synthetic delivery test",
+    html_body: "<p>This message must never leave the mocked provider boundary.</p>",
     text_body: "This message must never leave the mocked provider boundary.",
   };
 }
@@ -103,7 +104,7 @@ test("authorized synthetic request reaches only the injected provider stub", asy
     p_from_name: "HENVALT Test",
     p_reply_to: "recovery@example.invalid",
     p_subject: "Synthetic delivery test",
-    p_html_body: null,
+    p_html_body: "<p>This message must never leave the mocked provider boundary.</p>",
     p_text_body: "This message must never leave the mocked provider boundary.",
   });
   assert.equal(calls[2].url, "https://api.mailersend.com/v1/email");
