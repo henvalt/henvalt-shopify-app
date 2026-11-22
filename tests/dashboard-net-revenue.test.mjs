@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 const summary = readFileSync(new URL("../supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql", import.meta.url), "utf8");
 const series = readFileSync(new URL("../supabase/migrations/202611220012_dashboard_net_revenue_series.sql", import.meta.url), "utf8");
 const workflow = readFileSync(new URL("../.github/workflows/provider-send-interlock-static.yml", import.meta.url), "utf8");
+const merchantDashboard = readFileSync(new URL("../supabase/functions/henvalt-merchant-dashboard/index.ts", import.meta.url), "utf8");
 
 test("dashboard summary and activity amounts include confirmed refunds as negative revenue", () => {
   assert.match(summary, /entry_type IN \('RECOVERY', 'ADJUSTMENT'\)/);
@@ -26,4 +27,12 @@ test("safety CI tracks the dashboard net-revenue migration", () => {
 test("net revenue chart retains negative adjustment amounts rather than dropping refunds", () => {
   assert.match(series, /entry_type IN \('RECOVERY', 'ADJUSTMENT'\)/);
   assert.doesNotMatch(series, /entry_type = 'RECOVERY' AND rl\.billable IS TRUE/);
+});
+
+test("merchant dashboard API supplies the series consumed by the chart", () => {
+  assert.match(merchantDashboard, /rpc\/control_plane_revenue_series/);
+  assert.match(merchantDashboard, /p_granularity: "day"/);
+  assert.match(merchantDashboard, /revenueSeries,?[\s\S]*range:/);
+  assert.match(workflow, /supabase\/functions\/henvalt-merchant-dashboard\/index\.ts/);
+  assert.match(workflow, /Type-check merchant dashboard Edge Function/);
 });
