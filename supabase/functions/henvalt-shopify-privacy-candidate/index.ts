@@ -102,9 +102,12 @@ Deno.serve(async (req: Request) => {
     return reply(503, { error: "shop_connection_not_unique" });
   }
   const connection = connections[0] ?? null;
-  if (connection && String(connection.shopify_shop_id ?? "") !== signedShopId) {
+  if (connection?.shopify_shop_id && String(connection.shopify_shop_id) !== signedShopId) {
     return reply(401, { error: "signed_shop_identity_mismatch" });
   }
+  // A legacy row without a stored Shopify ID is not a verified tenant mapping.
+  const verifiedConnection = connection?.shopify_shop_id &&
+      String(connection.shopify_shop_id) === signedShopId ? connection : null;
 
   const customerId = asId(payload?.customer?.id);
   const rawCustomerEmail = typeof payload?.customer?.email === "string"
@@ -126,17 +129,17 @@ Deno.serve(async (req: Request) => {
 
   // Persist only minimal identifiers. The database RPC deduplicates by signed payload hash
   // and also rejects reuse of one webhook ID with a different signed body.
-  const initialStatus = connection ? "PENDING" : "REVIEW_REQUIRED";
+  const initialStatus = verifiedConnection ? "PENDING" : "REVIEW_REQUIRED";
   const persisted = await rpc("persist_shopify_privacy_request", {
-    p_tenant_id: connection?.tenant_id ?? null,
+    p_tenant_id: verifiedConnection?.tenant_id ?? null,
     p_shop_domain: shop,
     p_shopify_shop_id: signedShopId,
     p_topic: topic,
     p_webhook_id: webhookId,
     p_signed_payload_hash: signedPayloadHash,
-    p_customer_id: connection ? customerId : null,
+    p_customer_id: verifiedConnection ? customerId : null,
     p_request_id: requestId,
-    p_payload: connection ? minimalPayload : {},
+    p_payload: verifiedConnection ? minimalPayload : {},
     p_status: initialStatus,
   });
   if (!persisted.ok) {
@@ -151,7 +154,7 @@ Deno.serve(async (req: Request) => {
   if (stored.status === "COMPLETED") {
     return reply(200, { received: true, processed: true, duplicate: true, topic });
   }
-  if (!connection || stored.status === "REVIEW_REQUIRED") {
+  if (!verifiedConnection || stored.status === "REVIEW_REQUIRED") {
     return reply(200, { received: true, queued: true, review_required: true, topic });
   }
 
