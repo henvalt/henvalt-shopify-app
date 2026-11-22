@@ -114,6 +114,10 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql
+      - name: Apply complete Shopify replay mutation fencing for order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql
       - name: Apply transactional replay lease heartbeat for order-edit acceptance
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
