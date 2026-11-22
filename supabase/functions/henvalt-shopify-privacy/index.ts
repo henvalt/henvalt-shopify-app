@@ -23,7 +23,13 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-async function verifyHmac(raw: Uint8Array, supplied: string): Promise<boolean> {
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
+async function verifyHmac(raw: ArrayBuffer, supplied: string): Promise<boolean> {
   if (!SHOPIFY_API_SECRET || !supplied) return false;
   const key = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(SHOPIFY_API_SECRET),
@@ -94,7 +100,7 @@ Deno.serve(async (req: Request) => {
     return reply(503, { error: "request_body_read_failed" });
   }
   if (!boundedBody.ok) return reply(413, { error: "payload_too_large" });
-  const raw = boundedBody.bytes;
+  const raw = toArrayBuffer(boundedBody.bytes);
   if (!(await verifyHmac(raw, hmac))) return reply(401, { error: "invalid_hmac" });
 
   let payload: any;
