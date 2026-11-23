@@ -40,3 +40,10 @@ test("dashboard RPC privileges remain service-role-only", () => {
   assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.control_plane_revenue_series[\s\S]*?FROM PUBLIC, anon, authenticated/);
   assert.match(migration, /GRANT EXECUTE ON FUNCTION henvalt\.control_plane_revenue_series[\s\S]*?TO service_role/);
 });
+
+
+test("dashboard inline browser script parses after financial UI changes", () => {
+  const inlineScript = dashboard.match(/<script>([\s\S]*?)<\/script>/i)?.[1];
+  assert.ok(inlineScript, "expected the dashboard inline script");
+  assert.doesNotThrow(() => new Function(inlineScript));
+});
