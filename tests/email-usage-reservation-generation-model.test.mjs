@@ -284,6 +284,7 @@ test("14 multiple provider matches freeze the parent and retain every provider I
   assert.equal(m.reconcile(g, { matches: ["msg-A", "msg-B"], complete: true }), "DUPLICATE_INCIDENT");
   assert.equal(m.parent("i14").frozen, true);
   assert.equal(m.parent("i14").incident, "MULTIPLE_PROVIDER_MATCHES");
+  assert.deepEqual(g.providerMessageIds, ["msg-A", "msg-B"]);
   assert.equal(g.state, "AMBIGUOUS");
 });
 
