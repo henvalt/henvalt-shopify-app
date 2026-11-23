@@ -89,6 +89,7 @@ test("candidate Edge Function commits the durable egress fence before MailerSend
   assert.match(handler, /egressFenceStarted !== true/);
   assert.match(handler, /providerEgressStarted = true/);
   assert.match(handler, /api\\.mailersend\\.com\\/v1\\/email/);
+  assert.ok(handler.indexOf("assert_mailersend_delivery_envelope") < handler.indexOf("mark_mailersend_provider_egress_started"));
   assert.ok(handler.indexOf("mark_mailersend_provider_egress_started") < handler.indexOf("https://api.mailersend.com/v1/email"));
   assert.match(report, /durable egress-start RPC after envelope authorization and before the provider HTTP call/);
 });
