@@ -20,6 +20,8 @@ jobs:
           deno-version: v2.x
       - name: Type-check OAuth webhook registration
         run: deno check supabase/functions/henvalt-shopify-oauth/webhook-registration.ts
+      - name: Type-check complete Shopify OAuth callback
+        run: deno check supabase/functions/henvalt-shopify-oauth/index.ts
       - name: Test OAuth webhook registration safety
         run: deno test --allow-env supabase/functions/henvalt-shopify-oauth/webhook-registration_test.ts
       - name: Validate Shopify TOML and extension source
