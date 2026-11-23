@@ -54,6 +54,9 @@ test("provider reconciliation requires MailerSend evidence rather than reservati
     "utf8",
   );
   assert.match(specification, /activity_read/);
+  assert.match(specification, /\\`queued\\`, \\`sent\\`, \\`rejected\\`, and \\`delivered\\`/);
+  assert.match(specification, /Consume\\. The API created an email record/);
+  assert.match(specification, /1,000 rows per page and 100 pages/);
   assert.match(specification, /date_from/);
   assert.match(specification, /date_to/);
   assert.match(specification, /complete pagination/);
