@@ -43,6 +43,7 @@ CREATE TABLE henvalt.delivery_attempts (
  delivery_request_id uuid NOT NULL,
  state henvalt.delivery_state NOT NULL,
  provider_status_code integer,
+ provider_response jsonb NOT NULL DEFAULT '{}'::jsonb,
  attempted_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE OR REPLACE FUNCTION henvalt.enforce_billing_entitlement_before_delivery()
