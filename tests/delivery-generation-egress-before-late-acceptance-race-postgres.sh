@@ -13,7 +13,7 @@ old_request=$(psql -Atqc "SELECT id FROM henvalt_test.delivery_requests WHERE in
 new_request=$(psql -Atqc "SELECT id FROM henvalt_test.delivery_requests WHERE intervention_id='$parent' AND generation_number=2;")
 psql -v ON_ERROR_STOP=1 -Atqc "SELECT henvalt_test.claim_generation('$new_request');" | grep -qx t
 first_log="$(mktemp)"; second_log="$(mktemp)"
-PGAPPNAME=egress-before-late psql -v ON_ERROR_STOP=1 >"$first_log" 2>&1 <<SQL &
+PGAPPNAME=egress-before-late psql -At -v ON_ERROR_STOP=1 >"$first_log" 2>&1 <<SQL &
 BEGIN;
 SELECT id FROM henvalt_test.interventions WHERE id='$parent' FOR UPDATE;
 SELECT pg_sleep(1.2);
