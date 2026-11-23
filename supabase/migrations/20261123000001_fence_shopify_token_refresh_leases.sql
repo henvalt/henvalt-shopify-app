@@ -2,6 +2,9 @@
 -- Additive to the already-live token storage/refresh schema; no credentials are changed.
 
 alter table henvalt.shopify_connections
+  add column if not exists token_refresh_lease_until timestamptz,
+  add column if not exists token_refresh_started_at timestamptz,
+  add column if not exists token_refresh_last_error text,
   add column if not exists token_refresh_lease_id uuid;
 
 comment on column henvalt.shopify_connections.token_refresh_lease_id is
