@@ -321,7 +321,7 @@ Deno.serve(async (req: Request) => {
     // then verify the complete expected set before reporting success.
     const webhookUri = "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks";
     const webhookRegistration = await registerShopifyWebhooks({ shop, accessToken, webhookUri });
-    const results: Array<Record<string, unknown>> = webhookRegistration.results;
+    const results = webhookRegistration.results;
     const allWebhooksRegistered = webhookRegistration.allRegistered;
     // Store per-topic verification for support and dashboard diagnostics.
     const webhookAudit = await db("/rest/v1/audit_log", {
