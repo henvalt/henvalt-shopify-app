@@ -23,7 +23,7 @@ The deployed script and tracked `cloudflare/worker.js` were not identical. The d
 
 This branch reconciles the source with the live route and failure behavior, while adding:
 
-- A bounded streaming body reader with a 1 MB maximum, including chunked requests without Content-Length.
+- A bounded streaming body reader with a 5 MB maximum, including chunked requests without Content-Length.
 - HMAC verification over the exact raw bytes, not parsed/re-serialized JSON.
 - Strict shop-domain and webhook-header validation.
 - An allowlist of forwarded Shopify headers; arbitrary cookies and Authorization headers are not forwarded.
@@ -33,3 +33,8 @@ This branch reconciles the source with the live route and failure behavior, whil
 ## Deployment boundary
 
 No live Worker, binding, secret, Shopify webhook subscription, n8n workflow or Supabase object was changed. The new source is a draft pull request only. Do not deploy until the tests run in CI and the live route has a controlled signed-webhook verification. Do not replace the live secret binding.
+
+
+## Payload-size contract
+
+The Worker enforces a 5,000,000-byte streaming cap for HTTPS webhook deliveries. Shopify's current delivery documentation lists a 5 MB payload limit for HTTPS destinations (separate from the 1 MB Amazon EventBridge limit). This keeps the Worker bounded without rejecting valid HTTPS deliveries solely because they exceed 1 MB. See https://shopify.dev/docs/apps/build/events/delivery-structure.
