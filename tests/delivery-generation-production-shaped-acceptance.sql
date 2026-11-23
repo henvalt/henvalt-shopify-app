@@ -1,4 +1,4 @@
-\\set ON_ERROR_STOP on
+\set ON_ERROR_STOP on
 DO $tests$
 DECLARE
   v_tenant uuid := gen_random_uuid();
