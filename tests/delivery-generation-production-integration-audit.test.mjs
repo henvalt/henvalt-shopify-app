@@ -81,12 +81,15 @@ test("legacy one-off request reset is explicitly identified as incompatible with
   assert.match(report, /The generation cutover must replace this RPC with a fail-closed response/);
 });
 
-test("current Edge Function has no durable pre-egress fence yet; local boolean is not mistaken for one", () => {
-  assert.equal(audit.provider_edge_function.egress_marker_is_durable_in_database, false);
-  assert.equal(audit.provider_edge_function.current_egress_marker_is_process_local_boolean, true);
+test("candidate Edge Function commits the durable egress fence before MailerSend; production remains unchanged", () => {
+  assert.equal(audit.provider_edge_function.candidate_handler_calls_durable_egress_rpc, true);
+  assert.equal(audit.provider_edge_function.production_database_has_egress_marker, false);
+  assert.equal(audit.provider_edge_function.process_local_boolean_is_diagnostic_only, true);
+  assert.match(handler, /mark_mailersend_provider_egress_started/);
+  assert.match(handler, /egressFenceStarted !== true/);
   assert.match(handler, /providerEgressStarted = true/);
-  assert.match(handler, /api\.mailersend\.com\/v1\/email/);
-  assert.doesNotMatch(handler, /mark_delivery_provider_egress_started/);
+  assert.match(handler, /api\\.mailersend\\.com\\/v1\\/email/);
+  assert.ok(handler.indexOf("mark_mailersend_provider_egress_started") < handler.indexOf("https://api.mailersend.com/v1/email"));
   assert.match(report, /durable egress-start RPC after envelope authorization and before the provider HTTP call/);
 });
 
