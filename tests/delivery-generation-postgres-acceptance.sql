@@ -283,6 +283,28 @@ BEGIN
     IF SQLERRM='39 ambiguous in-flight generation was retried' THEN RAISE; END IF;
   END;
 
+
+  -- 40: malformed extra identity-prefix tags are rejected rather than ignored.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(
+      ARRAY['tenant:'||v_tenant::text,'tenant:invalid','delivery:'||r::text],
+      'recipient@example.test',NULL
+    );
+    RAISE EXCEPTION '40 malformed extra tenant tag was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='40 malformed extra tenant tag was accepted' THEN RAISE; END IF;
+  END;
+
+  -- 41: blank provider message IDs are not treated as valid correlation evidence.
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(v_tags,'recipient@example.test','   ');
+    RAISE EXCEPTION '41 blank provider message ID was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='41 blank provider message ID was accepted' THEN RAISE; END IF;
+  END;
+
 END
 $tests$;
-SELECT 'delivery generation PostgreSQL model acceptance passed (39 cases)' AS result;
+SELECT 'delivery generation PostgreSQL model acceptance passed (41 cases)' AS result;
