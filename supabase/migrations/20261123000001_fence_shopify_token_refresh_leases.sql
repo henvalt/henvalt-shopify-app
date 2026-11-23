@@ -39,7 +39,7 @@ begin
     return jsonb_build_object('claimed',false,'reason','EXPIRING_OFFLINE_TOKEN_NOT_CONFIGURED');
   end if;
   if v_conn.reauth_required_at is not null then return jsonb_build_object('claimed',false,'reason','REAUTH_REQUIRED'); end if;
-  if not p_force and v_conn.access_token_expires_at > now()+interval '5 minutes' then
+  if not p_force and v_conn.access_token_expires_at > clock_timestamp()+interval '5 minutes' then
     return jsonb_build_object('claimed',false,'reason','TOKEN_STILL_VALID','expires_at',v_conn.access_token_expires_at);
   end if;
   if v_conn.token_refresh_lease_until is not null and v_conn.token_refresh_lease_until>clock_timestamp() then
