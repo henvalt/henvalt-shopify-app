@@ -225,8 +225,7 @@ BEGIN
   IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_GENERATION_NOT_FOUND'; END IF;
 
   IF v_previous.status <> 'FAILED'
-     OR v_previous.provider_egress_started_at IS NOT NULL
-     OR v_previous.provider_claimed_at IS NOT NULL THEN
+     OR v_previous.provider_egress_started_at IS NOT NULL THEN
     RAISE EXCEPTION 'PREVIOUS_GENERATION_NOT_PROVEN_PRE_PROVIDER';
   END IF;
 
