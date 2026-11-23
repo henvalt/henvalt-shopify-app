@@ -14,6 +14,10 @@ const lockOrderMigration = read("../supabase/migrations/202611230004_delivery_li
 const lockOrderAcceptance = read("./delivery-lifecycle-lock-order-acceptance.sql");
 const legacyOneOffMigration = read("../supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql");
 const legacyOneOffAcceptance = read("./legacy-one-off-delivery-disable-acceptance.sql");
+const lateAcceptanceMigration = read("../supabase/migrations/202611230006_late_provider_acceptance_incidents.sql");
+const webhookRoutingMigration = read("../supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql");
+const lateAcceptanceAcceptance = read("./delivery-generation-production-shaped-late-acceptance.sql");
+const webhookRoutingAcceptance = read("./delivery-generation-production-shaped-webhook-routing.sql");
 const prodShapeAcceptance = read("./delivery-generation-production-shaped-acceptance.sql");
 
 test("live delivery-generation audit is explicitly read-only and pinned to the inspected active workflow", () => {
@@ -138,4 +142,31 @@ test("legacy one-off test delivery routes are explicitly disabled before immutab
   assert.match(legacyOneOffAcceptance, /normal tenant-scoped token claim was broken/);
   assert.match(legacyOneOffAcceptance, /legacy one-off reauthorization did not fail closed/);
   assert.match(legacyOneOffAcceptance, /legacy one-off preparation did not fail closed/);
+});
+
+
+test("late provider acceptance creates durable incident evidence without rewriting attempts", () => {
+  assert.match(lateAcceptanceMigration, /settle_late_provider_acceptance/);
+  assert.match(lateAcceptanceMigration, /EXACT_TENANT_AND_DELIVERY_TAG_REQUIRED/);
+  assert.match(lateAcceptanceMigration, /LATE_PROVIDER_ACCEPTANCE/);
+  assert.match(lateAcceptanceMigration, /FOR UPDATE/);
+  assert.match(lateAcceptanceMigration, /delivery_generation_incidents/);
+  assert.match(lateAcceptanceMigration, /status='CONSUMED'/);
+  assert.match(lateAcceptanceMigration, /delivery_attempt_id,provider_status_code,reason/);
+  assert.match(lateAcceptanceMigration, /historical_attempts_preserved/);
+  assert.match(lateAcceptanceAcceptance, /historical delivery attempts were rewritten or fabricated/);
+  assert.match(lateAcceptanceAcceptance, /duplicate incident inserted/);
+  assert.match(lateAcceptanceAcceptance, /mismatched delivery tag was accepted/);
+});
+
+test("MailerSend sent and delivered webhooks resolve exact delivery tags before late settlement", () => {
+  assert.match(webhookRoutingMigration, /v_delivery_request_tag uuid/);
+  assert.match(webhookRoutingMigration, /MAILERSEND_WEBHOOK_EXACT_TAG_MATCH_PATCH_FAILED/);
+  assert.match(webhookRoutingMigration, /settle_late_provider_acceptance\(v_event\)/);
+  assert.match(webhookRoutingMigration, /activity\.sent/);
+  assert.match(webhookRoutingMigration, /activity\.delivered/);
+  assert.match(webhookRoutingMigration, /MAILERSEND_ACCEPTANCE_REQUIRES_EXACT_DELIVERY_TAG/);
+  assert.match(webhookRoutingAcceptance, /normal activity\.sent did not settle current generation/);
+  assert.match(webhookRoutingAcceptance, /late webhook did not freeze parent/);
+  assert.match(webhookRoutingAcceptance, /mismatched delivery tag was accepted/);
 });
