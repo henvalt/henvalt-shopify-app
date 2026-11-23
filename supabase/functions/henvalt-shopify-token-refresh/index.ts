@@ -79,7 +79,16 @@ export function createTokenRefreshHandler(deps: Dependencies) {
     }
 
     const leaseId = validLeaseId(claim?.lease_id) ? claim.lease_id : "";
-    if (!leaseId || typeof claim?.refresh_token !== "string" || claim.refresh_token.length < 20) {
+    if (!leaseId) {
+      return json(503, { refreshed: false, error: "refresh_claim_contract_invalid", retryable: false });
+    }
+    if (typeof claim?.refresh_token !== "string" || claim.refresh_token.length < 20) {
+      try {
+        await rpc("fail_shopify_token_refresh", {
+          p_shop_domain: shop, p_error_code: "refresh_claim_contract_invalid",
+          p_reauth_required: false, p_lease_id: leaseId,
+        });
+      } catch {}
       return json(503, { refreshed: false, error: "refresh_claim_contract_invalid", retryable: false });
     }
 
