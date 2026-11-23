@@ -130,3 +130,89 @@ END;
 $$;
 REVOKE ALL ON FUNCTION henvalt.assert_provider_sending_enabled()
   FROM PUBLIC,anon,authenticated,service_role;
+
+
+-- Minimal production-shaped MailerSend webhook processor. Its lookup and
+-- result-delegation anchors intentionally mirror the deployed function so
+-- candidate source-preserving webhook patches are exercised by CI.
+CREATE UNIQUE INDEX provider_events_provider_hash_uq
+  ON henvalt.provider_events(provider,event_hash);
+
+CREATE OR REPLACE FUNCTION henvalt.record_delivery_result(
+  p_delivery_request_id uuid,p_provider text,p_provider_message_id text,
+  p_provider_status_code integer,p_state henvalt.delivery_state,
+  p_error_class text,p_retryable boolean,p_provider_response jsonb
+) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,public AS $$
+BEGIN
+  UPDATE henvalt.delivery_requests
+     SET provider_message_id=coalesce(provider_message_id,p_provider_message_id),
+         status=p_state,updated_at=clock_timestamp()
+   WHERE id=p_delivery_request_id;
+  RETURN p_delivery_request_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION henvalt.process_mailersend_webhook_event(
+  p_payload jsonb,p_raw_body_base64 text
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,extensions,pg_temp AS $$
+DECLARE
+  v_hash text;
+  v_type text;
+  v_data jsonb;
+  v_mid text;
+  v_email text;
+  v_tenant uuid;
+  v_req uuid;
+  v_event uuid;
+  v_time timestamptz;
+BEGIN
+  v_type := p_payload->>'type';
+  v_data := coalesce(p_payload->'data','{}'::jsonb);
+  v_mid := nullif(v_data->>'message_id','');
+  v_email := lower(nullif(coalesce(v_data->>'email',v_data->>'recipient'),''));
+  v_tenant := nullif(p_payload->>'tenant_id','')::uuid;
+  v_hash := md5(p_raw_body_base64);
+  IF jsonb_typeof(v_data->'tags') = 'array' THEN
+    SELECT substring(t.tag from '^tenant:([0-9a-fA-F-]{36})$')::uuid
+      INTO v_tenant
+      FROM jsonb_array_elements_text(v_data->'tags') AS t(tag)
+     WHERE t.tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     LIMIT 1;
+  END IF;
+
+  INSERT INTO henvalt.provider_events (
+    provider,event_hash,event_type,provider_message_id,recipient_email,tenant_id,occurred_at,payload
+  ) VALUES (
+    'mailersend',v_hash,v_type,v_mid,v_email,v_tenant,now(),p_payload
+  ) ON CONFLICT(provider,event_hash) DO NOTHING
+  RETURNING id INTO v_event;
+  IF v_event IS NULL THEN
+    SELECT id INTO v_event FROM henvalt.provider_events
+     WHERE provider='mailersend' AND event_hash=v_hash LIMIT 1;
+    RETURN jsonb_build_object('accepted',true,'duplicate',true,'event_id',v_event);
+  END IF;
+
+  IF v_tenant IS NOT NULL AND v_mid IS NOT NULL THEN
+    SELECT dr.id INTO v_req
+      FROM henvalt.delivery_requests dr
+     WHERE dr.tenant_id = v_tenant
+       AND lower(COALESCE(dr.provider, '')) = 'mailersend'
+       AND dr.provider_message_id = v_mid
+     ORDER BY dr.created_at DESC
+     LIMIT 1;
+
+    IF v_req IS NULL THEN RAISE EXCEPTION 'Provider event is not yet linked to a delivery request'; END IF;
+    UPDATE henvalt.provider_events
+       SET delivery_request_id = v_req
+     WHERE id = v_event;
+  END IF;
+
+  IF v_req IS NOT NULL AND v_type = 'activity.delivered' THEN
+    PERFORM henvalt.record_delivery_result(v_req,'mailersend',v_mid,200,'DELIVERED'::henvalt.delivery_state,NULL,false,p_payload);
+  END IF;
+  UPDATE henvalt.provider_events SET processed_at=now() WHERE id=v_event;
+  RETURN jsonb_build_object('accepted',true,'event_id',v_event,'matched_delivery_request',v_req IS NOT NULL);
+END;
+$$;
