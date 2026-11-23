@@ -11,6 +11,10 @@ DECLARE
   v_status text;
   v_count integer;
   v_attempt uuid;
+  v_tenant2 uuid := gen_random_uuid();
+  v_intervention2 uuid := gen_random_uuid();
+  v_request2 uuid := gen_random_uuid();
+  v_attempt2 uuid;
 BEGIN
   PERFORM set_config('request.jwt.claim.role','service_role',true);
 
@@ -122,6 +126,35 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM='pending generation was forked' THEN RAISE; END IF;
   END;
+
+  -- A released reservation without its matching append-only event is not proof.
+  INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
+  VALUES(v_intervention2,v_tenant2,gen_random_uuid(),'EMAIL','FAILED');
+  INSERT INTO henvalt.delivery_requests(
+    id,tenant_id,intervention_id,channel,delivery_mode,recipient_reference,
+    status,provider,idempotency_key,correlation_id,provider_claimed_at
+  ) VALUES(
+    v_request2,v_tenant2,v_intervention2,'EMAIL','HENVALT_MANAGED',
+    'buyer2@example.test','FAILED','mailersend','legacy-key-2',gen_random_uuid(),now()
+  );
+  INSERT INTO henvalt.delivery_attempts(
+    tenant_id,delivery_request_id,attempt_number,state,provider_status_code,provider_response
+  ) VALUES(
+    v_tenant2,v_request2,1,'FAILED',409,
+    '{"henvalt_delivery_stage":"pre_provider"}'::jsonb
+  ) RETURNING id INTO v_attempt2;
+  INSERT INTO henvalt.email_usage_reservations(
+    tenant_id,delivery_request_id,status,status_reason,last_attempt_id
+  ) VALUES(v_tenant2,v_request2,'RELEASED','DEFINITIVE_PROVIDER_REJECTION_409',v_attempt2);
+  BEGIN
+    PERFORM henvalt.create_delivery_retry_generation(v_tenant2,v_intervention2,gen_random_uuid());
+    RAISE EXCEPTION 'retry without append-only release event was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='retry without append-only release event was accepted' THEN RAISE; END IF;
+  END;
+  IF (SELECT count(*) FROM henvalt.delivery_requests WHERE intervention_id=v_intervention2)<>1 THEN
+    RAISE EXCEPTION 'failed retry without release evidence created a generation';
+  END IF;
 
   -- The routine must reject non-service callers.
   PERFORM set_config('request.jwt.claim.role','authenticated',true);
