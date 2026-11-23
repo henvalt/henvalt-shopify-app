@@ -40,10 +40,6 @@ create table henvalt.shopify_connections (
   access_token_expires_at timestamptz,
   refresh_token_expires_at timestamptz,
   token_updated_at timestamptz,
-  token_refresh_lease_until timestamptz,
-  token_refresh_lease_id uuid,
-  token_refresh_started_at timestamptz,
-  token_refresh_last_error text,
   reauth_required_at timestamptz,
   updated_at timestamptz
 );
