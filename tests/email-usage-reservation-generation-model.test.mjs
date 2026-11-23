@@ -392,9 +392,12 @@ test("23 PostgreSQL generation fixture covers parent-first retry, claim, egress 
   assert.match(bootstrap, /PREVIOUS_GENERATION_NOT_PROVEN_RETRYABLE/);
   assert.match(bootstrap, /CONTRADICTORY_LATE_ACCEPTANCE/);
   assert.match(bootstrap, /provider_egress_started_at/);
-  assert.match(acceptance, /30 transaction-level acceptance cases|30 cases/);
+  assert.match(bootstrap, /resolve_delivery_tag/);
+  assert.match(bootstrap, /PROVIDER_RECIPIENT_MISMATCH/);
+  assert.match(acceptance, /37 transaction-level acceptance cases|37 cases/);
   assert.match(acceptance, /consent_ok=false/);
   assert.match(acceptance, /interlock_open=false/);
+  assert.match(acceptance, /cross-tenant delivery tag was accepted/);
   assert.match(distinctRace, /second concurrent retry command unexpectedly created another generation/);
   assert.match(sameCommandRace, /same retry command did not return the same request id/);
   assert.match(lateFirstRace, /late acceptance did not freeze intervention/);
