@@ -24,6 +24,19 @@ jobs:
         run: deno check supabase/functions/henvalt-shopify-oauth/index.ts
       - name: Test OAuth webhook registration safety
         run: deno test --allow-env supabase/functions/henvalt-shopify-oauth/webhook-registration_test.ts
+      - name: Validate OAuth state owner migration ordering
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          owner = Path("supabase/migrations/202610270003_bind_shopify_oauth_state_to_owner.sql")
+          expiring = Path("supabase/migrations/202611040001_shopify_expiring_offline_tokens.sql")
+          assert owner.exists(), "Missing OAuth state owner migration"
+          assert owner.name < expiring.name, "OAuth owner column must exist before the owner-bound finalization RPC"
+          sql = owner.read_text()
+          assert "initiated_by_user_id uuid references auth.users(id)" in sql
+          assert "on delete cascade" in sql
+          print("OAuth state owner schema ordering passed.")
+          PY
       - name: Validate Shopify TOML and extension source
         run: |
           python3 - <<'PY'
