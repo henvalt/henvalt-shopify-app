@@ -39,6 +39,23 @@ The earlier statement that no global recovery gate existed in the live delivery 
 - Until that candidate is reviewed, staged and explicitly approved, keep the current recovery switch and all flow toggles OFF and do not run the manual test-send node. The candidate interlock is not live.
 
 
+
+## Email quota concurrency gap — 2026-11-23
+
+A read-only review of the live billing trigger and delivery-attempt measurement trigger found a separate quota race:
+
+- `enforce_billing_entitlement_before_delivery()` locks the tenant's `billing_accounts` row and checks `monthly_email_limit` by counting `email_usage_measurements` before a `PENDING → UNKNOWN` delivery claim.
+- The only live producer of those usage rows is `measure_email_usage_after_attempt()`, an **AFTER INSERT** trigger on `delivery_attempts`. It records only after a provider attempt is recorded, for `ACCEPTED`, `DELIVERED`, or `UNKNOWN` attempt states.
+- The billing-account row lock serializes the authorization checks, but it does not reserve the slot. The first authorization commits and releases the lock before its provider call and attempt measurement. A second concurrent authorization can then count the same prior measurements and pass against the same final available slot. This is a code-path race; no quota overrun was observed in the current tenant.
+- Current test account state: `PENDING`, `test_mode=true`, `monthly_email_limit=5`, four recorded email-usage rows, zero pending delivery requests. This leaves one test-mode slot; it is not permission to send.
+- The historical one-off test request is already `DELIVERED`, has a provider message ID and three attempts. It does not satisfy the manual reauthorization function's required `FAILED` state, absent provider ID/claim, and exactly-one-attempt conditions, so that request is not eligible for another manual send.
+
+### Required candidate correction
+
+Introduce a durable, idempotent email-usage reservation keyed uniquely by `delivery_request_id`. Create it in the same transaction as the `PENDING → UNKNOWN` claim while holding the billing-account row lock. The cap check must count measured usage plus outstanding reservations. Convert a reservation to consumed when the attempt is `ACCEPTED`, `DELIVERED`, or `UNKNOWN`; release it only for a definitive `FAILED` or `REJECTED` result that proves no message was accepted. Keep ambiguous outcomes reserved until reconciliation. Add PostgreSQL tests with four of five slots already consumed and two independent sessions claiming two different pending requests: exactly one claim must succeed, the other must be denied, and duplicate retries must not create a second reservation. Also test release after definitive rejection and retention after ambiguous provider transport.
+
+No reservation table, trigger, billing function, delivery request, or email usage row was changed in this audit. Do not enable delivery until this race is addressed in a candidate migration and the two-session test passes.
+
 ## Candidate implementation already present elsewhere
 
 The open draft PR `#6` (`[DRAFT] HENVALT public-app hardening preparation`) already describes candidate work for a default-deny provider interlock, append-only operator audit, database trigger protection, and coverage of the ordinary and manual delivery paths. That candidate is not the live production implementation. This audit adds a fresh read-only verification of the current live credential-release function and records the exact production gap. Do not duplicate or fork the PR #6 implementation without reconciling its migration and tests first.
