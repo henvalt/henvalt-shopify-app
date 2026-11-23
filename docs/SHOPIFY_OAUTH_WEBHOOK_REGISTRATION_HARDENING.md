@@ -14,7 +14,7 @@ The callback now delegates registration to `webhook-registration.ts`:
 4. Read the subscription set once more and verify every expected topic against the exact ingress URI.
 5. Treat the final Shopify subscription list as the source of truth; a mutation response alone never marks a webhook verified.
 
-This reduces list queries from up to 13 to exactly 2 on a healthy callback, while preserving per-topic error details and final verification. Create mutations remain sequential to avoid bursts and make per-topic failure reporting deterministic.
+This reduces list queries from up to 13 to exactly 2 on a healthy callback, while preserving per-topic error details and final verification. Create mutations remain sequential to avoid bursts and make per-topic failure reporting deterministic. The callback also resolves the Shopify shop GID through the GraphQL Admin API instead of the legacy REST `shop.json` endpoint.
 
 ## Tests
 
@@ -23,7 +23,8 @@ The Deno test suite covers:
 - one initial list + one final list, with creates only for missing topics;
 - fail-closed behavior when the initial list is unavailable (no create mutations);
 - reconciliation when a create mutation reports a user error but final state confirms the subscription;
-- no success when final verification cannot find the expected subscription.
+- no success when final verification cannot find the expected subscription;
+- GraphQL shop identity lookup success, GraphQL errors, and missing shop IDs.
 
 ## Safety boundary
 
