@@ -30,6 +30,8 @@ The earlier statement that no global recovery gate existed in the live delivery 
 4. **Current tenant state is closed and has no queued send work.** Read-only counts show the global recovery switch is false, all four flow toggles are false, zero queued/claimed `execute_intervention` jobs, zero READY/SCHEDULED/SENDING interventions, and zero PENDING/QUEUED/PROCESSING delivery requests. One historical recovery sequence remains ACTIVE, but it has no current intervention or delivery request. The recovery and delivery workflows themselves are active schedulers; their business send gates remain closed.
 5. **No send or production mutation occurred during this recheck.** No workflow was executed, no provider token was released, no MailerSend request was made, and no email was sent.
 
+6. **Jurisdiction and merchant-compliance evidence remains incomplete.** AU, CA, GB and US jurisdiction policy rows and country registry entries are enabled. Read-only boolean checks show the test tenant has not confirmed its postal address, CAN-SPAM controls, merchant identity, sender profile, or opt-out evidence at collection/in-message. The send-eligibility function denies missing country evidence and applies the jurisdiction-specific requirements; no postal address or other personal/business address value was read. Keep sending disabled until the merchant supplies and confirms the required evidence.
+
 ### Updated interpretation
 
 - The live ordinary delivery path already has tenant-level and per-flow checks at both authorization and credential release; the previous 21 November wording that these were wholly absent is stale.
