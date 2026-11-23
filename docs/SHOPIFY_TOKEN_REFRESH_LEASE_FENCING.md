@@ -49,9 +49,9 @@ Do not deploy the Edge Function before the migration while the schedule is runni
 
 ## Verification
 
-The Deno regression suite covers service-role gating, malformed/missing lease IDs, successful fenced completion, stale completion, network failure, terminal provider rejection, malformed provider token pairs, persistence failure cleanup, non-claimed conflicts, and invalid shop domains.
+The Deno regression suite covers service-role gating, malformed/missing lease IDs, successful fenced completion, stale completion, network failure, terminal provider rejection, malformed provider token pairs, persistence failure cleanup, non-claimed conflicts, invalid shop domains, and fenced release of malformed token claims. All 11 tests passed in GitHub Actions run 1887.
 
-The SQL contract workflow checks lease ownership, lease expiry, stale cleanup, function privileges, legacy RPC removal, and the shop-domain regex. It does not execute the migration against production. Before rollout, the SQL should also be exercised against a disposable PostgreSQL/Supabase-compatible test database and the deployed Edge Function should be verified against the migrated RPC signatures.
+The candidate migration was applied successfully to a disposable PostgreSQL 17 instance. Integration checks passed for valid domain matching, one-owner claim exclusivity, stale completion/failure no-ops, token-pair persistence rollback, successful owner completion, expired lease reclaim, and service-role-only RPC grants. The SQL contract checks also passed. Deno type-check, all 11 tests, PostgreSQL integration, migration static checks, and existing Shopify app configuration checks passed in GitHub Actions run 1887. The Shopify deployment job was skipped for the pull request. No production migration or deployment occurred.
 
 ## Rollout safety
 
