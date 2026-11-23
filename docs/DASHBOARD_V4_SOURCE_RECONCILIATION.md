@@ -30,7 +30,10 @@ The reconciled source retains the existing Auth user validation, exactly-one-mem
 ## Verification still required before deployment
 
 1. Compare the deployed function's version/hash against this committed source using the Supabase function export or deployment pipeline.
-2. Run Deno type-check and tests in CI against the exact committed source.
+2. Run Deno type-check and the pure date / granularity validation tests in CI against the exact committed source.
+   - Explicit malformed dates now return HTTP 400 rather than silently falling back to defaults.
+   - Impossible calendar dates (for example, February 31), reversed ranges, ranges longer than 366 days, and unsupported granularities are rejected by a shared pure validator.
+   - Automated tests cover leap days, malformed dates, defaults, reversed / overlong ranges, and all supported / unsupported granularities.
 3. Exercise unauthenticated, invalid-token, zero/multiple membership, zero/multiple active shop, invalid date range and valid authenticated tenant paths.
 4. Verify the revenue series and ledger responses remain tenant scoped and confirmed-attribution only.
 5. Review the wildcard CORS origin against the production dashboard's actual origin and the intended app embedding model.
