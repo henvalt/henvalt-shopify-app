@@ -21,6 +21,8 @@ MailerSend documents a searchable sending-log API:
 - The list result includes `message_id`, `status`, `tags`, `recipient`, `created_at`, and `domain_id`.
 - `GET /v1/email/{email_id}` returns the individual email record and its activity.
 - The list endpoint requires a token with `activity_read` or `activity_full`; the single-email endpoint accepts `email_full`, `activity_read`, or `activity_full`.
+- The list endpoint allows up to 1,000 rows per page and 100 pages, and is rate-limited to 10 requests/minute shared with the activity endpoint. It supports exact tag and message-ID filtering. Split large date ranges into bounded windows; hitting a page or rate limit before exhausting the window makes a negative result inconclusive.
+- The live provider configuration has a `verified_domain` name but no typed domain ID. MailerSend's `GET /v1/domains` can map a verified domain name to its provider domain ID, but requires the separate `domains_read` permission; do not assume `activity_read` includes it.
 - Results are retained only for the account's configured activity-retention period. A no-match result is therefore not proof of non-acceptance unless the complete query window is known to be retained and fully paginated.
 
 Official API references:
