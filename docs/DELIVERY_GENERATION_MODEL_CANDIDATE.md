@@ -252,13 +252,15 @@ Added an executable PostgreSQL 17 model under `tests/delivery-generation-*`. It 
 - consent, tenant status, interlock and intervention freeze rechecks at both claim and egress boundaries;
 - late acceptance consumes a released reservation while preserving the original FAILED request state and appending a separate provider-evidence attempt;
 - contradictory acceptance freezes the parent and creates an incident;
-- duplicate provider event identity is idempotent.
+- duplicate provider event identity is idempotent and cannot be rebound to another request;
+- exact `tenant:<uuid>` + `delivery:<uuid>` tag correlation works when the original event has no message ID;
+- wrong-tenant, missing/duplicate delivery tags, recipient mismatches and provider-message-ID rebinding are rejected.
 
 The model is intentionally explicit that a provider HTTP response is not a pre-provider failure, even if it is an HTTP 4xx/5xx. A missing reservation, missing attempt, missing server marker, or unresolved/ambiguous state rejects retry.
 
 ### PostgreSQL acceptance and concurrency coverage
 
-- `tests/delivery-generation-postgres-acceptance.sql`: 28 transaction-level acceptance cases.
+- `tests/delivery-generation-postgres-acceptance.sql`: 37 transaction-level acceptance cases.
 - `tests/delivery-generation-concurrency-postgres.sh`: two independent sessions with distinct retry commands; exactly one generation may be allocated.
 - `tests/delivery-generation-same-command-concurrency-postgres.sh`: two independent sessions with the same retry command; both must receive the same request ID.
 - `tests/delivery-generation-late-acceptance-race-postgres.sh`: late acceptance takes the parent lock first; retry must wait and then be rejected.
