@@ -88,3 +88,17 @@ No operator RPC should be added until the MailerSend token's actual read scopes 
 ## Release boundary
 
 This document is not authorization to grant MailerSend scopes, change account settings, send email, create a provider lookup job, release reservations, deploy a function, or activate recovery/delivery. Keep ambiguous reservations held until the complete provider-evidence path has passed isolated staging acceptance.
+
+## Live schema audit — read-only, 2026-11-23
+
+The connected Supabase project was inspected using catalog metadata and the definition of `henvalt.record_delivery_result`; no rows or database objects were changed.
+
+Confirmed:
+- `henvalt.delivery_attempts` persists `tenant_id`, `delivery_request_id`, `provider`, `provider_message_id`, `provider_status_code`, `state`, `retryable`, `provider_response`, and `attempted_at`.
+- `record_delivery_result` writes the supplied provider message ID and response JSON to the attempt row, and preserves a non-null provider message ID on the delivery request.
+- `henvalt.provider_configs` has a JSONB `configuration`; `henvalt.sending_identities` has JSONB `metadata`. Neither table exposes a dedicated typed `domain_id` column in the inspected schema.
+
+Consequences:
+- Successful 202 responses already have a durable message ID path; the handler forwards `x-message-id` and the n8n classifier records it.
+- The ambiguous transport case has no message ID by definition. Tag-based search is therefore required, and the exact MailerSend sending-domain ID must be resolved from verified server-side configuration or a separately authorized provider-domain lookup.
+- The presence of JSONB configuration fields does not prove a usable domain ID or a MailerSend read scope. Do not infer either from the schema alone.
