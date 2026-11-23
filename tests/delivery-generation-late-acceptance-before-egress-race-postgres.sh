@@ -28,7 +28,7 @@ for _ in $(seq 1 100); do
   sleep 0.03
 done
 if [[ "$ready" != "1" ]]; then cat "$first_log"; kill "$first_pid" 2>/dev/null || true; echo "late event session missed barrier" >&2; exit 1; fi
-PGAPPNAME=egress-after-late psql -v ON_ERROR_STOP=1 >"$second_log" 2>&1 <<SQL
+PGAPPNAME=egress-after-late psql -At -v ON_ERROR_STOP=1 >"$second_log" 2>&1 <<SQL
 SELECT henvalt_test.start_provider_egress('$new_request');
 SQL
 wait "$first_pid"
