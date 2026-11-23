@@ -132,6 +132,29 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       const envelopeAuthorized = await envelopeResponse.json().catch(() => false);
       if (envelopeAuthorized !== true) return preProviderJson(409, "delivery_envelope_not_authorized");
 
+      // Commit the durable, one-way generation fence after all database
+      // envelope checks and immediately before the provider HTTP request.
+      // A failed/ambiguous fence call must never fall through to MailerSend.
+      const egressFenceResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/mark_mailersend_provider_egress_started", {
+        method: "POST",
+        redirect: "error",
+        headers: {
+          apikey: serviceRoleKey,
+          authorization: "Bearer " + serviceRoleKey,
+          "content-type": "application/json",
+          accept: "application/json",
+          "accept-profile": "henvalt",
+          "content-profile": "henvalt",
+        },
+        body: JSON.stringify({
+          p_tenant_id: tenantId,
+          p_delivery_request_id: deliveryRequestId,
+        }),
+      });
+      if (!egressFenceResponse.ok) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
+      const egressFenceStarted = await egressFenceResponse.json().catch(() => false);
+      if (egressFenceStarted !== true) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
+
       const tags = ["tenant:" + tenantId, "delivery:" + deliveryRequestId];
       if (isUuid(body.intervention_id)) tags.push("intervention:" + body.intervention_id);
       if (isUuid(body.correlation_id)) tags.push("correlation:" + body.correlation_id);
