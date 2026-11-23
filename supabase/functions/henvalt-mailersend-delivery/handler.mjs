@@ -7,7 +7,11 @@ const json = (status, body, extra = {}) => new Response(JSON.stringify(body), {
   },
 });
 
-function preProviderJson(status, error) {\n  return json(status, { error, henvalt_delivery_stage: "pre_provider" });\n}\n\nfunction constantTimeEqual(a, b) {
+function preProviderJson(status, error) {
+  return json(status, { error, henvalt_delivery_stage: "pre_provider" });
+}
+
+function constantTimeEqual(a, b) {
   const x = new TextEncoder().encode(a);
   const y = new TextEncoder().encode(b);
   if (x.length !== y.length) return false;
