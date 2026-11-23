@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { getShopifyShopId, registerShopifyWebhooks } from "./webhook-registration.ts";
+import { getShopifyShopId, registerShopifyWebhooks, SHOPIFY_WEBHOOK_SPECS } from "./webhook-registration.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
@@ -338,7 +338,7 @@ Deno.serve(async (req: Request) => {
           destination: webhookUri,
           all_registered: allWebhooksRegistered,
           verified_count: results.filter((item) => item.ok === true && item.verified === true).length,
-          expected_count: specs.length,
+          expected_count: SHOPIFY_WEBHOOK_SPECS.length,
           registrations: results.map((item) => ({
             topic: item.topic,
             ok: item.ok === true,
