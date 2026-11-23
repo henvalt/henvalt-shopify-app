@@ -78,6 +78,18 @@ A further code review found that the deployed summary RPC labels an opportunity 
 
 Latest verified candidate commit: `9612a7d85b698678a19e46ab8e9640e6df229b36`. GitHub Actions run `45121661863` passed Deno type-check and all 19 tests (8 range tests + 11 handler tests).
 
+
+## Additional live RPC semantics audit — 2026-11-23
+
+A read-only inspection of the deployed `control_plane_dashboard_summary` and `control_plane_revenue_series` function definitions found two further metric-integrity issues that are not changed by this PR:
+
+1. **Recovered count semantics differ by dashboard section.** The headline `metrics.recoveredOrders` counts distinct `order_attributions.order_id` rows with `attribution_confidence='CONFIRMED'`. The `byEvent[].recovered` breakdown instead counts `opportunities.status='RECOVERED'`. Those are different predicates and can disagree. The attribution table has a unique `(tenant_id, order_id)` constraint and an `opportunity_id` FK, so the per-event breakdown can be reconciled against confirmed attributions joined to their opportunity type. The current test tenant has no attribution or revenue rows, so no live mismatch was observed; this is a code-path discrepancy, not an observed incorrect figure.
+2. **Revenue aggregation assumes one currency without enforcing it.** Both summary and revenue-series RPCs sum all confirmed, billable ledger amounts without grouping or filtering by currency. The summary then selects one currency from the latest opportunity/ledger row (or tenant default) and formats the combined amount as that currency. If a store has confirmed billable recoveries in multiple currencies, the displayed total and chart would add unlike units. The inspected test tenant currently has zero confirmed billable recovery rows and a null default currency, so the risk is unexercised, not observed.
+
+The summary RPC's `recoveryRate` also divides confirmed attributions evaluated in the requested period by opportunities created in that same period. Those timestamps represent different cohorts; this is a period activity ratio, not necessarily a cohort conversion rate. The UI should label it accordingly or a future RPC should use a consistent opportunity cohort.
+
+**Release posture:** Do not claim these semantics are verified by the existing handler tests. Before presenting the dashboard as financially authoritative, reconcile per-event recovered counts to confirmed attribution and define a currency policy (single-currency enforcement, per-currency breakdown, or an explicit FX conversion source). No live SQL, migration, RLS, or function was changed during this audit.
+
 ## Shopify webhook integrity evidence
 
 The n8n ingest workflow's Webhook node has `rawBody=true`; the n8n Webhook implementation places the exact raw request bytes in the binary `data` property while retaining parsed JSON in `body`. The workflow passes the base64 binary bytes and `X-Shopify-Hmac-Sha256` header to the private `verify_shopify_webhook_hmac` RPC before tenant resolution and event ingestion. Read-only tenant records show 130 webhook events reached the ingest ledger after that verification step: 129 processed and one failed business validation. This is evidence that historical webhook HMAC verification and ingestion worked; it is not evidence of a current webhook delivery today.
