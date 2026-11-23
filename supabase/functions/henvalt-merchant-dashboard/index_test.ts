@@ -110,9 +110,13 @@ Deno.test("returns tenant-scoped confirmed ledger and revenue series for one aut
     json({ id: "user-1" }),
     json([{ tenant_id: "tenant-a" }]),
     json([{ shop_domain: "one.myshopify.com" }]),
-    json({ linked: true, metrics: { revenueRecovered: 42 } }),
+    json({ linked: true, currency: "USD", metrics: { revenueRecovered: 42 }, activity: [
+      { id: "opportunity-1", outcome: "recovered", amount: 999, currency: "USD" },
+      { id: "opportunity-2", outcome: "recovered", amount: 500, currency: "USD" },
+      { id: "opportunity-3", outcome: "pending", amount: null },
+    ] }),
     json({ series: [{ bucket: "2026-11-23T00:00:00.000Z", recovered_revenue: 42 }], current_revenue: 42, previous_revenue: 20, change_percent: 110 }),
-    json([{ id: "ledger-1", amount: 42, attribution_confidence: "CONFIRMED" }]),
+    json([{ id: "ledger-1", opportunity_id: "opportunity-1", amount: 42, currency: "USD", billable: true, attribution_confidence: "CONFIRMED" }]),
   ]);
   const handler = createDashboardHandler({ ...OPTIONS, fetchImpl: mock.fetchImpl });
   const response = await handler(request("?from=2026-11-01&to=2026-11-23&granularity=week"));
@@ -121,6 +125,9 @@ Deno.test("returns tenant-scoped confirmed ledger and revenue series for one aut
     throw new Error("valid dashboard response missing expected data");
   }
   if (body.revenueSeries[0].recovered_revenue !== 42) throw new Error("revenue series bucket shape differs from the live RPC contract");
+  if (body.activity[0].amount !== 42) throw new Error("activity must use the confirmed ledger amount, not opportunity value at risk");
+  if (body.activity[1].amount !== null) throw new Error("unmatched recovered activity must not display unverified revenue");
+  if (body.activity[2].amount !== null) throw new Error("pending activity must not display a revenue amount");
   if (body.range.from !== "2026-11-01" || body.range.granularity !== "week") throw new Error("range not preserved");
   const connectionUrl = mock.calls[2].input;
   if (!connectionUrl.includes("tenant_id=eq.tenant-a") || !connectionUrl.includes("tenants.status=eq.ACTIVE")) {
@@ -133,7 +140,9 @@ Deno.test("returns tenant-scoped confirmed ledger and revenue series for one aut
   const ledgerUrl = new URL(mock.calls[5].input);
   if (ledgerUrl.searchParams.get("tenant_id") !== "eq.tenant-a" ||
       ledgerUrl.searchParams.get("entry_type") !== "eq.RECOVERY" ||
-      ledgerUrl.searchParams.get("attribution_confidence") !== "eq.CONFIRMED") {
+      ledgerUrl.searchParams.get("attribution_confidence") !== "eq.CONFIRMED" ||
+      ledgerUrl.searchParams.get("billable") !== "eq.true" ||
+      !ledgerUrl.searchParams.get("select")?.includes("opportunity_id")) {
     throw new Error("ledger query missing tenant/recovery/confirmed filters");
   }
   for (const call of mock.calls.slice(1)) {
