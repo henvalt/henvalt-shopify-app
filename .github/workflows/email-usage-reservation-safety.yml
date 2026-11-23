@@ -1,0 +1,66 @@
+name: HENVALT email usage reservation safety
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611230001_email_usage_reservations.sql"
+      - "tests/email-usage-reservation-*"
+      - "tests/email-usage-reservations.test.mjs"
+      - ".github/workflows/email-usage-reservation-safety.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "supabase/migrations/202611230001_email_usage_reservations.sql"
+      - "tests/email-usage-reservation-*"
+      - "tests/email-usage-reservations.test.mjs"
+      - ".github/workflows/email-usage-reservation-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quota-reservation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Run reservation contract tests
+        run: node --test tests/email-usage-reservations.test.mjs
+      - name: Bootstrap isolated PostgreSQL fixture
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/email-usage-reservation-bootstrap.sql
+      - name: Apply candidate reservation migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611230001_email_usage_reservations.sql
+      - name: Exercise reservation lifecycle and privacy
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/email-usage-reservation-postgres-acceptance.sql
+      - name: Prove final-slot serialization across independent sessions
+        run: bash tests/email-usage-reservation-concurrency-postgres.sh
