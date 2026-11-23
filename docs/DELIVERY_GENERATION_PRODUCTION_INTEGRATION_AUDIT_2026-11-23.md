@@ -195,3 +195,22 @@ The first production-shaped migration CI attempt reached the migration and faile
 ## Current disposition
 
 The six CI workflows for candidate `225ea379448a21270b0415863b7fc6152464caa2` passed, including the 42-case isolated PostgreSQL model and six concurrency races. Those results do not close the live integration blockers above. PR #7 remains draft and unmerged. No production migration, Edge Function deployment, n8n workflow mutation/execution, provider request, or email was performed.
+
+
+## Durable provider-egress fence candidate — 2026-11-23
+
+A second candidate migration, `202611230003_delivery_provider_egress_fence.sql`, now adds the missing database compare-and-set boundary. It depends on the generation schema/RPC migration and the global provider-send interlock candidate.
+
+The service-role-only `mark_mailersend_provider_egress_started` RPC:
+- resolves the intervention without locking the child request, then locks parent → request;
+- requires the intervention to remain SENDING and unfrozen;
+- requires a claimed UNKNOWN MailerSend EMAIL request;
+- rejects stale generations whenever a newer generation exists;
+- rechecks the global provider-send interlock;
+- writes `provider_egress_started_at` once and refuses every second crossing.
+
+The MailerSend Edge Function candidate now calls this RPC after the database envelope assertion and immediately before the provider HTTP request. If the fence RPC rejects, returns false, times out, or is unavailable, the handler returns a server-authored pre-provider rejection and does not call MailerSend. Once the fence succeeds, a crash or provider transport failure remains ambiguous and non-retryable.
+
+The production-shaped PostgreSQL fixture now models the global interlock and tests closed-gate denial, one successful crossing, duplicate crossing rejection, and marker immutability. The Node handler tests assert the provider stub is unreachable unless the egress-fence RPC returns true.
+
+**Important limitation:** this is candidate-only. The live Edge Function and live Supabase schema remain unchanged. The marker is a durable statement that the provider boundary was crossed; it cannot recall a request already in flight if the operator closes the interlock or a late-acceptance webhook arrives immediately after the marker commits. The existing lock-order rewrites, webhook late-acceptance settlement, legacy one-off removal, recovery-worker retry wiring, and isolated Supabase staging remain mandatory before cutover.
