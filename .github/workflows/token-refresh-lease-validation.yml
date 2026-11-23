@@ -5,12 +5,14 @@ on:
     paths:
       - "supabase/functions/henvalt-shopify-token-refresh/**"
       - "supabase/migrations/*token_refresh*"
+      - "supabase/tests/shopify_token_refresh_lease_fencing.sql"
       - ".github/workflows/token-refresh-lease-validation.yml"
   push:
     branches: [main]
     paths:
       - "supabase/functions/henvalt-shopify-token-refresh/**"
       - "supabase/migrations/*token_refresh*"
+      - "supabase/tests/shopify_token_refresh_lease_fencing.sql"
       - ".github/workflows/token-refresh-lease-validation.yml"
 
 permissions:
@@ -19,6 +21,19 @@ permissions:
 jobs:
   token-refresh-validation:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2
@@ -28,7 +43,17 @@ jobs:
         run: deno check supabase/functions/henvalt-shopify-token-refresh/index.ts
       - name: Run token refresh lease regression tests
         run: deno test --allow-env supabase/functions/henvalt-shopify-token-refresh/index_test.ts
-      - name: Validate SQL fencing contract
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Execute lease fencing migration against disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
+            --file supabase/tests/shopify_token_refresh_lease_fencing.sql
+      - name: Validate migration contract and regex
         run: |
           python3 - <<'PY'
           from pathlib import Path
