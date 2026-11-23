@@ -111,7 +111,7 @@ Deno.test("returns tenant-scoped confirmed ledger and revenue series for one aut
     json([{ tenant_id: "tenant-a" }]),
     json([{ shop_domain: "one.myshopify.com" }]),
     json({ linked: true, metrics: { revenueRecovered: 42 } }),
-    json({ series: [{ date: "2026-11-23", revenue: 42 }], current_revenue: 42, previous_revenue: 20, change_percent: 110 }),
+    json({ series: [{ bucket: "2026-11-23T00:00:00.000Z", recovered_revenue: 42 }], current_revenue: 42, previous_revenue: 20, change_percent: 110 }),
     json([{ id: "ledger-1", amount: 42, attribution_confidence: "CONFIRMED" }]),
   ]);
   const handler = createDashboardHandler({ ...OPTIONS, fetchImpl: mock.fetchImpl });
@@ -120,6 +120,7 @@ Deno.test("returns tenant-scoped confirmed ledger and revenue series for one aut
   if (response.status !== 200 || body.ledger.length !== 1 || body.revenueSeries.length !== 1) {
     throw new Error("valid dashboard response missing expected data");
   }
+  if (body.revenueSeries[0].recovered_revenue !== 42) throw new Error("revenue series bucket shape differs from the live RPC contract");
   if (body.range.from !== "2026-11-01" || body.range.granularity !== "week") throw new Error("range not preserved");
   const connectionUrl = mock.calls[2].input;
   if (!connectionUrl.includes("tenant_id=eq.tenant-a") || !connectionUrl.includes("tenants.status=eq.ACTIVE")) {
