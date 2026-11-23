@@ -129,6 +129,31 @@ BEGIN
   p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
   IF NOT henvalt_test.settle_late_acceptance('evt-24a',r,'shared-message-id') THEN RAISE EXCEPTION '24 first event failed'; END IF;
   IF henvalt_test.settle_late_acceptance('evt-24a',r,'shared-message-id') THEN RAISE EXCEPTION '24 duplicate hash not deduped'; END IF;
+
+  -- 25: consent revoked after claim but before provider egress blocks the fence.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p);
+  IF NOT henvalt_test.claim_generation(r) THEN RAISE EXCEPTION '25 claim failed'; END IF;
+  UPDATE henvalt_test.interventions SET consent_ok=false WHERE id=p;
+  IF henvalt_test.start_provider_egress(r) THEN RAISE EXCEPTION '25 egress ignored revoked consent'; END IF;
+
+  -- 26: global interlock closed after claim but before provider egress blocks the fence.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p);
+  IF NOT henvalt_test.claim_generation(r) THEN RAISE EXCEPTION '26 claim failed'; END IF;
+  UPDATE henvalt_test.interventions SET interlock_open=false WHERE id=p;
+  IF henvalt_test.start_provider_egress(r) THEN RAISE EXCEPTION '26 egress bypassed closed interlock'; END IF;
+
+  -- 27: tenant deactivation after claim but before provider egress blocks the fence.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p);
+  IF NOT henvalt_test.claim_generation(r) THEN RAISE EXCEPTION '27 claim failed'; END IF;
+  UPDATE henvalt_test.interventions SET tenant_active=false WHERE id=p;
+  IF henvalt_test.start_provider_egress(r) THEN RAISE EXCEPTION '27 egress bypassed tenant deactivation'; END IF;
+
+  -- 28: a freeze applied after claim but before provider egress blocks the fence.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p);
+  IF NOT henvalt_test.claim_generation(r) THEN RAISE EXCEPTION '28 claim failed'; END IF;
+  UPDATE henvalt_test.interventions SET frozen_at=now(),freeze_reason='TEST_FREEZE' WHERE id=p;
+  IF henvalt_test.start_provider_egress(r) THEN RAISE EXCEPTION '28 egress bypassed intervention freeze'; END IF;
+
 END
 $tests$;
-SELECT 'delivery generation PostgreSQL model acceptance passed (24 cases)' AS result;
+SELECT 'delivery generation PostgreSQL model acceptance passed (28 cases)' AS result;
