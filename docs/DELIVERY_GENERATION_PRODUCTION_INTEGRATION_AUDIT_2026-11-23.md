@@ -187,6 +187,11 @@ This migration is **not ready to deploy**. It does not yet:
 
 The migration is an executable first slice of the production-shaped implementation, not a completed delivery-generation cutover. It must not be applied to production or staging until the remaining RPC/Edge/n8n changes and complete concurrency suite are validated together.
 
+
+### Production-shaped CI harness correction
+
+The first production-shaped migration CI attempt reached the migration and failed at its role revocation statements because the disposable fixture had not created Supabase's `anon` and `authenticated` roles. This was a fixture defect, not a production database failure. The fixture now creates `anon`, `authenticated`, and `service_role` before applying the migration. The same run had already passed the existing 42-case reference-model suite and the new production-shaped schema bootstrap. A fresh exact-head run after the role correction is not yet confirmed; do not treat the migration candidate as passing until that run completes successfully.
+
 ## Current disposition
 
 The six CI workflows for candidate `225ea379448a21270b0415863b7fc6152464caa2` passed, including the 42-case isolated PostgreSQL model and six concurrency races. Those results do not close the live integration blockers above. PR #7 remains draft and unmerged. No production migration, Edge Function deployment, n8n workflow mutation/execution, provider request, or email was performed.
