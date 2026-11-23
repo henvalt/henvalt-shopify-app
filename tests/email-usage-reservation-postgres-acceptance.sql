@@ -79,11 +79,29 @@ BEGIN
     RAISE EXCEPTION '429 rate limit incorrectly released quota reservation';
   END IF;
 
+  IF (SELECT count(*) FROM henvalt.email_usage_reservation_events WHERE tenant_id=t) <> 5 THEN
+    RAISE EXCEPTION 'reservation state history missing transitions';
+  END IF;
   IF has_table_privilege('anon','henvalt.email_usage_reservations','SELECT')
      OR has_table_privilege('authenticated','henvalt.email_usage_reservations','SELECT')
-     OR has_table_privilege('service_role','henvalt.email_usage_reservations','SELECT') THEN
-    RAISE EXCEPTION 'email reservation table is exposed to application roles';
+     OR has_table_privilege('service_role','henvalt.email_usage_reservations','SELECT')
+     OR has_table_privilege('anon','henvalt.email_usage_reservation_events','SELECT')
+     OR has_table_privilege('authenticated','henvalt.email_usage_reservation_events','SELECT')
+     OR has_table_privilege('service_role','henvalt.email_usage_reservation_events','SELECT') THEN
+    RAISE EXCEPTION 'email reservation or event table is exposed to application roles';
   END IF;
+  BEGIN
+    UPDATE henvalt.email_usage_reservation_events SET reason='tamper attempt';
+    RAISE EXCEPTION 'reservation event history was mutable';
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    NULL;
+  END;
+  BEGIN
+    DELETE FROM henvalt.email_usage_reservation_events;
+    RAISE EXCEPTION 'reservation event history was deletable';
+  EXCEPTION WHEN SQLSTATE '55000' THEN
+    NULL;
+  END;
 END
 $test$;
 SELECT 'email usage reservation acceptance passed' AS result;
