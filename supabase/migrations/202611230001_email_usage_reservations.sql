@@ -191,7 +191,13 @@ BEGIN
   -- missing status codes and transport failures remain reserved.
   v_definitive_rejection :=
     v_state IN ('FAILED', 'REJECTED')
-    AND NEW.provider_status_code IN (400, 401, 403, 404, 405, 410, 413, 415, 422);
+    AND (
+      NEW.provider_status_code IN (400, 401, 403, 404, 405, 410, 413, 415, 422)
+      -- The Edge Function emits this server-owned marker only on branches
+      -- that return before POST /v1/email is invoked. Do not infer this from
+      -- status code 409/5xx alone: provider responses may be ambiguous.
+      OR NEW.provider_response->>'henvalt_delivery_stage' = 'pre_provider'
+    );
 
   IF v_state IN ('ACCEPTED', 'DELIVERED', 'UNKNOWN') THEN
     -- A late acceptance/ambiguous result upgrades even a previously released
