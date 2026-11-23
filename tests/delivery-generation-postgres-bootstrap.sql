@@ -16,6 +16,7 @@ CREATE TABLE henvalt_test.delivery_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
   intervention_id uuid NOT NULL REFERENCES henvalt_test.interventions(id),
+  provider_message_id text,
   generation_number integer NOT NULL CHECK (generation_number > 0),
   status text NOT NULL CHECK (status IN ('PENDING','UNKNOWN','ACCEPTED','DELIVERED','FAILED','REJECTED')),
   idempotency_key text NOT NULL,
@@ -230,8 +231,9 @@ CREATE OR REPLACE FUNCTION henvalt_test.settle_late_acceptance(
   p_event_id text, p_request uuid, p_message_id text
 ) RETURNS boolean LANGUAGE plpgsql AS $$
 DECLARE v_parent uuid; v_tenant uuid; v_status text; v_gen integer; v_latest integer; v_inserted text;
+        v_existing_request uuid; v_existing_message_id text; v_request_message_id text;
 BEGIN
-  SELECT intervention_id,tenant_id INTO v_parent,v_tenant
+  SELECT intervention_id,tenant_id,provider_message_id INTO v_parent,v_tenant,v_request_message_id
     FROM henvalt_test.delivery_requests WHERE id=p_request;
   IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_REQUEST_NOT_FOUND'; END IF;
   PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
@@ -241,7 +243,24 @@ BEGIN
   VALUES(p_event_id,p_request,p_message_id,'delivered')
   ON CONFLICT(event_id) DO NOTHING
   RETURNING event_id INTO v_inserted;
-  IF v_inserted IS NULL THEN RETURN false; END IF;
+  IF v_inserted IS NULL THEN
+    SELECT delivery_request_id,provider_message_id INTO v_existing_request,v_existing_message_id
+      FROM henvalt_test.provider_events WHERE event_id=p_event_id;
+    IF v_existing_request IS DISTINCT FROM p_request
+       OR v_existing_message_id IS DISTINCT FROM p_message_id THEN
+      RAISE EXCEPTION 'PROVIDER_EVENT_IDENTITY_CONFLICT';
+    END IF;
+    RETURN false;
+  END IF;
+
+  IF v_request_message_id IS NOT NULL AND v_request_message_id IS DISTINCT FROM p_message_id THEN
+    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_MISMATCH';
+  END IF;
+  IF EXISTS (SELECT 1 FROM henvalt_test.delivery_requests
+              WHERE tenant_id=v_tenant AND provider_message_id=p_message_id AND id<>p_request) THEN
+    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_ALREADY_BOUND';
+  END IF;
+  UPDATE henvalt_test.delivery_requests SET provider_message_id=p_message_id WHERE id=p_request;
 
   SELECT status,generation_number INTO v_status,v_gen
     FROM henvalt_test.delivery_requests WHERE id=p_request;
