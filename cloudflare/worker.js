@@ -1,4 +1,4 @@
-const MAX_BODY_BYTES = 1_000_000;
+const MAX_BODY_BYTES = 5_000_000;
 const SHOP_DOMAIN_RE = /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/;
 const encoder = new TextEncoder();
 
