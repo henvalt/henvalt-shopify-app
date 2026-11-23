@@ -178,3 +178,42 @@ Deno.test("fails closed on a repeated pagination cursor", async () => {
   assertEquals(result.allRegistered, false);
   assertEquals(result.results.every((item) => !item.ok), true);
 });
+
+
+Deno.test("bounds webhook registration time and preserves time for final verification", async () => {
+  let clock = 0;
+  let listCalls = 0;
+  let createCalls = 0;
+  const created: Array<{ id: string; topic: string; uri: string }> = [];
+  const fetchImpl: typeof fetch = async (_input, init) => {
+    clock += 10_000;
+    const body = JSON.parse(String(init?.body));
+    if (body.query.includes("webhookSubscriptions")) {
+      listCalls++;
+      return response({
+        data: {
+          webhookSubscriptions: {
+            nodes: listCalls === 1 ? [] : created,
+            pageInfo: { hasNextPage: false, endCursor: null },
+          },
+        },
+      });
+    }
+    createCalls++;
+    const spec = SHOPIFY_WEBHOOK_SPECS.find((item) => item.gql === body.variables.topic)!;
+    const subscription = { id: `created-${spec.gql}`, topic: spec.gql, uri: "https://ingress.example/webhooks" };
+    created.push(subscription);
+    return response({ data: { webhookSubscriptionCreate: { userErrors: [], webhookSubscription: subscription } } });
+  };
+  const result = await registerShopifyWebhooks({
+    shop: "demo.myshopify.com",
+    accessToken: "test-token",
+    webhookUri: "https://ingress.example/webhooks",
+    fetchImpl,
+    now: () => clock,
+  });
+  assertEquals(createCalls, 3);
+  assertEquals(listCalls, 2);
+  assertEquals(result.allRegistered, false);
+  assertEquals(result.results.filter((item) => item.ok && item.verified).length, 3);
+});
