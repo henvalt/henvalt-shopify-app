@@ -16,6 +16,10 @@ The callback now delegates registration to `webhook-registration.ts`:
 
 This reduces list queries from up to 13 to exactly 2 on a healthy callback, while preserving per-topic error details and final verification. Create mutations remain sequential to avoid bursts and make per-topic failure reporting deterministic. The callback also resolves the Shopify shop GID through the GraphQL Admin API instead of the legacy REST `shop.json` endpoint. The subscription inventory is fully paginated (100 per page), with repeated-cursor and page-limit guards, so an existing matching subscription beyond the first 100 records is not missed. A schema migration adds the missing owner column referenced by the owner-bound OAuth flow and is ordered before the expiring-token finalization RPC.
 
+## Runtime budget
+
+The OAuth callback runs inside a Supabase Edge Function. A full inventory read plus twelve sequential webhook-create mutations plus final verification must not be allowed to consume the function's entire wall-clock budget. The helper now has a 45-second total budget, reserves the final 12 seconds for authoritative verification, caps inventory pagination at ten pages, and shortens each request timeout to the remaining budget. If the inventory or creates cannot finish inside the budget, registration reports attention rather than blocking the OAuth callback until the platform timeout. The callback continues to fail closed: unverified webhooks are not reported as registered.
+
 ## Tests
 
 The Deno test suite covers:
