@@ -4,12 +4,20 @@ on:
   pull_request:
     paths:
       - "tests/delivery-generation-*"
+      - "tests/fixtures/delivery-generation-*"
+      - "tests/fixtures/n8n-delivery-generation-contract-snapshot.json"
+      - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
+      - "docs/DELIVERY_GENERATION_*.md"
       - ".github/workflows/delivery-generation-model-safety.yml"
   push:
     branches:
       - "work/48h-system-readiness-2026-11-21"
     paths:
       - "tests/delivery-generation-*"
+      - "tests/fixtures/delivery-generation-*"
+      - "tests/fixtures/n8n-delivery-generation-contract-snapshot.json"
+      - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
+      - "docs/DELIVERY_GENERATION_*.md"
       - ".github/workflows/delivery-generation-model-safety.yml"
   workflow_dispatch:
 
@@ -37,6 +45,12 @@ jobs:
       PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run live production integration audit contract
+        run: node --test tests/delivery-generation-production-integration-audit.test.mjs
       - name: Install PostgreSQL client
         run: |
           sudo apt-get update
