@@ -22,15 +22,15 @@ test("reservation settlement is conservative and never expires ambiguous sends",
   assert.match(migration, /status IN \('RESERVED', 'RELEASED'\)/);
   assert.match(migration, /AND status = 'RESERVED'/);
   assert.doesNotMatch(migration, /DELETE FROM henvalt\.email_usage_reservations/i);
-  assert.doesNotMatch(migration, /\\bexpires_at\\b/i);
-  assert.doesNotMatch(migration, /WHERE[\\s\\S]{0,200}created_at\\s*<\\s*now\\(\\)\\s*-/i);
+  assert.doesNotMatch(migration, /expires_at/i);
   assert.match(migration, /email_usage_reservation_events/);
   assert.match(migration, /event_type text NOT NULL CHECK/);
-  assert.match(migration, /BEFORE UPDATE OR DELETE ON henvalt\\.email_usage_reservation_events/);
+  assert.match(migration, /BEFORE UPDATE OR DELETE ON henvalt\.email_usage_reservation_events/i);
 });
 
-test("reservation data remains private to the database owner", () => {
+test("reservation and event data remain private to the database owner", () => {
   assert.match(migration, /ENABLE ROW LEVEL SECURITY/);
   assert.match(migration, /REVOKE ALL ON henvalt\.email_usage_reservations FROM PUBLIC, anon, authenticated, service_role/);
+  assert.match(migration, /REVOKE ALL ON henvalt\.email_usage_reservation_events FROM PUBLIC, anon, authenticated, service_role/);
   assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.sync_email_usage_reservation_after_attempt\(\)[\s\S]*?FROM PUBLIC, anon, authenticated, service_role/);
 });
