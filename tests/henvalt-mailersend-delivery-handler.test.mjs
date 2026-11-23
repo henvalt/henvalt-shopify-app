@@ -163,6 +163,34 @@ test("service configuration failure is explicitly marked pre-provider", async ()
   });
 });
 
+test("provider response cannot forge the pre-provider quota-release marker", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+        return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        error: "provider_conflict",
+        henvalt_delivery_stage: "pre_provider",
+      }), { status: 409 });
+    },
+  });
+  const response = await handler(request(validBody()));
+  assert.equal(response.status, 409);
+  const body = await response.json();
+  assert.equal(body.error, "provider_conflict");
+  assert.equal(body.henvalt_delivery_stage, "provider_response");
+  assert.equal(calls.length, 3);
+  assert.equal(calls[2], "https://api.mailersend.com/v1/email");
+});
+
 test("invalid service credential and invalid input are rejected before any fetch", async () => {
   let calls = 0;
   const handler = createDeliveryHandler({
