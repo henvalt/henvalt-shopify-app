@@ -22,7 +22,8 @@ async function sign(body: Uint8Array, secret = SECRET): Promise<string> {
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, body);
+  const stableBody = new Uint8Array(body);
+  const signature = await crypto.subtle.sign("HMAC", key, stableBody.buffer);
   let binary = "";
   for (const byte of new Uint8Array(signature)) binary += String.fromCharCode(byte);
   return btoa(binary);
