@@ -137,6 +137,7 @@ class GenerationModel {
     if (g.state !== "AMBIGUOUS") throw new Error("GENERATION_NOT_AMBIGUOUS");
     if (!complete || matches.length === 0) return "UNRESOLVED";
     if (matches.length > 1) {
+      for (const id of matches) if (!g.providerMessageIds.includes(id)) g.providerMessageIds.push(id);
       const p = this.parent(g.parentId);
       p.frozen = true;
       p.incident = "MULTIPLE_PROVIDER_MATCHES";
