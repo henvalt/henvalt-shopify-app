@@ -31,3 +31,7 @@ The Deno test suite covers:
 ## Safety boundary
 
 This is a draft code change only. It does not change the deployed Supabase Edge Function, Shopify app version, webhook subscriptions, secrets, n8n workflows, recovery switches, email delivery, billing, or production database.
+
+## Adjacent checkout recovery release gate
+
+Shopify's December 1, 2026 public-app protected-customer-data change can remove `abandoned_checkout_url` unless all four protected customer fields are approved. HENVALT's recovery preflight requires a destination URL and fails closed if absent. See [`SHOPIFY_CHECKOUT_URL_PROTECTED_DATA_RELEASE_GATE.md`](./SHOPIFY_CHECKOUT_URL_PROTECTED_DATA_RELEASE_GATE.md) before enabling checkout recovery.
