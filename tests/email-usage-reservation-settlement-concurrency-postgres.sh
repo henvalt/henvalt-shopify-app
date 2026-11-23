@@ -7,7 +7,7 @@ set -euo pipefail
 : "${PGPASSWORD:=postgres}"
 export PGHOST PGPORT PGUSER PGDATABASE PGPASSWORD
 
-tenant='99999999-9999-4999-8999-999999999999'
+tenant='dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 delivery='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 failure_attempt='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 accepted_attempt='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
