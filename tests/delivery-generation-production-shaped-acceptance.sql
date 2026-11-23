@@ -88,6 +88,13 @@ BEGIN
   END;
 
 
+  BEGIN
+    UPDATE henvalt.delivery_retry_commands SET generation_number=99
+     WHERE tenant_id=v_tenant AND intervention_id=v_intervention AND retry_command_id=v_command;
+    RAISE EXCEPTION 'retry ledger mutation was accepted';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
   -- A second distinct retry command cannot fork a still-pending generation.
   BEGIN
     PERFORM henvalt.create_delivery_retry_generation(v_tenant,v_intervention,gen_random_uuid());
