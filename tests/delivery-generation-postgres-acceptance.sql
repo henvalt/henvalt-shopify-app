@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 DO $tests$
 DECLARE
-  p uuid; r uuid; r2 uuid; cmd uuid; got uuid; n integer;
+  p uuid; r uuid; r2 uuid; cmd uuid; got uuid; n integer; v_tenant uuid; v_tags text[];
 BEGIN
   -- 01: first generation is generation one.
   p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p);
@@ -177,6 +177,83 @@ BEGIN
     IF SQLERRM='30 provider message ID rebound to another request' THEN RAISE; END IF;
   END;
 
+
+  -- 31: exact tenant + delivery tags resolve a pre-provider request without a message ID.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
+  v_tags:=ARRAY['tenant:'||v_tenant::text,'delivery:'||r::text];
+  got:=henvalt_test.resolve_delivery_tag(v_tags,'recipient@example.test',NULL);
+  IF got<>r THEN RAISE EXCEPTION '31 exact delivery tag did not resolve request'; END IF;
+  IF NOT henvalt_test.settle_late_acceptance('evt-31',got,NULL) THEN RAISE EXCEPTION '31 tag-correlated late acceptance failed'; END IF;
+
+  -- 32: missing delivery tag is rejected, never guessed from recipient alone.
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(ARRAY['tenant:'||v_tenant::text],'recipient@example.test',NULL);
+    RAISE EXCEPTION '32 missing delivery tag was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='32 missing delivery tag was accepted' THEN RAISE; END IF;
+  END;
+
+  -- 33: a valid delivery UUID under the wrong tenant cannot resolve.
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p);
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(
+      ARRAY['tenant:'||v_tenant::text,'delivery:'||r2::text],
+      'recipient@example.test',NULL
+    );
+    RAISE EXCEPTION '33 cross-tenant delivery tag was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='33 cross-tenant delivery tag was accepted' THEN RAISE; END IF;
+  END;
+
+  -- 34: provider recipient must match the immutable request recipient.
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(v_tags,'other@example.test',NULL);
+    RAISE EXCEPTION '34 recipient mismatch was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='34 recipient mismatch was accepted' THEN RAISE; END IF;
+  END;
+
+  -- 35: duplicate delivery tags are ambiguous and rejected.
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(
+      ARRAY['tenant:'||v_tenant::text,'delivery:'||r::text,'delivery:'||r::text],
+      'recipient@example.test',NULL
+    );
+    RAISE EXCEPTION '35 duplicate delivery tags were accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='35 duplicate delivery tags were accepted' THEN RAISE; END IF;
+  END;
+
+  -- 36: a request already bound to a provider message ID rejects a different ID.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
+  v_tags:=ARRAY['tenant:'||v_tenant::text,'delivery:'||r::text];
+  IF NOT henvalt_test.settle_late_acceptance('evt-36',r,'msg-36') THEN RAISE EXCEPTION '36 first settlement failed'; END IF;
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(v_tags,'recipient@example.test','msg-36-other');
+    RAISE EXCEPTION '36 provider message ID mismatch was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='36 provider message ID mismatch was accepted' THEN RAISE; END IF;
+  END;
+
+  -- 37: a provider message ID bound to another request cannot be reused.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
+  v_tags:=ARRAY['tenant:'||v_tenant::text,'delivery:'||r::text];
+  IF NOT henvalt_test.settle_late_acceptance('evt-37a',r,'msg-37-shared') THEN RAISE EXCEPTION '37 first settlement failed'; END IF;
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
+  BEGIN
+    PERFORM henvalt_test.resolve_delivery_tag(
+      ARRAY['tenant:'||v_tenant::text,'delivery:'||r2::text],
+      'recipient@example.test','msg-37-shared'
+    );
+    RAISE EXCEPTION '37 provider message ID reused across requests';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='37 provider message ID reused across requests' THEN RAISE; END IF;
+  END;
+
 END
 $tests$;
-SELECT 'delivery generation PostgreSQL model acceptance passed (30 cases)' AS result;
+SELECT 'delivery generation PostgreSQL model acceptance passed (37 cases)' AS result;
