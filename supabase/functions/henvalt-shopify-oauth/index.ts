@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { registerShopifyWebhooks } from "./webhook-registration.ts";
+import { getShopifyShopId, registerShopifyWebhooks } from "./webhook-registration.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
@@ -275,14 +275,13 @@ Deno.serve(async (req: Request) => {
       return json(502, { error: "shopify_expiring_offline_token_response_invalid" });
     }
 
-    const shopRes = await fetch(`https://${shop}/admin/api/2026-10/shop.json`, { headers: { "x-shopify-access-token": accessToken, accept: "application/json" } });
-    if (!shopRes.ok) {
-      console.error("Shopify shop verification failed", shopRes.status);
+    let shopId = "";
+    try {
+      shopId = await getShopifyShopId({ shop, accessToken });
+    } catch {
+      console.error("Shopify GraphQL shop verification failed");
       return json(502, { error: "shopify_shop_verification_failed" });
     }
-    const shopData = await shopRes.json();
-    const shopId = String(shopData?.shop?.id ?? "");
-    if (!shopId) return json(502, { error: "shopify_shop_id_missing" });
 
     const finalized = await db("/rest/v1/rpc/control_plane_finalize_shopify_oauth_install_expiring_for_owner", {
       method: "POST",
