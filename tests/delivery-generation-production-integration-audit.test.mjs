@@ -66,7 +66,7 @@ test("legacy one-off request reset is explicitly identified as incompatible with
   assert.equal(audit.service_role_execution.can_claim_provider_token, true);
   assert.equal(audit.service_role_execution.can_record_delivery_result, true);
   assert.equal(audit.service_role_execution.can_process_provider_webhook, true);
-  assert.match(report, /service_role can execute all four relevant RPCs/);
+  assert.match(report, /`service_role` can execute all four relevant RPCs/);
   assert.match(report, /The generation cutover must replace this RPC with a fail-closed response/);
 });
 
