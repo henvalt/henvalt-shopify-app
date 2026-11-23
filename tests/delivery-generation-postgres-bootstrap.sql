@@ -257,25 +257,18 @@ BEGIN
   IF p_message_id IS NOT NULL AND (btrim(p_message_id)='' OR length(p_message_id)>255) THEN
     RAISE EXCEPTION 'INVALID_PROVIDER_MESSAGE_ID';
   END IF;
-
   SELECT substring(tag from '^tenant:([0-9a-fA-F-]{36})$')::uuid
-    INTO v_tenant
-    FROM unnest(p_tags) AS tags(tag)
+    INTO v_tenant FROM unnest(p_tags) AS tags(tag)
    WHERE tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   SELECT substring(tag from '^delivery:([0-9a-fA-F-]{36})$')::uuid
-    INTO v_request_id
-    FROM unnest(p_tags) AS tags(tag)
+    INTO v_request_id FROM unnest(p_tags) AS tags(tag)
    WHERE tag ~* '^delivery:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-
-  SELECT intervention_id INTO v_parent
-    FROM henvalt_test.delivery_requests
+  SELECT intervention_id INTO v_parent FROM henvalt_test.delivery_requests
    WHERE id=v_request_id AND tenant_id=v_tenant;
   IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_TAG_NOT_FOUND_FOR_TENANT'; END IF;
   PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
-  SELECT * INTO v_request
-    FROM henvalt_test.delivery_requests
-   WHERE id=v_request_id AND tenant_id=v_tenant
-   FOR UPDATE;
+  SELECT * INTO v_request FROM henvalt_test.delivery_requests
+   WHERE id=v_request_id AND tenant_id=v_tenant FOR UPDATE;
   IF lower(v_request.recipient_email)<>lower(coalesce(p_recipient,'')) THEN
     RAISE EXCEPTION 'PROVIDER_RECIPIENT_MISMATCH';
   END IF;
@@ -295,21 +288,32 @@ END $$;
 CREATE OR REPLACE FUNCTION henvalt_test.settle_late_acceptance(
   p_event_id text, p_request uuid, p_message_id text
 ) RETURNS boolean LANGUAGE plpgsql AS $$
-DECLARE v_parent uuid; v_tenant uuid; v_status text; v_gen integer; v_latest integer; v_inserted text;
-        v_existing_request uuid; v_existing_message_id text; v_request_message_id text;
+DECLARE
+  v_parent uuid;
+  v_tenant uuid;
+  v_status text;
+  v_gen integer;
+  v_latest integer;
+  v_inserted text;
+  v_existing_request uuid;
+  v_existing_message_id text;
+  v_request_message_id text;
 BEGIN
-  SELECT intervention_id,tenant_id,provider_message_id INTO v_parent,v_tenant,v_request_message_id
+  SELECT intervention_id,tenant_id,provider_message_id
+    INTO v_parent,v_tenant,v_request_message_id
     FROM henvalt_test.delivery_requests WHERE id=p_request;
   IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_REQUEST_NOT_FOUND'; END IF;
   PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
-  PERFORM 1 FROM henvalt_test.delivery_requests WHERE id=p_request AND tenant_id=v_tenant FOR UPDATE;
+  PERFORM 1 FROM henvalt_test.delivery_requests
+   WHERE id=p_request AND tenant_id=v_tenant FOR UPDATE;
 
   INSERT INTO henvalt_test.provider_events(event_id,delivery_request_id,provider_message_id,event_type)
   VALUES(p_event_id,p_request,p_message_id,'delivered')
   ON CONFLICT(event_id) DO NOTHING
   RETURNING event_id INTO v_inserted;
   IF v_inserted IS NULL THEN
-    SELECT delivery_request_id,provider_message_id INTO v_existing_request,v_existing_message_id
+    SELECT delivery_request_id,provider_message_id
+      INTO v_existing_request,v_existing_message_id
       FROM henvalt_test.provider_events WHERE event_id=p_event_id;
     IF v_existing_request IS DISTINCT FROM p_request
        OR v_existing_message_id IS DISTINCT FROM p_message_id THEN
@@ -331,212 +335,8 @@ BEGIN
     FROM henvalt_test.delivery_requests WHERE id=p_request;
   SELECT max(generation_number) INTO v_latest
     FROM henvalt_test.delivery_requests WHERE intervention_id=v_parent;
-
   UPDATE henvalt_test.reservations SET status='CONSUMED',reason='LATE_PROVIDER_ACCEPTANCE'
    WHERE delivery_request_id=p_request AND status IN ('RELEASED','RESERVED');
-
-  INSERT INTO henvalt_test.delivery_attempts(delivery_request_id,attempt_number,state,stage,provider_status_code)
-  SELECT p_request,coalesce(max(attempt_number),0)+1,'ACCEPTED','provider_event',200
-    FROM henvalt_test.delivery_attempts WHERE delivery_request_id=p_request;
-
-  IF v_status='FAILED' OR v_gen<v_latest THEN
-    UPDATE henvalt_test.interventions
-       SET frozen_at=coalesce(frozen_at,clock_timestamp()),
-           freeze_reason='CONTRADICTORY_LATE_ACCEPTANCE'
-     WHERE id=v_parent;
-    INSERT INTO henvalt_test.incidents(intervention_id,delivery_request_id,incident_type,provider_event_id)
-    VALUES(v_parent,p_request,'CONTRADICTORY_LATE_ACCEPTANCE',p_event_id)
-    ON CONFLICT(provider_event_id) DO NOTHING;
-  ELSE
-    UPDATE henvalt_test.delivery_requests SET status='DELIVERED' WHERE id=p_request;
-  END IF;
-  RETURN true;
-END $$;
-),
-         count(*) FILTER (WHERE tag ~* '^delivery:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-    FROM unnest(coalesce(p_tags,ARRAY[]::text[])) AS tags(tag);
-  IF v_tenant_count<>1 OR v_delivery_count<>1 THEN
-    RAISE EXCEPTION 'EXACT_TENANT_AND_DELIVERY_TAG_REQUIRED';
-  END IF;
-
-  SELECT substring(tag from '^tenant:([0-9a-fA-F-]{36})$')::uuid
-    INTO v_tenant
-    FROM unnest(p_tags) AS tags(tag)
-   WHERE tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-  SELECT substring(tag from '^delivery:([0-9a-fA-F-]{36})$')::uuid
-    INTO v_request_id
-    FROM unnest(p_tags) AS tags(tag)
-   WHERE tag ~* '^delivery:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-
-  SELECT intervention_id INTO v_parent
-    FROM henvalt_test.delivery_requests
-   WHERE id=v_request_id AND tenant_id=v_tenant;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_TAG_NOT_FOUND_FOR_TENANT'; END IF;
-  PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
-  SELECT * INTO v_request
-    FROM henvalt_test.delivery_requests
-   WHERE id=v_request_id AND tenant_id=v_tenant
-   FOR UPDATE;
-  IF lower(v_request.recipient_email)<>lower(coalesce(p_recipient,'')) THEN
-    RAISE EXCEPTION 'PROVIDER_RECIPIENT_MISMATCH';
-  END IF;
-  IF v_request.provider_message_id IS NOT NULL
-     AND v_request.provider_message_id IS DISTINCT FROM p_message_id THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_MISMATCH';
-  END IF;
-  IF p_message_id IS NOT NULL AND EXISTS (
-    SELECT 1 FROM henvalt_test.delivery_requests
-     WHERE tenant_id=v_tenant AND provider_message_id=p_message_id AND id<>v_request_id
-  ) THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_ALREADY_BOUND';
-  END IF;
-  RETURN v_request_id;
-END $$;
-
-CREATE OR REPLACE FUNCTION henvalt_test.settle_late_acceptance(
-  p_event_id text, p_request uuid, p_message_id text
-) RETURNS boolean LANGUAGE plpgsql AS $$
-DECLARE v_parent uuid; v_tenant uuid; v_status text; v_gen integer; v_latest integer; v_inserted text;
-        v_existing_request uuid; v_existing_message_id text; v_request_message_id text;
-BEGIN
-  SELECT intervention_id,tenant_id,provider_message_id INTO v_parent,v_tenant,v_request_message_id
-    FROM henvalt_test.delivery_requests WHERE id=p_request;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_REQUEST_NOT_FOUND'; END IF;
-  PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
-  PERFORM 1 FROM henvalt_test.delivery_requests WHERE id=p_request AND tenant_id=v_tenant FOR UPDATE;
-
-  INSERT INTO henvalt_test.provider_events(event_id,delivery_request_id,provider_message_id,event_type)
-  VALUES(p_event_id,p_request,p_message_id,'delivered')
-  ON CONFLICT(event_id) DO NOTHING
-  RETURNING event_id INTO v_inserted;
-  IF v_inserted IS NULL THEN
-    SELECT delivery_request_id,provider_message_id INTO v_existing_request,v_existing_message_id
-      FROM henvalt_test.provider_events WHERE event_id=p_event_id;
-    IF v_existing_request IS DISTINCT FROM p_request
-       OR v_existing_message_id IS DISTINCT FROM p_message_id THEN
-      RAISE EXCEPTION 'PROVIDER_EVENT_IDENTITY_CONFLICT';
-    END IF;
-    RETURN false;
-  END IF;
-
-  IF v_request_message_id IS NOT NULL AND v_request_message_id IS DISTINCT FROM p_message_id THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_MISMATCH';
-  END IF;
-  IF EXISTS (SELECT 1 FROM henvalt_test.delivery_requests
-              WHERE tenant_id=v_tenant AND provider_message_id=p_message_id AND id<>p_request) THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_ALREADY_BOUND';
-  END IF;
-  UPDATE henvalt_test.delivery_requests SET provider_message_id=p_message_id WHERE id=p_request;
-
-  SELECT status,generation_number INTO v_status,v_gen
-    FROM henvalt_test.delivery_requests WHERE id=p_request;
-  SELECT max(generation_number) INTO v_latest
-    FROM henvalt_test.delivery_requests WHERE intervention_id=v_parent;
-
-  UPDATE henvalt_test.reservations SET status='CONSUMED',reason='LATE_PROVIDER_ACCEPTANCE'
-   WHERE delivery_request_id=p_request AND status IN ('RELEASED','RESERVED');
-
-  INSERT INTO henvalt_test.delivery_attempts(delivery_request_id,attempt_number,state,stage,provider_status_code)
-  SELECT p_request,coalesce(max(attempt_number),0)+1,'ACCEPTED','provider_event',200
-    FROM henvalt_test.delivery_attempts WHERE delivery_request_id=p_request;
-
-  IF v_status='FAILED' OR v_gen<v_latest THEN
-    UPDATE henvalt_test.interventions
-       SET frozen_at=coalesce(frozen_at,clock_timestamp()),
-           freeze_reason='CONTRADICTORY_LATE_ACCEPTANCE'
-     WHERE id=v_parent;
-    INSERT INTO henvalt_test.incidents(intervention_id,delivery_request_id,incident_type,provider_event_id)
-    VALUES(v_parent,p_request,'CONTRADICTORY_LATE_ACCEPTANCE',p_event_id)
-    ON CONFLICT(provider_event_id) DO NOTHING;
-  ELSE
-    UPDATE henvalt_test.delivery_requests SET status='DELIVERED' WHERE id=p_request;
-  END IF;
-  RETURN true;
-END $$;
-)
-    INTO v_tenant_prefix_count,v_delivery_prefix_count,v_tenant_count,v_delivery_count
-    FROM unnest(coalesce(p_tags,ARRAY[]::text[])) AS tags(tag);
-  IF v_tenant_count<>1 OR v_delivery_count<>1 THEN
-    RAISE EXCEPTION 'EXACT_TENANT_AND_DELIVERY_TAG_REQUIRED';
-  END IF;
-
-  SELECT substring(tag from '^tenant:([0-9a-fA-F-]{36})$')::uuid
-    INTO v_tenant
-    FROM unnest(p_tags) AS tags(tag)
-   WHERE tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-  SELECT substring(tag from '^delivery:([0-9a-fA-F-]{36})$')::uuid
-    INTO v_request_id
-    FROM unnest(p_tags) AS tags(tag)
-   WHERE tag ~* '^delivery:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
-
-  SELECT intervention_id INTO v_parent
-    FROM henvalt_test.delivery_requests
-   WHERE id=v_request_id AND tenant_id=v_tenant;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_TAG_NOT_FOUND_FOR_TENANT'; END IF;
-  PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
-  SELECT * INTO v_request
-    FROM henvalt_test.delivery_requests
-   WHERE id=v_request_id AND tenant_id=v_tenant
-   FOR UPDATE;
-  IF lower(v_request.recipient_email)<>lower(coalesce(p_recipient,'')) THEN
-    RAISE EXCEPTION 'PROVIDER_RECIPIENT_MISMATCH';
-  END IF;
-  IF v_request.provider_message_id IS NOT NULL
-     AND v_request.provider_message_id IS DISTINCT FROM p_message_id THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_MISMATCH';
-  END IF;
-  IF p_message_id IS NOT NULL AND EXISTS (
-    SELECT 1 FROM henvalt_test.delivery_requests
-     WHERE tenant_id=v_tenant AND provider_message_id=p_message_id AND id<>v_request_id
-  ) THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_ALREADY_BOUND';
-  END IF;
-  RETURN v_request_id;
-END $$;
-
-CREATE OR REPLACE FUNCTION henvalt_test.settle_late_acceptance(
-  p_event_id text, p_request uuid, p_message_id text
-) RETURNS boolean LANGUAGE plpgsql AS $$
-DECLARE v_parent uuid; v_tenant uuid; v_status text; v_gen integer; v_latest integer; v_inserted text;
-        v_existing_request uuid; v_existing_message_id text; v_request_message_id text;
-BEGIN
-  SELECT intervention_id,tenant_id,provider_message_id INTO v_parent,v_tenant,v_request_message_id
-    FROM henvalt_test.delivery_requests WHERE id=p_request;
-  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_REQUEST_NOT_FOUND'; END IF;
-  PERFORM 1 FROM henvalt_test.interventions WHERE id=v_parent FOR UPDATE;
-  PERFORM 1 FROM henvalt_test.delivery_requests WHERE id=p_request AND tenant_id=v_tenant FOR UPDATE;
-
-  INSERT INTO henvalt_test.provider_events(event_id,delivery_request_id,provider_message_id,event_type)
-  VALUES(p_event_id,p_request,p_message_id,'delivered')
-  ON CONFLICT(event_id) DO NOTHING
-  RETURNING event_id INTO v_inserted;
-  IF v_inserted IS NULL THEN
-    SELECT delivery_request_id,provider_message_id INTO v_existing_request,v_existing_message_id
-      FROM henvalt_test.provider_events WHERE event_id=p_event_id;
-    IF v_existing_request IS DISTINCT FROM p_request
-       OR v_existing_message_id IS DISTINCT FROM p_message_id THEN
-      RAISE EXCEPTION 'PROVIDER_EVENT_IDENTITY_CONFLICT';
-    END IF;
-    RETURN false;
-  END IF;
-
-  IF v_request_message_id IS NOT NULL AND v_request_message_id IS DISTINCT FROM p_message_id THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_MISMATCH';
-  END IF;
-  IF EXISTS (SELECT 1 FROM henvalt_test.delivery_requests
-              WHERE tenant_id=v_tenant AND provider_message_id=p_message_id AND id<>p_request) THEN
-    RAISE EXCEPTION 'PROVIDER_MESSAGE_ID_ALREADY_BOUND';
-  END IF;
-  UPDATE henvalt_test.delivery_requests SET provider_message_id=p_message_id WHERE id=p_request;
-
-  SELECT status,generation_number INTO v_status,v_gen
-    FROM henvalt_test.delivery_requests WHERE id=p_request;
-  SELECT max(generation_number) INTO v_latest
-    FROM henvalt_test.delivery_requests WHERE intervention_id=v_parent;
-
-  UPDATE henvalt_test.reservations SET status='CONSUMED',reason='LATE_PROVIDER_ACCEPTANCE'
-   WHERE delivery_request_id=p_request AND status IN ('RELEASED','RESERVED');
-
   INSERT INTO henvalt_test.delivery_attempts(delivery_request_id,attempt_number,state,stage,provider_status_code)
   SELECT p_request,coalesce(max(attempt_number),0)+1,'ACCEPTED','provider_event',200
     FROM henvalt_test.delivery_attempts WHERE delivery_request_id=p_request;
