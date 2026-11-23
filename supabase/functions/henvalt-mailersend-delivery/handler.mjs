@@ -48,6 +48,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
     if (!constantTimeEqual(bearer, serviceRoleKey)) return preProviderJson(401, "service_role_required");
 
     let apiToken = "";
+    let providerEgressStarted = false;
     try {
       const body = await req.json().catch(() => ({}));
       const tenantId = body.tenant_id;
@@ -142,6 +143,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
 
       let providerResponse;
       try {
+        providerEgressStarted = true;
         providerResponse = await fetchImpl("https://api.mailersend.com/v1/email", {
           method: "POST",
           redirect: "error",
@@ -169,7 +171,9 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
         ? providerBody
         : { result: providerBody }, responseHeaders);
     } catch {
-      return json(500, { error: "delivery_provider_failed" });
+      return providerEgressStarted
+        ? json(500, { error: "delivery_provider_failed" })
+        : preProviderJson(500, "delivery_preflight_failed");
     } finally {
       apiToken = "";
     }
