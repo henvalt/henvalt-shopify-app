@@ -38,3 +38,8 @@ No live Worker, binding, secret, Shopify webhook subscription, n8n workflow or S
 ## Payload-size contract
 
 The Worker enforces a 5,000,000-byte streaming cap for HTTPS webhook deliveries. Shopify's current delivery documentation lists a 5 MB payload limit for HTTPS destinations (separate from the 1 MB Amazon EventBridge limit). This keeps the Worker bounded without rejecting valid HTTPS deliveries solely because they exceed 1 MB. See https://shopify.dev/docs/apps/build/events/delivery-structure.
+
+
+## CI verification — 2026-11-23
+
+GitHub Actions run `45122423050` completed the ingress checks on code commit `dcb4714f544d192ce3cb312c16a86926ff772224`: Deno type-check passed and all 8 tests passed. An earlier run caught a TypeScript `BufferSource` mismatch in the test HMAC helper; the helper now copies the input to a concrete `ArrayBuffer` before signing. The successful run's Shopify deployment job was skipped because this was a pull request.
