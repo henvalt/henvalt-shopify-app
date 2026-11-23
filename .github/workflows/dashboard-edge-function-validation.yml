@@ -1,0 +1,23 @@
+name: Dashboard Edge Function validation
+
+on:
+  pull_request:
+    paths:
+      - "supabase/functions/henvalt-merchant-dashboard/**"
+      - ".github/workflows/dashboard-edge-function-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard-edge-function:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check deployed dashboard source
+        run: deno check supabase/functions/henvalt-merchant-dashboard/index.ts
