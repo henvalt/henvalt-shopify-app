@@ -19,6 +19,24 @@ This document is a release blocker record and implementation contract, not autho
 6. Live `henvalt.delivery_requests` currently contains 2 ACCEPTED and 1 DELIVERED rows (from the read-only status aggregation). These are historical states, not evidence of a current send in progress.
 7. No verified global no-send control was found in the live database function or published workflow graph.
 
+
+## Fresh live credential-release recheck — 2026-11-23
+
+The earlier statement that no global recovery gate existed in the live delivery path is now superseded by a fresh read-only inspection of the current deployed functions and active n8n workflow:
+
+1. **Ordinary delivery authorization checks the live switches.** `henvalt.authorize_delivery_request` requires an ACTIVE tenant, matching PENDING request, SENDING intervention, active recovery sequence, eligible opportunity, current tenant setting `henvalt_app.recoveryEnabled=true`, and the matching per-flow `enabled=true`. It then rechecks Shopify connection, order conversion, consent/jurisdiction, suppression, message/unsubscribe, sender and provider configuration before changing the request to the pre-send UNKNOWN state.
+2. **Credential release independently rechecks the switches.** `henvalt.get_mailersend_token_for_delivery` repeats the tenant/global/per-flow, consent, suppression, opportunity, connection, sender-domain and delivery-claim conditions in the final Vault-token release predicate. The ordinary route therefore has a second gate after `authorize_delivery_request`, protecting the gap between authorization and secret retrieval.
+3. **A narrowly scoped manual test exception still bypasses the normal switch.** The live token-release function retains an exact one-off test exception tied to a single tenant, opportunity, delivery request, idempotency key and `test_only=true` message. The active `HENVALT_DELIVERY` workflow has a separate manual-trigger node that calls `reauthorize_one_off_test_delivery`; that function only accepts the specific failed test request after one credential-unavailable 409 attempt, then temporarily enables the recovery switch and checkout flow inside its transaction, runs the same authorization function, and restores the original settings before commit. This is not a general merchant-send bypass, but it can authorize a real test email to its hardcoded allowlisted recipient. **Do not execute this manual trigger without explicit user approval.**
+4. **Current tenant state is closed and has no queued send work.** Read-only counts show the global recovery switch is false, all four flow toggles are false, zero queued/claimed `execute_intervention` jobs, zero READY/SCHEDULED/SENDING interventions, and zero PENDING/QUEUED/PROCESSING delivery requests. One historical recovery sequence remains ACTIVE, but it has no current intervention or delivery request. The recovery and delivery workflows themselves are active schedulers; their business send gates remain closed.
+5. **No send or production mutation occurred during this recheck.** No workflow was executed, no provider token was released, no MailerSend request was made, and no email was sent.
+
+### Updated interpretation
+
+- The live ordinary delivery path already has tenant-level and per-flow checks at both authorization and credential release; the previous 21 November wording that these were wholly absent is stale.
+- The remaining gap is that the special manual test exception can temporarily bypass the tenant switch. The candidate PR #7 provider interlock is still valuable because it places a single independent default-deny control above both ordinary and exceptional routes and removes reliance on a recipient-specific exception.
+- Until that candidate is reviewed, staged and explicitly approved, keep the current recovery switch and all flow toggles OFF and do not run the manual test-send node. The candidate interlock is not live.
+
+
 ## Candidate implementation already present elsewhere
 
 The open draft PR `#6` (`[DRAFT] HENVALT public-app hardening preparation`) already describes candidate work for a default-deny provider interlock, append-only operator audit, database trigger protection, and coverage of the ordinary and manual delivery paths. That candidate is not the live production implementation. This audit adds a fresh read-only verification of the current live credential-release function and records the exact production gap. Do not duplicate or fork the PR #6 implementation without reconciling its migration and tests first.
