@@ -90,6 +90,19 @@ The summary RPC's `recoveryRate` also divides confirmed attributions evaluated i
 
 **Release posture:** Do not claim these semantics are verified by the existing handler tests. Before presenting the dashboard as financially authoritative, reconcile per-event recovered counts to confirmed attribution and define a currency policy (single-currency enforcement, per-currency breakdown, or an explicit FX conversion source). No live SQL, migration, RLS, or function was changed during this audit.
 
+
+## Supabase advisor snapshot — 2026-11-23
+
+Read-only Security and Performance advisor checks returned:
+
+- **11 tables** in the private `henvalt` schema have RLS enabled with no policies. This is consistent with service-role-only internal tables and means ordinary roles are denied by default; do not add blanket tenant policies just to silence the INFO finding.
+- One WARN reports `henvalt.is_tenant_member(uuid)` as a `SECURITY DEFINER` RPC executable by `authenticated`. Existing RLS policies depend on it, and prior inspection found it checks `auth.uid()` against tenant membership. Do not revoke or convert it without reviewing every dependent policy and the function body; the warning remains a deliberate review item.
+- Auth leaked-password protection is disabled. This is an Auth configuration hardening item, not a database migration; it was not changed in this audit.
+- One foreign key, `shopify_privacy_requests.tenant_id`, lacks a covering index. Consider a targeted index before privacy-request volume grows; no index was created.
+- The advisor lists 64 unused indexes. The tenant has very little production-like traffic, so these are not evidence that the indexes are unnecessary. Do not drop them based on this snapshot.
+
+No advisor remediation, grant change, RLS policy, Auth setting, index, or production database object was changed.
+
 ## Shopify webhook integrity evidence
 
 The n8n ingest workflow's Webhook node has `rawBody=true`; the n8n Webhook implementation places the exact raw request bytes in the binary `data` property while retaining parsed JSON in `body`. The workflow passes the base64 binary bytes and `X-Shopify-Hmac-Sha256` header to the private `verify_shopify_webhook_hmac` RPC before tenant resolution and event ingestion. Read-only tenant records show 130 webhook events reached the ingest ledger after that verification step: 129 processed and one failed business validation. This is evidence that historical webhook HMAC verification and ingestion worked; it is not evidence of a current webhook delivery today.
