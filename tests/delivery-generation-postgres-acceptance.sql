@@ -305,6 +305,28 @@ BEGIN
     IF SQLERRM='41 blank provider message ID was accepted' THEN RAISE; END IF;
   END;
 
+
+  -- 42: failed provider-evidence correlation rolls back the event receipt and every settlement side effect.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p,v_tenant);
+  UPDATE henvalt_test.delivery_requests SET provider_message_id='msg-42-bound-elsewhere' WHERE id=r2;
+  BEGIN
+    PERFORM henvalt_test.settle_late_acceptance('evt-42',r,'msg-42-bound-elsewhere');
+    RAISE EXCEPTION '42 conflicting provider evidence unexpectedly settled';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='42 conflicting provider evidence unexpectedly settled' THEN RAISE; END IF;
+  END;
+  IF EXISTS (SELECT 1 FROM henvalt_test.provider_events WHERE event_id='evt-42') THEN
+    RAISE EXCEPTION '42 rejected webhook event receipt was not rolled back';
+  END IF;
+  IF (SELECT status FROM henvalt_test.reservations WHERE delivery_request_id=r)<>'RELEASED' THEN
+    RAISE EXCEPTION '42 rejected webhook changed the quota reservation';
+  END IF;
+  IF (SELECT provider_message_id FROM henvalt_test.delivery_requests WHERE id=r) IS NOT NULL THEN
+    RAISE EXCEPTION '42 rejected webhook changed the request message identity';
+  END IF;
+
 END
 $tests$;
-SELECT 'delivery generation PostgreSQL model acceptance passed (41 cases)' AS result;
+SELECT 'delivery generation PostgreSQL model acceptance passed (42 cases)' AS result;
