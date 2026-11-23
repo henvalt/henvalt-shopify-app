@@ -34,6 +34,23 @@ ALTER TABLE henvalt.recovery_interventions
   ADD COLUMN IF NOT EXISTS delivery_frozen_at timestamptz,
   ADD COLUMN IF NOT EXISTS delivery_freeze_reason text;
 
+DO $freeze_constraint$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid='henvalt.recovery_interventions'::regclass
+      AND conname='recovery_interventions_delivery_freeze_pair'
+  ) THEN
+    ALTER TABLE henvalt.recovery_interventions
+      ADD CONSTRAINT recovery_interventions_delivery_freeze_pair
+      CHECK ((delivery_frozen_at IS NULL) = (delivery_freeze_reason IS NULL)) NOT VALID;
+  END IF;
+END;
+$freeze_constraint$;
+
+ALTER TABLE henvalt.recovery_interventions
+  VALIDATE CONSTRAINT recovery_interventions_delivery_freeze_pair;
+
 DO $constraints$
 BEGIN
   IF NOT EXISTS (
