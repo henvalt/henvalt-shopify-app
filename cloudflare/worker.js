@@ -12,6 +12,37 @@ function json(data, status = 200) {
   });
 }
 
+async function readBoundedBody(request) {
+  if (!request.body) return { error: "empty_body" };
+  const reader = request.body.getReader();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      totalBytes += part.value.byteLength;
+      if (totalBytes > MAX_BODY_BYTES) {
+        await reader.cancel();
+        return { error: "body_too_large" };
+      }
+      chunks.push(part.value);
+    }
+  } catch {
+    return { error: "body_unreadable" };
+  } finally {
+    reader.releaseLock();
+  }
+  if (totalBytes === 0) return { error: "empty_body" };
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return { bytes };
+}
+
 function constantTimeEqual(left, right) {
   if (left.length !== right.length) return false;
   let difference = 0;
@@ -78,16 +109,12 @@ export function createHandler(options = {}) {
       return json({ ok: false, error: "body_too_large" }, 413);
     }
 
-    let rawBody;
-    try {
-      rawBody = await request.arrayBuffer();
-    } catch {
-      return json({ ok: false, error: "body_unreadable" }, 400);
-    }
-    if (rawBody.byteLength === 0) return json({ ok: false, error: "empty_body" }, 400);
-    if (rawBody.byteLength > MAX_BODY_BYTES) {
+    const bodyResult = await readBoundedBody(request);
+    if (bodyResult.error === "body_too_large") {
       return json({ ok: false, error: "body_too_large" }, 413);
     }
+    if (bodyResult.error) return json({ ok: false, error: bodyResult.error }, 400);
+    const rawBody = bodyResult.bytes;
 
     let validSignature = false;
     try {
