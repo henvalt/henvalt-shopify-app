@@ -104,3 +104,30 @@ Consequences:
 - Successful 202 responses already have a durable message ID path; the handler forwards `x-message-id` and the n8n classifier records it.
 - The ambiguous transport case has no message ID by definition. Tag-based search is therefore required, and the exact MailerSend sending-domain ID must be resolved from verified server-side configuration or a separately authorized provider-domain lookup.
 - The presence of JSONB configuration fields does not prove a usable domain ID or a MailerSend read scope. Do not infer either from the schema alone.
+
+## Pre-provider failure evidence — candidate implementation, 2026-11-23
+
+A further audit of the deployed credential-release function and the pinned delivery workflow found a quota leak that was not covered by the original reconciliation plan:
+
+1. `authorize_delivery_request` changes a request from `PENDING` to `UNKNOWN`, which creates the quota reservation.
+2. `get_mailersend_token_for_delivery` claims the request before resolving/decrypting the provider credential.
+3. The Edge Function can then reject the request at the credential or envelope boundary without ever calling MailerSend.
+4. The prior n8n classifier persisted generic 4xx/5xx results, while the reservation trigger deliberately retained HTTP 409 and ambiguous responses. A request could therefore become terminal while its quota reservation remained `RESERVED`.
+
+Candidate correction:
+- Edge Function pre-provider exits return a server-generated `henvalt_delivery_stage: "pre_provider"` marker.
+- Any actual MailerSend response is normalized to `henvalt_delivery_stage: "provider_response"`, overriding a provider-supplied marker. This prevents provider response JSON from forging quota-release evidence.
+- The delivery candidate classifier treats only the exact server marker as a definitive no-egress failure and persists the marker in `provider_response`.
+- The reservation trigger releases only when state is `FAILED`/`REJECTED` and either the existing narrow provider rejection allowlist matches or the exact pre-provider marker is present.
+- An actual provider 409, including one whose body attempts to claim `pre_provider`, remains reserved.
+- Provider transport errors after the request begins remain ambiguous and held.
+
+Coverage added:
+- credential RPC non-2xx and transport failure;
+- envelope authorization failure and transport failure;
+- provider response attempting to spoof the marker;
+- SQL acceptance for a genuine pre-provider failure releasing quota;
+- SQL acceptance for a provider 409 with `provider_response` marker remaining reserved;
+- delivery candidate classifier preserving the stage evidence.
+
+Important boundary: this is candidate code and isolated-test work only. It does not change the deployed Edge Function, active n8n workflow, or production migration state. The existing provider-claim timestamp can still make a pre-provider failure terminal; this correction addresses quota leakage, not automated retry of that request. A separate retry design must create a fresh, idempotently fenced send attempt and must not reset a claimed request in place.
