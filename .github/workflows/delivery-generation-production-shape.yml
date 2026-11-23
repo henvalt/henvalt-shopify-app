@@ -5,6 +5,8 @@ on:
     paths:
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
+      - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
+      - "tests/delivery-generation-production-shaped-late-acceptance.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   push:
@@ -12,6 +14,7 @@ on:
       - "work/48h-system-readiness-2026-11-21"
     paths:
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
+      - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   workflow_dispatch:
@@ -52,5 +55,9 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql
       - name: Apply durable provider egress fence candidate
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230003_delivery_provider_egress_fence.sql
+      - name: Apply late provider acceptance incident candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230006_late_provider_acceptance_incidents.sql
       - name: Verify generation, evidence, idempotency and immutable fences
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-acceptance.sql
+      - name: Verify late provider acceptance settlement and quota evidence
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-late-acceptance.sql
