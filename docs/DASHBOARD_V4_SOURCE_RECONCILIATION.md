@@ -76,7 +76,7 @@ A further code review found that the deployed summary RPC labels an opportunity 
 - Sets the activity amount to null when there is no matching ledger entry, so the UI displays no monetary amount instead of presenting estimated value at risk as recovered revenue.
 - Adds regression coverage for a matched ledger entry, an unmatched recovered opportunity, a pending opportunity, and the PostgREST query filters.
 
-Latest verified candidate commit: `9612a7d85b698678a19e46ab8e9640e6df229b36`. GitHub Actions run `45121661863` passed Deno type-check and all 19 tests (8 range tests + 11 handler tests).
+Latest verified candidate commit: `9612a7d85b698678a19e46ab8e9640e6df229b36`. GitHub Actions run `45121661863` passed Deno type-check and all 19 tests (8 range tests + 11 handler tests). The current documentation/audit head `49bace1b7a7e323996d7565a42f46c7e561e42f9` also passed GitHub Actions run `1902` (Shopify app configuration/static validation) and dashboard Edge Function run `27` (Deno type-check and both validation/handler test files).
 
 
 ## Additional live RPC semantics audit — 2026-11-23
