@@ -357,7 +357,8 @@ test("21 schema-grounded design replaces the live one-request index and preserve
   assert.match(spec, /generation_number integer NOT NULL DEFAULT 1/);
   assert.match(spec, /\(tenant_id, intervention_id, generation_number\)/);
   assert.match(spec, /delivery_requests_tenant_id_idempotency_key_key/);
-  assert.match(spec, /provider_claimed_at.*cannot serve this purpose/i);
+  assert.match(spec, /provider_claimed_at/);
+  assert.match(spec, /credential-claim fence, not proof that the provider HTTP request started/i);
   assert.match(spec, /provider-egress-start marker/i);
   assert.match(spec, /recovery_intervention → delivery_request → billing_account\/reservation → delivery_attempt\/event/);
   assert.match(spec, /No generation column\/index, retry-command ledger, egress-start RPC/);
