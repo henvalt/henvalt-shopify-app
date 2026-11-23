@@ -42,6 +42,7 @@ Deno.test("rejects invalid Auth session and never performs privileged lookups", 
   if (response.status !== 401 || (await response.json()).error !== "invalid_session") throw new Error("invalid token accepted");
   if (mock.calls.length !== 1 || !mock.calls[0].input.endsWith("/auth/v1/user")) throw new Error("privileged lookup occurred");
   if (new Headers(mock.calls[0].init?.headers).get("apikey") !== OPTIONS.anonKey) throw new Error("Auth must use anon key");
+  if (new Headers(mock.calls[0].init?.headers).get("authorization") !== "Bearer valid-test-token") throw new Error("Bearer token was not normalized before Auth validation");
 });
 
 Deno.test("rejects zero tenant memberships", async () => {
