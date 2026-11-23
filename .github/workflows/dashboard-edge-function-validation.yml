@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "supabase/functions/henvalt-merchant-dashboard/**"
+      - "dashboard/index.html"
       - ".github/workflows/dashboard-edge-function-validation.yml"
 
 permissions:
