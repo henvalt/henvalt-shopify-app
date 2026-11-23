@@ -164,6 +164,7 @@ jobs:
               "token_refresh_lease_id=v_lease_id",
               "v_conn.token_refresh_lease_id is distinct from p_lease_id",
               "token_refresh_lease_id=p_lease_id",
+              "v_conn.access_token_expires_at > clock_timestamp()+interval '5 minutes'",
               "v_conn.token_refresh_lease_until>clock_timestamp()",
               "v_conn.token_refresh_lease_until<=clock_timestamp()",
               "and token_refresh_lease_until>clock_timestamp()",
