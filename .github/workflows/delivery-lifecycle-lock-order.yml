@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
+      - "supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql"
+      - "tests/legacy-one-off-delivery-disable-acceptance.sql"
       - "tests/delivery-lifecycle-lock-order-*.sql"
       - ".github/workflows/delivery-lifecycle-lock-order.yml"
   push:
@@ -53,3 +55,7 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql
       - name: Verify lock order and RPC behavior
         run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f tests/delivery-lifecycle-lock-order-acceptance.sql
+      - name: Disable legacy one-off reauthorization and test-sender routes
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql
+      - name: Verify normal token path and one-off fail-closed behavior
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f tests/legacy-one-off-delivery-disable-acceptance.sql
