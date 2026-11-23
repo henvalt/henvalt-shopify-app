@@ -277,3 +277,27 @@ This is an executable transaction contract, not a production migration or proof 
 The existing `authorize_delivery_request` and `get_mailersend_token_for_delivery` code paths also need current-generation checks. The actual Edge Function needs a durable egress-authorization RPC after envelope validation and immediately before the MailerSend POST. The real MailerSend webhook path still needs exact delivery-tag correlation and the narrow late-acceptance settlement path described in section 12.
 
 **No generation migration has been applied or added to the candidate migration directory in this batch. No production Supabase object, Edge Function, active n8n workflow, provider credential, or email was changed.**
+
+
+## 14. Active n8n delivery integration — read-only verification, 2026-11-23
+
+Read-only inspection through the connected n8n integration pinned the active workflow:
+
+- Workflow: `HENVALT_DELIVERY`
+- Workflow ID: `CvVyybGJZSnklxiZ`
+- Active version ID: `621ae6ce-a006-4fed-a70e-acf774c360fb`
+- Active: true; 62 nodes; current draft version equals active version.
+
+The sanitized snapshot is stored at `tests/fixtures/n8n-delivery-generation-contract-snapshot.json`. It intentionally excludes credentials, recipient email, hardcoded one-off request ID, provider tokens and request body values.
+
+Three active paths must be integrated together:
+
+1. **Normal delivery:** `Authorize & Context` calls `authorize_delivery_request`; `MailerSend Send` calls the `henvalt-mailersend-delivery` Edge Function; `Classify Result` feeds `Record Delivery Result`, which calls `record_delivery_result` directly through PostgREST.
+2. **Provider webhook:** `Verify MailerSend Signature` calls `verify_mailersend_webhook_signature_api`; `Process MailerSend Event` calls `process_mailersend_webhook_event`.
+3. **Manual one-off test:** `Prepare One-Off Test Delivery` calls `reauthorize_one_off_test_delivery`; the one-off provider node calls the same Edge Function; `Record One-Off Test Result` also calls `record_delivery_result` directly.
+
+The direct `record_delivery_result` callers are therefore not limited to the SQL webhook processor. There are two n8n PostgREST callers in the active workflow. Any parent-first lock-order refactor, generation check, or provider-egress fence must preserve the RPC signature or update both callers in a reviewed candidate workflow. The manual one-off route must not bypass current-generation/freeze checks.
+
+The existing webhook route still calls the legacy processor, whose live catalog implementation matches only by tenant + provider message ID and invokes the terminal-state-protected result RPC. The generation work must add exact delivery-tag correlation for late acceptance without silently changing ordinary bounce, unsubscribe, inbound-reply, tracking or suppression behavior.
+
+**No n8n workflow was changed, executed, published, deactivated or otherwise mutated during this inspection.** The snapshot is a static integration contract only; it does not itself prove that the live routes are safe for generation retries.
