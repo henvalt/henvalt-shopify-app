@@ -430,7 +430,7 @@ BEGIN
 END $$;
 )::uuid
     INTO v_tenant
-    FROM unnest(p_tags) AS tag
+    FROM unnest(p_tags) AS tags(tag)
    WHERE tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
   p_event_id text, p_request uuid, p_message_id text
 ) RETURNS boolean LANGUAGE plpgsql AS $$
@@ -554,7 +554,7 @@ BEGIN
 END $$;
 )::uuid
     INTO v_request_id
-    FROM unnest(p_tags) AS tag
+    FROM unnest(p_tags) AS tags(tag)
    WHERE tag ~* '^delivery:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
   p_event_id text, p_request uuid, p_message_id text
 ) RETURNS boolean LANGUAGE plpgsql AS $$
