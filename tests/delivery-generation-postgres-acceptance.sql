@@ -1,4 +1,4 @@
-\\set ON_ERROR_STOP on
+\set ON_ERROR_STOP on
 DO $tests$
 DECLARE
   p uuid; r uuid; r2 uuid; cmd uuid; got uuid; n integer;
