@@ -10,6 +10,7 @@ DECLARE
   v_gen integer;
   v_status text;
   v_count integer;
+  v_attempt uuid;
 BEGIN
   PERFORM set_config('request.jwt.claim.role','service_role',true);
 
@@ -31,13 +32,16 @@ BEGIN
   ) VALUES (
     v_tenant,v_request,1,'FAILED',409,
     '{"henvalt_delivery_stage":"pre_provider","error":"credential_unavailable"}'::jsonb
-  );
+  ) RETURNING id INTO v_attempt;
 
   INSERT INTO henvalt.email_usage_reservations(
-    tenant_id,delivery_request_id,status,status_reason
+    tenant_id,delivery_request_id,status,status_reason,last_attempt_id
   ) VALUES (
-    v_tenant,v_request,'RELEASED','DEFINITIVE_PROVIDER_REJECTION_409'
+    v_tenant,v_request,'RELEASED','DEFINITIVE_PROVIDER_REJECTION_409',v_attempt
   );
+  INSERT INTO henvalt.email_usage_reservation_events(reservation_id,tenant_id,delivery_request_id,event_type,previous_status,new_status,delivery_attempt_id,reason)
+  SELECT id,v_tenant,v_request,'RELEASED','RESERVED','RELEASED',v_attempt,'DEFINITIVE_PROVIDER_REJECTION_409'
+  FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request;
 
   -- Existing row is generation 1 without changing its identity or state.
   SELECT generation_number,status::text INTO v_gen,v_status
@@ -76,6 +80,20 @@ BEGIN
   IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention)<>'SENDING' THEN
     RAISE EXCEPTION 'parent intervention not returned to SENDING';
   END IF;
+
+  BEGIN
+    UPDATE henvalt.delivery_requests SET generation_number=99 WHERE id=v_next;
+    RAISE EXCEPTION 'generation number mutation was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='generation number mutation was accepted' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    UPDATE henvalt.delivery_retry_commands SET generation_number=99 WHERE tenant_id=v_tenant AND intervention_id=v_intervention AND retry_command_id=v_command;
+    RAISE EXCEPTION 'retry ledger mutation was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='retry ledger mutation was accepted' THEN RAISE; END IF;
+  END;
 
   -- A second distinct retry command cannot fork a still-pending generation.
   BEGIN
