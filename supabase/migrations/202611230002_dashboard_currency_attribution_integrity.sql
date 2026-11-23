@@ -160,15 +160,7 @@ BEGIN
             OR o.status IN ('INELIGIBLE', 'SUPPRESSED') THEN 'skipped'
           ELSE 'pending'
         END,
-        'amount', CASE WHEN EXISTS (
-          SELECT 1
-            FROM henvalt.order_attributions oa
-           WHERE oa.tenant_id = o.tenant_id
-             AND oa.opportunity_id = o.id
-             AND oa.attribution_confidence = 'CONFIRMED'
-             AND oa.evaluated_at >= p_from
-             AND oa.evaluated_at < p_to + interval '1 day'
-        ) THEN NULL ELSE NULL END
+        'amount', NULL
       ) AS item,
       o.created_at
       FROM henvalt.opportunities o
@@ -406,7 +398,7 @@ BEGIN
        AND rl.entry_type = 'RECOVERY'
        AND rl.billable IS TRUE
        AND rl.attribution_confidence = 'CONFIRMED'
-       AND rl.currency::text = v_current_currency
+       AND upper(btrim(rl.currency::text)) = v_current_currency
        AND rl.created_at >= p_from
        AND rl.created_at < p_to + interval '1 day';
 
@@ -425,7 +417,7 @@ BEGIN
          AND rl.entry_type = 'RECOVERY'
          AND rl.billable IS TRUE
          AND rl.attribution_confidence = 'CONFIRMED'
-         AND rl.currency::text = v_current_currency
+         AND upper(btrim(rl.currency::text)) = v_current_currency
          AND rl.created_at >= p_from
          AND rl.created_at < p_to + interval '1 day'
        GROUP BY 1
@@ -455,7 +447,7 @@ BEGIN
        AND rl.entry_type = 'RECOVERY'
        AND rl.billable IS TRUE
        AND rl.attribution_confidence = 'CONFIRMED'
-       AND rl.currency::text = v_current_currency
+       AND upper(btrim(rl.currency::text)) = v_current_currency
        AND rl.created_at >= v_previous_from
        AND rl.created_at < p_from;
   END IF;
