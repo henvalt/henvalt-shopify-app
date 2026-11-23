@@ -75,7 +75,7 @@ CREATE TABLE henvalt_test.incidents (
 
 CREATE OR REPLACE FUNCTION henvalt_test.seed_initial(
   p_intervention_id uuid, p_tenant_id uuid DEFAULT gen_random_uuid()
-) RETURNS uuid LANGUAGE plpgsql AS $
+) RETURNS uuid LANGUAGE plpgsql AS $$
 DECLARE v_tenant uuid; v_request uuid;
 BEGIN
   INSERT INTO henvalt_test.interventions(id,tenant_id)
