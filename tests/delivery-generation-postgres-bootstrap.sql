@@ -1,4 +1,4 @@
-\\set ON_ERROR_STOP on
+\set ON_ERROR_STOP on
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE SCHEMA henvalt_test;
 
@@ -157,6 +157,7 @@ BEGIN
      OR v_attempt.id IS NULL
      OR v_attempt.state <> 'FAILED'
      OR v_attempt.stage <> 'pre_provider'
+     OR v_reservation.delivery_request_id IS NULL
      OR v_reservation.status <> 'RELEASED'
      OR EXISTS (SELECT 1 FROM henvalt_test.provider_events
                  WHERE delivery_request_id=v_previous.id
