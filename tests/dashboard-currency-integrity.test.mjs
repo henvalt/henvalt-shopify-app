@@ -18,6 +18,8 @@ test("dashboard totals never add unlike currencies", () => {
   assert.match(migration, /revenueByCurrency/);
   assert.match(migration, /current_currency_conflict/);
   assert.match(migration, /comparison_currency_conflict/);
+  assert.match(migration, /v_invalid_currency_count > 0/);
+  assert.match(migration, /ELSE 'UNKNOWN'/);
   assert.match(handler, /currencyConflict \? null/);
   assert.match(handler, /existing\.currency !== currency/);
   assert.match(dashboard, /Multiple currencies/);
