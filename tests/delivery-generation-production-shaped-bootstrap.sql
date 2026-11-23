@@ -100,6 +100,15 @@ CREATE TABLE henvalt.provider_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb
 );
 
+-- Fields introduced by the quota-reservation candidate and used by
+-- late-provider-acceptance reconciliation.
+ALTER TABLE henvalt.email_usage_reservations
+  ADD COLUMN consumed_at timestamptz,
+  ADD COLUMN released_at timestamptz,
+  ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE henvalt.email_usage_reservation_events
+  ADD COLUMN provider_status_code integer;
+
 -- Minimal production interlock fixture required by the egress-fence migration.
 CREATE TABLE henvalt.provider_send_control (
   control_key text PRIMARY KEY CHECK(control_key='global'),
