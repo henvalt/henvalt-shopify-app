@@ -95,8 +95,9 @@
     "credential_rpc": "get_mailersend_token_for_delivery",
     "envelope_rpc": "assert_mailersend_delivery_envelope",
     "provider_endpoint": "https://api.mailersend.com/v1/email",
-    "egress_marker_is_durable_in_database": false,
-    "current_egress_marker_is_process_local_boolean": true,
+    "candidate_handler_calls_durable_egress_rpc": true,
+    "production_database_has_egress_marker": false,
+    "process_local_boolean_is_diagnostic_only": true,
     "required_marker_position": "after_envelope_authorization_before_provider_http"
   },
   "late_acceptance": {
