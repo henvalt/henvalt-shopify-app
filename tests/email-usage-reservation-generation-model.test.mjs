@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 // Executable reference model for the proposed delivery-generation contract.
 // This is intentionally not production code and makes no network/database calls.
