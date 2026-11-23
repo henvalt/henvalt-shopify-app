@@ -361,3 +361,17 @@ test("21 schema-grounded design replaces the live one-request index and preserve
   assert.match(spec, /recovery_intervention → delivery_request → billing_account\/reservation → delivery_attempt\/event/);
   assert.match(spec, /No generation column\/index, retry-command ledger, egress-start RPC/);
 });
+
+
+test("22 design explicitly separates trigger-level settlement from the real webhook late-acceptance path", () => {
+  const spec = readFileSync(
+    new URL("../docs/DELIVERY_GENERATION_MODEL_CANDIDATE.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(spec, /process_mailersend_webhook_event/);
+  assert.match(spec, /record_delivery_result/);
+  assert.match(spec, /does not currently resolve a delivery using the.*delivery:/);
+  assert.match(spec, /rejects transitions from terminal.*FAILED/);
+  assert.match(spec, /does not prove the real MailerSend webhook path/);
+  assert.match(spec, /race between late webhook settlement and retry-generation creation/i);
+});
