@@ -14,6 +14,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Set up Deno for OAuth registration tests
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check OAuth webhook registration
+        run: deno check supabase/functions/henvalt-shopify-oauth/webhook-registration.ts
+      - name: Test OAuth webhook registration safety
+        run: deno test --allow-env supabase/functions/henvalt-shopify-oauth/webhook-registration_test.ts
       - name: Validate Shopify TOML and extension source
         run: |
           python3 - <<'PY'
