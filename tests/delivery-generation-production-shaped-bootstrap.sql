@@ -99,3 +99,25 @@ CREATE TABLE henvalt.provider_events (
   occurred_at timestamptz,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb
 );
+
+-- Minimal production interlock fixture required by the egress-fence migration.
+CREATE TABLE henvalt.provider_send_control (
+  control_key text PRIMARY KEY CHECK(control_key='global'),
+  provider_sending_enabled boolean NOT NULL DEFAULT false
+);
+INSERT INTO henvalt.provider_send_control(control_key,provider_sending_enabled)
+VALUES('global',true);
+CREATE OR REPLACE FUNCTION henvalt.assert_provider_sending_enabled()
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path=pg_catalog,henvalt,pg_temp AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.provider_send_control
+     WHERE control_key='global' AND provider_sending_enabled IS TRUE
+  ) THEN
+    RAISE EXCEPTION 'HENVALT_PROVIDER_SENDING_DISABLED' USING ERRCODE='42501';
+  END IF;
+END;
+$$;
+REVOKE ALL ON FUNCTION henvalt.assert_provider_sending_enabled()
+  FROM PUBLIC,anon,authenticated,service_role;
