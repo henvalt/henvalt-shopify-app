@@ -32,6 +32,21 @@ References:
 - https://shopify.dev/docs/apps/build/authentication-authorization/access-tokens
 - https://shopify.dev/changelog/posts/more-resilient-refreshes-for-expiring-offline-access-tokens
 
+## n8n integration and rollout ordering
+
+The active HENVALT_RECOVERY workflow runs every minute. Its scheduled path reaches the stale-work repair node, then the due-token query, then the token-refresh Edge Function. At the 2026-11-23 13:40:28 UTC execution, the due-token query returned zero rows and the refresh HTTP node did not execute. The live test-shop token snapshot at 13:41:10 UTC showed 46 minutes remaining, no active lease, no refresh error, and no reauthorization requirement.
+
+The n8n HTTP Request node currently has a 20-second timeout. The Edge Function's Shopify request timeout is 15 seconds, before accounting for the claim and completion RPCs. Increase the n8n timeout to at least 30 seconds in the same controlled rollout; do not change the live workflow as part of this draft.
+
+Recommended rollout order:
+1. Pause the scheduled recovery workflow or isolate its token-refresh branch before changing the RPC contract.
+2. Drain in-flight executions and allow the existing 90-second lease window to expire (use at least a two-minute quiet period).
+3. Deploy the new Edge Function and apply the migration while the scheduled caller remains paused.
+4. Verify that a claim returns a UUID lease ID, that stale completion/failure are no-ops, and that the current owner can atomically persist the pair.
+5. Set the n8n caller timeout to at least 30 seconds, then resume the schedule.
+
+Do not deploy the Edge Function before the migration while the schedule is running: the old claim RPC does not return a lease ID, so the new handler correctly fails closed but cannot safely release that old lease. Do not apply the migration while an old worker may still be in flight.
+
 ## Verification
 
 The Deno regression suite covers service-role gating, malformed/missing lease IDs, successful fenced completion, stale completion, network failure, terminal provider rejection, malformed provider token pairs, persistence failure cleanup, non-claimed conflicts, and invalid shop domains.
