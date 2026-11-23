@@ -132,8 +132,8 @@ test("candidate lifecycle patch imposes parent-first locks across all four datab
 test("legacy one-off test delivery routes are explicitly disabled before immutable-generation cutover", () => {
   assert.match(legacyOneOffMigration, /LEGACY_ONE_OFF_DELIVERY_DISABLED_FOR_IMMUTABLE_GENERATIONS/);
   assert.match(legacyOneOffMigration, /LEGACY_ONE_OFF_TOKEN_ALLOWLIST_PATCH_FAILED/);
-  assert.match(legacyOneOffMigration, /REVOKE ALL ON FUNCTION henvalt\\.reauthorize_one_off_test_delivery/);
-  assert.match(legacyOneOffMigration, /REVOKE ALL ON FUNCTION henvalt\\.prepare_one_off_test_delivery/);
+  assert.match(legacyOneOffMigration, /REVOKE ALL ON FUNCTION henvalt\.reauthorize_one_off_test_delivery/);
+  assert.match(legacyOneOffMigration, /REVOKE ALL ON FUNCTION henvalt\.prepare_one_off_test_delivery/);
   assert.match(legacyOneOffAcceptance, /hard-coded one-off token allowlist survived cutover patch/);
   assert.match(legacyOneOffAcceptance, /normal tenant-scoped token claim was broken/);
   assert.match(legacyOneOffAcceptance, /legacy one-off reauthorization did not fail closed/);
