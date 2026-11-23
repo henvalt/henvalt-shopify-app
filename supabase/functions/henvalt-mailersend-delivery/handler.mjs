@@ -7,7 +7,7 @@ const json = (status, body, extra = {}) => new Response(JSON.stringify(body), {
   },
 });
 
-function constantTimeEqual(a, b) {
+function preProviderJson(status, error) {\n  return json(status, { error, henvalt_delivery_stage: "pre_provider" });\n}\n\nfunction constantTimeEqual(a, b) {
   const x = new TextEncoder().encode(a);
   const y = new TextEncoder().encode(b);
   if (x.length !== y.length) return false;
@@ -41,11 +41,11 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       });
     }
     if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
-    if (!supabaseUrl || !serviceRoleKey) return json(503, { error: "delivery_service_not_configured" });
+    if (!supabaseUrl || !serviceRoleKey) return preProviderJson(503, "delivery_service_not_configured");
 
     const authorization = req.headers.get("authorization") ?? "";
     const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
-    if (!constantTimeEqual(bearer, serviceRoleKey)) return json(401, { error: "service_role_required" });
+    if (!constantTimeEqual(bearer, serviceRoleKey)) return preProviderJson(401, "service_role_required");
 
     let apiToken = "";
     try {
@@ -60,17 +60,17 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       const textBody = body.text_body;
       const replyTo = body.reply_to;
 
-      if (!isUuid(tenantId) || !isUuid(deliveryRequestId)) return json(400, { error: "invalid_delivery_identity" });
+      if (!isUuid(tenantId) || !isUuid(deliveryRequestId)) return preProviderJson(400, "invalid_delivery_identity");
       if (!validEmail(recipient) || !validEmail(sender) || (replyTo != null && replyTo !== "" && !validEmail(replyTo))) {
-        return json(400, { error: "invalid_email_address" });
+        return preProviderJson(400, "invalid_email_address");
       }
       if (typeof fromName !== "string" || fromName.trim().length < 1 || fromName.length > 120 ||
           typeof subject !== "string" || subject.trim().length < 1 || subject.length > 200) {
-        return json(400, { error: "invalid_message_headers" });
+        return preProviderJson(400, "invalid_message_headers");
       }
       if ((typeof html !== "string" || html.length < 1 || html.length > 100000) &&
           (typeof textBody !== "string" || textBody.length < 1 || textBody.length > 20000)) {
-        return json(400, { error: "message_content_required" });
+        return preProviderJson(400, "message_content_required");
       }
 
       // This RPC is the sole credential-release boundary. A closed/missing
@@ -88,11 +88,11 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
         },
         body: JSON.stringify({ p_tenant_id: tenantId, p_delivery_request_id: deliveryRequestId }),
       });
-      if (!tokenResponse.ok) return json(409, { error: "tenant_provider_credential_unavailable" });
+      if (!tokenResponse.ok) return preProviderJson(409, "tenant_provider_credential_unavailable");
 
       const tokenValue = await tokenResponse.json().catch(() => null);
       if (typeof tokenValue !== "string" || tokenValue.length < 20 || tokenValue.length > 512) {
-        return json(409, { error: "tenant_provider_credential_unavailable" });
+        return preProviderJson(409, "tenant_provider_credential_unavailable");
       }
       apiToken = tokenValue;
 
@@ -123,9 +123,9 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
           p_text_body: typeof textBody === "string" ? textBody : null,
         }),
       });
-      if (!envelopeResponse.ok) return json(409, { error: "delivery_envelope_not_authorized" });
+      if (!envelopeResponse.ok) return preProviderJson(409, "delivery_envelope_not_authorized");
       const envelopeAuthorized = await envelopeResponse.json().catch(() => false);
-      if (envelopeAuthorized !== true) return json(409, { error: "delivery_envelope_not_authorized" });
+      if (envelopeAuthorized !== true) return preProviderJson(409, "delivery_envelope_not_authorized");
 
       const tags = ["tenant:" + tenantId, "delivery:" + deliveryRequestId];
       if (isUuid(body.intervention_id)) tags.push("intervention:" + body.intervention_id);
