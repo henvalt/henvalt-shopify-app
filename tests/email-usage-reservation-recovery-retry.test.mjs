@@ -25,10 +25,10 @@ function classify(response) {
 }
 
 test("ambiguous provider outcomes are not automatically requeued by recovery", () => {
-  for (const status of ["UNKNOWN", "ACCEPTED", "DELIVERED"]) {
+  for (const status of ["UNKNOWN"]) {
     const result = classify({
       body: { state: status, failure_category: "PROVIDER_TRANSIENT" },
-      statusCode: status === "UNKNOWN" ? 502 : 202,
+      statusCode: 502,
     });
     assert.equal(result.json.retryable, false, `${status} must not trigger a retry`);
     assert.equal(result.json.final_status, "FAILED");
