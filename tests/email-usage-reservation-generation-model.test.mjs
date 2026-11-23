@@ -345,3 +345,19 @@ test("20 generation numbers and request identities remain monotonic and immutabl
   assert.notEqual(g2.requestId, g1.requestId);
   assert.notEqual(g2.idempotencyKey, g1.idempotencyKey);
 });
+
+
+test("21 schema-grounded design replaces the live one-request index and preserves lock ordering", () => {
+  const spec = readFileSync(
+    new URL("../docs/DELIVERY_GENERATION_MODEL_CANDIDATE.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(spec, /ux_delivery_request_intervention/);
+  assert.match(spec, /generation_number integer NOT NULL DEFAULT 1/);
+  assert.match(spec, /\(tenant_id, intervention_id, generation_number\)/);
+  assert.match(spec, /delivery_requests_tenant_id_idempotency_key_key/);
+  assert.match(spec, /provider_claimed_at cannot serve this purpose/i);
+  assert.match(spec, /provider-egress-start marker/i);
+  assert.match(spec, /recovery_intervention → delivery_request → billing_account\/reservation → delivery_attempt\/event/);
+  assert.match(spec, /No generation column\/index, retry-command ledger, egress-start RPC/);
+});
