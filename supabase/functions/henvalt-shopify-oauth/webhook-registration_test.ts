@@ -139,7 +139,7 @@ Deno.test("paginates the subscription inventory before creating missing hooks", 
       return response({ data: { webhookSubscriptionCreate: { userErrors: [], webhookSubscription: { id: `created-${spec.gql}` } } } });
     }
     calls.push({ after: body.variables.after ?? null, query: body.query });
-    if (calls.length === 1) {
+    if (calls.length === 1 || calls.length === 3) {
       return response({ data: { webhookSubscriptions: { nodes: pageOne, pageInfo: { hasNextPage: true, endCursor: "cursor-100" } } } });
     }
     return response({ data: { webhookSubscriptions: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } } });
