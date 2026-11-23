@@ -150,18 +150,18 @@ Deno.test("rejects oversized webhook bodies", async () => {
       controller.close();
     },
   });
-  const request = new Request("https://ingress.example/shopify/webhooks", {
+  const request = {
+    url: "https://ingress.example/shopify/webhooks",
     method: "POST",
-    headers: {
+    headers: new Headers({
       "content-type": "application/json",
       "x-shopify-shop-domain": "ur4jvw-nz.myshopify.com",
       "x-shopify-topic": "checkouts/update",
       "x-shopify-hmac-sha256": "placeholder",
       "x-shopify-webhook-id": "large-webhook",
-    },
+    }),
     body,
-    duplex: "half",
-  } as RequestInit);
+  } as Request;
   if (request.headers.has("content-length")) throw new Error("streaming test unexpectedly has content-length");
   const result = await handler(request, ENV);
   if (result.status !== 413) throw new Error("chunked oversized body was not rejected");
