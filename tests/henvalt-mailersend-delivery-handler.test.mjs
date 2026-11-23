@@ -313,6 +313,9 @@ test("all credential, authorization and provider requests refuse redirects", asy
       if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
         return new Response("true", { status: 200 });
       }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started") {
+        return new Response("true", { status: 200 });
+      }
       throw new TypeError("redirect mode error: provider attempted a redirect");
     },
   });
