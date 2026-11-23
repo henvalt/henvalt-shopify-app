@@ -144,6 +144,10 @@ jobs:
         run: |
           psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
             --file supabase/tests/shopify_token_refresh_lease_fencing.sql
+      - name: Exercise concurrent claims and post-lock lease expiry
+        env:
+          PGPASSWORD: postgres
+        run: bash supabase/tests/shopify_token_refresh_concurrency.sh
       - name: Validate migration contract and regex
         run: |
           python3 - <<'PY'
@@ -160,7 +164,11 @@ jobs:
               "token_refresh_lease_id=v_lease_id",
               "v_conn.token_refresh_lease_id is distinct from p_lease_id",
               "token_refresh_lease_id=p_lease_id",
-              "and token_refresh_lease_until>now()",
+              "v_conn.token_refresh_lease_until>clock_timestamp()",
+              "v_conn.token_refresh_lease_until<=clock_timestamp()",
+              "and token_refresh_lease_until>clock_timestamp()",
+              "token_refresh_lease_until=clock_timestamp()+interval '10 minutes'",
+              "v_access_expires_at := clock_timestamp()+make_interval(secs=>p_access_expires_in)",
               "token_refresh_lease_id=null",
               "grant execute on function henvalt.complete_shopify_token_refresh(text,text,text,integer,integer,uuid) to service_role",
           ):
