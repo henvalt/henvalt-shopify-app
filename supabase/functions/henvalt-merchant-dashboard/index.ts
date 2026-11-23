@@ -112,10 +112,11 @@ export function createDashboardHandler(options: DashboardHandlerOptions) {
       const toExclusive = new Date(Date.parse(to + "T00:00:00.000Z") + 86400000).toISOString();
       const ledgerUrl = new URL(supabaseUrl + "/rest/v1/revenue_ledger");
       ledgerUrl.search = new URLSearchParams({
-        select: "id,order_id,amount,currency,created_at,attribution_confidence,billable,billing_status,order:orders!revenue_ledger_order_id_fkey(shopify_order_id,order_number,total_value),attribution:order_attributions!revenue_ledger_attribution_id_fkey(attribution_method,attribution_confidence),billing:billing_measurements!billing_measurements_ledger_entry_id_fkey(henvalt_percentage,henvalt_fee,status)",
+        select: "id,order_id,opportunity_id,amount,currency,created_at,attribution_confidence,billable,billing_status,order:orders!revenue_ledger_order_id_fkey(shopify_order_id,order_number,total_value),attribution:order_attributions!revenue_ledger_attribution_id_fkey(attribution_method,attribution_confidence),billing:billing_measurements!billing_measurements_ledger_entry_id_fkey(henvalt_percentage,henvalt_fee,status)",
         tenant_id: "eq." + tenantId,
         entry_type: "eq.RECOVERY",
         attribution_confidence: "eq.CONFIRMED",
+        billable: "eq.true",
         created_at: "gte." + from + "T00:00:00.000Z",
         and: "(created_at.lt." + toExclusive + ")",
         order: "created_at.desc",
@@ -134,6 +135,11 @@ export function createDashboardHandler(options: DashboardHandlerOptions) {
 
       return reply(200, {
         ...summary,
+        activity: (Array.isArray(summary.activity) ? summary.activity : []).map((item: Record<string, unknown>) => {
+          if (item.outcome !== "recovered") return item;
+          const confirmedEntry = ledger.find((entry: Record<string, unknown>) => entry.opportunity_id === item.id);
+          return { ...item, amount: confirmedEntry?.amount ?? null, currency: confirmedEntry?.currency ?? summary.currency };
+        }),
         ledger,
         revenueSeries: revenue?.series ?? [],
         revenueComparison: {
