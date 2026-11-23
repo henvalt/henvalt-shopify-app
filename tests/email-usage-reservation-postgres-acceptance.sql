@@ -155,6 +155,44 @@ BEGIN
     RAISE EXCEPTION 'UNKNOWN provider result did not consume quota';
   END IF;
 
+
+  -- Billing-cycle rollover: old measured usage falls out of the new cycle,
+  -- but an unresolved provider reservation remains held across the boundary.
+  INSERT INTO henvalt.billing_accounts(tenant_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES
+    ('aaaaaaaa-1111-4111-8111-111111111111','PENDING',true,now()-interval '1 day',1),
+    ('bbbbbbbb-2222-4222-8222-222222222222','PENDING',true,now()-interval '1 day',1);
+
+  INSERT INTO henvalt.email_usage_measurements(tenant_id,delivery_attempt_id,created_at)
+  VALUES
+    ('aaaaaaaa-1111-4111-8111-111111111111',gen_random_uuid(),now()-interval '60 days'),
+    ('bbbbbbbb-2222-4222-8222-222222222222',gen_random_uuid(),now()-interval '60 days');
+
+  INSERT INTO henvalt.delivery_requests(id,tenant_id)
+  VALUES
+    ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-1111-4111-8111-111111111111'),
+    ('bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','bbbbbbbb-2222-4222-8222-222222222222');
+
+  -- Historical usage must not consume the new billing cycle's quota.
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+   WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+  IF (SELECT status FROM henvalt.email_usage_reservations
+       WHERE delivery_request_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1') <> 'RESERVED' THEN
+    RAISE EXCEPTION 'prior-cycle measured usage incorrectly blocked new-cycle delivery';
+  END IF;
+
+  -- An unresolved reservation is different: it remains held even when its
+  -- original cycle has ended, because the provider may still have accepted it.
+  UPDATE henvalt.email_usage_reservations
+     SET cycle_start=now()-interval '60 days'
+   WHERE delivery_request_id='bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+   WHERE id='bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+  IF (SELECT status FROM henvalt.delivery_requests
+       WHERE id='bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1') <> 'PENDING' THEN
+    RAISE EXCEPTION 'prior-cycle unresolved reservation did not block new delivery';
+  END IF;
+
 END
 $test$;
 SELECT 'email usage reservation acceptance passed' AS result;
