@@ -49,7 +49,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
       - name: Run reservation contract tests
-        run: node --test tests/email-usage-reservations.test.mjs tests/email-usage-reservation-provider-classifier.test.mjs
+        run: node --test tests/email-usage-reservations.test.mjs tests/email-usage-reservation-provider-classifier.test.mjs tests/email-usage-reservation-generation-model.test.mjs
       - name: Bootstrap isolated PostgreSQL fixture
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
