@@ -157,6 +157,36 @@ The current recovery worker still needs an explicit retry-generation branch. Do 
 
 A read-only privilege check confirmed that `service_role` can execute all four relevant RPCs: `reauthorize_one_off_test_delivery`, `get_mailersend_token_for_delivery`, `record_delivery_result`, and `process_mailersend_webhook_event`. These are not dead catalog objects or inaccessible legacy routines; the active server-side integration role can reach them. The token-release function also contains a hard-coded one-off test allowlist branch. This makes the one-off reset path an actual reachable cutover concern, not just historical code.
 
+
+## Production-shaped migration candidate — 2026-11-23
+
+A first additive production-shaped migration candidate is now present at `supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql`. It depends on the preceding candidate quota-reservation migration and deliberately does **not** rewrite the active authorization, provider-token, result-settlement, or webhook RPCs.
+
+The candidate migration currently implements:
+
+- Existing delivery requests backfill to generation 1 without changing request IDs or statuses.
+- The one-request-per-intervention unique index is replaced by tenant/intervention/generation uniqueness.
+- One retry-command ledger row per command, plus an append-only incident ledger.
+- Monotonicity triggers prevent generation-number mutation, egress-marker rollback, parent-freeze rollback, and retry/incident ledger edits.
+- `create_delivery_retry_generation` locks the parent intervention before the previous generation and quota reservation; it requires a FAILED parent/request, server-authored `pre_provider` evidence, a RELEASED quota hold tied to the exact latest attempt and an append-only RELEASED event, no egress marker, and no provider event for the prior request.
+- The retry command is idempotent. A repeated command returns the same request.
+- The new request copies the existing immutable message/recipient envelope, gets a generation-specific idempotency key, and remains PENDING. It does not pre-create a quota reservation: the existing entitlement trigger still reserves quota atomically at PENDING → UNKNOWN.
+- A provider-token claim timestamp alone does not prohibit retry when the latest attempt is server-proven pre-provider and all other evidence is clean. The timestamp is not a durable provider-egress marker.
+
+A separate production-shaped PostgreSQL 17 fixture and acceptance script now apply this migration against the live table/enum shape (without connecting to Supabase). CI verifies generation-1 backfill, immutable prior request, generation-2 creation, same-command idempotency, pending-generation fork denial, exact reservation release evidence, append-only behavior, and service-role-only RPC authorization.
+
+### Explicit incompleteness
+
+This migration is **not ready to deploy**. It does not yet:
+
+- Reorder `authorize_delivery_request`, `get_mailersend_token_for_delivery`, `record_delivery_result`, or `process_mailersend_webhook_event` into the same parent-first lock order.
+- Replace the legacy one-off reauthorization RPC or remove its hard-coded token-release exception.
+- Add the durable compare-and-set provider-egress RPC and call it immediately before MailerSend HTTP egress.
+- Rework late provider acceptance to resolve exact `tenant:` + `delivery:` tags and freeze newer generations.
+- Wire the recovery worker to issue a retry command and carry the new request ID through the normal delivery route.
+
+The migration is an executable first slice of the production-shaped implementation, not a completed delivery-generation cutover. It must not be applied to production or staging until the remaining RPC/Edge/n8n changes and complete concurrency suite are validated together.
+
 ## Current disposition
 
 The six CI workflows for candidate `225ea379448a21270b0415863b7fc6152464caa2` passed, including the 42-case isolated PostgreSQL model and six concurrency races. Those results do not close the live integration blockers above. PR #7 remains draft and unmerged. No production migration, Edge Function deployment, n8n workflow mutation/execution, provider request, or email was performed.
