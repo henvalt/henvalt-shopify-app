@@ -154,6 +154,29 @@ BEGIN
   UPDATE henvalt_test.interventions SET frozen_at=now(),freeze_reason='TEST_FREEZE' WHERE id=p;
   IF henvalt_test.start_provider_egress(r) THEN RAISE EXCEPTION '28 egress bypassed intervention freeze'; END IF;
 
+
+  -- 29: reusing a provider event identity for another request is a hard conflict.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  IF NOT henvalt_test.settle_late_acceptance('evt-29',r,'msg-29') THEN RAISE EXCEPTION '29 first event failed'; END IF;
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r2);
+  BEGIN
+    PERFORM henvalt_test.settle_late_acceptance('evt-29',r2,'msg-29-other');
+    RAISE EXCEPTION '29 event identity rebound to another request';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='29 event identity rebound to another request' THEN RAISE; END IF;
+  END;
+
+  -- 30: a provider message ID already bound to one request cannot be rebound.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  IF NOT henvalt_test.settle_late_acceptance('evt-30a',r,'msg-30-shared') THEN RAISE EXCEPTION '30 first event failed'; END IF;
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r2);
+  BEGIN
+    PERFORM henvalt_test.settle_late_acceptance('evt-30b',r2,'msg-30-shared');
+    RAISE EXCEPTION '30 provider message ID rebound to another request';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='30 provider message ID rebound to another request' THEN RAISE; END IF;
+  END;
+
 END
 $tests$;
-SELECT 'delivery generation PostgreSQL model acceptance passed (28 cases)' AS result;
+SELECT 'delivery generation PostgreSQL model acceptance passed (30 cases)' AS result;
