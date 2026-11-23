@@ -99,6 +99,19 @@ BEGIN
   EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
   END;
 
+  -- A stale generation must not cross egress even if its status/claim fields
+  -- are forged into an otherwise egress-ready shape.
+  UPDATE henvalt.delivery_requests
+     SET status='UNKNOWN', provider_claimed_at=clock_timestamp()
+   WHERE id=v_request;
+  BEGIN
+    PERFORM henvalt.mark_mailersend_provider_egress_started(v_tenant,v_request);
+    RAISE EXCEPTION 'stale delivery generation crossed provider egress';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'STALE_DELIVERY_GENERATION' THEN RAISE; END IF;
+  END;
+  UPDATE henvalt.delivery_requests SET status='FAILED' WHERE id=v_request;
+
   -- The durable egress fence requires a claimed current generation and an
   -- open global send interlock; it can be crossed exactly once.
   UPDATE henvalt.delivery_requests
