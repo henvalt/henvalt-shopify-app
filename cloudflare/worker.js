@@ -12,6 +12,7 @@ function json(data, status = 200) {
   });
 }
 
+/** @param {Request} request */
 async function readBoundedBody(request) {
   if (!request.body) return { error: "empty_body" };
   const reader = request.body.getReader();
@@ -52,6 +53,7 @@ function constantTimeEqual(left, right) {
   return difference === 0;
 }
 
+/** @param {ArrayBuffer | Uint8Array} rawBody @param {string} received @param {string} secret */
 export async function verifyShopifyHmac(rawBody, received, secret) {
   if (!secret || !received) return false;
   const key = await crypto.subtle.importKey(
@@ -67,9 +69,11 @@ export async function verifyShopifyHmac(rawBody, received, secret) {
   return constantTimeEqual(btoa(binary), received);
 }
 
+/** @param {{ fetchImpl?: typeof fetch }} options */
 export function createHandler(options = {}) {
   const fetchImpl = options.fetchImpl || fetch;
 
+  /** @param {Request} request @param {{ SHOPIFY_API_SECRET?: string, N8N_INGEST_URL?: string }} env */
   return async function handleRequest(request, env) {
     const url = new URL(request.url);
 
@@ -110,10 +114,12 @@ export function createHandler(options = {}) {
     }
 
     const bodyResult = await readBoundedBody(request);
-    if (bodyResult.error === "body_too_large") {
-      return json({ ok: false, error: "body_too_large" }, 413);
+    if ("error" in bodyResult) {
+      if (bodyResult.error === "body_too_large") {
+        return json({ ok: false, error: "body_too_large" }, 413);
+      }
+      return json({ ok: false, error: bodyResult.error }, 400);
     }
-    if (bodyResult.error) return json({ ok: false, error: bodyResult.error }, 400);
     const rawBody = bodyResult.bytes;
 
     let validSignature = false;
