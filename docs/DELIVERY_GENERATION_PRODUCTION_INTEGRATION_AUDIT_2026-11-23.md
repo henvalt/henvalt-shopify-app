@@ -251,3 +251,15 @@ The token RPC also contained a hard-coded tenant, opportunity, recipient, idempo
 A dedicated PostgreSQL acceptance script verifies that the normal tenant-scoped token claim remains functional, the hard-coded allowlist disappears, both legacy RPCs reject calls, and service_role no longer has execute permission.
 
 This is a deliberate cutover blocker, not a production change. The active n8n manual one-off route must be removed or replaced with an isolated safe test workflow before this candidate migration is applied to any live environment. Production remains unchanged.
+
+
+## Late provider acceptance and webhook generation routing — 2026-11-23
+
+A separate production-shaped candidate now covers the gap between the already-tested generation model and the deployed provider webhook path.
+
+- Migration `202611230006_late_provider_acceptance_incidents.sql` adds a service-role-only `settle_late_provider_acceptance` RPC. It requires one exact tenant tag and one exact delivery tag, verifies the provider event/request/message identity, takes the intervention lock before the delivery-request lock, and classifies acceptance as contradictory when the request is already FAILED/REJECTED or a newer generation exists.
+- Contradictory evidence freezes the parent intervention monotonically, writes one append-only incident per provider event, and upgrades a RELEASED quota reservation to CONSUMED with a separate reservation-event row. It does not mutate the historical FAILED request or invent a delivery attempt for a webhook event.
+- Migration `202611230007_mailersend_webhook_generation_routing.sql` is a source-preserving candidate patch for the existing webhook processor. It resolves `delivery:` tags before message-ID fallback, refuses malformed/duplicate tags, routes `activity.sent` and `activity.delivered` through late settlement first, and records normal `activity.sent` acceptance when the current request is still PENDING/UNKNOWN. Existing bounce and suppression branches remain in the function body.
+- Disposable PostgreSQL 17 production-shaped acceptance covers late acceptance after FAILED, older-generation acceptance after a newer generation exists, idempotent duplicate events, quota release reversal, exact-tag mismatch rejection, normal current-generation `activity.sent`, and preservation of historical attempt rows.
+
+**Cutover boundary:** both migrations are candidate-only. The source-preserving webhook patch must pass exact-head CI against the production-shaped fixture before review. It is not yet a staging E2E test of the live MailerSend webhook signature route, and no production migration or n8n change is authorized or performed.
