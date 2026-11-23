@@ -9,7 +9,7 @@ The live claim RPC serializes claims with a transaction-scoped advisory lock and
 
 A worker whose request outlives its lease can therefore complete or fail after another worker has claimed a replacement lease. This can overwrite or disrupt a newer token pair.
 
-The live claim function's shop-domain regex was also tested directly against the live database. With standard_conforming_strings enabled, the double-escaped-dot pattern did not match demo.myshopify.com; the single-escaped-dot pattern did. The candidate migration corrects the pattern. The checked-in token-storage migration did not declare the live lease timestamp/error columns, so this migration also adds all lease fields with IF NOT EXISTS to remain safe on both the current live schema and a clean migration replay.
+The pg_get_functiondef output made the live shop-domain regex escaping ambiguous when passed through the tool's serialized output. A later read-only check found a successful live token refresh at 13:27:32 UTC for ur4jvw-nz.myshopify.com, with a 60-minute access-token lifetime and no refresh error, confirming that the deployed claim path has accepted the valid shop domain. This audit therefore does not classify the live regex as a defect. The candidate migration uses the canonical single-backslash SQL literal, and the disposable PostgreSQL test verifies that demo.myshopify.com is accepted. The checked-in token-storage migration did not declare the live lease timestamp/error columns, so this migration also adds all lease fields with IF NOT EXISTS to remain safe on both the current live schema and a clean migration replay.
 
 ## Candidate design
 
