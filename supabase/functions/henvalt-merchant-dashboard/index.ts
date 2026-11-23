@@ -1,4 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { resolveDashboardRange } from "./validation.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -58,19 +59,17 @@ Deno.serve(async (req: Request) => {
     }
 
     const u = new URL(req.url);
-    const validDate = (v: string | null) =>
-      v && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v)) ? v : null;
     const today = new Date().toISOString().slice(0, 10);
-    const from = validDate(u.searchParams.get("from")) ??
-      new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
-    const to = validDate(u.searchParams.get("to")) ?? today;
-    if (to < from || Date.parse(to) - Date.parse(from) > 366 * 86400000) {
-      return reply(400, { error: "invalid_date_range" });
-    }
-    const requestedGranularity = u.searchParams.get("granularity");
-    const granularity = ["day", "week", "month"].includes(requestedGranularity ?? "")
-      ? requestedGranularity!
-      : "day";
+    const defaultFrom = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+    const range = resolveDashboardRange(
+      u.searchParams.get("from"),
+      u.searchParams.get("to"),
+      u.searchParams.get("granularity"),
+      today,
+      defaultFrom,
+    );
+    if (!range.ok) return reply(400, { error: range.error });
+    const { from, to, granularity } = range;
 
     const rpcHeaders = {
       apikey: SERVICE_ROLE_KEY,
