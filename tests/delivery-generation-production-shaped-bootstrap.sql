@@ -70,6 +70,7 @@ CREATE TABLE henvalt.email_usage_reservations (
   cycle_start timestamptz NOT NULL DEFAULT now(),
   status text NOT NULL CHECK(status IN ('RESERVED','CONSUMED','RELEASED')),
   status_reason text NOT NULL,
+  last_attempt_id uuid,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE henvalt.email_usage_reservation_events (
@@ -80,6 +81,7 @@ CREATE TABLE henvalt.email_usage_reservation_events (
   event_type text NOT NULL,
   previous_status text,
   new_status text NOT NULL,
+  delivery_attempt_id uuid,
   reason text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
