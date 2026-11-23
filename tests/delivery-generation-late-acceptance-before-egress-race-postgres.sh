@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "\${PGHOST:=127.0.0.1}"; : "\${PGPORT:=5432}"; : "\${PGUSER:=postgres}"; : "\${PGDATABASE:=postgres}"; : "\${PGPASSWORD:=postgres}"
+: "${PGHOST:=127.0.0.1}"; : "${PGPORT:=5432}"; : "${PGUSER:=postgres}"; : "${PGDATABASE:=postgres}"; : "${PGPASSWORD:=postgres}"
 export PGHOST PGPORT PGUSER PGDATABASE PGPASSWORD
 parent='cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd'
 event='late-acceptance-before-egress-003'
 psql -v ON_ERROR_STOP=1 <<SQL
-SELECT henvalt_test.seed_initial('$parent') AS old_request \\gset
+SELECT henvalt_test.seed_initial('$parent') AS old_request \gset
 SELECT henvalt_test.mark_pre_provider_failure(:'old_request');
-SELECT henvalt_test.create_retry_generation('$parent','cdcdcdcd-1111-4111-8111-cdcdcdcdcdcd') AS new_request \\gset
+SELECT henvalt_test.create_retry_generation('$parent','cdcdcdcd-1111-4111-8111-cdcdcdcdcdcd') AS new_request \gset
 SQL
 old_request=$(psql -Atqc "SELECT id FROM henvalt_test.delivery_requests WHERE intervention_id='$parent' AND generation_number=1;")
 new_request=$(psql -Atqc "SELECT id FROM henvalt_test.delivery_requests WHERE intervention_id='$parent' AND generation_number=2;")
