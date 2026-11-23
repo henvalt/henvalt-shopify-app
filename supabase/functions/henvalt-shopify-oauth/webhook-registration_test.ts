@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert";
-import { registerShopifyWebhooks, SHOPIFY_WEBHOOK_SPECS } from "./webhook-registration.ts";
+import { getShopifyShopId, registerShopifyWebhooks, SHOPIFY_WEBHOOK_SPECS } from "./webhook-registration.ts";
 
 function response(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json" } });
@@ -90,4 +90,37 @@ Deno.test("does not report success when final verification fails", async () => {
   });
   assertEquals(result.allRegistered, false);
   assertEquals(result.results.every((item) => !item.ok), true);
+});
+
+Deno.test("resolves the Shopify shop ID through the GraphQL Admin API", async () => {
+  let requestedUrl = "";
+  let requestedBody: any = null;
+  const fetchImpl: typeof fetch = async (input, init) => {
+    requestedUrl = String(input);
+    requestedBody = JSON.parse(String(init?.body));
+    return response({ data: { shop: { id: "gid://shopify/Shop/123" } } });
+  };
+  const id = await getShopifyShopId({
+    shop: "demo.myshopify.com",
+    accessToken: "test-token",
+    fetchImpl,
+  });
+  assertEquals(id, "gid://shopify/Shop/123");
+  assertEquals(requestedUrl, "https://demo.myshopify.com/admin/api/2026-10/graphql.json");
+  assertEquals(requestedBody.query, "query { shop { id } }");
+});
+
+Deno.test("rejects GraphQL shop lookup errors and missing shop IDs", async () => {
+  const graphErrorFetch: typeof fetch = async () => response({ errors: [{ message: "denied" }] });
+  const missingIdFetch: typeof fetch = async () => response({ data: { shop: { id: null } } });
+  let graphError = false;
+  let missingId = false;
+  try {
+    await getShopifyShopId({ shop: "demo.myshopify.com", accessToken: "test-token", fetchImpl: graphErrorFetch });
+  } catch { graphError = true; }
+  try {
+    await getShopifyShopId({ shop: "demo.myshopify.com", accessToken: "test-token", fetchImpl: missingIdFetch });
+  } catch { missingId = true; }
+  assertEquals(graphError, true);
+  assertEquals(missingId, true);
 });
