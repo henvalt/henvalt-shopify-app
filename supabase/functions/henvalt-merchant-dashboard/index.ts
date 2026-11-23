@@ -31,7 +31,7 @@ export function createDashboardHandler(options: DashboardHandlerOptions) {
       if (!supabaseUrl || !serviceRoleKey || !anonKey) {
         return reply(503, { error: "dashboard_not_configured" });
       }
-      const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\\s+/i, "").trim();
+      const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
       if (!token) return reply(401, { error: "sign_in_required" });
 
       // Validate the Supabase access token against Auth; never trust decoded JWT claims.
