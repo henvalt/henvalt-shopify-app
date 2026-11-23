@@ -86,13 +86,15 @@ stored_lease="$("${psql_cmd[@]}" -c "SELECT token_refresh_lease_id FROM henvalt.
 # PostgreSQL now() (transaction start time). The completion transaction starts
 # while the lease is live, waits behind a lock holder, then resumes after expiry.
 "${psql_cmd[@]}" -c "UPDATE henvalt.shopify_connections SET token_refresh_lease_until=clock_timestamp()+interval '5 seconds' WHERE shop_domain='demo.myshopify.com';"
-"${psql_cmd[@]}" -c "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('demo.myshopify.com:shopify-token-refresh',0)); SELECT 'LOCK_HELD'; SELECT pg_sleep(8); COMMIT;" > "$tmp/lock-holder" &
+PGAPPNAME=henvalt-lock-holder "${psql_cmd[@]}" -c "BEGIN; SELECT pg_advisory_xact_lock(hashtextextended('demo.myshopify.com:shopify-token-refresh',0)); SELECT pg_sleep(8); COMMIT;" > "$tmp/lock-holder" &
 holder_pid=$!
+holder_waiting=0
 for _ in $(seq 1 200); do
-  if grep -q LOCK_HELD "$tmp/lock-holder" 2>/dev/null; then break; fi
+  holder_waiting="$("${psql_cmd[@]}" -c "SELECT count(*) FROM pg_stat_activity WHERE application_name='henvalt-lock-holder' AND state='active' AND wait_event='PgSleep';")"
+  [[ "$holder_waiting" == "1" ]] && break
   sleep 0.02
 done
-grep -q LOCK_HELD "$tmp/lock-holder" || { echo "lock holder did not acquire advisory lock" >&2; exit 1; }
+[[ "$holder_waiting" == "1" ]] || { echo "lock holder did not enter pg_sleep while holding the advisory lock" >&2; exit 1; }
 
 PGAPPNAME=henvalt-lease-expiry-test "${psql_cmd[@]}" -c "SELECT henvalt.complete_shopify_token_refresh('demo.myshopify.com','late-access-token-01234567890123456789','late-refresh-token-01234567890123456789',3600,7776000,'$lease_id'::uuid);" > "$tmp/late-completion" &
 completion_pid=$!
