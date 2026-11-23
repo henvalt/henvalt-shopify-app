@@ -62,8 +62,8 @@ BEGIN
     FROM henvalt.email_usage_reservation_events
    WHERE delivery_request_id='$delivery';
 
-  IF v_released + v_consumed < 2 THEN
-    RAISE EXCEPTION 'concurrent settlement evidence is incomplete: released %, consumed %',v_released,v_consumed;
+  IF v_consumed < 1 OR v_released > 1 THEN
+    RAISE EXCEPTION 'concurrent settlement evidence is invalid: released %, consumed %',v_released,v_consumed;
   END IF;
 
   IF (SELECT count(*) FROM henvalt.email_usage_measurements
