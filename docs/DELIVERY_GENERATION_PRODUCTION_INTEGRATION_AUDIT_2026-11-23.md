@@ -214,3 +214,23 @@ The MailerSend Edge Function candidate now calls this RPC after the database env
 The production-shaped PostgreSQL fixture now models the global interlock and tests closed-gate denial, one successful crossing, duplicate crossing rejection, and marker immutability. The Node handler tests assert the provider stub is unreachable unless the egress-fence RPC returns true.
 
 **Important limitation:** this is candidate-only. The live Edge Function and live Supabase schema remain unchanged. The marker is a durable statement that the provider boundary was crossed; it cannot recall a request already in flight if the operator closes the interlock or a late-acceptance webhook arrives immediately after the marker commits. The existing lock-order rewrites, webhook late-acceptance settlement, legacy one-off removal, recovery-worker retry wiring, and isolated Supabase staging remain mandatory before cutover.
+
+
+## Parent-first delivery lifecycle lock-order candidate — 2026-11-23
+
+A fourth candidate migration, `202611230004_delivery_lifecycle_parent_first_lock_order.sql`, now addresses the deadlock inversion found in the read-only deployed RPC audit. The canonical order is:
+
+1. `recovery_interventions` parent row
+2. `delivery_requests` child row
+
+The migration obtains each current deployed function definition using `pg_get_functiondef`, performs narrow, guarded source substitutions, and executes the resulting `CREATE OR REPLACE FUNCTION`. This preserves the existing validation and state-transition bodies rather than re-authoring the large production functions from partial excerpts.
+
+The candidate patches all four entry points:
+- `authorize_delivery_request`: locks the intervention before its request `FOR UPDATE`.
+- `get_mailersend_token_for_delivery`: resolves the parent key without a child lock, locks the intervention, then performs the request claim update.
+- `record_delivery_result`: reads the parent key without a row lock, locks the intervention, then performs the original request `FOR UPDATE`.
+- `process_mailersend_webhook_event`: removes its preliminary request `FOR UPDATE`; result settlement delegates to the parent-first result RPC.
+
+A dedicated disposable PostgreSQL 17 workflow bootstraps the exact RPC signatures and lock-bearing source shapes, applies the guarded migration, checks the rewritten function definitions, and calls each function. This validates the migration mechanics and expected ordering on the fixture; it is not a substitute for applying it to a staging copy of the full deployed schema and exercising real concurrent n8n/webhook sessions.
+
+**Remaining lock-order risk:** other callers or triggers may lock delivery requests or interventions outside these four functions. The two direct n8n `record_delivery_result` callers are compatible with the new parent-first result RPC once deployed, but their surrounding workflow transactions and the legacy one-off path still require separate review. The hard-coded one-off allowlist in the live token RPC is not removed by this migration. No production function, schema, Edge Function or n8n workflow was changed.
