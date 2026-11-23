@@ -41,7 +41,8 @@ function classify({ statusCode, headers = {}, body = {} } = {}) {
       },
     }),
   };
-  return vm.runInNewContext(classifier, sandbox);
+  const runClassifier = vm.runInNewContext(`(function ($) {\n${classifier}\n})`, {});
+  return runClassifier(sandbox.$);
 }
 
 test("MailerSend accepted response captures message ID and records ACCEPTED", () => {
