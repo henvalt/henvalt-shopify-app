@@ -119,7 +119,7 @@ test("candidate lifecycle patch imposes parent-first locks across all four datab
   assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_TOKEN_PATCH_ANCHOR_MISMATCH/);
   assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_RESULT_PATCH_ANCHOR_MISMATCH/);
   assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_WEBHOOK_PATCH_FAILED/);
-  assert.match(lockOrderMigration, /PERFORM 1 FROM henvalt\\.recovery_interventions/);
+  assert.match(lockOrderMigration, /PERFORM 1 FROM henvalt\.recovery_interventions/);
   assert.match(lockOrderAcceptance, /authorization parent-first lock order missing/);
   assert.match(lockOrderAcceptance, /token parent-first lock order missing/);
   assert.match(lockOrderAcceptance, /result parent-first lock order missing/);
