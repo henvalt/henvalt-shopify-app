@@ -43,27 +43,31 @@ BEGIN
   IF s#>>'{metrics,revenueRecovered}' IS NOT NULL THEN
     RAISE EXCEPTION 'summary returned a cross-currency numeric total';
   END IF;
-  IF jsonb_array_length(s->'revenueByCurrency') <> 2 THEN
-    RAISE EXCEPTION 'summary did not preserve per-currency totals';
+  IF jsonb_array_length(s->'revenueByCurrency') <> 2
+     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s->'revenueByCurrency') x
+       WHERE x->>'currency'='USD' AND (x->>'amount')::numeric=100)
+     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s->'revenueByCurrency') x
+       WHERE x->>'currency'='GBP' AND (x->>'amount')::numeric=50) THEN
+    RAISE EXCEPTION 'summary did not preserve exact per-currency totals';
   END IF;
   IF (s#>>'{metrics,recoveredOrders}')::integer <> 2 THEN
     RAISE EXCEPTION 'confirmed attribution order count is incorrect';
   END IF;
   SELECT sum((x->>'recovered')::integer) INTO recovered_sum
     FROM jsonb_array_elements(s->'byEvent') x;
-  IF recovered_sum <> 2 THEN
+  IF coalesce(recovered_sum,-1) <> 2 THEN
     RAISE EXCEPTION 'by-event recovered counts do not reconcile to headline: %',recovered_sum;
   END IF;
-  IF (SELECT (x->>'recovered')::integer FROM jsonb_array_elements(s->'byEvent') x WHERE x->>'eventType'='abandoned_cart') <> 1
-     OR (SELECT (x->>'recovered')::integer FROM jsonb_array_elements(s->'byEvent') x WHERE x->>'eventType'='unclassified') <> 1 THEN
+  IF coalesce((SELECT (x->>'recovered')::integer FROM jsonb_array_elements(s->'byEvent') x WHERE x->>'eventType'='abandoned_cart'),-1) <> 1
+     OR coalesce((SELECT (x->>'recovered')::integer FROM jsonb_array_elements(s->'byEvent') x WHERE x->>'eventType'='unclassified'),-1) <> 1 THEN
     RAISE EXCEPTION 'confirmed attribution categories are not classified correctly';
   END IF;
   SELECT x INTO v_item FROM jsonb_array_elements(s->'activity') x WHERE x->>'id'=o_unverified::text;
-  IF v_item->>'outcome' <> 'unverified' THEN
+  IF v_item IS NULL OR v_item->>'outcome' IS DISTINCT FROM 'unverified' THEN
     RAISE EXCEPTION 'RECOVERED opportunity without confirmed attribution was shown as recovered: %',v_item;
   END IF;
   SELECT x INTO v_item FROM jsonb_array_elements(s->'activity') x WHERE x->>'id'=o_attributed::text;
-  IF v_item->>'outcome' <> 'recovered' THEN
+  IF v_item IS NULL OR v_item->>'outcome' IS DISTINCT FROM 'recovered' THEN
     RAISE EXCEPTION 'confirmed attribution was not shown as recovered: %',v_item;
   END IF;
 
@@ -87,7 +91,7 @@ BEGIN
      OR r->>'change_percent' IS NOT NULL THEN
     RAISE EXCEPTION 'cross-currency period comparison was not withheld: %',r;
   END IF;
-  IF (SELECT sum((x->>'recovered_revenue')::numeric) FROM jsonb_array_elements(r->'series') x) <> 30 THEN
+  IF coalesce((SELECT sum((x->>'recovered_revenue')::numeric) FROM jsonb_array_elements(r->'series') x),-1) <> 30 THEN
     RAISE EXCEPTION 'single-currency current trend was not preserved';
   END IF;
 
