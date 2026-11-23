@@ -186,9 +186,10 @@ DECLARE
   v_reservation_id uuid;
   v_previous_status text;
 BEGIN
-  -- Only a narrow allowlist of explicit provider 4xx responses proves that
-  -- MailerSend rejected the request. Timeouts, conflicts, rate limits, 5xx,
-  -- missing status codes and transport failures remain reserved.
+  -- Release only on an explicit provider rejection allowlist, or a
+  -- server-authored Edge Function marker proving execution stopped before
+  -- POST /v1/email. Provider 409s, timeouts, rate limits, 5xx and transport
+  -- ambiguity without that marker remain reserved.
   v_definitive_rejection :=
     v_state IN ('FAILED', 'REJECTED')
     AND (
