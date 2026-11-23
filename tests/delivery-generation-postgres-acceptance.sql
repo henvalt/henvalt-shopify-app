@@ -168,8 +168,9 @@ BEGIN
 
   -- 30: a provider message ID already bound to one request cannot be rebound.
   p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
   IF NOT henvalt_test.settle_late_acceptance('evt-30a',r,'msg-30-shared') THEN RAISE EXCEPTION '30 first event failed'; END IF;
-  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r2);
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p,v_tenant); PERFORM henvalt_test.mark_pre_provider_failure(r2);
   BEGIN
     PERFORM henvalt_test.settle_late_acceptance('evt-30b',r2,'msg-30-shared');
     RAISE EXCEPTION '30 provider message ID rebound to another request';
@@ -242,7 +243,7 @@ BEGIN
   SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
   v_tags:=ARRAY['tenant:'||v_tenant::text,'delivery:'||r::text];
   IF NOT henvalt_test.settle_late_acceptance('evt-37a',r,'msg-37-shared') THEN RAISE EXCEPTION '37 first settlement failed'; END IF;
-  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p);
+  p:=gen_random_uuid(); r2:=henvalt_test.seed_initial(p,v_tenant);
   SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p;
   BEGIN
     PERFORM henvalt_test.resolve_delivery_tag(
