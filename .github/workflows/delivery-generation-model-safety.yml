@@ -43,7 +43,7 @@ jobs:
           sudo apt-get install -y postgresql-client
       - name: Bootstrap isolated generation model
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/delivery-generation-postgres-bootstrap.sql
-      - name: Run 30 delivery-generation acceptance cases
+      - name: Run 37 delivery-generation acceptance cases
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/delivery-generation-postgres-acceptance.sql
       - name: Prove concurrent retry commands serialize
         run: bash tests/delivery-generation-concurrency-postgres.sh
