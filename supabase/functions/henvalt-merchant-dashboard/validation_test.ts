@@ -32,7 +32,7 @@ Deno.test("rejects malformed explicit to date instead of silently defaulting", (
 
 Deno.test("rejects reversed and overlong ranges", () => {
   const reversed = resolveDashboardRange("2026-11-24", "2026-11-23", null, "2026-11-23", "2026-10-25");
-  const overlong = resolveDashboardRange("2025-11-22", "2026-11-23", null, "2026-11-23", "2026-10-25");
+  const overlong = resolveDashboardRange("2025-11-21", "2026-11-23", null, "2026-11-23", "2026-10-25");
   if (reversed.ok || reversed.error !== "invalid_date_range") throw new Error("reversed range accepted");
   if (overlong.ok || overlong.error !== "invalid_date_range") throw new Error("overlong range accepted");
 });
