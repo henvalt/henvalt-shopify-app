@@ -36,7 +36,7 @@ test("reservation and event data remain private to the database owner", () => {
 });
 
 test("ambiguous HTTP outcomes stay held and only the explicit rejection allowlist releases", () => {
-  const allowlist = migration.match(/NEW\\.provider_status_code IN \\(([^)]+)\\)/)?.[1];
+  const allowlist = migration.match(/NEW\.provider_status_code IN \(([^)]+)\)/)?.[1];
   assert.ok(allowlist, "definitive provider rejection allowlist must exist");
   assert.deepEqual(
     allowlist.split(",").map((value) => Number(value.trim())),
@@ -45,7 +45,7 @@ test("ambiguous HTTP outcomes stay held and only the explicit rejection allowlis
   for (const ambiguousCode of [408, 409, 429, 500, 502, 503]) {
     assert.ok(!allowlist.includes(String(ambiguousCode)), `ambiguous status ${ambiguousCode} must not release quota`);
   }
-  assert.match(migration, /v_state IN \\('ACCEPTED', 'DELIVERED', 'UNKNOWN'\\)/);
+  assert.match(migration, /v_state IN \('ACCEPTED', 'DELIVERED', 'UNKNOWN'\)/);
 });
 
 test("provider reconciliation requires MailerSend evidence rather than reservation age", () => {
