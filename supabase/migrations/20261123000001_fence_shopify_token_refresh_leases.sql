@@ -42,10 +42,10 @@ begin
   if not p_force and v_conn.access_token_expires_at > now()+interval '5 minutes' then
     return jsonb_build_object('claimed',false,'reason','TOKEN_STILL_VALID','expires_at',v_conn.access_token_expires_at);
   end if;
-  if v_conn.token_refresh_lease_until is not null and v_conn.token_refresh_lease_until>now() then
+  if v_conn.token_refresh_lease_until is not null and v_conn.token_refresh_lease_until>clock_timestamp() then
     return jsonb_build_object('claimed',false,'reason','REFRESH_ALREADY_IN_PROGRESS');
   end if;
-  if v_conn.refresh_token_expires_at is not null and v_conn.refresh_token_expires_at<=now() then
+  if v_conn.refresh_token_expires_at is not null and v_conn.refresh_token_expires_at<=clock_timestamp() then
     update henvalt.shopify_connections set reauth_required_at=now(),token_refresh_last_error='refresh_token_expired',
       token_refresh_lease_until=null,token_refresh_lease_id=null,updated_at=now() where id=v_conn.id;
     return jsonb_build_object('claimed',false,'reason','REAUTH_REQUIRED');
@@ -61,8 +61,8 @@ begin
   v_lease_id := gen_random_uuid();
   update henvalt.shopify_connections set
     token_refresh_lease_id=v_lease_id,
-    token_refresh_lease_until=now()+interval '10 minutes',
-    token_refresh_started_at=now(),
+    token_refresh_lease_until=clock_timestamp()+interval '10 minutes',
+    token_refresh_started_at=clock_timestamp(),
     updated_at=now()
     where id=v_conn.id;
 
@@ -113,7 +113,7 @@ begin
   if not found or v_conn.token_type<>'offline_expiring'
      or v_conn.token_refresh_lease_id is distinct from p_lease_id
      or v_conn.token_refresh_lease_until is null
-     or v_conn.token_refresh_lease_until<=now() then
+     or v_conn.token_refresh_lease_until<=clock_timestamp() then
     return jsonb_build_object('refreshed',false,'reason','STALE_REFRESH_LEASE');
   end if;
   if v_conn.access_token_secret_ref is null or v_conn.access_token_secret_ref !~* '^[0-9a-f-]{36}$'
@@ -129,8 +129,8 @@ begin
     'henvalt_shopify_'||replace(v_conn.shop_domain,'.','_')||'_refresh',
     'Shopify expiring Admin API refresh token for '||v_conn.shop_domain);
 
-  v_access_expires_at := now()+make_interval(secs=>p_access_expires_in);
-  v_refresh_expires_at := now()+make_interval(secs=>p_refresh_expires_in);
+  v_access_expires_at := clock_timestamp()+make_interval(secs=>p_access_expires_in);
+  v_refresh_expires_at := clock_timestamp()+make_interval(secs=>p_refresh_expires_in);
   update henvalt.shopify_connections set
     access_token_expires_at=v_access_expires_at,
     refresh_token_expires_at=v_refresh_expires_at,
@@ -178,7 +178,7 @@ begin
     where lower(shop_domain)=lower(p_shop_domain)
       and active=true
       and token_refresh_lease_id=p_lease_id
-      and token_refresh_lease_until>now()
+      and token_refresh_lease_until>clock_timestamp()
     returning id into v_id;
 
   return jsonb_build_object(
