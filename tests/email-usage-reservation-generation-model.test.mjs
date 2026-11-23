@@ -377,3 +377,26 @@ test("22 design explicitly separates trigger-level settlement from the real webh
   assert.match(spec, /does not prove the real MailerSend webhook path/);
   assert.match(spec, /race between late webhook settlement and retry-generation creation/i);
 });
+
+
+test("23 PostgreSQL generation fixture covers parent-first retry, claim, egress and late acceptance", () => {
+  const root = new URL("../", import.meta.url);
+  const bootstrap = readFileSync(new URL("tests/delivery-generation-postgres-bootstrap.sql", root), "utf8");
+  const acceptance = readFileSync(new URL("tests/delivery-generation-postgres-acceptance.sql", root), "utf8");
+  const distinctRace = readFileSync(new URL("tests/delivery-generation-concurrency-postgres.sh", root), "utf8");
+  const sameCommandRace = readFileSync(new URL("tests/delivery-generation-same-command-concurrency-postgres.sh", root), "utf8");
+  const lateFirstRace = readFileSync(new URL("tests/delivery-generation-late-acceptance-race-postgres.sh", root), "utf8");
+  const retryFirstRace = readFileSync(new URL("tests/delivery-generation-retry-wins-late-acceptance-race-postgres.sh", root), "utf8");
+  assert.match(bootstrap, /CREATE SCHEMA henvalt_test/);
+  assert.match(bootstrap, /UNIQUE \(tenant_id, intervention_id, generation_number\)/);
+  assert.match(bootstrap, /PREVIOUS_GENERATION_NOT_PROVEN_RETRYABLE/);
+  assert.match(bootstrap, /CONTRADICTORY_LATE_ACCEPTANCE/);
+  assert.match(bootstrap, /provider_egress_started_at/);
+  assert.match(acceptance, /28 transaction-level acceptance cases|28 cases/);
+  assert.match(acceptance, /consent_ok=false/);
+  assert.match(acceptance, /interlock_open=false/);
+  assert.match(distinctRace, /second concurrent retry command unexpectedly created another generation/);
+  assert.match(sameCommandRace, /same retry command did not return the same request id/);
+  assert.match(lateFirstRace, /late acceptance did not freeze intervention/);
+  assert.match(retryFirstRace, /new generation was claimable after contradictory late acceptance/);
+});
