@@ -4,6 +4,7 @@ DECLARE
   t_mixed uuid := '11111111-1111-4111-8111-111111111111';
   t_compare uuid := '22222222-2222-4222-8222-222222222222';
   t_empty uuid := '33333333-3333-4333-8333-333333333333';
+  t_invalid uuid := '99999999-9999-4999-8999-999999999999';
   o_unverified uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
   o_attributed uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2';
   s jsonb;
@@ -14,11 +15,13 @@ BEGIN
   INSERT INTO henvalt.tenants(id,name,status,default_currency) VALUES
     (t_mixed,'Mixed currency','ACTIVE','USD'),
     (t_compare,'Comparison currency','ACTIVE','USD'),
-    (t_empty,'Empty ledger','ACTIVE','CAD');
+    (t_empty,'Empty ledger','ACTIVE','CAD'),
+    (t_invalid,'Invalid currency','ACTIVE','USD');
   INSERT INTO henvalt.shopify_connections(id,tenant_id,shop_domain,active) VALUES
     ('44444444-4444-4444-8444-444444444441',t_mixed,'mixed.myshopify.com',true),
     ('44444444-4444-4444-8444-444444444442',t_compare,'compare.myshopify.com',true),
-    ('44444444-4444-4444-8444-444444444443',t_empty,'empty.myshopify.com',true);
+    ('44444444-4444-4444-8444-444444444443',t_empty,'empty.myshopify.com',true),
+    ('44444444-4444-4444-8444-444444444444',t_invalid,'invalid.myshopify.com',true);
 
   INSERT INTO henvalt.opportunities(id,tenant_id,opportunity_type,status,value_at_risk,currency,created_at,updated_at) VALUES
     (o_unverified,t_mixed,'ABANDONED_CHECKOUT','RECOVERED',999,'USD','2026-11-15','2026-11-15'),
@@ -100,6 +103,19 @@ BEGIN
      OR s->>'revenueCurrencyConflict' <> 'false'
      OR (s#>>'{metrics,revenueRecovered}')::numeric <> 0 THEN
     RAISE EXCEPTION 'empty ledger did not use tenant default currency and zero total: %',s;
+  END IF;
+
+  INSERT INTO henvalt.revenue_ledger(id,tenant_id,opportunity_id,entry_type,amount,currency,billable,attribution_confidence,created_at)
+  VALUES('99999999-9999-4999-8999-999999999991',t_invalid,NULL,'RECOVERY',9,'   ',true,'CONFIRMED','2026-11-17');
+  s := henvalt.control_plane_dashboard_summary('invalid.myshopify.com','2026-11-10','2026-11-20');
+  IF s->>'revenueCurrencyConflict' <> 'true'
+     OR s#>>'{metrics,revenueRecovered}' IS NOT NULL
+     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(s->'revenueByCurrency') x WHERE x->>'currency'='UNKNOWN') THEN
+    RAISE EXCEPTION 'invalid ISO currency was not failed closed: %',s;
+  END IF;
+  r := henvalt.control_plane_revenue_series('invalid.myshopify.com','2026-11-10','2026-11-20','day');
+  IF r->>'current_currency_conflict' <> 'true' OR jsonb_array_length(r->'series') <> 0 THEN
+    RAISE EXCEPTION 'invalid currency was included in the revenue trend: %',r;
   END IF;
 
   IF NOT has_function_privilege('service_role','henvalt.control_plane_dashboard_summary(text,timestamptz,timestamptz)','EXECUTE')
