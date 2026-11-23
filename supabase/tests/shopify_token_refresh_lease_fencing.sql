@@ -113,12 +113,16 @@ begin
     raise exception 'live lease was not exclusive: %',v_result;
   end if;
 
-  -- Simulate expiry and a new worker taking ownership.
-  v_new_lease := gen_random_uuid();
+  -- Expire the first lease, then let a real second claim replace its owner ID.
   update henvalt.shopify_connections set
-    token_refresh_lease_id=v_new_lease,
-    token_refresh_lease_until=now()+interval '10 minutes'
+    token_refresh_lease_until=now()-interval '1 second'
     where shop_domain='demo.myshopify.com';
+  v_claim := henvalt.claim_shopify_token_refresh('demo.myshopify.com',true);
+  if v_claim->>'claimed' <> 'true' then raise exception 'replacement worker could not claim expired lease: %',v_claim; end if;
+  v_new_lease := (v_claim->>'lease_id')::uuid;
+  if v_new_lease is null or v_new_lease=v_old_lease then
+    raise exception 'reclaim did not generate a distinct lease ID';
+  end if;
 
   -- Old worker completion must not rotate either secret or expiry.
   v_result := henvalt.complete_shopify_token_refresh(
