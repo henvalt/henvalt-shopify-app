@@ -185,3 +185,23 @@ Deno.test("rejects invalid shop domains before claiming", async () => {
   assertEquals(response.status, 400);
   assertEquals(rpcCalls, 0);
 });
+
+
+Deno.test("releases a valid lease when the claimed refresh token is malformed", async () => {
+  const failBodies: Array<Record<string, unknown>> = [];
+  const handler = createTokenRefreshHandler({
+    ...depsBase,
+    rpc: async (name, body) => {
+      if (name === "claim_shopify_token_refresh") {
+        return { claimed: true, lease_id: LEASE, refresh_token: "short" };
+      }
+      if (name === "fail_shopify_token_refresh") failBodies.push(body);
+      return {};
+    },
+    fetchImpl: async () => tokenResponse(),
+  });
+  const response = await handler(request());
+  assertEquals(response.status, 503);
+  assertEquals(failBodies[0]?.p_lease_id, LEASE);
+  assertEquals(failBodies[0]?.p_error_code, "refresh_claim_contract_invalid");
+});
