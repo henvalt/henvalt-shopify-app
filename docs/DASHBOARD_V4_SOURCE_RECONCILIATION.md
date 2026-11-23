@@ -24,7 +24,7 @@ The reconciled source retains the existing Auth user validation, exactly-one-mem
 - No Supabase deployment was performed.
 - No production SQL, migration or RLS policy was changed.
 - No secrets, keys or credentials were added to Git.
-- No dashboard UI or billing semantics were changed.
+- Dashboard chart now consumes the API's `revenueSeries` buckets instead of reconstructing a trend from only the latest eight activity rows; no billing semantics were changed.
 - No n8n workflow, Shopify app version, recovery toggle, sender or provider setting was changed.
 
 ## Verification still required before deployment
