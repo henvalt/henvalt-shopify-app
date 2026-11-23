@@ -254,6 +254,34 @@ BEGIN
     IF SQLERRM='37 provider message ID reused across requests' THEN RAISE; END IF;
   END;
 
+
+  -- 38: prior-generation late acceptance freezes a newer generation before its egress fence.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  r2:=henvalt_test.create_retry_generation(p,gen_random_uuid());
+  IF NOT henvalt_test.settle_late_acceptance('evt-38',r,'msg-38') THEN RAISE EXCEPTION '38 late acceptance failed'; END IF;
+  IF henvalt_test.claim_generation(r2) THEN RAISE EXCEPTION '38 newer generation claimed after freeze'; END IF;
+  IF henvalt_test.start_provider_egress(r2) THEN RAISE EXCEPTION '38 newer generation crossed egress after freeze'; END IF;
+
+  -- 39: if the newer generation already crossed egress, late evidence freezes future sends;
+  -- the in-flight generation remains held and ambiguous rather than being retried.
+  p:=gen_random_uuid(); r:=henvalt_test.seed_initial(p); PERFORM henvalt_test.mark_pre_provider_failure(r);
+  r2:=henvalt_test.create_retry_generation(p,gen_random_uuid());
+  IF NOT henvalt_test.claim_generation(r2) OR NOT henvalt_test.start_provider_egress(r2) THEN
+    RAISE EXCEPTION '39 newer generation failed to cross initial egress fence';
+  END IF;
+  IF NOT henvalt_test.settle_late_acceptance('evt-39',r,'msg-39') THEN RAISE EXCEPTION '39 late acceptance failed'; END IF;
+  PERFORM henvalt_test.mark_ambiguous(r2);
+  IF (SELECT status FROM henvalt_test.reservations WHERE delivery_request_id=r2)<>'CONSUMED' THEN
+    RAISE EXCEPTION '39 in-flight generation quota was not conservatively consumed';
+  END IF;
+  IF henvalt_test.start_provider_egress(r2) THEN RAISE EXCEPTION '39 frozen in-flight generation re-entered provider egress'; END IF;
+  BEGIN
+    PERFORM henvalt_test.create_retry_generation(p,gen_random_uuid());
+    RAISE EXCEPTION '39 ambiguous in-flight generation was retried';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='39 ambiguous in-flight generation was retried' THEN RAISE; END IF;
+  END;
+
 END
 $tests$;
-SELECT 'delivery generation PostgreSQL model acceptance passed (37 cases)' AS result;
+SELECT 'delivery generation PostgreSQL model acceptance passed (39 cases)' AS result;
