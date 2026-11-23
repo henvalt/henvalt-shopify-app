@@ -24,15 +24,29 @@ const CREATE_MUTATION = `mutation CreateWebhook($topic: WebhookSubscriptionTopic
 type Subscription = { id: string; topic: string; uri: string };
 type Result = { topic: string; ok: boolean; verified: boolean; id?: string; error?: string };
 
+const REGISTRATION_BUDGET_MS = 45_000;
+const FINAL_VERIFICATION_RESERVE_MS = 12_000;
+const MAX_SUBSCRIPTION_PAGES = 10;
+
 export async function registerShopifyWebhooks(input: {
   shop: string;
   accessToken: string;
   webhookUri: string;
   fetchImpl?: typeof fetch;
+  now?: () => number;
 }): Promise<{ results: Result[]; allRegistered: boolean }> {
   const fetchImpl = input.fetchImpl ?? fetch;
+  const now = input.now ?? Date.now;
+  const deadline = now() + REGISTRATION_BUDGET_MS;
+  const createDeadline = deadline - FINAL_VERIFICATION_RESERVE_MS;
   const endpoint = `https://${input.shop}/admin/api/2026-10/graphql.json`;
-  const gql = async (query: string, variables: Record<string, unknown> = {}) => {
+  const gql = async (
+    query: string,
+    variables: Record<string, unknown> = {},
+    operationDeadline = deadline,
+  ) => {
+    const remainingMs = operationDeadline - now();
+    if (remainingMs <= 0) throw new Error("SHOPIFY_WEBHOOK_REGISTRATION_DEADLINE_EXCEEDED");
     const response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
@@ -41,18 +55,18 @@ export async function registerShopifyWebhooks(input: {
         accept: "application/json",
       },
       body: JSON.stringify({ query, variables }),
-      signal: AbortSignal.timeout(15000),
+      signal: AbortSignal.timeout(Math.min(15000, remainingMs)),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok || payload?.errors?.length) throw new Error("SHOPIFY_GRAPHQL_REQUEST_FAILED");
     return payload?.data ?? {};
   };
-  const getSubscriptions = async (): Promise<Subscription[]> => {
+  const getSubscriptions = async (operationDeadline: number): Promise<Subscription[]> => {
     const subscriptions: Subscription[] = [];
     const seenCursors = new Set<string>();
     let after: string | null = null;
-    for (let page = 0; page < 100; page++) {
-      const data = await gql(LIST_QUERY, { after });
+    for (let page = 0; page < MAX_SUBSCRIPTION_PAGES; page++) {
+      const data = await gql(LIST_QUERY, { after }, operationDeadline);
       const connection = data?.webhookSubscriptions;
       const nodes = connection?.nodes;
       const pageInfo = connection?.pageInfo;
@@ -76,7 +90,7 @@ export async function registerShopifyWebhooks(input: {
   let initial: Subscription[] | null = null;
   let initialLookupError = false;
   try {
-    initial = await getSubscriptions();
+    initial = await getSubscriptions(createDeadline);
   } catch {
     // Fail closed: never create subscriptions when the existing set is unknown.
     initialLookupError = true;
@@ -97,7 +111,7 @@ export async function registerShopifyWebhooks(input: {
       const data = await gql(CREATE_MUTATION, {
         topic: spec.gql,
         input: { uri: input.webhookUri, format: "JSON" },
-      });
+      }, createDeadline);
       const created = data?.webhookSubscriptionCreate;
       if (created?.userErrors?.length || !created?.webhookSubscription?.id) {
         results.push({
@@ -117,7 +131,7 @@ export async function registerShopifyWebhooks(input: {
   let finalSubscriptions: Subscription[] = [];
   let finalLookupError = false;
   try {
-    finalSubscriptions = await getSubscriptions();
+    finalSubscriptions = await getSubscriptions(deadline);
   } catch {
     finalLookupError = true;
   }
