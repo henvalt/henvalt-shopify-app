@@ -190,3 +190,28 @@ A further design review distinguishes lease fencing at the queue boundary from s
 The candidate worker specification now requires a sequential heartbeat renewal before each potentially long-running or mutating stage, bounded per-stage timeouts, idempotency keyed by tenant plus source event/webhook, and immediate stop when renewal returns NULL. It explicitly does not claim strict cross-system side-effect fencing until mutating RPCs validate the lease inside their own transaction. A static regression test covers this boundary. This is a release blocker for claiming strong lease fencing, not something to hide behind the queue-level acceptance test.
 
 The heartbeat-contract code/spec update is at candidate commit `51622178fef4ac299f608a040e7673b7f207930b`; exact-head CI has not yet been observed for this commit.
+
+
+## 23 November — candidate email quota reservation correction
+
+The previous quota-race finding now has a draft implementation on this PR branch. This is candidate code only; the connected production database and all active n8n workflows remain unchanged.
+
+### Candidate state machine
+
+- A private `henvalt.email_usage_reservations` row is created by the existing `PENDING → UNKNOWN` delivery-request entitlement trigger, in the same PostgreSQL transaction as the request claim.
+- The trigger locks the tenant billing-account row before counting usage, then checks measured email usage plus every outstanding `RESERVED` hold. Counting unresolved holds across cycle boundaries is deliberately conservative because an in-flight provider call can cross a 30-day boundary.
+- Reservation identity is unique by `delivery_request_id`; the row is tenant-bound, RLS-enabled, and has no grants to `anon`, `authenticated` or `service_role`.
+- The existing after-attempt measurement trigger continues to create usage measurements for `ACCEPTED`, `DELIVERED` and `UNKNOWN`. A new after-attempt trigger converts the matching hold to `CONSUMED` for those states.
+- A hold is released only for an explicit allowlist of provider rejection status codes (400, 401, 403, 404, 405, 410, 413, 415, 422). Timeouts, conflicts, 429, 5xx, missing status codes and transport ambiguity retain the reservation. A later acceptance/ambiguous result upgrades a previously released hold to consumed.
+- There is no automatic time-based expiry. A stranded ambiguous hold requires reconciliation; silently expiring it could permit a duplicate send or exceed the cap.
+
+### Candidate files and acceptance
+
+- Migration: `supabase/migrations/202611230001_email_usage_reservations.sql`
+- Isolated PostgreSQL bootstrap and lifecycle acceptance: `tests/email-usage-reservation-bootstrap.sql`, `tests/email-usage-reservation-postgres-acceptance.sql`
+- Two-session final-slot race: `tests/email-usage-reservation-concurrency-postgres.sh`
+- Static contract test and dedicated PostgreSQL 17 GitHub Actions workflow: `tests/email-usage-reservations.test.mjs`, `.github/workflows/email-usage-reservation-safety.yml`
+
+The intended concurrency test starts with four of five email units measured. Session A claims request A and holds the transaction open; session B independently claims request B and must wait on the same billing-account row. After A commits its reservation, B must be denied and remain PENDING. The acceptance suite also covers duplicate claim idempotency, definitive rejection release, ambiguous 429 retention, late acceptance after release, measurement conversion and table privacy.
+
+**Validation status:** pending exact-head GitHub Actions execution. Until the disposable PostgreSQL workflow passes, this candidate is not validated and must not be applied to production. Even after CI passes, production cutover requires separate migration review and explicit approval. No production SQL, provider call, n8n workflow, billing row, secret or email was changed while creating this candidate.
