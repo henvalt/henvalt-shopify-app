@@ -13,44 +13,83 @@
     "node_count": 62,
     "direct_record_delivery_result_callers": 2,
     "paths": {
-      "normal_delivery": ["authorize_delivery_request", "henvalt-mailersend-delivery", "record_delivery_result"],
-      "provider_webhook": ["verify_mailersend_webhook_signature_api", "process_mailersend_webhook_event"],
-      "manual_one_off": ["reauthorize_one_off_test_delivery", "henvalt-mailersend-delivery", "record_delivery_result"]
+      "normal_delivery": [
+        "authorize_delivery_request",
+        "henvalt-mailersend-delivery",
+        "record_delivery_result"
+      ],
+      "provider_webhook": [
+        "verify_mailersend_webhook_signature_api",
+        "process_mailersend_webhook_event"
+      ],
+      "manual_one_off": [
+        "reauthorize_one_off_test_delivery",
+        "henvalt-mailersend-delivery",
+        "record_delivery_result"
+      ]
     }
   },
   "live_constraints": {
     "unique_intervention_index": {
       "name": "ux_delivery_request_intervention",
-      "columns": ["tenant_id", "intervention_id"],
+      "columns": [
+        "tenant_id",
+        "intervention_id"
+      ],
       "blocks_multiple_generations": true
     },
     "request_idempotency_index": {
       "name": "delivery_requests_tenant_id_idempotency_key_key",
-      "columns": ["tenant_id", "idempotency_key"]
+      "columns": [
+        "tenant_id",
+        "idempotency_key"
+      ]
     },
     "attempt_number_index": {
       "name": "delivery_attempts_delivery_request_id_attempt_number_key",
-      "columns": ["delivery_request_id", "attempt_number"]
+      "columns": [
+        "delivery_request_id",
+        "attempt_number"
+      ]
     },
     "provider_event_hash_index": {
       "name": "provider_events_provider_hash_key",
-      "columns": ["provider", "event_hash"]
+      "columns": [
+        "provider",
+        "event_hash"
+      ]
     },
     "candidate_email_usage_reservation_tables_deployed": false
   },
   "live_lock_order": {
-    "create_delivery_request": ["recovery_interventions", "delivery_requests"],
-    "authorize_delivery_request": ["delivery_requests", "recovery_interventions_read_without_lock"],
-    "record_delivery_result": ["delivery_requests", "recovery_interventions"],
-    "get_mailersend_token_for_delivery": ["delivery_requests_update_without_parent_lock"],
-    "process_mailersend_webhook_event": ["provider_events_insert", "delivery_requests_for_update", "record_delivery_result"]
+    "create_delivery_request": [
+      "recovery_interventions",
+      "delivery_requests"
+    ],
+    "authorize_delivery_request": [
+      "delivery_requests",
+      "recovery_interventions_read_without_lock"
+    ],
+    "record_delivery_result": [
+      "delivery_requests",
+      "recovery_interventions"
+    ],
+    "get_mailersend_token_for_delivery": [
+      "delivery_requests_update_without_parent_lock"
+    ],
+    "process_mailersend_webhook_event": [
+      "provider_events_insert",
+      "delivery_requests_for_update",
+      "record_delivery_result"
+    ]
   },
   "legacy_one_off_reauthorization": {
     "resets_failed_request_to_pending": true,
     "clears_provider_claimed_at": true,
     "sets_intervention_to_sending": true,
     "temporarily_changes_tenant_recovery_settings": true,
-    "must_be_replaced_or_disabled_for_generation_cutover": true
+    "must_be_replaced_or_disabled_for_generation_cutover": true,
+    "token_rpc_contains_hard_coded_test_allowlist": true
   },
   "provider_edge_function": {
     "credential_rpc": "get_mailersend_token_for_delivery",
@@ -65,5 +104,11 @@
     "existing_processor_uses_delivery_tag_for_resolution": false,
     "record_delivery_result_rejects_transition_from_failed": true,
     "separate_late_acceptance_settlement_required": true
+  },
+  "service_role_execution": {
+    "can_reauthorize_one_off": true,
+    "can_claim_provider_token": true,
+    "can_record_delivery_result": true,
+    "can_process_provider_webhook": true
   }
 }
