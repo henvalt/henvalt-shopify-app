@@ -9,6 +9,7 @@ const handler = read("../supabase/functions/henvalt-mailersend-delivery/handler.
 const report = read("../docs/DELIVERY_GENERATION_PRODUCTION_INTEGRATION_AUDIT_2026-11-23.md");
 const modelDoc = read("../docs/DELIVERY_GENERATION_MODEL_CANDIDATE.md");
 const migration = read("../supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql");
+const egressMigration = read("../supabase/migrations/202611230003_delivery_provider_egress_fence.sql");
 const prodShapeAcceptance = read("./delivery-generation-production-shaped-acceptance.sql");
 
 test("live delivery-generation audit is explicitly read-only and pinned to the inspected active workflow", () => {
@@ -102,4 +103,6 @@ test("production-shaped migration is an additive, guarded first slice—not a cu
   assert.doesNotMatch(migration, /mark_delivery_provider_egress_started/);
   assert.match(prodShapeAcceptance, /provider_claimed_at/);
   assert.match(prodShapeAcceptance, /retry without append-only release event was accepted/);
+  assert.match(prodShapeAcceptance, /closed interlock allowed provider egress/);
+  assert.match(prodShapeAcceptance, /provider egress fence allowed a second crossing/);
 });
