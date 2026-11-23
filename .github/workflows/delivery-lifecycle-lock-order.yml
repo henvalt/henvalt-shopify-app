@@ -47,6 +47,8 @@ jobs:
         run: createdb -h 127.0.0.1 -U postgres delivery_lock_order
       - name: Bootstrap production-shaped lifecycle RPC signatures
         run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f tests/delivery-lifecycle-lock-order-bootstrap.sql
+      - name: Validate candidate migration revision
+        run: echo "parent-first-lock-order-candidate-v2"
       - name: Apply guarded parent-first patch
         run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql
       - name: Verify lock order and RPC behavior
