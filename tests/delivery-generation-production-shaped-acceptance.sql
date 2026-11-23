@@ -99,9 +99,29 @@ BEGIN
   EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
   END;
 
+  -- The durable egress fence requires a claimed current generation and an
+  -- open global send interlock; it can be crossed exactly once.
   UPDATE henvalt.delivery_requests
-     SET provider_egress_started_at=clock_timestamp()
+     SET status='UNKNOWN', provider_claimed_at=clock_timestamp()
    WHERE id=v_next;
+  UPDATE henvalt.provider_send_control SET provider_sending_enabled=false
+   WHERE control_key='global';
+  BEGIN
+    PERFORM henvalt.mark_mailersend_provider_egress_started(v_tenant,v_next);
+    RAISE EXCEPTION 'closed interlock allowed provider egress';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  UPDATE henvalt.provider_send_control SET provider_sending_enabled=true
+   WHERE control_key='global';
+  IF henvalt.mark_mailersend_provider_egress_started(v_tenant,v_next) IS NOT TRUE THEN
+    RAISE EXCEPTION 'current generation did not cross egress fence';
+  END IF;
+  BEGIN
+    PERFORM henvalt.mark_mailersend_provider_egress_started(v_tenant,v_next);
+    RAISE EXCEPTION 'provider egress fence allowed a second crossing';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='provider egress fence allowed a second crossing' THEN RAISE; END IF;
+  END;
   BEGIN
     UPDATE henvalt.delivery_requests SET provider_egress_started_at=NULL WHERE id=v_next;
     RAISE EXCEPTION 'provider egress marker rollback was accepted';
