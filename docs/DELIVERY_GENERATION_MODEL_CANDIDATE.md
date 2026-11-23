@@ -197,3 +197,44 @@ In particular, authorization currently locks the request before reading the inte
 ### Current implementation status
 
 The reference-model tests and design document do not implement this migration. No generation column/index, retry-command ledger, egress-start RPC, or n8n generation routing has been added. The next engineering batch is a concrete migration design plus isolated PostgreSQL bootstrap/acceptance tests that model the live unique index and RPC lock order before any candidate production-shaped DDL is proposed.
+
+
+## 12. Late-acceptance webhook integration gap — read-only audit, 2026-11-23
+
+The quota settlement trigger's late-acceptance behavior has been proven by direct disposable-PostgreSQL attempt insertion. That is not equivalent to proving that the real MailerSend webhook can deliver the same evidence through the deployed RPC path.
+
+Read-only inspection of `henvalt.process_mailersend_webhook_event` and `henvalt.record_delivery_result` found two integration blockers:
+
+1. The webhook processor extracts the tenant tag and provider message ID, then resolves a delivery request by `tenant_id + provider + provider_message_id`. It does not currently resolve a delivery using the `delivery:<request UUID>` tag. A pre-provider failure normally has no provider message ID, so this route cannot correlate a later provider event to that request using its current lookup.
+2. After a match, the webhook processor calls `record_delivery_result`. That RPC locks the request and rejects transitions from terminal `FAILED` status. A delayed `activity.delivered` event for a request previously marked FAILED therefore cannot follow the ordinary result-recording path.
+
+The event processor inserts its provider-event row before linking/settling the delivery. The full transaction must be tested to establish whether a rejected settlement rolls back the event receipt and allows safe retry; do not assume webhook acknowledgement or event persistence is correct from the trigger test alone.
+
+### Required candidate correction
+
+Do not weaken the existing terminal-state transition rules globally. Add a narrowly scoped, authenticated provider-evidence settlement path that:
+
+- verifies the provider webhook signature before reaching the database;
+- resolves by exact tenant + immutable delivery tag/request identity when message ID is absent, and verifies the provider message ID/domain/recipient/time evidence when present;
+- binds the event to one exact generation/request, never merely to an intervention or recipient;
+- deduplicates the provider event by the existing provider/event hash identity;
+- appends late-acceptance evidence and upgrades a RELEASED quota reservation to CONSUMED exactly once;
+- preserves the original FAILED result and RELEASED audit event rather than rewriting history;
+- freezes the intervention and creates a duplicate/contradictory-evidence incident if a supposedly pre-provider generation later has provider acceptance evidence;
+- prevents a newer generation from entering provider egress after the contradiction is detected;
+- handles concurrent webhook deliveries and retry-command transactions with the same canonical parent-first lock order.
+
+If the provider webhook does not carry enough exact tags or metadata to correlate safely, do not guess. Keep the case unresolved for the documented provider activity reconciliation path.
+
+### Acceptance tests added to the required matrix
+
+- real webhook processor path for a provider message ID match;
+- exact delivery-tag match when the original pre-provider attempt has no message ID;
+- missing/ambiguous delivery tag rejected without attaching to a different request;
+- delayed `activity.delivered` after pre-provider FAILED is durably recorded as contradictory evidence, consumes quota, and freezes the parent;
+- duplicate webhook event is idempotent;
+- webhook event insertion and settlement rollback/commit behavior is explicitly verified;
+- race between late webhook settlement and retry-generation creation;
+- race between late webhook settlement and a newer generation's egress-start marker.
+
+**Verification boundary:** current quota CI proves the reservation trigger's direct late-acceptance transition and concurrency behavior. It does not prove the real MailerSend webhook path above. No production webhook, RPC, reservation, or delivery request was changed.
