@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "\${PGHOST:=127.0.0.1}"; : "\${PGPORT:=5432}"; : "\${PGUSER:=postgres}"; : "\${PGDATABASE:=postgres}"; : "\${PGPASSWORD:=postgres}"
+: "${PGHOST:=127.0.0.1}"; : "${PGPORT:=5432}"; : "${PGUSER:=postgres}"; : "${PGDATABASE:=postgres}"; : "${PGPASSWORD:=postgres}"
 export PGHOST PGPORT PGUSER PGDATABASE PGPASSWORD
 parent='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
 command_a='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
 command_b='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2'
 psql -v ON_ERROR_STOP=1 <<SQL
-SELECT henvalt_test.seed_initial('$parent') AS request_id \\gset
+SELECT henvalt_test.seed_initial('$parent') AS request_id \gset
 SELECT henvalt_test.mark_pre_provider_failure(:'request_id');
 SQL
 first_log="$(mktemp)"; second_log="$(mktemp)"
