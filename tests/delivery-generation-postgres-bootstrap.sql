@@ -245,7 +245,9 @@ DECLARE
 BEGIN
   SELECT count(*) FILTER (WHERE tag LIKE 'tenant:%'),
          count(*) FILTER (WHERE tag LIKE 'delivery:%'),
-         count(*) FILTER (WHERE tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+         count(*) FILTER (WHERE tag ~* '^tenant:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'),
+         count(*) FILTER (WHERE tag ~* '^delivery:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+    INTO v_tenant_prefix_count,v_delivery_prefix_count,v_tenant_count,v_delivery_count
     FROM unnest(coalesce(p_tags,ARRAY[]::text[])) AS tags(tag);
   IF v_tenant_count<>1 OR v_delivery_count<>1
      OR v_tenant_prefix_count<>v_tenant_count
