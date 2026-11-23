@@ -60,7 +60,7 @@ export function buildDeliveryCandidate(source) {
         code = replaceOne(
           code,
           'else if (!send || send.statusCode === undefined || send.statusCode === null) {',
-          'else if (send && send.body && send.body.henvalt_delivery_stage === "pre_provider") {\\n  state = "FAILED"; errorClass = String(send.body.error || "PRE_PROVIDER_FAILURE"); provider_status_code = Number(send.statusCode); provider_response = send.body; http_status = 502;\\n} else if (!send || send.statusCode === undefined || send.statusCode === null) {',
+          'else if (send && send.body && send.body.henvalt_delivery_stage === "pre_provider") {\\n  state = "FAILED"; errorClass = String(send.body.error || "PRE_PROVIDER_FAILURE"); provider_status_code = Number(send.statusCode); provider_response = send.body; http_status = 502;\n} else if (!send || send.statusCode === undefined || send.statusCode === null) {',
           "pre-provider failure classification"
         );
         code = replaceOne(
