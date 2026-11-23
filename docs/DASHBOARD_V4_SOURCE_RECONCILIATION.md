@@ -35,6 +35,7 @@ The reconciled source retains the existing Auth user validation, exactly-one-mem
    - Impossible calendar dates (for example, February 31), reversed ranges, ranges longer than 366 days, and unsupported granularities are rejected by a shared pure validator.
    - Automated tests cover leap days, malformed dates, defaults, reversed / overlong ranges, and all supported / unsupported granularities (8 tests).
    - Handler tests inject a deterministic fetch implementation; they verify Auth is checked first, privileged lookups use server credentials, ambiguous memberships / shops fail closed, and the ledger filter includes tenant, recovery entry type and confirmed attribution.
+   - A regression assertion verifies the standard `Authorization: Bearer <token>` header is normalized to exactly one bearer prefix before the Auth request.
    - These are mocked integration-contract tests, not proof of live Supabase Auth, PostgREST relationship, RLS or RPC behavior. Latest verified GitHub Actions run: 19 tests passed, 0 failed; the Deno type-check also passed.
 3. Run the isolated handler tests in CI; then exercise the same paths against a controlled Supabase test tenant before production deployment.
 4. Verify the revenue series and ledger responses remain tenant scoped and confirmed-attribution only.
