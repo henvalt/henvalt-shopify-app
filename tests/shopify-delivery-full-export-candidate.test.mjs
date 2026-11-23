@@ -77,6 +77,35 @@ test("no-send response is rejected and is never persisted as a provider result",
   assert.equal(w.connections["Should Record Provider Result?"].main[1][0].node, "Build Delivery Response");
 });
 
+test("pre-provider Edge Function failures are classified as definitive non-egress outcomes", () => {
+  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const nodes = new Map(w.nodes.map((n) => [n.name, n]));
+  const context = {
+    "Validate & Normalize": { item: { json: {
+      precheck_ok: true, tenant_id: "tenant", delivery_request_id: "request",
+      intervention_id: "intervention", recovery_id: "recovery", opportunity_id: "opportunity",
+      correlation_id: "correlation"
+    }}},
+    "Authorize & Context": { item: { json: { statusCode: 200, body: {
+      can_send: true, delivery_request_id: "request", provider: "MailerSend"
+    }}}},
+    "No-Send Provider Stub": { item: { json: {
+      statusCode: 409,
+      body: { error: "tenant_provider_credential_unavailable", henvalt_delivery_stage: "pre_provider" }
+    }}}
+  };
+  const classifier = new Function("$", "$json", nodes.get("Classify Result").parameters.jsCode)(
+    (name) => context[name],
+    {}
+  );
+  assert.equal(classifier.state, "FAILED");
+  assert.equal(classifier.error_class, "tenant_provider_credential_unavailable");
+  assert.equal(classifier.provider_status_code, 409);
+  assert.equal(classifier.provider_response.henvalt_delivery_stage, "pre_provider");
+  assert.equal(classifier.should_record_result, true);
+  assert.equal(classifier.retryable, false);
+});
+
 test("candidate webhooks use isolated path prefixes and graph connections resolve", () => {
   const w = buildDeliveryCandidate(fixture.workflow).workflow;
   const names = new Set(w.nodes.map((n) => n.name));
