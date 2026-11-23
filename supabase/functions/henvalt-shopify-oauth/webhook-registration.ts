@@ -127,3 +127,25 @@ export async function registerShopifyWebhooks(input: {
       results.every((item) => item.ok && item.verified),
   };
 }
+export async function getShopifyShopId(input: {
+  shop: string;
+  accessToken: string;
+  fetchImpl?: typeof fetch;
+}): Promise<string> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(`https://${input.shop}/admin/api/2026-10/graphql.json`, {
+    method: "POST",
+    headers: {
+      "x-shopify-access-token": input.accessToken,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({ query: "query { shop { id } }" }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.errors?.length) throw new Error("SHOPIFY_SHOP_LOOKUP_FAILED");
+  const id = payload?.data?.shop?.id;
+  if (typeof id !== "string" || !id) throw new Error("SHOPIFY_SHOP_ID_MISSING");
+  return id;
+}
