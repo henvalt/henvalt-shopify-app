@@ -97,6 +97,76 @@ COMMENT ON TABLE henvalt.delivery_retry_commands IS
 COMMENT ON TABLE henvalt.delivery_generation_incidents IS
   'Append-only evidence of contradictory provider outcomes across delivery generations.';
 
+
+CREATE OR REPLACE FUNCTION henvalt.enforce_delivery_generation_monotonicity()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO pg_catalog, henvalt, pg_temp
+AS $function$
+BEGIN
+  IF TG_TABLE_NAME = 'delivery_requests' THEN
+    IF NEW.generation_number IS DISTINCT FROM OLD.generation_number THEN
+      RAISE EXCEPTION 'DELIVERY_GENERATION_NUMBER_IS_IMMUTABLE'
+        USING ERRCODE = '55000';
+    END IF;
+    IF OLD.provider_egress_started_at IS NOT NULL
+       AND NEW.provider_egress_started_at IS DISTINCT FROM OLD.provider_egress_started_at THEN
+      RAISE EXCEPTION 'DELIVERY_PROVIDER_EGRESS_MARKER_IS_IMMUTABLE'
+        USING ERRCODE = '55000';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'recovery_interventions' THEN
+    IF OLD.delivery_frozen_at IS NOT NULL
+       AND (NEW.delivery_frozen_at IS DISTINCT FROM OLD.delivery_frozen_at
+         OR NEW.delivery_freeze_reason IS DISTINCT FROM OLD.delivery_freeze_reason) THEN
+      RAISE EXCEPTION 'DELIVERY_INTERVENTION_FREEZE_IS_IMMUTABLE'
+        USING ERRCODE = '55000';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.enforce_delivery_generation_monotonicity()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS delivery_requests_generation_monotonicity
+  ON henvalt.delivery_requests;
+CREATE TRIGGER delivery_requests_generation_monotonicity
+BEFORE UPDATE ON henvalt.delivery_requests
+FOR EACH ROW EXECUTE FUNCTION henvalt.enforce_delivery_generation_monotonicity();
+
+DROP TRIGGER IF EXISTS recovery_interventions_delivery_freeze_monotonicity
+  ON henvalt.recovery_interventions;
+CREATE TRIGGER recovery_interventions_delivery_freeze_monotonicity
+BEFORE UPDATE ON henvalt.recovery_interventions
+FOR EACH ROW EXECUTE FUNCTION henvalt.enforce_delivery_generation_monotonicity();
+
+CREATE OR REPLACE FUNCTION henvalt.reject_delivery_generation_ledger_mutation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path TO pg_catalog, henvalt, pg_temp
+AS $function$
+BEGIN
+  RAISE EXCEPTION 'DELIVERY_GENERATION_LEDGER_IS_APPEND_ONLY'
+    USING ERRCODE = '55000';
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.reject_delivery_generation_ledger_mutation()
+  FROM PUBLIC, anon, authenticated, service_role;
+
+DROP TRIGGER IF EXISTS delivery_retry_commands_append_only
+  ON henvalt.delivery_retry_commands;
+CREATE TRIGGER delivery_retry_commands_append_only
+BEFORE UPDATE OR DELETE ON henvalt.delivery_retry_commands
+FOR EACH ROW EXECUTE FUNCTION henvalt.reject_delivery_generation_ledger_mutation();
+
+DROP TRIGGER IF EXISTS delivery_generation_incidents_append_only
+  ON henvalt.delivery_generation_incidents;
+CREATE TRIGGER delivery_generation_incidents_append_only
+BEFORE UPDATE OR DELETE ON henvalt.delivery_generation_incidents
+FOR EACH ROW EXECUTE FUNCTION henvalt.reject_delivery_generation_ledger_mutation();
+
 CREATE OR REPLACE FUNCTION henvalt.create_delivery_retry_generation(
   p_tenant_id uuid,
   p_intervention_id uuid,
@@ -175,8 +245,20 @@ BEGIN
     FROM henvalt.email_usage_reservations
    WHERE tenant_id=p_tenant_id AND delivery_request_id=v_previous.id
    FOR UPDATE;
-  IF NOT FOUND OR v_reservation.status <> 'RELEASED' THEN
-    RAISE EXCEPTION 'PREVIOUS_QUOTA_RESERVATION_NOT_RELEASED';
+  IF NOT FOUND OR v_reservation.status <> 'RELEASED'
+     OR v_reservation.last_attempt_id IS DISTINCT FROM v_attempt.id THEN
+    RAISE EXCEPTION 'PREVIOUS_QUOTA_RESERVATION_NOT_RELEASED_BY_LATEST_ATTEMPT';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.email_usage_reservation_events e
+     WHERE e.reservation_id=v_reservation.id
+       AND e.delivery_request_id=v_previous.id
+       AND e.tenant_id=p_tenant_id
+       AND e.event_type='RELEASED'
+       AND e.delivery_attempt_id=v_attempt.id
+       AND e.new_status='RELEASED'
+  ) THEN
+    RAISE EXCEPTION 'APPEND_ONLY_RELEASE_EVIDENCE_MISSING';
   END IF;
 
   -- A RELEASED hold alone is insufficient. It must correspond to the
@@ -191,7 +273,6 @@ BEGIN
   IF EXISTS (
     SELECT 1 FROM henvalt.provider_events
      WHERE delivery_request_id=v_previous.id
-       AND lower(event_type) IN ('accepted','delivered','deferred','soft_bounce','hard_bounce','spam_complaint')
   ) THEN
     RAISE EXCEPTION 'PROVIDER_EVIDENCE_ALREADY_EXISTS';
   END IF;
