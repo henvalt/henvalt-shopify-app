@@ -4,7 +4,7 @@ Status: **read-only production audit + candidate integration specification**. Th
 
 ## Executive finding
 
-The isolated delivery-generation model is sound as a reference contract, but it is not yet a deployable change. A second delivery request per intervention is blocked by a live unique index, and several live functions acquire lifecycle locks in an order that conflicts with the model's required parent-first serialization. The active one-off test path also resets a failed request in place, bypassing immutable generations. Finally, the provider egress boundary is only process-local; the database has no durable marker immediately before the MailerSend request.
+The isolated delivery-generation model is sound as a reference contract, but it is not yet a deployable change. A second delivery request per intervention is blocked by a live unique index, and several live functions acquire lifecycle locks in an order that conflicts with the model's required parent-first serialization. The active one-off test path also resets a failed request in place, bypassing immutable generations. The candidate branch now contains a durable pre-egress RPC call in the Edge Function handler. The production database and deployed Edge Function remain unchanged, so the live system still lacks that candidate fence until an approved coordinated cutover.
 
 These are concrete production integration blockers. The existing 42 PostgreSQL model cases and six concurrency races validate the isolated model only; they do not validate these live functions or the active n8n graph.
 
@@ -84,10 +84,12 @@ The current Edge Function handler performs these steps:
 1. validates request shape;
 2. calls `get_mailersend_token_for_delivery`, which claims the request and returns the secret;
 3. calls `assert_mailersend_delivery_envelope`;
-4. sets a local JavaScript boolean `providerEgressStarted = true`;
-5. calls `POST https://api.mailersend.com/v1/email`.
+4. calls the service-role-only `mark_mailersend_provider_egress_started` compare-and-set RPC;
+5. requires a successful boolean response from that RPC or returns before provider egress;
+6. sets a local JavaScript boolean `providerEgressStarted = true` for response classification;
+7. calls `POST https://api.mailersend.com/v1/email`.
 
-The local boolean controls whether an error response is labelled `pre_provider` or ambiguous, but it is not durable. A process crash cannot be distinguished from a provider call that began. The handler needs a service-role-only, compare-and-set RPC after envelope authorization and immediately before the provider HTTP request. That RPC must lock parent → request, prove the request is still the current generation, check the parent is not frozen, and write a one-way `provider_egress_started_at` marker. If the process crashes after the marker but before the network call, the generation must remain ambiguous and non-retryable by design.
+The local boolean is diagnostic only; the database marker is the durable source of truth. The candidate RPC locks parent → request, proves the request is still the current generation, checks the parent is not frozen, and writes the one-way `provider_egress_started_at` marker. If the process crashes after the marker but before the network call, the generation remains ambiguous and non-retryable by design. The candidate handler's RPC call and ordering are covered by Node handler tests and the disposable PostgreSQL egress-fence acceptance. The live production Edge Function and schema remain unchanged.
 
 Credential release currently happens before envelope authorization. This is acceptable only if the request remains non-retryable while the request is in `UNKNOWN`; a new generation must never be created from a token-claimed request without trusted pre-provider failure evidence and a released reservation.
 
@@ -118,7 +120,7 @@ The production-shaped migration should be split into independently reviewable un
 5. Add a one-way egress-start RPC and a late-acceptance settlement RPC. Neither may accept caller-supplied claims as proof; both must derive tenant/intervention/request bindings from persisted rows.
 6. Update `authorize_delivery_request`, `get_mailersend_token_for_delivery`, `record_delivery_result`, and `process_mailersend_webhook_event` to use the same parent-first order and current-generation fence.
 7. Replace `reauthorize_one_off_test_delivery` with a fail-closed legacy response. Update the candidate n8n builder so the manual test path cannot reach the provider Edge Function through the old reset route.
-8. Update the Edge Function handler to call the durable egress-start RPC after envelope authorization and before the provider HTTP call. The server-owned pre-provider marker must only be emitted when that RPC has not succeeded and the provider call has not begun.
+8. **Candidate implementation complete:** the Edge Function handler calls the durable egress-start RPC after envelope authorization and before the provider HTTP call. The server-owned pre-provider marker is emitted only when the RPC has not succeeded and the provider call has not begun. Live production deployment remains blocked pending coordinated staging/cutover.
 
 The current recovery worker still needs an explicit retry-generation branch. Do not change its one-idempotency-key-per-intervention behavior by merely changing a string in n8n. It must call the idempotent database retry-command RPC and pass the returned new request identity through the same authorization, envelope, egress and result path.
 
@@ -263,3 +265,8 @@ A separate production-shaped candidate now covers the gap between the already-te
 - Disposable PostgreSQL 17 production-shaped acceptance covers late acceptance after FAILED, older-generation acceptance after a newer generation exists, idempotent duplicate events, quota release reversal, exact-tag mismatch rejection, normal current-generation `activity.sent`, and preservation of historical attempt rows.
 
 **Cutover boundary:** both migrations are candidate-only. The source-preserving webhook patch must pass exact-head CI against the production-shaped fixture before review. It is not yet a staging E2E test of the live MailerSend webhook signature route, and no production migration or n8n change is authorized or performed.
+
+
+### Egress-boundary audit correction — 2026-11-23
+
+The initial audit fixture incorrectly described the candidate handler as using only a process-local boolean. Re-reading `supabase/functions/henvalt-mailersend-delivery/handler.mjs` showed that it already calls `mark_mailersend_provider_egress_started` after envelope authorization, requires a successful `true` response, and only then calls MailerSend. The boolean remains solely for response classification after the provider boundary. The static audit contract and this report now distinguish the candidate handler from the unchanged production Edge Function/database. No handler behavior was changed for this correction.
