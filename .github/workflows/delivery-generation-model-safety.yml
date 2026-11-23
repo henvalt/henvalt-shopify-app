@@ -1,0 +1,51 @@
+name: HENVALT delivery generation PostgreSQL model safety
+
+on:
+  pull_request:
+    paths:
+      - "tests/delivery-generation-*"
+      - ".github/workflows/delivery-generation-model-safety.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "tests/delivery-generation-*"
+      - ".github/workflows/delivery-generation-model-safety.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  delivery-generation-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated generation model
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/delivery-generation-postgres-bootstrap.sql
+      - name: Run 24 delivery-generation acceptance cases
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/delivery-generation-postgres-acceptance.sql
+      - name: Prove concurrent retry commands serialize
+        run: bash tests/delivery-generation-concurrency-postgres.sh
+      - name: Prove late acceptance wins retry-generation race
+        run: bash tests/delivery-generation-late-acceptance-race-postgres.sh
