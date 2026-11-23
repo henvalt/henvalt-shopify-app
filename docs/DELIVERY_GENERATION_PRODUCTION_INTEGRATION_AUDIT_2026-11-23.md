@@ -153,6 +153,10 @@ The current recovery worker still needs an explicit retry-generation branch. Do 
 - Review SQL lock graphs and deadlock logs under concurrent retry/claim/webhook load.
 - Only after all evidence passes should a separately reviewed cutover be proposed. Production remains untouched until explicit approval.
 
+## Service-role reachability
+
+A read-only privilege check confirmed that `service_role` can execute all four relevant RPCs: `reauthorize_one_off_test_delivery`, `get_mailersend_token_for_delivery`, `record_delivery_result`, and `process_mailersend_webhook_event`. These are not dead catalog objects or inaccessible legacy routines; the active server-side integration role can reach them. The token-release function also contains a hard-coded one-off test allowlist branch. This makes the one-off reset path an actual reachable cutover concern, not just historical code.
+
 ## Current disposition
 
 The six CI workflows for candidate `225ea379448a21270b0415863b7fc6152464caa2` passed, including the 42-case isolated PostgreSQL model and six concurrency races. Those results do not close the live integration blockers above. PR #7 remains draft and unmerged. No production migration, Edge Function deployment, n8n workflow mutation/execution, provider request, or email was performed.
