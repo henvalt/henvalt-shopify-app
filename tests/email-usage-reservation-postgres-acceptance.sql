@@ -21,20 +21,24 @@ BEGIN
   SELECT count(*) INTO n FROM henvalt.email_usage_reservations WHERE delivery_request_id=r1;
   IF n <> 1 THEN RAISE EXCEPTION 'repeated state update created duplicate reservation'; END IF;
 
+  -- Four measured units plus one outstanding reservation exhaust the cap.
+  BEGIN
+    UPDATE henvalt.delivery_requests SET status='UNKNOWN' WHERE id=r2;
+    RAISE EXCEPTION 'reservation was not counted against the final quota slot';
+  EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM NOT LIKE 'HENVALT email usage limit reached%' THEN RAISE; END IF;
+  END;
+  IF (SELECT status FROM henvalt.delivery_requests WHERE id=r2) <> 'PENDING' THEN
+    RAISE EXCEPTION 'denied quota claim changed request state';
+  END IF;
+
   INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
   VALUES(gen_random_uuid(),t,r1,'FAILED',400);
   IF (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=r1) <> 'RELEASED' THEN
     RAISE EXCEPTION 'definitive provider rejection did not release reservation';
   END IF;
 
-  -- A later acceptance overrides a prior release; the provider's acceptance
-  -- evidence is stronger than a previous rejection/timeout classification.
-  INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
-  VALUES(gen_random_uuid(),t,r1,'ACCEPTED',202);
-  IF (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=r1) <> 'CONSUMED' THEN
-    RAISE EXCEPTION 'late acceptance did not consume released reservation';
-  END IF;
-
+  -- Releasing a definitive rejection makes the slot available again.
   UPDATE henvalt.delivery_requests SET status='UNKNOWN' WHERE id=r2;
   INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
   VALUES(gen_random_uuid(),t,r2,'UNKNOWN',502);
@@ -42,21 +46,25 @@ BEGIN
     RAISE EXCEPTION 'ambiguous provider result did not consume reservation';
   END IF;
   SELECT count(*) INTO n FROM henvalt.email_usage_measurements WHERE tenant_id=t;
-  IF n <> 6 THEN RAISE EXCEPTION 'accepted/ambiguous attempts not measured exactly once: %',n; END IF;
+  IF n <> 5 THEN RAISE EXCEPTION 'ambiguous attempt not measured exactly once: %',n; END IF;
 
-  -- One reserved request at four measured units uses the fifth slot.
-  -- Another authorization must fail without changing its PENDING state.
+  -- A late provider acceptance overrides an earlier release and is measured.
+  INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
+  VALUES(gen_random_uuid(),t,r1,'ACCEPTED',202);
+  IF (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=r1) <> 'CONSUMED' THEN
+    RAISE EXCEPTION 'late acceptance did not consume released reservation';
+  END IF;
+  SELECT count(*) INTO n FROM henvalt.email_usage_measurements WHERE tenant_id=t;
+  IF n <> 6 THEN RAISE EXCEPTION 'late acceptance was not measured exactly once: %',n; END IF;
+
   BEGIN
     UPDATE henvalt.delivery_requests SET status='UNKNOWN' WHERE id=r3;
-    RAISE EXCEPTION 'quota cap allowed a sixth email';
+    RAISE EXCEPTION 'quota cap allowed an additional email after late acceptance';
   EXCEPTION WHEN insufficient_privilege THEN
     IF SQLERRM NOT LIKE 'HENVALT email usage limit reached%' THEN RAISE; END IF;
   END;
-  IF (SELECT status FROM henvalt.delivery_requests WHERE id=r3) <> 'PENDING' THEN
-    RAISE EXCEPTION 'denied quota claim changed request state';
-  END IF;
 
-  -- Ambiguous 429 is never treated as a definitive rejection.
+  -- A 429 response is not proof of non-acceptance and must retain its hold.
   INSERT INTO henvalt.billing_accounts(tenant_id,status,test_mode,activated_at,monthly_email_limit)
   VALUES('33333333-3333-4333-8333-333333333333','PENDING',true,now()-interval '1 day',10);
   INSERT INTO henvalt.delivery_requests(id,tenant_id)
