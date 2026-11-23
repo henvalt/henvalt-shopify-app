@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
-: "\${PGHOST:=127.0.0.1}"; : "\${PGPORT:=5432}"; : "\${PGUSER:=postgres}"; : "\${PGDATABASE:=postgres}"; : "\${PGPASSWORD:=postgres}"
+: "${PGHOST:=127.0.0.1}"; : "${PGPORT:=5432}"; : "${PGUSER:=postgres}"; : "${PGDATABASE:=postgres}"; : "${PGPASSWORD:=postgres}"
 export PGHOST PGPORT PGUSER PGDATABASE PGPASSWORD
 parent='dededede-dede-4ded-8ded-dededededede'
 event='egress-before-late-acceptance-004'
 psql -v ON_ERROR_STOP=1 <<SQL
-SELECT henvalt_test.seed_initial('$parent') AS old_request \\gset
+SELECT henvalt_test.seed_initial('$parent') AS old_request \gset
 SELECT henvalt_test.mark_pre_provider_failure(:'old_request');
 SELECT henvalt_test.create_retry_generation('$parent','dededede-1111-4111-8111-dededededede');
 SQL
