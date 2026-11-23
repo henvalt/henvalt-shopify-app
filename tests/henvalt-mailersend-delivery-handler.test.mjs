@@ -42,7 +42,7 @@ test("closed interlock / unavailable credential fails before provider egress", a
   });
   const response = await handler(request(validBody()));
   assert.equal(response.status, 409);
-  assert.deepEqual(await response.json(), { error: "tenant_provider_credential_unavailable" });
+  assert.deepEqual(await response.json(), { error: "tenant_provider_credential_unavailable", henvalt_delivery_stage: "pre_provider" });
   assert.equal(calls.length, 1, "only the credential-release RPC may be called");
   assert.ok(!calls.some((call) => call.url === "https://api.mailersend.com/v1/email"));
 });
@@ -64,7 +64,7 @@ test("missing, malformed or unavailable token never reaches the provider", async
       const response = await handler(request(validBody()));
       assert.equal(response.status, 409);
       assert.equal(urls.length, 1);
-      assert.ok(!urls.includes("https://api.mailersend.com/v1/email"));
+      assert.ok(!urls.includes("https://api.mailersend.com/v1/email"));\n      assert.equal((await response.clone().json()).henvalt_delivery_stage, "pre_provider");
     });
   }
 });
@@ -115,6 +115,20 @@ test("authorized synthetic request reaches only the injected provider stub", asy
   assert.ok(payload.tags.includes("delivery:" + DELIVERY_ID));
 });
 
+test("service configuration failure is explicitly marked pre-provider", async () => {
+  const handler = createDeliveryHandler({
+    supabaseUrl: "",
+    serviceRoleKey: "",
+    fetchImpl: async () => { throw new Error("must not fetch"); },
+  });
+  const response = await handler(request(validBody()));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), {
+    error: "delivery_service_not_configured",
+    henvalt_delivery_stage: "pre_provider",
+  });
+});
+
 test("invalid service credential and invalid input are rejected before any fetch", async () => {
   let calls = 0;
   const handler = createDeliveryHandler({
@@ -147,7 +161,7 @@ test("database envelope mismatch blocks provider egress even after token claim",
   });
   const response = await handler(request(validBody()));
   assert.equal(response.status, 409);
-  assert.deepEqual(await response.json(), { error: "delivery_envelope_not_authorized" });
+  assert.deepEqual(await response.json(), { error: "delivery_envelope_not_authorized", henvalt_delivery_stage: "pre_provider" });
   assert.deepEqual(calls, [
     SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery",
     SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope",
