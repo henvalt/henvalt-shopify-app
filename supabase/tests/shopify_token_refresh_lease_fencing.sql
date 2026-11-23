@@ -65,6 +65,7 @@ create or replace function vault.update_secret(
 language plpgsql
 as $$
 begin
+  if p_secret like 'fail-secret-write%' then raise exception 'simulated_vault_write_failure'; end if;
   update vault.decrypted_secrets set decrypted_secret=p_secret where id=p_id;
   if not found then raise exception 'vault_secret_not_found'; end if;
 end;
@@ -96,12 +97,15 @@ declare
   v_new_lease uuid;
   v_expired_lease uuid;
   v_secret text;
+  v_original_access_expiry timestamptz;
 begin
   -- Valid domains must pass the corrected regex and receive a lease.
   v_claim := henvalt.claim_shopify_token_refresh('demo.myshopify.com',true);
   if v_claim->>'claimed' <> 'true' then raise exception 'valid shop was not claimed: %',v_claim; end if;
   v_old_lease := (v_claim->>'lease_id')::uuid;
   if v_old_lease is null then raise exception 'claim omitted lease ID'; end if;
+  select access_token_expires_at into v_original_access_expiry
+    from henvalt.shopify_connections where shop_domain='demo.myshopify.com';
 
   -- A second worker cannot claim while the first lease is live.
   v_result := henvalt.claim_shopify_token_refresh('demo.myshopify.com',true);
@@ -136,6 +140,12 @@ begin
   if v_secret <> 'old-refresh-token-01234567890123456789' then
     raise exception 'stale completion changed refresh secret';
   end if;
+  if (select token_refresh_lease_id from henvalt.shopify_connections where shop_domain='demo.myshopify.com') <> v_new_lease then
+    raise exception 'stale completion changed replacement lease';
+  end if;
+  if (select access_token_expires_at from henvalt.shopify_connections where shop_domain='demo.myshopify.com') <> v_original_access_expiry then
+    raise exception 'stale completion changed token expiry';
+  end if;
 
   -- Old worker failure must not clear the replacement lease or set reauth.
   v_result := henvalt.fail_shopify_token_refresh('demo.myshopify.com','stale_failure',true,v_old_lease);
@@ -145,6 +155,28 @@ begin
   end if;
   if (select reauth_required_at from henvalt.shopify_connections where shop_domain='demo.myshopify.com') is not null then
     raise exception 'stale failure set reauthorization';
+  end if;
+
+  -- A failure while writing the second secret must roll back the first secret update too.
+  begin
+    perform henvalt.complete_shopify_token_refresh(
+      'demo.myshopify.com',
+      'partial-access-token-01234567890123456789',
+      'fail-secret-write-refresh-token-0123456789',
+      3600,7776000,v_new_lease
+    );
+    raise exception 'expected simulated Vault write failure';
+  exception when others then
+    if sqlerrm = 'expected simulated Vault write failure' then raise; end if;
+    if sqlerrm <> 'simulated_vault_write_failure' then raise; end if;
+  end;
+  select decrypted_secret into v_secret from vault.decrypted_secrets
+    where id='11111111-1111-4111-8111-111111111111';
+  if v_secret <> 'old-access-token-01234567890123456789' then
+    raise exception 'partial Vault write was not rolled back';
+  end if;
+  if (select token_refresh_lease_id from henvalt.shopify_connections where shop_domain='demo.myshopify.com') <> v_new_lease then
+    raise exception 'failed pair persistence cleared the active lease';
   end if;
 
   -- Current owner can atomically complete and clear its lease.
@@ -189,6 +221,18 @@ begin
   end if;
   if (select reauth_required_at from henvalt.shopify_connections where shop_domain='demo.myshopify.com') is null then
     raise exception 'current terminal failure did not set reauth';
+  end if;
+
+  if has_function_privilege('anon','henvalt.claim_shopify_token_refresh(text,boolean)','EXECUTE') then
+    raise exception 'anon unexpectedly has claim RPC access';
+  end if;
+  if has_function_privilege('authenticated','henvalt.complete_shopify_token_refresh(text,text,text,integer,integer,uuid)','EXECUTE') then
+    raise exception 'authenticated unexpectedly has completion RPC access';
+  end if;
+  if has_function_privilege('service_role','henvalt.claim_shopify_token_refresh(text,boolean)','EXECUTE') is false
+     or has_function_privilege('service_role','henvalt.complete_shopify_token_refresh(text,text,text,integer,integer,uuid)','EXECUTE') is false
+     or has_function_privilege('service_role','henvalt.fail_shopify_token_refresh(text,text,boolean,uuid)','EXECUTE') is false then
+    raise exception 'service_role is missing required RPC execution access';
   end if;
 
   raise notice 'All Shopify token refresh lease-fencing database tests passed.';
