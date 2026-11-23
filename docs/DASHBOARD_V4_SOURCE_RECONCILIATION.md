@@ -121,3 +121,20 @@ A source/deployment drift was found: the deployed Worker script differs from the
 The connected Shopify store is `ur4jvw-nz.myshopify.com` and its plan is trial. The connector reports: “Plan: trial — you'll need to upgrade before you can start selling and unlock full features”. This is a practical constraint on generating a real paid checkout/order test; it does not invalidate the historical webhook registrations or the historical HMAC-verified events.
 
 The pixel collector Worker is also present with the expected Supabase URL and publishable key bindings, plus a secret collector binding and rate limiter. The tenant has 35 historical pixel events (19 page views, 10 product views, 6 add-to-cart events), latest received 2026-11-14 17:44:38 UTC. There is still no fresh pixel or webhook event evidence after 14 November.
+
+
+## Financial metric integrity correction — 2026-11-23
+
+The earlier live RPC audit identified cross-currency aggregation and a recovered-order predicate mismatch. A candidate correction is now on this PR branch.
+
+- `control_plane_dashboard_summary` counts recovered orders from distinct confirmed `order_attributions`, not `opportunities.status='RECOVERED'`. Its per-event breakdown uses the same attribution predicate and adds an `unclassified` bucket for confirmed attributions without a matching opportunity, so the event counts reconcile to the headline. Recent activity labels a status-only RECOVERED opportunity as `unverified` until a confirmed attribution exists.
+- Confirmed, billable recovery revenue is never summed across unlike currencies. The summary returns `revenueByCurrency`; if the selected period contains multiple or malformed currency codes, the headline total is null and the UI displays a multiple-currency state instead of formatting a combined amount in one currency.
+- The revenue series is withheld for a mixed-currency current period. A single-currency current series remains available when only the previous comparison period has a different or mixed currency, but previous-period revenue and percentage change are null.
+- The dashboard handler aggregates multiple ledger rows for one opportunity only when every row uses the same currency. It does not take an arbitrary first row or add unlike currencies. Activity rows use the ledger row's currency; a mixed-currency opportunity has no single numeric amount.
+- The UI displays per-currency totals and an explicit mixed-currency message; null financial values render as an em dash, not zero.
+
+Candidate migration: `supabase/migrations/202611230002_dashboard_currency_attribution_integrity.sql`.
+
+Acceptance covers mixed USD/GBP rows, per-currency totals, malformed currency codes, current-vs-previous currency mismatch, single-currency trend retention, zero-ledger default currency, confirmed attribution count reconciliation, status-only recovered opportunities, and service-role-only RPC grants.
+
+**Validation status:** Deno type-check and dashboard handler tests passed on the latest candidate head. The dedicated PostgreSQL 17 currency/attribution workflow is running against the final acceptance fixture; no production SQL or RPC has been changed. This remains draft candidate code and requires explicit review before deployment.
