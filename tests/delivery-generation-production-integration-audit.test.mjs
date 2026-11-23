@@ -10,6 +10,8 @@ const report = read("../docs/DELIVERY_GENERATION_PRODUCTION_INTEGRATION_AUDIT_20
 const modelDoc = read("../docs/DELIVERY_GENERATION_MODEL_CANDIDATE.md");
 const migration = read("../supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql");
 const egressMigration = read("../supabase/migrations/202611230003_delivery_provider_egress_fence.sql");
+const lockOrderMigration = read("../supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql");
+const lockOrderAcceptance = read("./delivery-lifecycle-lock-order-acceptance.sql");
 const prodShapeAcceptance = read("./delivery-generation-production-shaped-acceptance.sql");
 
 test("live delivery-generation audit is explicitly read-only and pinned to the inspected active workflow", () => {
@@ -105,4 +107,21 @@ test("production-shaped migration is an additive, guarded first slice—not a cu
   assert.match(prodShapeAcceptance, /retry without append-only release event was accepted/);
   assert.match(prodShapeAcceptance, /closed interlock allowed provider egress/);
   assert.match(prodShapeAcceptance, /provider egress fence allowed a second crossing/);
+});
+
+
+test("candidate lifecycle patch imposes parent-first locks across all four database entry points", () => {
+  assert.match(lockOrderMigration, /authorize_delivery_request/);
+  assert.match(lockOrderMigration, /get_mailersend_token_for_delivery/);
+  assert.match(lockOrderMigration, /record_delivery_result/);
+  assert.match(lockOrderMigration, /process_mailersend_webhook_event/);
+  assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_AUTHORIZATION_PATCH_ANCHOR_MISMATCH/);
+  assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_TOKEN_PATCH_ANCHOR_MISMATCH/);
+  assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_RESULT_PATCH_ANCHOR_MISMATCH/);
+  assert.match(lockOrderMigration, /DELIVERY_LOCK_ORDER_WEBHOOK_PATCH_FAILED/);
+  assert.match(lockOrderMigration, /PERFORM 1 FROM henvalt\\.recovery_interventions/);
+  assert.match(lockOrderAcceptance, /authorization parent-first lock order missing/);
+  assert.match(lockOrderAcceptance, /token parent-first lock order missing/);
+  assert.match(lockOrderAcceptance, /result parent-first lock order missing/);
+  assert.match(lockOrderAcceptance, /webhook still locks child before result settlement/);
 });
