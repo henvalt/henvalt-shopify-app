@@ -95,6 +95,26 @@ BEGIN
   EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
   END;
 
+  UPDATE henvalt.delivery_requests
+     SET provider_egress_started_at=clock_timestamp()
+   WHERE id=v_next;
+  BEGIN
+    UPDATE henvalt.delivery_requests SET provider_egress_started_at=NULL WHERE id=v_next;
+    RAISE EXCEPTION 'provider egress marker rollback was accepted';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
+  UPDATE henvalt.recovery_interventions
+     SET delivery_frozen_at=clock_timestamp(), delivery_freeze_reason='TEST_CONTRADICTION'
+   WHERE id=v_intervention;
+  BEGIN
+    UPDATE henvalt.recovery_interventions
+       SET delivery_frozen_at=NULL, delivery_freeze_reason=NULL
+     WHERE id=v_intervention;
+    RAISE EXCEPTION 'parent freeze rollback was accepted';
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
+  END;
+
   -- A second distinct retry command cannot fork a still-pending generation.
   BEGIN
     PERFORM henvalt.create_delivery_retry_generation(v_tenant,v_intervention,gen_random_uuid());
