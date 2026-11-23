@@ -143,7 +143,13 @@ Deno.test("returns retryable gateway error when n8n rejects the webhook", async 
 
 Deno.test("rejects oversized webhook bodies", async () => {
   const handler = createHandler({ fetchImpl: async () => { throw new Error("must not forward"); } });
-  const body = "x".repeat(1_000_001);
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(600_000));
+      controller.enqueue(new Uint8Array(500_001));
+      controller.close();
+    },
+  });
   const request = new Request("https://ingress.example/shopify/webhooks", {
     method: "POST",
     headers: {
@@ -154,7 +160,9 @@ Deno.test("rejects oversized webhook bodies", async () => {
       "x-shopify-webhook-id": "large-webhook",
     },
     body,
-  });
+    duplex: "half",
+  } as RequestInit);
+  if (request.headers.has("content-length")) throw new Error("streaming test unexpectedly has content-length");
   const result = await handler(request, ENV);
-  if (result.status !== 413) throw new Error("oversized body was not rejected");
+  if (result.status !== 413) throw new Error("chunked oversized body was not rejected");
 });
