@@ -18,7 +18,7 @@ The current quota candidate correctly:
 
 MailerSend documents a searchable sending-log API:
 - `GET /v1/emails` requires `domain_id`, `date_from`, and `date_to`; supports filtering by recipient, subject, tag, status and interaction; and returns one row per recipient email.
-- The list result includes `message_id`, `status`, `tags`, `recipient`, `created_at`, and `domain_id`.
+- The list result includes `message_id`, `status`, `tags`, `recipient`, `created_at`, and `domain_id`; documented email statuses are `queued`, `sent`, `rejected`, and `delivered`.
 - `GET /v1/email/{email_id}` returns the individual email record and its activity.
 - The list endpoint requires a token with `activity_read` or `activity_full`; the single-email endpoint accepts `email_full`, `activity_read`, or `activity_full`.
 - The list endpoint allows up to 1,000 rows per page and 100 pages, and is rate-limited to 10 requests/minute shared with the activity endpoint. It supports exact tag and message-ID filtering. Split large date ranges into bounded windows; hitting a page or rate limit before exhausting the window makes a negative result inconclusive.
@@ -52,7 +52,7 @@ If any of those are absent, reconciliation must remain unavailable rather than i
 | Provider evidence | Reservation outcome |
 |---|---|
 | Exactly one matching email record, status `queued`, `sent`, or `delivered` | Consume; record the provider message/email ID and evidence |
-| Exactly one matching record, status `rejected` | Do not automatically release until HENVALT verifies the provider's rejection semantics and that no other matching recipient record exists |
+| Exactly one matching record, status `rejected` | Consume. The API created an email record; rejection is a later delivery outcome, not proof the send request was never accepted |
 | More than one matching record | Consume and raise a duplicate-send incident; preserve every matching provider ID and require operator review; never choose an arbitrary row |
 | No match, incomplete pagination, rate limit, API error, expired retention, or inconclusive time window | Keep RESERVED; no retry and no release |
 | Exact message ID returned by original 202 response and a successful provider lookup | Consume; message ID is primary correlation |
