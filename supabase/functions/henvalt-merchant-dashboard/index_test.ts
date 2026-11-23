@@ -169,3 +169,91 @@ Deno.test("handles preflight and rejects unsupported methods", async () => {
   const method = await handler(request("", null, "POST"));
   if (preflight.status !== 204 || method.status !== 405) throw new Error("method contract mismatch");
 });
+
+
+Deno.test("does not collapse mixed-currency ledger rows into a false dashboard total", async () => {
+  const mock = queuedFetch([
+    json({ id: "user-1" }),
+    json([{ tenant_id: "tenant-a" }]),
+    json([{ shop_domain: "one.myshopify.com" }]),
+    json({
+      linked: true,
+      currency: "USD",
+      revenueCurrencyConflict: true,
+      revenueByCurrency: [{ currency: "GBP", amount: 50 }, { currency: "USD", amount: 100 }],
+      metrics: { revenueRecovered: null, currency: "USD", recoveredOrders: 2 },
+      activity: [
+        { id: "opportunity-mixed", outcome: "recovered", amount: null },
+        { id: "opportunity-gbp", outcome: "recovered", amount: null },
+      ],
+      byEvent: [],
+    }),
+    json({
+      series: [],
+      current_revenue: null,
+      previous_revenue: null,
+      change_percent: null,
+      current_currency_conflict: true,
+      comparison_currency_conflict: true,
+    }),
+    json([
+      { id: "ledger-usd", opportunity_id: "opportunity-mixed", amount: 100, currency: "USD" },
+      { id: "ledger-gbp", opportunity_id: "opportunity-mixed", amount: 50, currency: "GBP" },
+      { id: "ledger-gbp-only", opportunity_id: "opportunity-gbp", amount: 20, currency: "GBP" },
+    ]),
+  ]);
+  const handler = createDashboardHandler({ ...OPTIONS, fetchImpl: mock.fetchImpl });
+  const response = await handler(request("?from=2026-11-01&to=2026-11-23"));
+  const body = await response.json();
+  if (response.status !== 200) throw new Error("mixed-currency dashboard response failed");
+  if (body.revenueCurrencyConflict !== true || body.revenueByCurrency.length !== 2) {
+    throw new Error("currency conflict and per-currency totals were not preserved");
+  }
+  if (body.metrics.revenueRecovered !== null || body.revenueComparison.currentRevenue !== null) {
+    throw new Error("mixed-currency total was converted into a misleading numeric value");
+  }
+  if (body.revenueSeries.length !== 0) throw new Error("mixed-currency trend should not be summed");
+  if (body.activity[0].amount !== null || body.activity[0].amountCurrencyConflict !== true) {
+    throw new Error("opportunity-level mixed currencies were incorrectly summed");
+  }
+  if (body.activity[1].amount !== 20 || body.activity[1].currency !== "GBP") {
+    throw new Error("single-currency opportunity amount was not preserved");
+  }
+});
+
+Deno.test("aggregates multiple confirmed ledger rows for one opportunity only when currency matches", async () => {
+  const mock = queuedFetch([
+    json({ id: "user-1" }),
+    json([{ tenant_id: "tenant-a" }]),
+    json([{ shop_domain: "one.myshopify.com" }]),
+    json({
+      linked: true,
+      currency: "USD",
+      revenueCurrencyConflict: false,
+      revenueByCurrency: [{ currency: "USD", amount: 42 }],
+      metrics: { revenueRecovered: 42, currency: "USD", recoveredOrders: 2 },
+      activity: [{ id: "opportunity-1", outcome: "recovered", amount: null }],
+    }),
+    json({
+      series: [{ bucket: "2026-11-23T00:00:00.000Z", recovered_revenue: 42 }],
+      current_revenue: 42,
+      previous_revenue: 0,
+      change_percent: null,
+      current_currency_conflict: false,
+      comparison_currency_conflict: false,
+    }),
+    json([
+      { id: "ledger-1", opportunity_id: "opportunity-1", amount: 12, currency: "USD" },
+      { id: "ledger-2", opportunity_id: "opportunity-1", amount: 30, currency: "USD" },
+    ]),
+  ]);
+  const handler = createDashboardHandler({ ...OPTIONS, fetchImpl: mock.fetchImpl });
+  const response = await handler(request("?from=2026-11-01&to=2026-11-23"));
+  const body = await response.json();
+  if (response.status !== 200 || body.activity[0].amount !== 42 || body.activity[0].currency !== "USD") {
+    throw new Error("same-currency confirmed ledger rows were not summed per opportunity");
+  }
+  if (body.revenueCurrencyConflict !== false || body.revenueComparison.currentRevenue !== 42) {
+    throw new Error("single-currency revenue was not preserved");
+  }
+});
