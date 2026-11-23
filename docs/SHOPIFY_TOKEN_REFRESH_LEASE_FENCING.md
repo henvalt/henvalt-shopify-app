@@ -9,7 +9,7 @@ The live claim RPC serializes claims with a transaction-scoped advisory lock and
 
 A worker whose request outlives its lease can therefore complete or fail after another worker has claimed a replacement lease. This can overwrite or disrupt a newer token pair.
 
-The live claim function's shop-domain regex was also tested directly against the live database. With standard_conforming_strings enabled, the double-escaped-dot pattern did not match demo.myshopify.com; the single-escaped-dot pattern did. The candidate migration corrects the pattern.
+The live claim function's shop-domain regex was also tested directly against the live database. With standard_conforming_strings enabled, the double-escaped-dot pattern did not match demo.myshopify.com; the single-escaped-dot pattern did. The candidate migration corrects the pattern. The checked-in token-storage migration did not declare the live lease timestamp/error columns, so this migration also adds all lease fields with IF NOT EXISTS to remain safe on both the current live schema and a clean migration replay.
 
 ## Candidate design
 
@@ -22,7 +22,7 @@ The live claim function's shop-domain regex was also tested directly against the
 - Every failure path passes the original lease ID; a stale worker cannot clear a replacement lease.
 - The Edge Function refuses a malformed claim response before contacting Shopify.
 - The Edge Function returns HTTP 409 for a stale completion and does not attempt a second cleanup RPC.
-- The lease is ten minutes, while the Shopify HTTP request timeout remains fifteen seconds. The longer lease reduces overlap; the lease ID remains the correctness fence if execution is delayed.
+- The lease is ten minutes, while the Shopify HTTP request timeout remains fifteen seconds. Supabase currently caps Edge Function wall-clock duration at 150 seconds on Free and 400 seconds on paid plans; ten minutes exceeds those documented runtime limits. The longer lease reduces overlap; the lease ID remains the correctness fence if execution is delayed. See https://supabase.com/docs/guides/functions/limits.
 
 ## Shopify-specific constraint
 
