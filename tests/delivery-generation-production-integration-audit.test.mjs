@@ -8,6 +8,8 @@ const n8n = JSON.parse(read("./fixtures/n8n-delivery-generation-contract-snapsho
 const handler = read("../supabase/functions/henvalt-mailersend-delivery/handler.mjs");
 const report = read("../docs/DELIVERY_GENERATION_PRODUCTION_INTEGRATION_AUDIT_2026-11-23.md");
 const modelDoc = read("../docs/DELIVERY_GENERATION_MODEL_CANDIDATE.md");
+const migration = read("../supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql");
+const prodShapeAcceptance = read("./delivery-generation-production-shaped-acceptance.sql");
 
 test("live delivery-generation audit is explicitly read-only and pinned to the inspected active workflow", () => {
   assert.equal(audit.production_schema_was_not_mutated, true);
@@ -85,4 +87,19 @@ test("late acceptance is kept separate from the terminal delivery-result state m
   assert.equal(audit.late_acceptance.separate_late_acceptance_settlement_required, true);
   assert.match(modelDoc, /Late acceptance after a prior release/);
   assert.match(report, /Late acceptance is a separate settlement path/);
+});
+
+test("production-shaped migration is an additive, guarded first slice—not a cutover", () => {
+  assert.match(migration, /DO NOT APPLY TO PRODUCTION/);
+  assert.match(migration, /DELIVERY_GENERATION_PREREQUISITES_MISSING/);
+  assert.match(migration, /DROP INDEX henvalt\.ux_delivery_request_intervention/);
+  assert.match(migration, /UNIQUE INDEX ux_delivery_request_intervention_generation/);
+  assert.match(migration, /CREATE OR REPLACE FUNCTION henvalt\.create_delivery_retry_generation/);
+  assert.match(migration, /auth\.role\(\) IS DISTINCT FROM 'service_role'/);
+  assert.match(migration, /APPEND_ONLY_RELEASE_EVIDENCE_MISSING/);
+  assert.match(migration, /DELIVERY_GENERATION_LEDGER_IS_APPEND_ONLY/);
+  assert.doesNotMatch(migration, /provider_claimed_at IS NOT NULL/);
+  assert.doesNotMatch(migration, /mark_delivery_provider_egress_started/);
+  assert.match(prodShapeAcceptance, /provider_claimed_at/);
+  assert.match(prodShapeAcceptance, /retry without append-only release event was accepted/);
 });
