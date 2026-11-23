@@ -171,9 +171,13 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       const responseHeaders = {};
       const messageId = providerResponse.headers.get("x-message-id");
       if (messageId) responseHeaders["x-message-id"] = messageId;
-      return json(providerResponse.status, providerBody && typeof providerBody === "object"
-        ? providerBody
-        : { result: providerBody }, responseHeaders);
+      // Never trust a provider response to assert HENVALT's internal stage.
+      // Override any provider-supplied value so only our own preflight branches
+      // can produce the exact "pre_provider" marker used by quota settlement.
+      const normalizedProviderBody = providerBody && typeof providerBody === "object"
+        ? { ...providerBody, henvalt_delivery_stage: "provider_response" }
+        : { result: providerBody, henvalt_delivery_stage: "provider_response" };
+      return json(providerResponse.status, normalizedProviderBody, responseHeaders);
     } catch {
       return providerEgressStarted
         ? json(500, { error: "delivery_provider_failed" })
