@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
+      - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   push:
@@ -49,5 +50,7 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-bootstrap.sql
       - name: Apply generation schema and retry RPC candidate
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql
+      - name: Apply durable provider egress fence candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230003_delivery_provider_egress_fence.sql
       - name: Verify generation, evidence, idempotency and immutable fences
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-acceptance.sql
