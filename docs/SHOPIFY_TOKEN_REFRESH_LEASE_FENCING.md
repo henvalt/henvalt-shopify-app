@@ -24,6 +24,12 @@ The pg_get_functiondef output made the live shop-domain regex escaping ambiguous
 - The Edge Function returns HTTP 409 for a stale completion and does not attempt a second cleanup RPC.
 - The lease is ten minutes, while the Shopify HTTP request timeout remains fifteen seconds. Supabase currently caps Edge Function wall-clock duration at 150 seconds on Free and 400 seconds on paid plans; ten minutes exceeds those documented runtime limits. The longer lease reduces overlap; the lease ID remains the correctness fence if execution is delayed. See https://supabase.com/docs/guides/functions/limits.
 
+## Lease time must be wall-clock time
+
+PostgreSQL `now()` is the transaction start timestamp and remains fixed while a transaction waits. A completion request can begin while its lease is valid, block behind the per-shop advisory lock, and resume after the lease deadline while still comparing against its earlier transaction timestamp. The same issue applies to claim-side active-lease checks and failure cleanup. The candidate migration therefore uses `clock_timestamp()` for lease creation, lease-expiry comparisons, and token-expiry values produced after lock acquisition. Non-lease audit timestamps may continue to use `now()`.
+
+The CI concurrency harness opens two independent PostgreSQL sessions together and installs a test-only trigger that holds the first claim inside its write for three seconds. It asserts exactly one claimant receives the lease. It then starts a completion transaction while its lease is live, deliberately blocks it behind the per-shop advisory lock until after the five-second lease deadline, and asserts the resumed completion returns `STALE_REFRESH_LEASE` without changing the owner ID. This catches transaction-start-time expiry checks rather than only testing sequential calls.
+
 ## Shopify-specific constraint
 
 Shopify explicitly requires refresh operations to be serialized per shop and warns that concurrent refreshes can leave one worker holding a token already replaced by another. Shopify also recommends atomically storing the returned access-token/refresh-token pair. Its newer retry behavior allows retrying the previously presented refresh token after ambiguous transient failures, but that is a recovery path—not permission to run concurrent refreshes.
@@ -51,7 +57,7 @@ Do not deploy the Edge Function before the migration while the schedule is runni
 
 The Deno regression suite covers service-role gating, malformed/missing lease IDs, successful fenced completion, stale completion, network failure, terminal provider rejection, malformed provider token pairs, persistence failure cleanup, non-claimed conflicts, invalid shop domains, and fenced release of malformed token claims. All 11 tests passed in GitHub Actions run 1887.
 
-The candidate migration was applied successfully to a disposable PostgreSQL 17 instance. Integration checks passed for valid domain matching, one-owner claim exclusivity, stale completion/failure no-ops, token-pair persistence rollback, successful owner completion, expired lease reclaim, and service-role-only RPC grants. The SQL contract checks also passed. Deno type-check, all 11 tests, PostgreSQL integration, migration static checks, and existing Shopify app configuration checks passed in GitHub Actions run 1887. The Shopify deployment job was skipped for the pull request. No production migration or deployment occurred.
+The candidate migration was applied successfully to a disposable PostgreSQL 17 instance. Sequential integration checks passed for valid domain matching, one-owner claim exclusivity, stale completion/failure no-ops, token-pair persistence rollback, successful owner completion, expired lease reclaim, and service-role-only RPC grants. The added concurrency harness additionally exercises two independent claimant sessions and a completion request that resumes only after its lease expires while waiting for the per-shop lock. Deno type-check, all 11 handler tests, PostgreSQL migration/integration, concurrency checks, migration static checks, and existing Shopify app configuration checks are required in CI. The Shopify deployment job is skipped for pull requests. No production migration or deployment occurs.
 
 ## Rollout safety
 
