@@ -64,7 +64,8 @@ test("missing, malformed or unavailable token never reaches the provider", async
       const response = await handler(request(validBody()));
       assert.equal(response.status, 409);
       assert.equal(urls.length, 1);
-      assert.ok(!urls.includes("https://api.mailersend.com/v1/email"));\n      assert.equal((await response.clone().json()).henvalt_delivery_stage, "pre_provider");
+      assert.ok(!urls.includes("https://api.mailersend.com/v1/email"));
+      assert.equal((await response.clone().json()).henvalt_delivery_stage, "pre_provider");
     });
   }
 });
