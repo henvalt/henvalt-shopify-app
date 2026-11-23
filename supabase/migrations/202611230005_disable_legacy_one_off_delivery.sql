@@ -21,7 +21,7 @@ BEGIN
   END IF;
   v_patched := regexp_replace(
     v_definition,
-    $re$OR\s+\(\s+dr\.tenant_id = '6d769024-cd44-4da4-be1d-a25a3dca0660'::uuid\s+AND dr\.opportunity_id = '871ad489-d120-4771-9164-db32fe7015b6'::uuid\s+AND dr\.recipient_reference = 'urmuhammadrehan18@gmail@gmail\.com'\s+AND dr\.idempotency_key = 'henvalt-one-off-email-test-2026-11-14-v1'\s+AND EXISTS \(SELECT 1 FROM henvalt\.messages tm WHERE tm\.id = dr\.message_reference AND tm\.tenant_id = dr\.tenant_id AND tm\.metadata->>'test_only' = 'true'\)\s+\)$re$,
+    $re$OR\s+\(\s+dr\.tenant_id = '6d769024-cd44-4da4-be1d-a25a3dca0660'::uuid\s+AND dr\.opportunity_id = '871ad489-d120-4771-9164-db32fe7015b6'::uuid\s+AND dr\.recipient_reference = 'urmuhammadrehan18@gmail\.com'\s+AND dr\.idempotency_key = 'henvalt-one-off-email-test-2026-11-14-v1'\s+AND EXISTS \(SELECT 1 FROM henvalt\.messages tm WHERE tm\.id = dr\.message_reference AND tm\.tenant_id = dr\.tenant_id AND tm\.metadata->>'test_only' = 'true'\)\s+\)$re$,
     '',
     'n'
   );
