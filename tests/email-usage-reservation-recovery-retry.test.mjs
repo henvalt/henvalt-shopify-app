@@ -35,6 +35,26 @@ test("ambiguous provider outcomes are not automatically requeued by recovery", (
   }
 });
 
+
+test("a terminal post-claim pre-provider failure is not retried against the same request identity", () => {
+  const result = classify({
+    body: {
+      state: "FAILED",
+      failure_category: "tenant_provider_credential_unavailable",
+      henvalt_delivery_stage: "pre_provider",
+    },
+    statusCode: 502,
+  });
+  assert.equal(result.json.retryable, false);
+  assert.equal(result.json.final_status, "FAILED");
+
+  const validate = fixture.workflow.nodes.find((node) => node.name === "Validate AI Output")?.parameters?.jsCode;
+  const createRequest = fixture.workflow.nodes.find((node) => node.name === "Create Delivery Request")?.parameters;
+  assert.match(validate || "", /idempotency_key:\s*"deliver:"\s*\+\s*pf\.intervention_id/);
+  assert.match(createRequest?.query || "", /henvalt\.create_delivery_request/);
+  assert.match(createRequest?.options?.queryReplacement || "", /idempotency_key/);
+});
+
 test("only pre-send configuration rejections are automatically requeued", () => {
   for (const reason of ["SENDER_IDENTITY_NOT_CONFIGURED", "EMAIL_PROVIDER_NOT_CONFIGURED"]) {
     const result = classify({
