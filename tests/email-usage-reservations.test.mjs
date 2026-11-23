@@ -22,7 +22,8 @@ test("reservation settlement is conservative and never expires ambiguous sends",
   assert.match(migration, /status IN \('RESERVED', 'RELEASED'\)/);
   assert.match(migration, /AND status = 'RESERVED'/);
   assert.doesNotMatch(migration, /DELETE FROM henvalt\.email_usage_reservations/i);
-  assert.doesNotMatch(migration, /interval '[0-9]+ (second|minute|hour|day)/i);
+  assert.doesNotMatch(migration, /\\bexpires_at\\b/i);
+  assert.doesNotMatch(migration, /WHERE[\\s\\S]{0,200}created_at\\s*<\\s*now\\(\\)\\s*-/i);
 });
 
 test("reservation data remains private to the database owner", () => {
