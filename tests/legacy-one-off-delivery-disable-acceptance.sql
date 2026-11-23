@@ -2,9 +2,9 @@
 DO $assert$
 DECLARE
   v_def text;
-  v_tenant uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  v_intervention uuid := 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
-  v_request uuid := 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  v_tenant uuid := 'e1e1e1e1-e1e1-41e1-81e1-e1e1e1e1e1e1';
+  v_intervention uuid := 'e2e2e2e2-e2e2-42e2-82e2-e2e2e2e2e2e2';
+  v_request uuid := 'e3e3e3e3-e3e3-43e3-83e3-e3e3e3e3e3e3';
   v_rejected boolean := false;
 BEGIN
   v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery(uuid,uuid)'::regprocedure);
