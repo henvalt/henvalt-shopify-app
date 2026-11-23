@@ -57,6 +57,6 @@ test("provider reconciliation requires MailerSend evidence rather than reservati
   assert.match(specification, /date_from/);
   assert.match(specification, /date_to/);
   assert.match(specification, /complete pagination/);
-  assert.match(specification, /No match, incomplete pagination[\\s\\S]*?Keep RESERVED/);
+  assert.match(specification, /No match, incomplete pagination[\s\S]*?Keep RESERVED/);
   assert.match(specification, /never release an ambiguous reservation merely because it is old/);
 });
