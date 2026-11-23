@@ -102,6 +102,62 @@ BEGIN
   EXCEPTION WHEN SQLSTATE '55000' THEN
     NULL;
   END;
+
+  -- Timeouts, conflicts, rate limits and 5xx responses are not proof of rejection.
+  INSERT INTO henvalt.billing_accounts(tenant_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES('77777777-7777-4777-8777-777777777777','PENDING',true,now()-interval '1 day',20);
+  INSERT INTO henvalt.delivery_requests(id,tenant_id) VALUES
+    ('88888888-8888-4888-8888-888888888801','77777777-7777-4777-8777-777777777777'),
+    ('88888888-8888-4888-8888-888888888802','77777777-7777-4777-8777-777777777777'),
+    ('88888888-8888-4888-8888-888888888803','77777777-7777-4777-8777-777777777777'),
+    ('88888888-8888-4888-8888-888888888804','77777777-7777-4777-8777-777777777777'),
+    ('88888888-8888-4888-8888-888888888805','77777777-7777-4777-8777-777777777777'),
+    ('88888888-8888-4888-8888-888888888806','77777777-7777-4777-8777-777777777777');
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+   WHERE tenant_id='77777777-7777-4777-8777-777777777777';
+  INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
+  VALUES
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888801','FAILED',408),
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888802','FAILED',409),
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888803','FAILED',429),
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888804','FAILED',500),
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888805','FAILED',502),
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888806','FAILED',503);
+  IF EXISTS (
+    SELECT 1 FROM henvalt.email_usage_reservations
+     WHERE tenant_id='77777777-7777-4777-8777-777777777777'
+       AND status <> 'RESERVED'
+  ) THEN
+    RAISE EXCEPTION 'timeout/conflict/rate-limit/server-error incorrectly released quota';
+  END IF;
+
+  -- Missing provider status remains held; UNKNOWN is itself ambiguous even
+  -- when a response code happens to look like a client error.
+  INSERT INTO henvalt.delivery_requests(id,tenant_id)
+  VALUES
+    ('88888888-8888-4888-8888-888888888807','77777777-7777-4777-8777-777777777777'),
+    ('88888888-8888-4888-8888-888888888808','77777777-7777-4777-8777-777777777777');
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+   WHERE id IN (
+     '88888888-8888-4888-8888-888888888807',
+     '88888888-8888-4888-8888-888888888808'
+   );
+  INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
+  VALUES
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888807','FAILED',NULL),
+    (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888808','UNKNOWN',400);
+  IF EXISTS (
+    SELECT 1 FROM henvalt.email_usage_reservations
+     WHERE tenant_id='77777777-7777-4777-8777-777777777777'
+       AND delivery_request_id IN (
+         '88888888-8888-4888-8888-888888888807',
+         '88888888-8888-4888-8888-888888888808'
+       )
+       AND status <> 'CONSUMED'
+  ) THEN
+    RAISE EXCEPTION 'missing-status or UNKNOWN provider result did not conservatively consume quota';
+  END IF;
+
 END
 $test$;
 SELECT 'email usage reservation acceptance passed' AS result;
