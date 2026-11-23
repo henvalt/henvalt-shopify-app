@@ -126,7 +126,7 @@ test("authorized synthetic request reaches only the injected provider stub", asy
   const response = await handler(request(validBody()));
   assert.equal(response.status, 202);
   assert.equal(response.headers.get("x-message-id"), "synthetic-provider-message-id");
-  assert.deepEqual(await response.json(), { message: "accepted" });
+  assert.deepEqual(await response.json(), { message: "accepted", henvalt_delivery_stage: "provider_response" });
   assert.equal(calls.length, 3);
   assert.equal(calls[0].url, SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery");
   assert.equal(calls[1].url, SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope");
