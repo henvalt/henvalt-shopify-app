@@ -13,7 +13,7 @@ export const SHOPIFY_WEBHOOK_SPECS = [
   { topic: "app/uninstalled", gql: "APP_UNINSTALLED" },
 ] as const;
 
-const LIST_QUERY = "query { webhookSubscriptions(first:100) { nodes { id topic uri } } }";
+const LIST_QUERY = "query ListWebhooks($after: String) { webhookSubscriptions(first:100, after:$after) { nodes { id topic uri } pageInfo { hasNextPage endCursor } } }";
 const CREATE_MUTATION = `mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
   webhookSubscriptionCreate(topic:$topic,webhookSubscription:$input) {
     userErrors { message }
@@ -48,12 +48,29 @@ export async function registerShopifyWebhooks(input: {
     return payload?.data ?? {};
   };
   const getSubscriptions = async (): Promise<Subscription[]> => {
-    const data = await gql(LIST_QUERY);
-    const nodes = data?.webhookSubscriptions?.nodes;
-    if (!Array.isArray(nodes)) throw new Error("SHOPIFY_WEBHOOK_LIST_INVALID");
-    return nodes.filter((node: any) =>
-      node && typeof node.id === "string" && typeof node.topic === "string" && typeof node.uri === "string"
-    );
+    const subscriptions: Subscription[] = [];
+    const seenCursors = new Set<string>();
+    let after: string | null = null;
+    for (let page = 0; page < 100; page++) {
+      const data = await gql(LIST_QUERY, { after });
+      const connection = data?.webhookSubscriptions;
+      const nodes = connection?.nodes;
+      const pageInfo = connection?.pageInfo;
+      if (!Array.isArray(nodes) || typeof pageInfo?.hasNextPage !== "boolean") {
+        throw new Error("SHOPIFY_WEBHOOK_LIST_INVALID");
+      }
+      subscriptions.push(...nodes.filter((node: any) =>
+        node && typeof node.id === "string" && typeof node.topic === "string" && typeof node.uri === "string"
+      ));
+      if (!pageInfo.hasNextPage) return subscriptions;
+      const cursor = pageInfo.endCursor;
+      if (typeof cursor !== "string" || !cursor || seenCursors.has(cursor)) {
+        throw new Error("SHOPIFY_WEBHOOK_CURSOR_INVALID");
+      }
+      seenCursors.add(cursor);
+      after = cursor;
+    }
+    throw new Error("SHOPIFY_WEBHOOK_PAGE_LIMIT_EXCEEDED");
   };
 
   let initial: Subscription[] | null = null;
