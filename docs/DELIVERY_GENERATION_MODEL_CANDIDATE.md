@@ -260,11 +260,13 @@ The model is intentionally explicit that a provider HTTP response is not a pre-p
 
 ### PostgreSQL acceptance and concurrency coverage
 
-- `tests/delivery-generation-postgres-acceptance.sql`: 37 transaction-level acceptance cases.
+- `tests/delivery-generation-postgres-acceptance.sql`: 39 transaction-level acceptance cases.
 - `tests/delivery-generation-concurrency-postgres.sh`: two independent sessions with distinct retry commands; exactly one generation may be allocated.
 - `tests/delivery-generation-same-command-concurrency-postgres.sh`: two independent sessions with the same retry command; both must receive the same request ID.
 - `tests/delivery-generation-late-acceptance-race-postgres.sh`: late acceptance takes the parent lock first; retry must wait and then be rejected.
 - `tests/delivery-generation-retry-wins-late-acceptance-race-postgres.sh`: retry takes the parent lock first; late acceptance must wait, consume the prior reservation, freeze the parent, and prevent the new generation from claiming.
+- `tests/delivery-generation-late-acceptance-before-egress-race-postgres.sh`: late acceptance wins the parent lock before the new generation's egress authorization; the egress fence must fail.
+- `tests/delivery-generation-egress-before-late-acceptance-race-postgres.sh`: provider egress wins first; late acceptance then freezes the parent, and the in-flight generation remains quota-consumed/ambiguous with no second egress.
 
 The dedicated workflow is `.github/workflows/delivery-generation-model-safety.yml`, using PostgreSQL 17. It is independent from the quota reservation workflow.
 
