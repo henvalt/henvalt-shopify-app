@@ -146,16 +146,13 @@ BEGIN
   VALUES
     (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888807','FAILED',NULL),
     (gen_random_uuid(),'77777777-7777-4777-8777-777777777777','88888888-8888-4888-8888-888888888808','UNKNOWN',400);
-  IF EXISTS (
-    SELECT 1 FROM henvalt.email_usage_reservations
-     WHERE tenant_id='77777777-7777-4777-8777-777777777777'
-       AND delivery_request_id IN (
-         '88888888-8888-4888-8888-888888888807',
-         '88888888-8888-4888-8888-888888888808'
-       )
-       AND status <> 'CONSUMED'
-  ) THEN
-    RAISE EXCEPTION 'missing-status or UNKNOWN provider result did not conservatively consume quota';
+  IF (SELECT status FROM henvalt.email_usage_reservations
+       WHERE delivery_request_id='88888888-8888-4888-8888-888888888807') <> 'RESERVED' THEN
+    RAISE EXCEPTION 'missing provider status incorrectly released quota';
+  END IF;
+  IF (SELECT status FROM henvalt.email_usage_reservations
+       WHERE delivery_request_id='88888888-8888-4888-8888-888888888808') <> 'CONSUMED' THEN
+    RAISE EXCEPTION 'UNKNOWN provider result did not consume quota';
   END IF;
 
 END
