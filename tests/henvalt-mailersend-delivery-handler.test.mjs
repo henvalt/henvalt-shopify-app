@@ -70,6 +70,39 @@ test("missing, malformed or unavailable token never reaches the provider", async
   }
 });
 
+test("credential and envelope RPC transport failures are marked pre-provider", async (t) => {
+  await t.test("credential RPC throws", async () => {
+    let calls = 0;
+    const handler = createDeliveryHandler({
+      supabaseUrl: SUPABASE_URL,
+      serviceRoleKey: SERVICE_KEY,
+      fetchImpl: async () => { calls++; throw new Error("synthetic Supabase timeout"); },
+    });
+    const response = await handler(request(validBody()));
+    assert.equal(response.status, 500);
+    assert.equal((await response.json()).henvalt_delivery_stage, "pre_provider");
+    assert.equal(calls, 1);
+  });
+  await t.test("envelope RPC throws after token claim", async () => {
+    let calls = 0;
+    const handler = createDeliveryHandler({
+      supabaseUrl: SUPABASE_URL,
+      serviceRoleKey: SERVICE_KEY,
+      fetchImpl: async (url) => {
+        calls++;
+        if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+          return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+        }
+        throw new Error("synthetic envelope RPC timeout");
+      },
+    });
+    const response = await handler(request(validBody()));
+    assert.equal(response.status, 500);
+    assert.equal((await response.json()).henvalt_delivery_stage, "pre_provider");
+    assert.equal(calls, 2);
+  });
+});
+
 test("authorized synthetic request reaches only the injected provider stub", async () => {
   const calls = [];
   const handler = createDeliveryHandler({
