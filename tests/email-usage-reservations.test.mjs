@@ -19,6 +19,7 @@ test("email quota is reserved in the same transaction as the delivery claim", ()
 test("reservation settlement is conservative and never expires ambiguous sends", () => {
   assert.match(migration, /v_state IN \('ACCEPTED', 'DELIVERED', 'UNKNOWN'\)/);
   assert.match(migration, /NEW\.provider_status_code IN \(400, 401, 403, 404, 405, 410, 413, 415, 422\)/);
+  assert.match(migration, /NEW\.provider_response->>'henvalt_delivery_stage' = 'pre_provider'/);
   assert.match(migration, /status IN \('RESERVED', 'RELEASED'\)/);
   assert.match(migration, /AND status = 'RESERVED'/);
   assert.doesNotMatch(migration, /DELETE FROM henvalt\.email_usage_reservations/i);
