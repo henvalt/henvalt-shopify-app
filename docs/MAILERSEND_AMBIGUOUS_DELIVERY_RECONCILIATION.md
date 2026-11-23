@@ -131,3 +131,15 @@ Coverage added:
 - delivery candidate classifier preserving the stage evidence.
 
 Important boundary: this is candidate code and isolated-test work only. It does not change the deployed Edge Function, active n8n workflow, or production migration state. The existing provider-claim timestamp can still make a pre-provider failure terminal; this correction addresses quota leakage, not automated retry of that request. A separate retry design must create a fresh, idempotently fenced send attempt and must not reset a claimed request in place.
+
+### Retry identity finding — same request cannot be retried safely
+
+The pinned recovery workflow sets `idempotency_key = "deliver:" + intervention_id`. The live `create_delivery_request` function returns the existing row for the same tenant/idempotency key regardless of its current status. `authorize_delivery_request` only accepts a `PENDING` request, and `get_mailersend_token_for_delivery` has a one-time `provider_claimed_at IS NULL` claim.
+
+Therefore, after a post-authorization/pre-provider failure is recorded as `FAILED`:
+- the reservation can be released with the explicit marker;
+- the request remains terminal and the existing idempotency key resolves to that same request;
+- rerunning the same recovery job does not create a fresh send attempt;
+- resetting the request to `PENDING` or clearing `provider_claimed_at` would be unsafe because other failure paths may have reached provider egress.
+
+A future retry design needs an explicit monotonic delivery generation (or a separate immutable delivery-attempt request identity), unique idempotency key per generation, a durable parent/child relation to the intervention, and a concurrency fence that prevents two generations from reaching provider egress concurrently. It must distinguish proven pre-provider failure from any outcome where provider egress began. This is intentionally not implemented in this pass.
