@@ -64,3 +64,5 @@ jobs:
             -f tests/email-usage-reservation-postgres-acceptance.sql
       - name: Prove final-slot serialization across independent sessions
         run: bash tests/email-usage-reservation-concurrency-postgres.sh
+      - name: Prove late acceptance wins concurrent settlement
+        run: bash tests/email-usage-reservation-settlement-concurrency-postgres.sh
