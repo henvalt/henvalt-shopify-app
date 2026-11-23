@@ -171,9 +171,10 @@ BEGIN
   INSERT INTO henvalt.delivery_requests(id,tenant_id)
   VALUES
     ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','aaaaaaaa-1111-4111-8111-111111111111'),
-    ('bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','bbbbbbbb-2222-4222-8222-222222222222');
+    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','bbbbbbbb-2222-4222-8222-222222222222'),
+    ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2','bbbbbbbb-2222-4222-8222-222222222222');
 
-  -- Historical usage must not consume the new billing cycle's quota.
+  -- Historical measured usage must not consume the new billing cycle quota.
   UPDATE henvalt.delivery_requests SET status='UNKNOWN'
    WHERE id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
   IF (SELECT status FROM henvalt.email_usage_reservations
@@ -181,16 +182,24 @@ BEGIN
     RAISE EXCEPTION 'prior-cycle measured usage incorrectly blocked new-cycle delivery';
   END IF;
 
-  -- An unresolved reservation is different: it remains held even when its
-  -- original cycle has ended, because the provider may still have accepted it.
+  -- First create a reservation in the old cycle, then simulate the cycle
+  -- boundary. Its unresolved status must continue to consume the only slot.
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+   WHERE id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
   UPDATE henvalt.email_usage_reservations
      SET cycle_start=now()-interval '60 days'
-   WHERE delivery_request_id='bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
-  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
-   WHERE id='bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
-  IF (SELECT status FROM henvalt.delivery_requests
-       WHERE id='bbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1') <> 'PENDING' THEN
+   WHERE delivery_request_id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+
+  BEGIN
+    UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+     WHERE id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2';
     RAISE EXCEPTION 'prior-cycle unresolved reservation did not block new delivery';
+  EXCEPTION WHEN insufficient_privilege THEN
+    IF SQLERRM NOT LIKE 'HENVALT email usage limit reached%' THEN RAISE; END IF;
+  END;
+  IF (SELECT status FROM henvalt.delivery_requests
+       WHERE id='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2') <> 'PENDING' THEN
+    RAISE EXCEPTION 'blocked rollover delivery changed request state';
   END IF;
 
 END
