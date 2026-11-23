@@ -256,6 +256,7 @@ BEGIN
        AND e.event_type='RELEASED'
        AND e.delivery_attempt_id=v_attempt.id
        AND e.new_status='RELEASED'
+       AND e.reason=v_reservation.status_reason
   ) THEN
     RAISE EXCEPTION 'APPEND_ONLY_RELEASE_EVIDENCE_MISSING';
   END IF;
