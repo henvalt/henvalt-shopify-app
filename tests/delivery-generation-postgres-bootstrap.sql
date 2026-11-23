@@ -73,12 +73,13 @@ CREATE TABLE henvalt_test.incidents (
   UNIQUE (provider_event_id)
 );
 
-CREATE OR REPLACE FUNCTION henvalt_test.seed_initial(p_intervention_id uuid)
-RETURNS uuid LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION henvalt_test.seed_initial(
+  p_intervention_id uuid, p_tenant_id uuid DEFAULT gen_random_uuid()
+) RETURNS uuid LANGUAGE plpgsql AS $
 DECLARE v_tenant uuid; v_request uuid;
 BEGIN
   INSERT INTO henvalt_test.interventions(id,tenant_id)
-  VALUES(p_intervention_id,gen_random_uuid());
+  VALUES(p_intervention_id,p_tenant_id);
   SELECT tenant_id INTO v_tenant FROM henvalt_test.interventions WHERE id=p_intervention_id;
   INSERT INTO henvalt_test.delivery_requests(tenant_id,intervention_id,generation_number,status,idempotency_key)
   VALUES(v_tenant,p_intervention_id,1,'PENDING','deliver:'||p_intervention_id||':g1')
