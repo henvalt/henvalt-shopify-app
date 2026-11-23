@@ -387,6 +387,8 @@ test("23 PostgreSQL generation fixture covers parent-first retry, claim, egress 
   const sameCommandRace = readFileSync(new URL("tests/delivery-generation-same-command-concurrency-postgres.sh", root), "utf8");
   const lateFirstRace = readFileSync(new URL("tests/delivery-generation-late-acceptance-race-postgres.sh", root), "utf8");
   const retryFirstRace = readFileSync(new URL("tests/delivery-generation-retry-wins-late-acceptance-race-postgres.sh", root), "utf8");
+  const lateBeforeEgress = readFileSync(new URL("tests/delivery-generation-late-acceptance-before-egress-race-postgres.sh", root), "utf8");
+  const egressBeforeLate = readFileSync(new URL("tests/delivery-generation-egress-before-late-acceptance-race-postgres.sh", root), "utf8");
   assert.match(bootstrap, /CREATE SCHEMA henvalt_test/);
   assert.match(bootstrap, /UNIQUE \(tenant_id, intervention_id, generation_number\)/);
   assert.match(bootstrap, /PREVIOUS_GENERATION_NOT_PROVEN_RETRYABLE/);
@@ -394,7 +396,7 @@ test("23 PostgreSQL generation fixture covers parent-first retry, claim, egress 
   assert.match(bootstrap, /provider_egress_started_at/);
   assert.match(bootstrap, /resolve_delivery_tag/);
   assert.match(bootstrap, /PROVIDER_RECIPIENT_MISMATCH/);
-  assert.match(acceptance, /37 transaction-level acceptance cases|37 cases/);
+  assert.match(acceptance, /39 transaction-level acceptance cases|39 cases/);
   assert.match(acceptance, /consent_ok=false/);
   assert.match(acceptance, /interlock_open=false/);
   assert.match(acceptance, /cross-tenant delivery tag was accepted/);
@@ -402,4 +404,6 @@ test("23 PostgreSQL generation fixture covers parent-first retry, claim, egress 
   assert.match(sameCommandRace, /same retry command did not return the same request id/);
   assert.match(lateFirstRace, /late acceptance did not freeze intervention/);
   assert.match(retryFirstRace, /new generation was claimable after contradictory late acceptance/);
+  assert.match(lateBeforeEgress, /egress was not denied after late acceptance won/);
+  assert.match(egressBeforeLate, /in-flight generation was not conservatively consumed/);
 });
