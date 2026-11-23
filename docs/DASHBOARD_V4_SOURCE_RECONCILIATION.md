@@ -46,3 +46,22 @@ The reconciled source retains the existing Auth user validation, exactly-one-mem
 ## Security review note
 
 The live function uses the service-role key only inside the Edge Function and validates the caller token against Supabase Auth before resolving tenant scope. Keep those boundaries intact. The endpoint currently allows `access-control-allow-origin: *`; bearer-token validation is still required and must not be replaced by CORS as an authorization control. Confirm the intended browser origins before tightening or changing CORS.
+
+
+## Live test-tenant verification — 2026-11-23
+
+Read-only verification was performed against the connected test tenant after the candidate CI run:
+
+- Tenant is ACTIVE and has exactly one membership and one active Shopify connection (ur4jvw-nz.myshopify.com), satisfying the candidate handler's unambiguous tenant/shop selection assumptions.
+- The tenant currently has zero revenue-ledger rows, including zero confirmed recovery rows. The dashboard must therefore show zero verified recovered revenue; it must not synthesize revenue from opportunity or delivery activity.
+- The tenant has 165 canonical events, 4 opportunities, 4 recovery interventions and 3 delivery requests. The latest canonical event is 2026-11-14 17:44:35 UTC; the latest opportunity is 2026-11-13 07:06:34 UTC. These are historical test records, not evidence of a current live Shopify event path.
+- All four recovery flow toggles and the tenant-wide recovery switch remain disabled.
+- The billing account remains PENDING in test mode, with no active Shopify subscription or usage line item. Four email-usage measurements exist and all four are unpriced. No production billing or delivery entitlement was granted.
+- The scheduled recovery worker's latest inspected run completed successfully, but its three discovery procedures each returned zero newly queued/created opportunities; stale-work repair and deferred-payment reconciliation returned zero work.
+- No recent ingest or delivery executions were returned by the execution search. This does not prove webhook registration is broken, but it means there is no fresh end-to-end event-to-delivery evidence.
+
+### Deployment gate
+
+The authenticated dashboard endpoint has not yet been exercised against live Supabase Auth, PostgREST relationships and RPCs. A valid owner/merchant session is required for that check; no credential was available to this audit, and no credential was requested or stored. The tenant's merchant legal sender profile is also incomplete, so recovery must remain disabled. These are operational blockers, not reasons to weaken authentication, consent, billing or sender checks.
+
+The Supabase security advisor also reports the existing henvalt.is_tenant_member(uuid) SECURITY DEFINER function as executable by authenticated. It checks auth.uid() against tenant membership and is referenced by existing RLS policies; no privilege change was made because revoking it without a dependency migration could break those policies. Review the intended RPC exposure and policy dependencies separately before changing grants.
