@@ -135,6 +135,8 @@ REVOKE ALL ON FUNCTION henvalt.assert_provider_sending_enabled()
 -- Minimal production-shaped MailerSend webhook processor. Its lookup and
 -- result-delegation anchors intentionally mirror the deployed function so
 -- candidate source-preserving webhook patches are exercised by CI.
+ALTER TABLE henvalt.provider_events ADD COLUMN processed_at timestamptz, ADD COLUMN processing_result jsonb NOT NULL DEFAULT '{}'::jsonb;
+
 CREATE UNIQUE INDEX provider_events_provider_hash_uq
   ON henvalt.provider_events(provider,event_hash);
 
