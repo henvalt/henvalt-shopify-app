@@ -18,6 +18,7 @@ on:
       - "tests/fixtures/delivery-generation-*"
       - "tests/fixtures/n8n-delivery-generation-contract-snapshot.json"
       - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
+      - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "docs/DELIVERY_GENERATION_*.md"
       - ".github/workflows/delivery-generation-model-safety.yml"
   workflow_dispatch:
