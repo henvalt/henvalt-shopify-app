@@ -65,3 +65,21 @@ Read-only verification was performed against the connected test tenant after the
 The authenticated dashboard endpoint has not yet been exercised against live Supabase Auth, PostgREST relationships and RPCs. A valid owner/merchant session is required for that check; no credential was available to this audit, and no credential was requested or stored. The tenant's merchant legal sender profile is also incomplete, so recovery must remain disabled. These are operational blockers, not reasons to weaken authentication, consent, billing or sender checks.
 
 The Supabase security advisor also reports the existing henvalt.is_tenant_member(uuid) SECURITY DEFINER function as executable by authenticated. It checks auth.uid() against tenant membership and is referenced by existing RLS policies; no privilege change was made because revoking it without a dependency migration could break those policies. Review the intended RPC exposure and policy dependencies separately before changing grants.
+
+
+## Confirmed-revenue activity correction — 2026-11-23
+
+A further code review found that the deployed summary RPC labels an opportunity as recovered using its opportunity status and exposes `value_at_risk` as the activity amount. That value is an estimate, not the paid order's recovered amount. The dashboard candidate now:
+
+- Selects `opportunity_id` from the revenue ledger and filters ledger rows to `entry_type=RECOVERY`, `attribution_confidence=CONFIRMED`, and `billable=true`.
+- Replaces an activity row's displayed amount only when a matching confirmed, billable ledger entry exists for that opportunity.
+- Sets the activity amount to null when there is no matching ledger entry, so the UI displays no monetary amount instead of presenting estimated value at risk as recovered revenue.
+- Adds regression coverage for a matched ledger entry, an unmatched recovered opportunity, a pending opportunity, and the PostgREST query filters.
+
+Latest verified candidate commit: `9612a7d85b698678a19e46ab8e9640e6df229b36`. GitHub Actions run `45121661863` passed Deno type-check and all 19 tests (8 range tests + 11 handler tests).
+
+## Shopify webhook integrity evidence
+
+The n8n ingest workflow's Webhook node has `rawBody=true`; the n8n Webhook implementation places the exact raw request bytes in the binary `data` property while retaining parsed JSON in `body`. The workflow passes the base64 binary bytes and `X-Shopify-Hmac-Sha256` header to the private `verify_shopify_webhook_hmac` RPC before tenant resolution and event ingestion. Read-only tenant records show 130 webhook events reached the ingest ledger after that verification step: 129 processed and one failed business validation. This is evidence that historical webhook HMAC verification and ingestion worked; it is not evidence of a current webhook delivery today.
+
+The one failed webhook was a `checkouts/update` event from 2026-11-02. Its recorded processing error was `missing_checkout_data`: checkout ID and customer email were not both available to create a recovery opportunity. It was not an HMAC failure. The latest Shopify webhook event was received 2026-11-14 15:44:42 UTC; the latest pixel event was received 2026-11-14 17:44:38 UTC. The pipeline has no fresh event evidence after those timestamps.
