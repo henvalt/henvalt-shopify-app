@@ -91,7 +91,7 @@ BEGIN
   END IF;
   v_definition := pg_get_functiondef(v_oid);
   IF position('SELECT dr.id INTO v_req' IN v_definition) = 0
-     OR position('LIMIT 1' || chr(10) || '     FOR UPDATE;' IN v_definition) = 0 THEN
+     OR v_definition !~ 'LIMIT 1\\s+FOR UPDATE;' THEN
     RAISE EXCEPTION 'DELIVERY_LOCK_ORDER_WEBHOOK_EXPECTED_LOCK_NOT_FOUND';
   END IF;
   v_patched := regexp_replace(
