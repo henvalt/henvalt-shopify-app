@@ -12,6 +12,8 @@ const migration = read("../supabase/migrations/202611230002_delivery_generation_
 const egressMigration = read("../supabase/migrations/202611230003_delivery_provider_egress_fence.sql");
 const lockOrderMigration = read("../supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql");
 const lockOrderAcceptance = read("./delivery-lifecycle-lock-order-acceptance.sql");
+const legacyOneOffMigration = read("../supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql");
+const legacyOneOffAcceptance = read("./legacy-one-off-delivery-disable-acceptance.sql");
 const prodShapeAcceptance = read("./delivery-generation-production-shaped-acceptance.sql");
 
 test("live delivery-generation audit is explicitly read-only and pinned to the inspected active workflow", () => {
@@ -124,4 +126,16 @@ test("candidate lifecycle patch imposes parent-first locks across all four datab
   assert.match(lockOrderAcceptance, /token parent-first lock order missing/);
   assert.match(lockOrderAcceptance, /result parent-first lock order missing/);
   assert.match(lockOrderAcceptance, /webhook still locks child before result settlement/);
+});
+
+
+test("legacy one-off test delivery routes are explicitly disabled before immutable-generation cutover", () => {
+  assert.match(legacyOneOffMigration, /LEGACY_ONE_OFF_DELIVERY_DISABLED_FOR_IMMUTABLE_GENERATIONS/);
+  assert.match(legacyOneOffMigration, /LEGACY_ONE_OFF_TOKEN_ALLOWLIST_PATCH_FAILED/);
+  assert.match(legacyOneOffMigration, /REVOKE ALL ON FUNCTION henvalt\\.reauthorize_one_off_test_delivery/);
+  assert.match(legacyOneOffMigration, /REVOKE ALL ON FUNCTION henvalt\\.prepare_one_off_test_delivery/);
+  assert.match(legacyOneOffAcceptance, /hard-coded one-off token allowlist survived cutover patch/);
+  assert.match(legacyOneOffAcceptance, /normal tenant-scoped token claim was broken/);
+  assert.match(legacyOneOffAcceptance, /legacy one-off reauthorization did not fail closed/);
+  assert.match(legacyOneOffAcceptance, /legacy one-off preparation did not fail closed/);
 });
