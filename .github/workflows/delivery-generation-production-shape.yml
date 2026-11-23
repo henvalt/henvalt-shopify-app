@@ -1,0 +1,53 @@
+name: HENVALT production-shaped delivery generation migration
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
+      - "tests/delivery-generation-production-shaped-*.sql"
+      - ".github/workflows/delivery-generation-production-shape.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
+      - "tests/delivery-generation-production-shaped-*.sql"
+      - ".github/workflows/delivery-generation-production-shape.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Create disposable production-shaped database
+        run: createdb -h 127.0.0.1 -U postgres delivery_generation_prodshape
+      - name: Bootstrap live-shape schema and Supabase roles
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-bootstrap.sql
+      - name: Apply generation schema and retry RPC candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql
+      - name: Verify generation, evidence, idempotency and immutable fences
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-acceptance.sql
