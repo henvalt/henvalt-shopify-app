@@ -238,3 +238,38 @@ If the provider webhook does not carry enough exact tags or metadata to correlat
 - race between late webhook settlement and a newer generation's egress-start marker.
 
 **Verification boundary:** current quota CI proves the reservation trigger's direct late-acceptance transition and concurrency behavior. It does not prove the real MailerSend webhook path above. No production webhook, RPC, reservation, or delivery request was changed.
+
+
+## 13. Isolated PostgreSQL transaction model — 2026-11-23
+
+Added an executable PostgreSQL 17 model under `tests/delivery-generation-*`. It deliberately uses a separate `henvalt_test` schema and never connects to Supabase. The fixture mirrors the invariants that must hold before production-shaped DDL is written:
+
+- unique tenant/idempotency identity and unique tenant/intervention/generation identity;
+- parent-first row locking for generation allocation, claim, egress authorization and late provider evidence;
+- a durable retry-command ledger;
+- retry permission only when the previous request is FAILED, its latest attempt contains the exact server-owned `pre_provider` stage marker, its provider-egress marker is null, and its reservation is RELEASED;
+- current-generation-only claim and egress;
+- consent, tenant status, interlock and intervention freeze rechecks at both claim and egress boundaries;
+- late acceptance consumes a released reservation while preserving the original FAILED request state and appending a separate provider-evidence attempt;
+- contradictory acceptance freezes the parent and creates an incident;
+- duplicate provider event identity is idempotent.
+
+The model is intentionally explicit that a provider HTTP response is not a pre-provider failure, even if it is an HTTP 4xx/5xx. A missing reservation, missing attempt, missing server marker, or unresolved/ambiguous state rejects retry.
+
+### PostgreSQL acceptance and concurrency coverage
+
+- `tests/delivery-generation-postgres-acceptance.sql`: 28 transaction-level acceptance cases.
+- `tests/delivery-generation-concurrency-postgres.sh`: two independent sessions with distinct retry commands; exactly one generation may be allocated.
+- `tests/delivery-generation-same-command-concurrency-postgres.sh`: two independent sessions with the same retry command; both must receive the same request ID.
+- `tests/delivery-generation-late-acceptance-race-postgres.sh`: late acceptance takes the parent lock first; retry must wait and then be rejected.
+- `tests/delivery-generation-retry-wins-late-acceptance-race-postgres.sh`: retry takes the parent lock first; late acceptance must wait, consume the prior reservation, freeze the parent, and prevent the new generation from claiming.
+
+The dedicated workflow is `.github/workflows/delivery-generation-model-safety.yml`, using PostgreSQL 17. It is independent from the quota reservation workflow.
+
+### Important boundary and blocker
+
+This is an executable transaction contract, not a production migration or proof that the live RPCs already obey this lock order. The read-only production audit found that `record_delivery_result` currently locks a delivery request first and can later update its parent intervention. The model uses parent-first ordering. Before any generation RPC or egress fence is promoted into a production-shaped migration, all live writers that can acquire both locks must be reconciled to the same order, or a reviewed deadlock/retry protocol must be proven.
+
+The existing `authorize_delivery_request` and `get_mailersend_token_for_delivery` code paths also need current-generation checks. The actual Edge Function needs a durable egress-authorization RPC after envelope validation and immediately before the MailerSend POST. The real MailerSend webhook path still needs exact delivery-tag correlation and the narrow late-acceptance settlement path described in section 12.
+
+**No generation migration has been applied or added to the candidate migration directory in this batch. No production Supabase object, Edge Function, active n8n workflow, provider credential, or email was changed.**
