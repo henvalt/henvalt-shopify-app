@@ -53,3 +53,7 @@ jobs:
         run: bash tests/delivery-generation-same-command-concurrency-postgres.sh
       - name: Prove retry-generation versus late-acceptance race
         run: bash tests/delivery-generation-retry-wins-late-acceptance-race-postgres.sh
+      - name: Prove late acceptance blocks provider egress
+        run: bash tests/delivery-generation-late-acceptance-before-egress-race-postgres.sh
+      - name: Prove already-started egress remains conservatively held
+        run: bash tests/delivery-generation-egress-before-late-acceptance-race-postgres.sh
