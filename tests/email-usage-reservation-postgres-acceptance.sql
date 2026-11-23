@@ -156,6 +156,38 @@ BEGIN
   END IF;
 
 
+  -- A later definitive rejection cannot release a reservation already consumed
+  -- by an earlier accepted/ambiguous attempt for this delivery request.
+  INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
+  VALUES(gen_random_uuid(),t,r2,'FAILED',400);
+  IF (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=r2) <> 'CONSUMED' THEN
+    RAISE EXCEPTION 'later definitive rejection downgraded a consumed reservation';
+  END IF;
+  IF (SELECT count(*) FROM henvalt.email_usage_reservation_events
+       WHERE delivery_request_id=r2 AND new_status='RELEASED') <> 0 THEN
+    RAISE EXCEPTION 'later rejection appended a release event after acceptance';
+  END IF;
+
+  -- Exercise every member of the narrow definitive-rejection allowlist.
+  INSERT INTO henvalt.billing_accounts(tenant_id,status,test_mode,activated_at,monthly_email_limit)
+  VALUES('99999999-9999-4999-8999-999999999999','PENDING',true,now()-interval '1 day',20);
+  INSERT INTO henvalt.delivery_requests(id,tenant_id)
+  SELECT ('99999999-9999-4999-8999-' || lpad(i::text,12,'0'))::uuid,
+         '99999999-9999-4999-8999-999999999999'
+    FROM generate_series(1,9) AS g(i);
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+   WHERE tenant_id='99999999-9999-4999-8999-999999999999';
+  INSERT INTO henvalt.delivery_attempts(id,tenant_id,delivery_request_id,state,provider_status_code)
+  SELECT gen_random_uuid(), '99999999-9999-4999-8999-999999999999',
+         ('99999999-9999-4999-8999-' || lpad(i::text,12,'0'))::uuid,
+         'FAILED', code
+    FROM unnest(ARRAY[400,401,403,404,405,410,413,415,422]) WITH ORDINALITY AS x(code,i);
+  IF (SELECT count(*) FROM henvalt.email_usage_reservations
+       WHERE tenant_id='99999999-9999-4999-8999-999999999999'
+         AND status='RELEASED') <> 9 THEN
+    RAISE EXCEPTION 'one or more allowlisted definitive rejections did not release';
+  END IF;
+
   -- Billing-cycle rollover: old measured usage falls out of the new cycle,
   -- but an unresolved provider reservation remains held across the boundary.
   INSERT INTO henvalt.billing_accounts(tenant_id,status,test_mode,activated_at,monthly_email_limit)
