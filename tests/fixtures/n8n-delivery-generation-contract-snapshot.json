@@ -1,0 +1,71 @@
+{
+  "snapshot_kind": "read_only_n8n_delivery_contract",
+  "captured_at": "2026-11-23",
+  "workflow_id": "CvVyybGJZSnklxiZ",
+  "workflow_name": "HENVALT_DELIVERY",
+  "active": true,
+  "version_id": "621ae6ce-a006-4fed-a70e-acf774c360fb",
+  "active_version_id": "621ae6ce-a006-4fed-a70e-acf774c360fb",
+  "node_count": 62,
+  "paths": {
+    "normal_delivery": [
+      {
+        "node": "Authorize & Context",
+        "rpc": "authorize_delivery_request"
+      },
+      {
+        "node": "MailerSend Send",
+        "edge_function": "henvalt-mailersend-delivery"
+      },
+      {
+        "node": "Classify Result",
+        "kind": "provider_result_classifier"
+      },
+      {
+        "node": "Record Delivery Result",
+        "rpc": "record_delivery_result"
+      }
+    ],
+    "provider_webhook": [
+      {
+        "node": "Verify MailerSend Signature",
+        "rpc": "verify_mailersend_webhook_signature_api"
+      },
+      {
+        "node": "Process MailerSend Event",
+        "rpc": "process_mailersend_webhook_event"
+      }
+    ],
+    "manual_one_off_test": [
+      {
+        "node": "Prepare One-Off Test Delivery",
+        "rpc": "reauthorize_one_off_test_delivery"
+      },
+      {
+        "node": "MailerSend One-Off Test Email",
+        "edge_function": "henvalt-mailersend-delivery"
+      },
+      {
+        "node": "Classify One-Off Provider Result",
+        "kind": "provider_result_classifier"
+      },
+      {
+        "node": "Record One-Off Test Result",
+        "rpc": "record_delivery_result"
+      }
+    ]
+  },
+  "assertions": {
+    "record_delivery_result_direct_calls": 2,
+    "provider_webhook_processor_is_separate": true,
+    "normal_and_manual_paths_share_provider_edge_function": true,
+    "no_workflow_mutation_performed": true
+  },
+  "excluded_fields": [
+    "credentials",
+    "request_body_values",
+    "recipient_email",
+    "hardcoded_one_off_request_id",
+    "provider_tokens"
+  ]
+}
