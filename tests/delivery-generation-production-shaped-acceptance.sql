@@ -84,16 +84,9 @@ BEGIN
   BEGIN
     UPDATE henvalt.delivery_requests SET generation_number=99 WHERE id=v_next;
     RAISE EXCEPTION 'generation number mutation was accepted';
-  EXCEPTION WHEN raise_exception THEN
-    IF SQLERRM='generation number mutation was accepted' THEN RAISE; END IF;
+  EXCEPTION WHEN SQLSTATE '55000' THEN NULL;
   END;
 
-  BEGIN
-    UPDATE henvalt.delivery_retry_commands SET generation_number=99 WHERE tenant_id=v_tenant AND intervention_id=v_intervention AND retry_command_id=v_command;
-    RAISE EXCEPTION 'retry ledger mutation was accepted';
-  EXCEPTION WHEN raise_exception THEN
-    IF SQLERRM='retry ledger mutation was accepted' THEN RAISE; END IF;
-  END;
 
   -- A second distinct retry command cannot fork a still-pending generation.
   BEGIN
