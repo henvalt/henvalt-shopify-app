@@ -1,0 +1,68 @@
+name: HENVALT dashboard currency integrity
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611230002_dashboard_currency_attribution_integrity.sql"
+      - "tests/dashboard-currency-*"
+      - "tests/dashboard-currency-integrity.test.mjs"
+      - "supabase/functions/henvalt-merchant-dashboard/**"
+      - "dashboard/index.html"
+      - ".github/workflows/dashboard-currency-integrity.yml"
+  push:
+    branches:
+      - "work/reconcile-dashboard-v4"
+    paths:
+      - "supabase/migrations/202611230002_dashboard_currency_attribution_integrity.sql"
+      - "tests/dashboard-currency-*"
+      - "tests/dashboard-currency-integrity.test.mjs"
+      - "supabase/functions/henvalt-merchant-dashboard/**"
+      - "dashboard/index.html"
+      - ".github/workflows/dashboard-currency-integrity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard-currency-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Run dashboard financial integrity contract tests
+        run: node --test tests/dashboard-currency-integrity.test.mjs
+      - name: Bootstrap isolated dashboard PostgreSQL fixture
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/dashboard-currency-bootstrap.sql
+      - name: Apply candidate dashboard integrity migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611230002_dashboard_currency_attribution_integrity.sql
+      - name: Exercise multi-currency, attribution and RPC grant acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/dashboard-currency-acceptance.sql
