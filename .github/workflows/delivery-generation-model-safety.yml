@@ -7,6 +7,7 @@ on:
       - "tests/fixtures/delivery-generation-*"
       - "tests/fixtures/n8n-delivery-generation-contract-snapshot.json"
       - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
+      - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "docs/DELIVERY_GENERATION_*.md"
       - ".github/workflows/delivery-generation-model-safety.yml"
   push:
@@ -59,6 +60,14 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/delivery-generation-postgres-bootstrap.sql
       - name: Run 42 delivery-generation acceptance cases
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/delivery-generation-postgres-acceptance.sql
+      - name: Create isolated production-shaped database
+        run: createdb -h 127.0.0.1 -U postgres delivery_generation_prodshape
+      - name: Bootstrap production-shaped delivery schema
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-bootstrap.sql
+      - name: Apply candidate generation migration to disposable production-shaped schema
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql
+      - name: Verify production-shaped retry generation RPC
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-acceptance.sql
       - name: Prove concurrent retry commands serialize
         run: bash tests/delivery-generation-concurrency-postgres.sh
       - name: Prove late acceptance wins retry-generation race
