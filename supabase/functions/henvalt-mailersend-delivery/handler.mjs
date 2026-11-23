@@ -132,6 +132,19 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       const envelopeAuthorized = await envelopeResponse.json().catch(() => false);
       if (envelopeAuthorized !== true) return preProviderJson(409, "delivery_envelope_not_authorized");
 
+      const tags = ["tenant:" + tenantId, "delivery:" + deliveryRequestId];
+      if (isUuid(body.intervention_id)) tags.push("intervention:" + body.intervention_id);
+      if (isUuid(body.correlation_id)) tags.push("correlation:" + body.correlation_id);
+      const message = {
+        from: { email: sender, name: fromName },
+        to: [{ email: recipient }],
+        reply_to: { email: validEmail(replyTo) ? replyTo : sender },
+        subject,
+        tags,
+      };
+      if (typeof html === "string" && html.length > 0) message.html = html;
+      if (typeof textBody === "string" && textBody.length > 0) message.text = textBody;
+
       // Commit the durable, one-way generation fence after all database
       // envelope checks and immediately before the provider HTTP request.
       // A failed/ambiguous fence call must never fall through to MailerSend.
@@ -154,19 +167,6 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       if (!egressFenceResponse.ok) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
       const egressFenceStarted = await egressFenceResponse.json().catch(() => false);
       if (egressFenceStarted !== true) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
-
-      const tags = ["tenant:" + tenantId, "delivery:" + deliveryRequestId];
-      if (isUuid(body.intervention_id)) tags.push("intervention:" + body.intervention_id);
-      if (isUuid(body.correlation_id)) tags.push("correlation:" + body.correlation_id);
-      const message = {
-        from: { email: sender, name: fromName },
-        to: [{ email: recipient }],
-        reply_to: { email: validEmail(replyTo) ? replyTo : sender },
-        subject,
-        tags,
-      };
-      if (typeof html === "string" && html.length > 0) message.html = html;
-      if (typeof textBody === "string" && textBody.length > 0) message.text = textBody;
 
       let providerResponse;
       try {
