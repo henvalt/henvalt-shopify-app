@@ -106,20 +106,20 @@ BEGIN
   -- A server-authored pre-provider marker proves no MailerSend POST occurred.
   -- This is distinct from an actual provider HTTP 409, which remains ambiguous.
   INSERT INTO henvalt.billing_accounts(tenant_id,status,test_mode,activated_at,monthly_email_limit)
-  VALUES('55555555-5555-4555-8555-555555555555','PENDING',true,now()-interval '1 day',5);
+  VALUES('12121212-1212-4212-8212-121212121212','PENDING',true,now()-interval '1 day',5);
   INSERT INTO henvalt.delivery_requests(id,tenant_id)
-  VALUES('66666666-6666-4666-8666-666666666666','55555555-5555-4555-8555-555555555555');
+  VALUES('13131313-1313-4313-8313-131313131313','12121212-1212-4212-8212-121212121212');
   UPDATE henvalt.delivery_requests SET status='UNKNOWN'
-   WHERE id='66666666-6666-4666-8666-666666666666';
+   WHERE id='13131313-1313-4313-8313-131313131313';
   INSERT INTO henvalt.delivery_attempts(
     id,tenant_id,delivery_request_id,state,provider_status_code,provider_response
   ) VALUES(
-    gen_random_uuid(),'55555555-5555-4555-8555-555555555555',
-    '66666666-6666-4666-8666-666666666666','FAILED',409,
+    gen_random_uuid(),'12121212-1212-4212-8212-121212121212',
+    '13131313-1313-4313-8313-131313131313','FAILED',409,
     '{"error":"tenant_provider_credential_unavailable","henvalt_delivery_stage":"pre_provider"}'::jsonb
   );
   IF (SELECT status FROM henvalt.email_usage_reservations
-       WHERE delivery_request_id='66666666-6666-4666-8666-666666666666') <> 'RELEASED' THEN
+       WHERE delivery_request_id='13131313-1313-4313-8313-131313131313') <> 'RELEASED' THEN
     RAISE EXCEPTION 'proven pre-provider failure did not release its quota hold';
   END IF;
 
