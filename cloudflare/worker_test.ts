@@ -145,8 +145,8 @@ Deno.test("rejects oversized webhook bodies", async () => {
   const handler = createHandler({ fetchImpl: async () => { throw new Error("must not forward"); } });
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(new Uint8Array(600_000));
-      controller.enqueue(new Uint8Array(500_001));
+      controller.enqueue(new Uint8Array(3_000_000));
+      controller.enqueue(new Uint8Array(2_000_001));
       controller.close();
     },
   });
