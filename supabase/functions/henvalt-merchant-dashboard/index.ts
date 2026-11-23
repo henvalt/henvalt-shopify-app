@@ -133,19 +133,57 @@ export function createDashboardHandler(options: DashboardHandlerOptions) {
       const ledger = await ledgerResponse.json();
       if (!Array.isArray(ledger)) throw new Error("REVENUE_LEDGER_INVALID_RESPONSE");
 
+      // One opportunity can have multiple confirmed orders. Sum them only
+      // when every matching ledger row uses the same currency; never pick an
+      // arbitrary first row or add unlike currencies together.
+      const ledgerByOpportunity = new Map<string, {
+        amount: number;
+        currency: string;
+        currencyConflict: boolean;
+      }>();
+      for (const entry of ledger as Array<Record<string, unknown>>) {
+        if (typeof entry.opportunity_id !== "string") continue;
+        const amount = Number(entry.amount);
+        if (!Number.isFinite(amount)) continue;
+        const currency = String(entry.currency ?? summary.currency ?? "USD").trim().toUpperCase();
+        const existing = ledgerByOpportunity.get(entry.opportunity_id);
+        if (!existing) {
+          ledgerByOpportunity.set(entry.opportunity_id, { amount, currency, currencyConflict: false });
+        } else if (existing.currency !== currency) {
+          existing.currencyConflict = true;
+          existing.amount = 0;
+        } else if (!existing.currencyConflict) {
+          existing.amount += amount;
+        }
+      }
+
+      const currencyConflict = summary.revenueCurrencyConflict === true ||
+        revenue?.current_currency_conflict === true;
+      const comparisonCurrencyConflict = revenue?.comparison_currency_conflict === true;
+
       return reply(200, {
         ...summary,
         activity: (Array.isArray(summary.activity) ? summary.activity : []).map((item: Record<string, unknown>) => {
           if (item.outcome !== "recovered") return item;
-          const confirmedEntry = ledger.find((entry: Record<string, unknown>) => entry.opportunity_id === item.id);
-          return { ...item, amount: confirmedEntry?.amount ?? null, currency: confirmedEntry?.currency ?? summary.currency };
+          const confirmed = typeof item.id === "string" ? ledgerByOpportunity.get(item.id) : undefined;
+          return {
+            ...item,
+            amount: confirmed && !confirmed.currencyConflict ? confirmed.amount : null,
+            currency: confirmed && !confirmed.currencyConflict ? confirmed.currency : null,
+            amountCurrencyConflict: confirmed?.currencyConflict === true,
+          };
         }),
         ledger,
-        revenueSeries: revenue?.series ?? [],
+        revenueCurrencyConflict: currencyConflict,
+        revenueByCurrency: Array.isArray(summary.revenueByCurrency) ? summary.revenueByCurrency : [],
+        revenueSeries: currencyConflict ? [] : (revenue?.series ?? []),
         revenueComparison: {
-          currentRevenue: revenue?.current_revenue ?? summary.metrics?.revenueRecovered ?? 0,
-          previousRevenue: revenue?.previous_revenue ?? 0,
-          changePercent: revenue?.change_percent ?? null,
+          currentRevenue: currencyConflict ? null :
+            (revenue?.current_revenue ?? summary.metrics?.revenueRecovered ?? 0),
+          previousRevenue: comparisonCurrencyConflict ? null : (revenue?.previous_revenue ?? 0),
+          changePercent: comparisonCurrencyConflict ? null : (revenue?.change_percent ?? null),
+          currencyConflict,
+          comparisonCurrencyConflict,
           previousFrom: revenue?.previous_from ?? null,
           previousTo: revenue?.previous_to ?? null,
         },
