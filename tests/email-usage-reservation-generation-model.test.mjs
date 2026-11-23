@@ -410,3 +410,31 @@ test("23 PostgreSQL generation fixture covers parent-first retry, claim, egress 
   assert.match(lateBeforeEgress, /egress was not denied after late acceptance won/);
   assert.match(egressBeforeLate, /in-flight generation was not conservatively consumed/);
 });
+
+
+test("24 live HENVALT_DELIVERY snapshot pins all active delivery and webhook entry paths", () => {
+  const root = new URL("../", import.meta.url);
+  const snapshot = JSON.parse(readFileSync(
+    new URL("tests/fixtures/n8n-delivery-generation-contract-snapshot.json", root),
+    "utf8",
+  ));
+  assert.equal(snapshot.workflow_id, "CvVyybGJZSnklxiZ");
+  assert.equal(snapshot.active, true);
+  assert.equal(snapshot.version_id, "621ae6ce-a006-4fed-a70e-acf774c360fb");
+  assert.equal(snapshot.active_version_id, snapshot.version_id);
+  assert.equal(snapshot.node_count, 62);
+  assert.deepEqual(
+    snapshot.paths.normal_delivery.map(x => x.rpc || x.edge_function || x.kind),
+    ["authorize_delivery_request", "henvalt-mailersend-delivery", "provider_result_classifier", "record_delivery_result"],
+  );
+  assert.deepEqual(
+    snapshot.paths.provider_webhook.map(x => x.rpc),
+    ["verify_mailersend_webhook_signature_api", "process_mailersend_webhook_event"],
+  );
+  assert.deepEqual(
+    snapshot.paths.manual_one_off_test.map(x => x.rpc || x.edge_function || x.kind),
+    ["reauthorize_one_off_test_delivery", "henvalt-mailersend-delivery", "provider_result_classifier", "record_delivery_result"],
+  );
+  assert.equal(snapshot.assertions.record_delivery_result_direct_calls, 2);
+  assert.equal(snapshot.assertions.no_workflow_mutation_performed, true);
+});
