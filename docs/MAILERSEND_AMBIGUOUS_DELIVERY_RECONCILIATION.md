@@ -51,7 +51,7 @@ If any of those are absent, reconciliation must remain unavailable rather than i
 |---|---|
 | Exactly one matching email record, status `queued`, `sent`, or `delivered` | Consume; record the provider message/email ID and evidence |
 | Exactly one matching record, status `rejected` | Do not automatically release until HENVALT verifies the provider's rejection semantics and that no other matching recipient record exists |
-| More than one matching record | Keep consumed/held and require operator review; never choose an arbitrary row |
+| More than one matching record | Consume and raise a duplicate-send incident; preserve every matching provider ID and require operator review; never choose an arbitrary row |
 | No match, incomplete pagination, rate limit, API error, expired retention, or inconclusive time window | Keep RESERVED; no retry and no release |
 | Exact message ID returned by original 202 response and a successful provider lookup | Consume; message ID is primary correlation |
 | A late webhook or lookup reports acceptance after an earlier release | Re-consume and append an explicit late-acceptance event; preserve the earlier release event |
