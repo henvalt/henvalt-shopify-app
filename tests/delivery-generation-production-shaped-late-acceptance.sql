@@ -1,4 +1,4 @@
-\\set ON_ERROR_STOP on
+\set ON_ERROR_STOP on
 SET request.jwt.claim.role='service_role';
 
 DO $test$
