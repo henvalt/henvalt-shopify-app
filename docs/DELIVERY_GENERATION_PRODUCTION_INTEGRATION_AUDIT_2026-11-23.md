@@ -234,3 +234,20 @@ The candidate patches all four entry points:
 A dedicated disposable PostgreSQL 17 workflow bootstraps the exact RPC signatures and lock-bearing source shapes, applies the guarded migration, checks the rewritten function definitions, and calls each function. This validates the migration mechanics and expected ordering on the fixture; it is not a substitute for applying it to a staging copy of the full deployed schema and exercising real concurrent n8n/webhook sessions.
 
 **Remaining lock-order risk:** other callers or triggers may lock delivery requests or interventions outside these four functions. The two direct n8n `record_delivery_result` callers are compatible with the new parent-first result RPC once deployed, but their surrounding workflow transactions and the legacy one-off path still require separate review. The hard-coded one-off allowlist in the live token RPC is not removed by this migration. No production function, schema, Edge Function or n8n workflow was changed.
+
+
+## Legacy one-off delivery shutdown candidate — 2026-11-23
+
+Candidate migration `202611230005_disable_legacy_one_off_delivery.sql` closes a separate generation-integrity hole discovered in the deployed token and test RPCs.
+
+The old `reauthorize_one_off_test_delivery` implementation could:
+- lock a FAILED delivery request and reset it in place to PENDING;
+- clear `provider_claimed_at`;
+- change the parent intervention back to SENDING;
+- temporarily turn tenant recovery and the abandoned-checkout flow on, call authorization, then restore settings.
+
+The token RPC also contained a hard-coded tenant, opportunity, recipient, idempotency key and `test_only` message exception. The candidate migration removes that exception from the token RPC, replaces both `reauthorize_one_off_test_delivery` and `prepare_one_off_test_delivery` with fail-closed exceptions, and revokes their execute grants from PUBLIC, anon, authenticated and service_role.
+
+A dedicated PostgreSQL acceptance script verifies that the normal tenant-scoped token claim remains functional, the hard-coded allowlist disappears, both legacy RPCs reject calls, and service_role no longer has execute permission.
+
+This is a deliberate cutover blocker, not a production change. The active n8n manual one-off route must be removed or replaced with an isolated safe test workflow before this candidate migration is applied to any live environment. Production remains unchanged.
