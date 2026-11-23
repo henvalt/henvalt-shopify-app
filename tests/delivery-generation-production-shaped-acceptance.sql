@@ -20,11 +20,11 @@ BEGIN
   INSERT INTO henvalt.delivery_requests(
     id,tenant_id,intervention_id,recovery_id,opportunity_id,channel,delivery_mode,
     recipient_reference,message_reference,template_reference,tracking_token,
-    status,provider,idempotency_key,correlation_id
+    status,provider,idempotency_key,correlation_id,provider_claimed_at
   ) VALUES (
     v_request,v_tenant,v_intervention,gen_random_uuid(),gen_random_uuid(),'EMAIL',
     'HENVALT_MANAGED','buyer@example.test',gen_random_uuid(),'recovery-v1',
-    'track-token-1','FAILED','mailersend','legacy-intervention-key',gen_random_uuid()
+    'track-token-1','FAILED','mailersend','legacy-intervention-key',gen_random_uuid(),now()
   );
 
   INSERT INTO henvalt.delivery_attempts(
