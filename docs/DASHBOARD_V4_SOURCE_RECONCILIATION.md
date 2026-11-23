@@ -1,15 +1,15 @@
 # Dashboard Edge Function v4 source reconciliation
 
-**Status:** Source parity restored in Git; not deployed
+**Status:** v4 baseline reconciled and input validation hardened in Git; not deployed
 **Live project:** `ocyplckdojdubyrsxcxa`
 **Function:** `henvalt-merchant-dashboard`
 **Deployed version inspected:** 4
-**Deployed source SHA-256:** `2cb76c18f7914ef75add999fd94d27f123fffbca1dc51394941e0708a072b44e`
+**Deployed baseline source SHA-256:** `2cb76c18f7914ef75add999fd94d27f123fffbca1dc51394941e0708a072b44e`
 **Repository commit:** `2bbc7ed94217acfbdf3ab858124880d2cfe87565`
 
 ## What changed
 
-The repository file `supabase/functions/henvalt-merchant-dashboard/index.ts` was replaced on this branch with the exact `index.ts` content returned by Supabase for deployed version 4.
+The repository file `supabase/functions/henvalt-merchant-dashboard/index.ts` was first reconciled to the `index.ts` content returned by Supabase for deployed version 4. This branch then adds a local pure validator (`validation.ts`) and imports it from the handler; the current branch is therefore a deliberate hardened derivative, not a byte-for-byte copy of the deployed function.
 
 The previous branch copy was missing:
 - `control_plane_revenue_series` invocation and granularity handling;
