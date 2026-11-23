@@ -61,6 +61,12 @@ test("legacy one-off request reset is explicitly identified as incompatible with
   assert.equal(audit.legacy_one_off_reauthorization.resets_failed_request_to_pending, true);
   assert.equal(audit.legacy_one_off_reauthorization.clears_provider_claimed_at, true);
   assert.equal(audit.legacy_one_off_reauthorization.must_be_replaced_or_disabled_for_generation_cutover, true);
+  assert.equal(audit.legacy_one_off_reauthorization.token_rpc_contains_hard_coded_test_allowlist, true);
+  assert.equal(audit.service_role_execution.can_reauthorize_one_off, true);
+  assert.equal(audit.service_role_execution.can_claim_provider_token, true);
+  assert.equal(audit.service_role_execution.can_record_delivery_result, true);
+  assert.equal(audit.service_role_execution.can_process_provider_webhook, true);
+  assert.match(report, /service_role can execute all four relevant RPCs/);
   assert.match(report, /The generation cutover must replace this RPC with a fail-closed response/);
 });
 
