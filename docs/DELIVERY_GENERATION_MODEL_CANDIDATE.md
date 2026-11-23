@@ -260,7 +260,7 @@ The model is intentionally explicit that a provider HTTP response is not a pre-p
 
 ### PostgreSQL acceptance and concurrency coverage
 
-- `tests/delivery-generation-postgres-acceptance.sql`: 41 transaction-level acceptance cases.
+- `tests/delivery-generation-postgres-acceptance.sql`: 42 transaction-level acceptance cases.
 - `tests/delivery-generation-concurrency-postgres.sh`: two independent sessions with distinct retry commands; exactly one generation may be allocated.
 - `tests/delivery-generation-same-command-concurrency-postgres.sh`: two independent sessions with the same retry command; both must receive the same request ID.
 - `tests/delivery-generation-late-acceptance-race-postgres.sh`: late acceptance takes the parent lock first; retry must wait and then be rejected.
