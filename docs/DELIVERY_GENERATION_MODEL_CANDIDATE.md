@@ -152,3 +152,48 @@ The reference-model suite covers these twenty scenarios; database acceptance mus
 6. Full candidate CI and review. Isolated Supabase staging remains a separate release prerequisite.
 
 This document does not authorize production schema changes, Edge Function deployment, active n8n changes, Shopify release, provider credential/scope changes, or email sending.
+
+
+## 11. Read-only live schema and RPC audit — 2026-11-23
+
+A read-only catalog query against the connected production Supabase project confirmed the exact structural constraints. No rows, schema objects, functions, secrets, or settings were changed.
+
+Observed `henvalt.delivery_requests` fields include `id`, `tenant_id`, `intervention_id`, `status`, `idempotency_key`, and `provider_claimed_at`. There is currently no `generation_number`, retry-command key, or durable provider-egress-start timestamp.
+
+Observed indexes/constraints:
+
+- `ux_delivery_request_intervention`: unique `(tenant_id, intervention_id)`. This is the direct one-request-per-intervention blocker.
+- `delivery_requests_tenant_id_idempotency_key_key`: unique `(tenant_id, idempotency_key)`. Preserve this.
+- `delivery_attempts_delivery_request_id_attempt_number_key`: unique `(delivery_request_id, attempt_number)`. Preserve per-request attempt sequencing.
+
+Observed RPC behavior:
+
+- `create_delivery_request(..., p_idempotency_key, ...)` locks the parent `recovery_interventions` row `FOR UPDATE`, returns an existing request for the same idempotency key after checking its parent/context, and otherwise inserts a new `PENDING` request. Its current callers supply one intervention-level key.
+- `authorize_delivery_request(...)` locks the request row, validates parent/context and `PENDING` status, rechecks tenant/flow/consent/suppression/provider prerequisites, and changes the request to `UNKNOWN` to claim it.
+- `get_mailersend_token_for_delivery(...)` performs the one-time `provider_claimed_at IS NULL` claim before resolving and decrypting the provider credential. That timestamp is a credential-claim fence, not proof that the provider HTTP request started.
+- `record_delivery_result(...)` locks the request and records append-only attempt history; terminal request states cannot be casually downgraded.
+
+### Consequences for the concrete candidate migration
+
+The earlier generic suggestion of "add a generation table" is insufficient by itself because the existing unique index still rejects a second request for the same intervention. The candidate implementation must explicitly address this:
+
+1. Add `generation_number integer NOT NULL DEFAULT 1 CHECK (generation_number > 0)` to `delivery_requests`; existing rows are generation 1.
+2. Replace `ux_delivery_request_intervention` with a unique index on `(tenant_id, intervention_id, generation_number)`. Keep the existing tenant/idempotency unique constraint.
+3. Add a tenant/intervention-scoped retry-command ledger (or equivalent nullable unique key) so the same retry command always returns the same generation/request, even after a later generation exists.
+4. Allocate N+1 only inside a transaction that locks the parent intervention first, checks the latest generation's trusted pre-provider failure and RELEASED reservation, and rejects all ambiguous/accepted/unresolved history.
+5. Make every claim and egress authorization verify that the request's generation is still the highest/current generation for that parent.
+6. Add a separate durable provider-egress-start marker. The existing `provider_claimed_at` cannot serve this purpose because credential resolution and envelope authorization occur after that claim but before the provider HTTP request.
+7. Introduce an internal egress-authorization RPC after envelope validation and immediately before provider fetch. It must atomically verify current generation, claim ownership, consent/tenant/interlock/envelope preconditions, and set the egress-start marker. If the marker commits and the process crashes before fetch, the outcome remains ambiguous by design.
+8. Keep the existing delivery-attempt and quota-reservation histories attached to immutable request IDs. A new generation gets a new request and reservation; it never resets an old row.
+
+### Lock-order requirement
+
+The live `create_delivery_request` already locks the intervention before inserting a request. Generation creation should reuse this parent lock. The other mutation paths must be audited and aligned to a single lock order before implementation:
+
+`recovery_intervention → delivery_request → billing_account/reservation → delivery_attempt/event`
+
+In particular, authorization currently locks the request before reading the intervention, and result recording locks the request. A migration that adds parent locking to only one path could introduce lock inversion. Before writing DDL, refactor the relevant candidate RPCs to use a consistent parent-first order and add two-session tests for retry-vs-claim, late-acceptance-vs-generation-create, and provider-result-vs-retry. Read-only lookup paths need not take these locks.
+
+### Current implementation status
+
+The reference-model tests and design document do not implement this migration. No generation column/index, retry-command ledger, egress-start RPC, or n8n generation routing has been added. The next engineering batch is a concrete migration design plus isolated PostgreSQL bootstrap/acceptance tests that model the live unique index and RPC lock order before any candidate production-shaped DDL is proposed.
