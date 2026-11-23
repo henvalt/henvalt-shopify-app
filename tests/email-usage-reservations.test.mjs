@@ -34,3 +34,29 @@ test("reservation and event data remain private to the database owner", () => {
   assert.match(migration, /REVOKE ALL ON henvalt\.email_usage_reservation_events FROM PUBLIC, anon, authenticated, service_role/);
   assert.match(migration, /REVOKE ALL ON FUNCTION henvalt\.sync_email_usage_reservation_after_attempt\(\)[\s\S]*?FROM PUBLIC, anon, authenticated, service_role/);
 });
+
+test("ambiguous HTTP outcomes stay held and only the explicit rejection allowlist releases", () => {
+  const allowlist = migration.match(/NEW\\.provider_status_code IN \\(([^)]+)\\)/)?.[1];
+  assert.ok(allowlist, "definitive provider rejection allowlist must exist");
+  assert.deepEqual(
+    allowlist.split(",").map((value) => Number(value.trim())),
+    [400, 401, 403, 404, 405, 410, 413, 415, 422],
+  );
+  for (const ambiguousCode of [408, 409, 429, 500, 502, 503]) {
+    assert.ok(!allowlist.includes(String(ambiguousCode)), `ambiguous status ${ambiguousCode} must not release quota`);
+  }
+  assert.match(migration, /v_state IN \\('ACCEPTED', 'DELIVERED', 'UNKNOWN'\\)/);
+});
+
+test("provider reconciliation requires MailerSend evidence rather than reservation age", () => {
+  const specification = readFileSync(
+    new URL("../docs/MAILERSEND_AMBIGUOUS_DELIVERY_RECONCILIATION.md", import.meta.url),
+    "utf8",
+  );
+  assert.match(specification, /activity_read/);
+  assert.match(specification, /date_from/);
+  assert.match(specification, /date_to/);
+  assert.match(specification, /complete pagination/);
+  assert.match(specification, /No match, incomplete pagination[\\s\\S]*?Keep RESERVED/);
+  assert.match(specification, /never release an ambiguous reservation merely because it is old/);
+});
