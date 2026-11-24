@@ -260,7 +260,7 @@ BEGIN
       OR (v_account.status='PENDING' AND v_account.test_mode IS TRUE)
     ) THEN
       RAISE EXCEPTION 'HENVALT billing entitlement is not active; delivery denied'
-        USING ERRCODE='42501';
+        USING ERRCODE = '42501';
     END IF;
   END IF;
   RETURN NEW;
