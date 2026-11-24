@@ -25,7 +25,7 @@ test("recovery replay candidate is pinned to the inspected three-workflow system
   assert.equal(contract.recovery_workflow.id, "3GEDoeCA4paXTaDF");
   assert.equal(
     contract.recovery_workflow.inspected_active_version,
-    "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+    "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
   );
   assert.equal(contract.status, "candidate-only; not an exported or deployed n8n workflow");
   assert.equal(contract.production_boundary.active_workflows_modified, false);
