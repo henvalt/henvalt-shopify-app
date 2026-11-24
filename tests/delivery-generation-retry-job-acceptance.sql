@@ -358,6 +358,27 @@ BEGIN
       RAISE EXCEPTION 'durable provider egress fence allowed a second generation';
     END IF;
   END;
+  -- A retry envelope that disappears because a late provider acceptance
+  -- froze the intervention must not overwrite SENDING or release its quota.
+  UPDATE henvalt.recovery_interventions
+     SET status='SENDING',
+         delivery_frozen_at=clock_timestamp(),
+         delivery_freeze_reason='LATE_PROVIDER_ACCEPTANCE'
+   WHERE id=v_intervention AND tenant_id=v_tenant;
+  UPDATE henvalt.background_jobs
+     SET status='CLAIMED',locked_by='retry-envelope-freeze-test',
+         locked_at=clock_timestamp()
+   WHERE id=v_retry_job;
+  v_result := henvalt.fail_delivery_retry_envelope_safely(
+    v_tenant,v_intervention,v_retry_request,2,v_retry_job,'retry-envelope-freeze-test'
+  );
+  IF v_result->>'action'<>'FROZEN' THEN
+    RAISE EXCEPTION 'frozen retry envelope failure was not a no-op: %',v_result;
+  END IF;
+  IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention)<>'SENDING'
+     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_retry_request)<>'RESERVED' THEN
+    RAISE EXCEPTION 'frozen retry envelope failure changed intervention or quota state';
+  END IF;
 END;
 $tests$;
 
