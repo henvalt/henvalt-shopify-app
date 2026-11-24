@@ -37,6 +37,12 @@ DECLARE
   v_request_invalid uuid := gen_random_uuid();
   v_retry_command_invalid uuid := gen_random_uuid();
   v_retry_job_invalid uuid := gen_random_uuid();
+
+  v_tenant_stale uuid := gen_random_uuid();
+  v_intervention_stale uuid := gen_random_uuid();
+  v_request_stale uuid := gen_random_uuid();
+  v_retry_command_stale uuid := gen_random_uuid();
+  v_retry_job_stale uuid := gen_random_uuid();
 BEGIN
   PERFORM set_config('request.jwt.claim.role','service_role',true);
 
@@ -433,6 +439,62 @@ BEGIN
   IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention_invalid)<>'FAILED'
      OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_invalid)<>'RELEASED' THEN
     RAISE EXCEPTION 'invalid retry envelope did not resolve intervention and release its reservation';
+  END IF;
+
+  -- A persisted attempt is contradictory evidence even if the request still
+  -- appears PENDING and has no egress marker. Never release quota or fail the
+  -- intervention from the missing-envelope branch in that state.
+  INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
+  VALUES(v_intervention_stale,v_tenant_stale,gen_random_uuid(),'EMAIL','SENDING');
+  INSERT INTO henvalt.delivery_requests(
+    id,tenant_id,intervention_id,channel,delivery_mode,recipient_reference,
+    status,provider,idempotency_key,correlation_id,generation_number
+  ) VALUES(
+    v_request_stale,v_tenant_stale,v_intervention_stale,'EMAIL','HENVALT_MANAGED',
+    'stale-envelope@example.test','PENDING','mailersend','stale-envelope-key',
+    gen_random_uuid(),2
+  );
+  INSERT INTO henvalt.delivery_retry_commands(
+    tenant_id,intervention_id,retry_command_id,generation_number,delivery_request_id
+  ) VALUES(
+    v_tenant_stale,v_intervention_stale,v_retry_command_stale,2,v_request_stale
+  );
+  INSERT INTO henvalt.background_jobs(
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
+  ) VALUES(
+    v_retry_job_stale,v_tenant_stale,'execute_delivery_retry_generation',
+    jsonb_build_object(
+      'tenant_id',v_tenant_stale,'intervention_id',v_intervention_stale,
+      'delivery_request_id',v_request_stale,'generation_number',2
+    ),
+    'CLAIMED','retry-envelope-stale-test',clock_timestamp()
+  );
+  INSERT INTO henvalt.delivery_retry_jobs(
+    tenant_id,intervention_id,retry_command_id,delivery_request_id,job_id
+  ) VALUES(
+    v_tenant_stale,v_intervention_stale,v_retry_command_stale,
+    v_request_stale,v_retry_job_stale
+  );
+  INSERT INTO henvalt.email_usage_reservations(
+    tenant_id,delivery_request_id,cycle_start,status,status_reason
+  ) VALUES(v_tenant_stale,v_request_stale,clock_timestamp(),'RESERVED','DELIVERY_CLAIMED');
+  INSERT INTO henvalt.delivery_attempts(
+    tenant_id,delivery_request_id,attempt_number,state,provider_status_code,provider_response
+  ) VALUES(
+    v_tenant_stale,v_request_stale,1,'FAILED',503,
+    '{"henvalt_delivery_stage":"provider_response","error":"contradictory_attempt"}'::jsonb
+  );
+
+  v_result := henvalt.fail_delivery_retry_envelope_safely(
+    v_tenant_stale,v_intervention_stale,v_request_stale,2,
+    v_retry_job_stale,'retry-envelope-stale-test'
+  );
+  IF v_result->>'action'<>'STALE' THEN
+    RAISE EXCEPTION 'retry envelope with prior attempt was not treated as stale: %',v_result;
+  END IF;
+  IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention_stale)<>'SENDING'
+     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_stale)<>'RESERVED' THEN
+    RAISE EXCEPTION 'stale retry envelope changed intervention or quota state';
   END IF;
 END;
 $tests$;
