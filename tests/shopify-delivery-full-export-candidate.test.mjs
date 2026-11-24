@@ -108,12 +108,21 @@ test("pre-provider Edge Function failures are classified as definitive non-egres
     (name) => name === "Classify Result"
       ? { item: { json: classifier } }
       : name === "Record Delivery Result"
-        ? { item: { json: { attempt_id: "attempt-0001" } } }
+        ? { item: { json: { body: '"550e8400-e29b-41d4-a716-446655440000"' } } }
         : { item: { json: {} } },
     {}
   );
   assert.equal(response.json.body.pre_provider_failure, true);
-  assert.equal(response.json.body.delivery_attempt_id, "attempt-0001");
+  assert.equal(response.json.body.delivery_attempt_id, "550e8400-e29b-41d4-a716-446655440000");
+  const invalidResponse = new Function("$", "$json", nodes.get("Build Delivery Response").parameters.jsCode)(
+    (name) => name === "Classify Result"
+      ? { item: { json: classifier } }
+      : name === "Record Delivery Result"
+        ? { item: { json: { body: "not-a-uuid" } } }
+        : { item: { json: {} } },
+    {}
+  );
+  assert.equal(invalidResponse.json.body.delivery_attempt_id, null);
 });
 
 test("candidate webhooks use isolated path prefixes and graph connections resolve", () => {
