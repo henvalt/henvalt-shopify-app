@@ -116,9 +116,19 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
             p_generation_number: retryGenerationNumber,
           }),
         });
-        if (!leaseResponse.ok) return preProviderJson(409, "delivery_retry_job_claim_invalid");
+        if (!leaseResponse.ok) return json(409, {
+          error: "delivery_retry_job_claim_invalid",
+          state: "REJECTED",
+          failure_category: "RETRY_JOB_CLAIM_LOST",
+          retry_job_claim_lost: true,
+        });
         const leaseRenewed = await leaseResponse.json().catch(() => false);
-        if (leaseRenewed !== true) return preProviderJson(409, "delivery_retry_job_claim_invalid");
+        if (leaseRenewed !== true) return json(409, {
+          error: "delivery_retry_job_claim_invalid",
+          state: "REJECTED",
+          failure_category: "RETRY_JOB_CLAIM_LOST",
+          retry_job_claim_lost: true,
+        });
       }
 
       // This RPC is the credential-release boundary. A closed/missing
@@ -216,9 +226,25 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
         },
         body: JSON.stringify(egressFenceBody),
       });
-      if (!egressFenceResponse.ok) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
+      if (!egressFenceResponse.ok) {
+        if (retryDelivery) return json(409, {
+          error: "delivery_retry_job_claim_invalid",
+          state: "REJECTED",
+          failure_category: "RETRY_JOB_CLAIM_LOST",
+          retry_job_claim_lost: true,
+        });
+        return preProviderJson(409, "delivery_provider_egress_fence_rejected");
+      }
       const egressFenceStarted = await egressFenceResponse.json().catch(() => false);
-      if (egressFenceStarted !== true) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
+      if (egressFenceStarted !== true) {
+        if (retryDelivery) return json(409, {
+          error: "delivery_retry_job_claim_invalid",
+          state: "REJECTED",
+          failure_category: "RETRY_JOB_CLAIM_LOST",
+          retry_job_claim_lost: true,
+        });
+        return preProviderJson(409, "delivery_provider_egress_fence_rejected");
+      }
 
       let providerResponse;
       try {
