@@ -59,7 +59,7 @@ BEGIN
     v_request,'mailersend','parent-first-message',202,'DELIVERED',NULL,false,'{}'::jsonb
   );
   IF (henvalt.process_mailersend_webhook_event(
-    jsonb_build_object('tenant_id',v_tenant,'message_id','parent-first-message'),'eA=='
+    jsonb_build_object('tenant_id',v_tenant,'message_id','parent-first-message','type','activity.sent'),'eA=='
   )->>'matched')<>'true' THEN
     RAISE EXCEPTION 'webhook fixture call failed';
   END IF;
