@@ -386,6 +386,10 @@ BEGIN
      AND generation_number=p_generation_number
    FOR UPDATE;
   IF NOT FOUND OR v_request.status <> 'PENDING'
+     OR v_request.channel <> 'EMAIL'
+     OR lower(COALESCE(v_request.provider,'')) <> 'mailersend'
+     OR v_request.tracking_token IS NULL
+     OR v_request.provider_claimed_at IS NOT NULL
      OR v_request.provider_egress_started_at IS NOT NULL
      OR EXISTS (
        SELECT 1 FROM henvalt.delivery_requests newer
@@ -429,6 +433,7 @@ BEGIN
   WHERE m.id=v_request.message_reference
     AND m.tenant_id=p_tenant_id
     AND m.intervention_id=p_intervention_id
+    AND m.channel=v_request.channel
     AND m.recipient=v_request.recipient_reference
     AND m.subject IS NOT NULL
     AND NULLIF(btrim(m.body),'') IS NOT NULL;
