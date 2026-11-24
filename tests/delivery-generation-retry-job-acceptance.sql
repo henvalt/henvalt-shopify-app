@@ -577,6 +577,9 @@ BEGIN
 
   -- The canonical PENDING -> UNKNOWN authorization transition must reuse the
   -- existing RESERVED hold rather than insert a second quota reservation.
+  INSERT INTO henvalt.billing_accounts(
+    tenant_id,status,test_mode,activated_at,monthly_email_limit
+  ) VALUES(v_tenant_resume,'ACTIVE',false,clock_timestamp(),1000);
   UPDATE henvalt.delivery_requests
      SET status='UNKNOWN'
    WHERE id=v_request_resume AND tenant_id=v_tenant_resume AND status='PENDING';
