@@ -362,6 +362,8 @@ BEGIN
      OR v_job.job_type <> 'execute_delivery_retry_generation'
      OR v_job.status <> 'CLAIMED'
      OR v_job.locked_by IS DISTINCT FROM p_worker_id
+     OR v_job.locked_at IS NULL
+     OR v_job.locked_at < clock_timestamp() - interval '900 seconds'
      OR v_job.tenant_id IS DISTINCT FROM p_tenant_id
      OR v_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
      OR v_job.payload->>'delivery_request_id' IS DISTINCT FROM p_delivery_request_id::text
@@ -445,6 +447,99 @@ BEGIN
   END IF;
 END;
 $function$;
+
+
+-- Final provider-egress ownership check for a queued retry generation.
+-- The loader check is not sufficient on its own: a worker can lose its
+-- 15-minute background-job lease after loading the immutable envelope.
+-- Lock order remains intervention -> delivery request -> background job.
+CREATE OR REPLACE FUNCTION henvalt.mark_mailersend_provider_egress_started(
+  p_tenant_id uuid,
+  p_delivery_request_id uuid,
+  p_retry_job_id uuid,
+  p_retry_worker_id text,
+  p_generation_number integer
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, auth, pg_temp
+AS $function$
+DECLARE
+  v_intervention_id uuid;
+  v_intervention henvalt.recovery_interventions%ROWTYPE;
+  v_request henvalt.delivery_requests%ROWTYPE;
+  v_job henvalt.background_jobs%ROWTYPE;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
+  END IF;
+  IF p_tenant_id IS NULL OR p_delivery_request_id IS NULL
+     OR p_retry_job_id IS NULL OR NULLIF(btrim(p_retry_worker_id),'') IS NULL
+     OR p_generation_number NOT IN (2,3) THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_EGRESS_IDENTITY_REQUIRED' USING ERRCODE='22023';
+  END IF;
+
+  SELECT dr.intervention_id INTO v_intervention_id
+    FROM henvalt.delivery_requests dr
+   WHERE dr.id=p_delivery_request_id AND dr.tenant_id=p_tenant_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_REQUEST_NOT_FOUND'; END IF;
+
+  SELECT * INTO v_intervention
+    FROM henvalt.recovery_interventions ri
+   WHERE ri.id=v_intervention_id AND ri.tenant_id=p_tenant_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_INTERVENTION_NOT_FOUND'; END IF;
+
+  SELECT * INTO v_request
+    FROM henvalt.delivery_requests dr
+   WHERE dr.id=p_delivery_request_id AND dr.tenant_id=p_tenant_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_REQUEST_NOT_FOUND'; END IF;
+
+  SELECT * INTO v_job
+    FROM henvalt.background_jobs j
+   WHERE j.id=p_retry_job_id
+   FOR UPDATE;
+  IF NOT FOUND
+     OR v_job.job_type <> 'execute_delivery_retry_generation'
+     OR v_job.status <> 'CLAIMED'
+     OR v_job.locked_by IS DISTINCT FROM p_retry_worker_id
+     OR v_job.locked_at IS NULL
+     OR v_job.locked_at < clock_timestamp() - interval '900 seconds'
+     OR v_job.tenant_id IS DISTINCT FROM p_tenant_id
+     OR v_job.payload->>'tenant_id' IS DISTINCT FROM p_tenant_id::text
+     OR v_job.payload->>'intervention_id' IS DISTINCT FROM v_intervention_id::text
+     OR v_job.payload->>'delivery_request_id' IS DISTINCT FROM p_delivery_request_id::text
+     OR (v_job.payload->>'generation_number')::integer IS DISTINCT FROM p_generation_number
+     OR NOT EXISTS (
+       SELECT 1 FROM henvalt.delivery_retry_jobs rj
+        WHERE rj.tenant_id=p_tenant_id
+          AND rj.intervention_id=v_intervention_id
+          AND rj.delivery_request_id=p_delivery_request_id
+          AND rj.job_id=p_retry_job_id
+     ) THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_INVALID' USING ERRCODE='55000';
+  END IF;
+
+  IF v_request.generation_number IS DISTINCT FROM p_generation_number THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_GENERATION_STALE' USING ERRCODE='55000';
+  END IF;
+
+  -- Reuse the canonical two-argument fence after validating retry ownership.
+  -- It rechecks parent/request state, latest generation and global send gate.
+  RETURN henvalt.mark_mailersend_provider_egress_started(
+    p_tenant_id,p_delivery_request_id
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.mark_mailersend_provider_egress_started(uuid,uuid,uuid,text,integer)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.mark_mailersend_provider_egress_started(uuid,uuid,uuid,text,integer)
+  TO service_role;
+
+COMMENT ON FUNCTION henvalt.mark_mailersend_provider_egress_started(uuid,uuid,uuid,text,integer) IS
+  'Retry-only final egress fence. Revalidates exact tenant/request/job/worker/generation mapping and the 900-second job lease under intervention -> request -> job locks before delegating to the canonical provider egress fence.';
 
 REVOKE ALL ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uuid,uuid,text)
   FROM PUBLIC, anon, authenticated;
