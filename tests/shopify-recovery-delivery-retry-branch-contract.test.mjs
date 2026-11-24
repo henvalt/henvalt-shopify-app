@@ -363,3 +363,57 @@ test("delivery candidate propagates the exact recorded attempt and trusted pre-p
   assert.equal(classifyRecovery.pre_provider_failure, true);
   assert.equal(classifyRecovery.reason, "PRE_PROVIDER_FAILURE");
 });
+
+
+test("recovery retry payload carries exact job lease identity through delivery normalization", () => {
+  const { workflow: recovery } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const nodeCode = (workflow, name) => workflow.nodes.find((node) => node.name === name).parameters.jsCode;
+  const jobId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const tenantId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const interventionId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+  const requestId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+  const workerId = "retry-worker-contract";
+
+  const payload = new Function("$", "$json", nodeCode(recovery, "Build Delivery Retry Payload"))(
+    (name) => ({ item: { json: {
+      job_id: jobId,
+      tenant_id: tenantId,
+      intervention_id: interventionId,
+      generation_number: 2,
+      worker_id: workerId,
+    } } }),
+    {
+      delivery_request_id: requestId,
+      message_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      tenant_id: tenantId,
+      intervention_id: interventionId,
+      recipient: "retry@example.test",
+      subject: "Stored subject",
+      html_body: "<p>Stored body</p>",
+      text_body: "Stored body",
+      correlation_id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      idempotency_key: "deliver:" + interventionId + ":g2",
+    },
+  ).json;
+
+  assert.equal(payload.delivery_generation_retry, true);
+  assert.equal(payload.retry_job_id, jobId);
+  assert.equal(payload.retry_worker_id, workerId);
+  assert.equal(payload.retry_generation_number, 2);
+  assert.equal(payload.metadata.delivery_generation_retry, true);
+
+  const normalized = new Function("$input", "$json", nodeCode(delivery, "Validate & Normalize"))(
+    { item: { json: payload } },
+    {},
+  );
+  assert.equal(normalized.delivery_generation_retry, true);
+  assert.equal(normalized.retry_job_id, jobId);
+  assert.equal(normalized.retry_worker_id, workerId);
+  assert.equal(normalized.retry_generation_number, 2);
+  assert.equal(normalized.delivery_request_id, requestId);
+});
