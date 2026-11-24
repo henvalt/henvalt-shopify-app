@@ -25,6 +25,12 @@ DECLARE
   v_job_max uuid := gen_random_uuid();
   v_request_max uuid := gen_random_uuid();
   v_attempt_max uuid;
+
+  v_tenant_unmarked uuid := gen_random_uuid();
+  v_intervention_unmarked uuid := gen_random_uuid();
+  v_job_unmarked uuid := gen_random_uuid();
+  v_request_unmarked uuid := gen_random_uuid();
+  v_attempt_unmarked uuid;
 BEGIN
   PERFORM set_config('request.jwt.claim.role','service_role',true);
 
@@ -202,6 +208,52 @@ BEGIN
   END IF;
   IF (SELECT count(*) FROM henvalt.delivery_requests WHERE intervention_id=v_intervention_amb)<>1 THEN
     RAISE EXCEPTION 'ambiguous provider outcome created another generation';
+  END IF;
+
+  -- Missing provider-stage evidence must fail closed even if a reservation
+  -- happens to be released and its event ledger otherwise looks retryable.
+  INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
+  VALUES(v_intervention_unmarked,v_tenant_unmarked,gen_random_uuid(),'EMAIL','FAILED');
+  INSERT INTO henvalt.delivery_requests(
+    id,tenant_id,intervention_id,channel,delivery_mode,recipient_reference,
+    status,provider,idempotency_key,correlation_id,generation_number
+  ) VALUES(
+    v_request_unmarked,v_tenant_unmarked,v_intervention_unmarked,'EMAIL','HENVALT_MANAGED',
+    'unmarked@example.test','FAILED','mailersend','unmarked-stage-key',gen_random_uuid(),1
+  );
+  INSERT INTO henvalt.delivery_attempts(
+    tenant_id,delivery_request_id,attempt_number,state,provider_status_code,provider_response
+  ) VALUES(
+    v_tenant_unmarked,v_request_unmarked,1,'FAILED',409,
+    '{"error":"missing_server_delivery_stage"}'::jsonb
+  ) RETURNING id INTO v_attempt_unmarked;
+  INSERT INTO henvalt.email_usage_reservations(
+    tenant_id,delivery_request_id,status,status_reason,last_attempt_id
+  ) VALUES(v_tenant_unmarked,v_request_unmarked,'RELEASED','PRE_PROVIDER_FAILURE',v_attempt_unmarked);
+  INSERT INTO henvalt.email_usage_reservation_events(
+    reservation_id,tenant_id,delivery_request_id,event_type,previous_status,
+    new_status,delivery_attempt_id,reason
+  )
+  SELECT id,v_tenant_unmarked,v_request_unmarked,'RELEASED','RESERVED','RELEASED',
+         v_attempt_unmarked,'PRE_PROVIDER_FAILURE'
+    FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_unmarked;
+  INSERT INTO henvalt.background_jobs(
+    id,tenant_id,job_type,payload,status,locked_by
+  ) VALUES(
+    v_job_unmarked,v_tenant_unmarked,'execute_intervention',
+    jsonb_build_object('tenant_id',v_tenant_unmarked,'intervention_id',v_intervention_unmarked),
+    'CLAIMED','recovery-worker-unmarked'
+  );
+  v_result := henvalt.enqueue_delivery_retry_generation_job(
+    v_intervention_unmarked,v_job_unmarked,'recovery-worker-unmarked',
+    v_request_unmarked,v_attempt_unmarked
+  );
+  IF v_result->>'action'<>'CONTINUE_NORMAL' THEN
+    RAISE EXCEPTION 'missing provider-stage marker incorrectly qualified for retry: %',v_result;
+  END IF;
+  IF (SELECT count(*) FROM henvalt.delivery_requests WHERE intervention_id=v_intervention_unmarked)<>1
+     OR (SELECT count(*) FROM henvalt.delivery_retry_jobs WHERE intervention_id=v_intervention_unmarked)<>0 THEN
+    RAISE EXCEPTION 'missing provider-stage marker created a retry generation or job';
   END IF;
 
   -- Generation 3 is the hard ceiling. A further pre-provider failure is
