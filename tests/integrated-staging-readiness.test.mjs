@@ -89,7 +89,7 @@ test("the isolated race matrix contains both retry-vs-late-acceptance orderings 
 
 test("email reservation and parent-first lock-order acceptance are present in the integrated gate", () => {
   assert.match(reservationAcceptance, /reservation/);
-  assert.match(reservationAcceptance, /concurrent|concurrency/i);
+  assert.match(reservationAcceptance, /reservation was not counted against the final quota slot/);\n  assert.match(reservationAcceptance, /late acceptance did not consume released reservation/);\n  assert.match(reservationAcceptance, /ambiguous provider result did not consume reservation/);
   assert.match(lifecycleAcceptance, /intervention/);
   assert.match(lifecycleAcceptance, /delivery_requests|delivery request/i);
   assert.match(lifecycleAcceptance, /delivery lifecycle parent-first lock order acceptance passed/);
