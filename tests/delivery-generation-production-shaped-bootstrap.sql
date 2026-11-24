@@ -238,6 +238,38 @@ ALTER TABLE henvalt.email_usage_reservations
 ALTER TABLE henvalt.email_usage_reservation_events
   ADD COLUMN provider_status_code integer;
 
+-- Minimal production-shaped billing entitlement trigger. The retry migration
+-- source-patches this function to reuse an existing RESERVED hold only after
+-- the account's ACTIVE/test-mode entitlement check has passed.
+CREATE OR REPLACE FUNCTION henvalt.enforce_billing_entitlement_before_delivery()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, pg_temp
+AS $function$
+DECLARE
+  v_account henvalt.billing_accounts%ROWTYPE;
+BEGIN
+  IF OLD.status='PENDING' AND NEW.status='UNKNOWN' THEN
+    SELECT * INTO v_account
+      FROM henvalt.billing_accounts
+     WHERE tenant_id=NEW.tenant_id
+     FOR UPDATE;
+    IF NOT FOUND OR NOT (
+      v_account.status='ACTIVE'
+      OR (v_account.status='PENDING' AND v_account.test_mode IS TRUE)
+    ) THEN
+      RAISE EXCEPTION 'HENVALT billing entitlement is not active; delivery denied'
+        USING ERRCODE='42501';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$function$;
+CREATE TRIGGER enforce_billing_entitlement_before_delivery
+BEFORE UPDATE OF status ON henvalt.delivery_requests
+FOR EACH ROW EXECUTE FUNCTION henvalt.enforce_billing_entitlement_before_delivery();
+
 -- Minimal production interlock fixture required by the egress-fence migration.
 CREATE TABLE henvalt.provider_send_control (
   control_key text PRIMARY KEY CHECK(control_key='global'),
