@@ -366,10 +366,10 @@ BEGIN
   END;
   -- A retry envelope that disappears because a late provider acceptance
   -- froze the intervention must not overwrite SENDING or release its quota.
+  -- This parent was already frozen above for the envelope-loader test.
+  -- Restore only its lifecycle status; never rewrite the immutable freeze marker.
   UPDATE henvalt.recovery_interventions
-     SET status='SENDING',
-         delivery_frozen_at=clock_timestamp(),
-         delivery_freeze_reason='LATE_PROVIDER_ACCEPTANCE'
+     SET status='SENDING'
    WHERE id=v_intervention AND tenant_id=v_tenant;
   UPDATE henvalt.background_jobs
      SET status='CLAIMED',locked_by='retry-envelope-freeze-test',
