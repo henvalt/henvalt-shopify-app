@@ -603,6 +603,38 @@ BEGIN
   IF (SELECT status::text FROM henvalt.delivery_requests WHERE id=v_request_resume)<>'PENDING' THEN
     RAISE EXCEPTION 'inactive billing entitlement changed retry request state';
   END IF;
+
+  -- Reusing a reserved hold must also preserve the live monetary usage cap.
+  UPDATE henvalt.billing_accounts
+     SET status='ACTIVE',usage_cap_amount=0
+   WHERE tenant_id=v_tenant_resume;
+  BEGIN
+    UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+     WHERE id=v_request_resume AND tenant_id=v_tenant_resume;
+    RAISE EXCEPTION 'retry quota reuse bypassed monetary usage cap';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  IF (SELECT status::text FROM henvalt.delivery_requests WHERE id=v_request_resume)<>'PENDING' THEN
+    RAISE EXCEPTION 'monetary usage cap failure changed retry request state';
+  END IF;
+
+  -- And it must not bypass the tenant's monthly email ceiling.
+  UPDATE henvalt.billing_accounts
+     SET usage_cap_amount=100000,monthly_email_limit=1
+   WHERE tenant_id=v_tenant_resume;
+  INSERT INTO henvalt.email_usage_measurements(tenant_id,delivery_attempt_id)
+  VALUES(v_tenant_resume,gen_random_uuid());
+  BEGIN
+    UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+     WHERE id=v_request_resume AND tenant_id=v_tenant_resume;
+    RAISE EXCEPTION 'retry quota reuse bypassed monthly email limit';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  IF (SELECT status::text FROM henvalt.delivery_requests WHERE id=v_request_resume)<>'PENDING' THEN
+    RAISE EXCEPTION 'monthly email limit failure changed retry request state';
+  END IF;
 END;
 $tests$;
 
