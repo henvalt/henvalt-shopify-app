@@ -257,6 +257,7 @@ CREATE OR REPLACE FUNCTION henvalt.load_delivery_retry_envelope(
   recipient text,
   subject text,
   html_body text,
+  text_body text,
   tracking_token text,
   idempotency_key text,
   correlation_id uuid
@@ -339,7 +340,10 @@ BEGIN
     v_request.delivery_mode::text,
     v_request.recipient_reference,
     m.subject,
-    m.body,
+    henvalt.render_sender_identity_footer(p_tenant_id,m.body),
+    henvalt.render_email_plain_text(
+      henvalt.render_sender_identity_footer(p_tenant_id,m.body)
+    ),
     v_request.tracking_token,
     v_request.idempotency_key,
     v_request.correlation_id
