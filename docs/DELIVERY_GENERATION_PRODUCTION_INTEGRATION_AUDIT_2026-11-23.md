@@ -306,3 +306,47 @@ The inactive no-send candidate builders now contain the missing graph contract:
 - The recovery candidate contains 74 nodes (46-node inspected baseline plus the replay and retry branches). The billing staging candidate shares the same graph and now has its node-count contract updated.
 
 The graph changes are still only in the generated no-send candidate. The active `HENVALT_RECOVERY` and `HENVALT_DELIVERY` workflows have not been updated or published. The delivery candidate intentionally cannot send provider email.
+
+
+## Re-verified live cutover blockers — 2026-11-24
+
+A second read-only inspection was performed against the connected Supabase and n8n instances after the retry-generation candidate was added. This section records live state, not candidate claims.
+
+### Live Supabase database
+
+- Project: `ocyplckdojdubyrsxcxa` (`henvalt`), status `ACTIVE_HEALTHY`, PostgreSQL 17.6.1.166.
+- The production migration history still ends at `20261114174204` (`fix_mailersend_token_browse_case_expression`).
+- Live `henvalt.delivery_requests` does not contain `generation_number` or `provider_egress_started_at`.
+- The live unique index `ux_delivery_request_intervention` still enforces one request per `(tenant_id, intervention_id)`.
+- No production `delivery_retry_jobs`, generation incident table, or generation retry RPCs are present in the inspected migration/schema state.
+- The connected Supabase project has no development branches. The inactive legacy project is not treated as staging and was not restored.
+
+These observations independently confirm that migrations 002/003/006/007 and 202611240001 remain candidate-only. Do not apply them to this live project as isolated changes.
+
+### Live Edge Function
+
+- `henvalt-mailersend-delivery` remains deployed at version 1, with gateway JWT verification enabled.
+- Its deployed source releases the tenant MailerSend token through `get_mailersend_token_for_delivery` and then calls the MailerSend HTTP endpoint directly.
+- The deployed source does not call `assert_mailersend_delivery_envelope` or `mark_mailersend_provider_egress_started`.
+- The repository candidate handler does call both checks in order before provider egress, but its deployment artifact and dependent database functions are not live.
+
+### Live n8n workflows
+
+The active versions were read again from the connected n8n instance and matched the sanitized source fixtures used by the candidate builders:
+
+| Workflow | Active version | Live nodes |
+|---|---|---:|
+| HENVALT_INGEST | `6368d539-708f-494a-8be8-b9601d0e8607` | 51 |
+| HENVALT_RECOVERY | `3fd9fca9-a83f-4c2a-8618-24496a695eb8` | 46 |
+| HENVALT_DELIVERY | `621ae6ce-a006-4fed-a70e-acf774c360fb` | 62 |
+
+- All three live workflows remain active and unchanged.
+- The active recovery workflow still routes ordinary delivery failures through the legacy `Classify Delivery Failure` logic; it does not yet carry the generation-aware retry job branch.
+- The active delivery response does not currently return the exact delivery-attempt ID and trusted pre-provider marker required by the new recovery classifier.
+- The candidate recovery and delivery builders are pinned to the exact active versions above. Their generated exports remain inactive, no-send candidates; they are not published to n8n.
+
+### Release implication
+
+The retry-generation work is now covered by production-shaped PostgreSQL 17 acceptance, mocked Edge Function provider-boundary tests, generated recovery graph execution tests, and a two-order PostgreSQL lock-race acceptance. This is stronger candidate evidence, not production readiness.
+
+The remaining mandatory gate is a distinct isolated Supabase staging environment with matching Edge Function secrets/configuration and isolated n8n workflow credentials. The live project and live workflows remain untouched until the complete coordinated cutover is approved.
