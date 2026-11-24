@@ -954,14 +954,14 @@ BEGIN
   END IF;
   v_patched := regexp_replace(
     v_definition,
-    'RETURN NEW;\\s+END;\\s+\\$function\\$',
-    E'-- HENVALT_RETRY_RESERVED_HOLD_REUSE\\n' ||
-    E'  IF OLD.status = ''PENDING'' AND NEW.status = ''UNKNOWN''\\n' ||
-    E'     AND NEW.provider_egress_started_at IS NULL\\n' ||
-    E'     AND EXISTS (SELECT 1 FROM henvalt.email_usage_reservations eur WHERE eur.tenant_id=NEW.tenant_id AND eur.delivery_request_id=NEW.id AND eur.status=''RESERVED'')\\n' ||
-    E'     AND NOT EXISTS (SELECT 1 FROM henvalt.delivery_attempts da WHERE da.tenant_id=NEW.tenant_id AND da.delivery_request_id=NEW.id)\\n' ||
-    E'     AND NOT EXISTS (SELECT 1 FROM henvalt.provider_events pe WHERE pe.tenant_id=NEW.tenant_id AND pe.delivery_request_id=NEW.id) THEN\\n' ||
-    E'    RETURN NEW;\\n  END IF;\\n\\n  RETURN NEW;\\nEND;\\n$function$',
+    'RETURN NEW;\s+END;\s+\$function\$',
+    E'-- HENVALT_RETRY_RESERVED_HOLD_REUSE\n' ||
+    E'  IF OLD.status = ''PENDING'' AND NEW.status = ''UNKNOWN''\n' ||
+    E'     AND NEW.provider_egress_started_at IS NULL\n' ||
+    E'     AND EXISTS (SELECT 1 FROM henvalt.email_usage_reservations eur WHERE eur.tenant_id=NEW.tenant_id AND eur.delivery_request_id=NEW.id AND eur.status=''RESERVED'')\n' ||
+    E'     AND NOT EXISTS (SELECT 1 FROM henvalt.delivery_attempts da WHERE da.tenant_id=NEW.tenant_id AND da.delivery_request_id=NEW.id)\n' ||
+    E'     AND NOT EXISTS (SELECT 1 FROM henvalt.provider_events pe WHERE pe.tenant_id=NEW.tenant_id AND pe.delivery_request_id=NEW.id) THEN\n' ||
+    E'    RETURN NEW;\n  END IF;\n\n  RETURN NEW;\nEND;\n$function$',
     'n'
   );
   IF v_patched = v_definition
