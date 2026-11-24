@@ -587,6 +587,22 @@ BEGIN
      OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_resume)<>'RESERVED' THEN
     RAISE EXCEPTION 'retry authorization duplicated or released its existing quota hold';
   END IF;
+
+  -- Reusing a hold must not bypass a later billing cancellation.
+  UPDATE henvalt.billing_accounts SET status='CANCELLED'
+   WHERE tenant_id=v_tenant_resume;
+  UPDATE henvalt.delivery_requests SET status='PENDING'
+   WHERE id=v_request_resume AND tenant_id=v_tenant_resume;
+  BEGIN
+    UPDATE henvalt.delivery_requests SET status='UNKNOWN'
+     WHERE id=v_request_resume AND tenant_id=v_tenant_resume;
+    RAISE EXCEPTION 'retry quota reuse bypassed inactive billing entitlement';
+  EXCEPTION WHEN insufficient_privilege THEN
+    NULL;
+  END;
+  IF (SELECT status::text FROM henvalt.delivery_requests WHERE id=v_request_resume)<>'PENDING' THEN
+    RAISE EXCEPTION 'inactive billing entitlement changed retry request state';
+  END IF;
 END;
 $tests$;
 
