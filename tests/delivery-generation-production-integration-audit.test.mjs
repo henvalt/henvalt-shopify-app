@@ -182,6 +182,7 @@ test("pre-provider delivery retry creates a dedicated bounded generation job wit
   assert.match(retryJobMigration, /enqueue_delivery_retry_generation_job/);
   assert.match(retryJobMigration, /execute_delivery_retry_generation/);
   assert.match(retryJobMigration, /CREATE TABLE IF NOT EXISTS henvalt\.delivery_retry_jobs/);
+  assert.match(retryJobMigration, /delivery_retry_jobs_append_only/);
   assert.match(retryJobMigration, /provider_response->>'henvalt_delivery_stage' <> 'pre_provider'/);
   assert.match(retryJobMigration, /v_previous\.generation_number >= 3/);
   assert.match(retryJobMigration, /load_delivery_retry_envelope/);
@@ -198,6 +199,7 @@ test("pre-provider delivery retry creates a dedicated bounded generation job wit
   assert.match(retryJobAcceptance, /expected RETRY_QUEUED/);
   assert.match(retryJobAcceptance, /source intervention job was not completed atomically/);
   assert.match(retryJobAcceptance, /immutable message envelope/);
+  assert.match(retryJobAcceptance, /append-only retry job mapping missing/);
   assert.match(retryJobAcceptance, /wrong worker loaded a delivery retry envelope/);
   assert.match(retryJobAcceptance, /mismatched attempt identity was accepted/);
   assert.match(retryJobAcceptance, /frozen intervention exposed a retry envelope/);
