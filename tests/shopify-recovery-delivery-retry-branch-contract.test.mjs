@@ -116,10 +116,62 @@ test("acceptance proves ambiguous outcomes do not retry and generation three is 
   assert.match(acceptance, /immutable message envelope/);
 });
 
-
 test("retry job terminal outcomes preserve fair replay scheduling in the existing worker", () => {
   assert.ok(recoveryBuilder.includes(`c["Resume Delivery Retry Decision?"] = { main: [[edge("Is Delivery Retry Generation Job?")], [edge("Claim Shopify Replay Job")]] };`));
   assert.ok(recoveryBuilder.includes(`c["Delivery Retry Enqueued?"] = { main: [[edge("Claim Shopify Replay Job")], [edge("Complete Job")]] };`));
   assert.ok(recoveryBuilder.includes(`c["Retry Delivery Generation Enqueue Job"] = { main: [[edge("Claim Shopify Replay Job")]`));
   assert.equal(contract.workflow_count, 3);
+});
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { buildRecoveryCandidate } from "../n8n/shopify-recovery-candidate-builder.mjs";
+
+const recoveryFixture = JSON.parse(readFileSync(
+  "n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json",
+  "utf8",
+));
+const replayManifest = JSON.parse(readFileSync(
+  "n8n/shopify-recovery-replay-graph-patch.json",
+  "utf8",
+));
+const replayNormalizer = readFileSync(
+  "n8n/shopify-replay-claim-normalizer-node-candidate.js",
+  "utf8",
+);
+
+test("generated recovery graph routes retry generations through the existing delivery subworkflow", () => {
+  const { workflow, audit } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const nodes = new Map(workflow.nodes.map((node) => [node.name, node]));
+  const target = (name, output = 0) => workflow.connections[name]?.main?.[output]?.[0]?.node ?? null;
+
+  assert.equal(workflow.nodes.length, contract.target.candidate_node_count);
+  assert.equal(workflow.active, false);
+  assert.equal(workflow.settings.availableInMCP, false);
+  assert.equal(audit.delivery_retry_generation_branch, true);
+  assert.equal(nodes.get("Claim Due Job").parameters.query.includes("'execute_delivery_retry_generation'"), true);
+  assert.equal(target("Job Claimed?", 0), "Claimed Job Valid?");
+  assert.equal(target("Claimed Job Valid?", 0), "Resume Delivery Retry Generation");
+  assert.equal(target("Claimed Job Valid?", 1), "Complete Job");
+  assert.equal(target("Resume Delivery Retry Decision?", 0), "Is Delivery Retry Generation?");
+  assert.equal(target("Resume Delivery Retry Decision?", 1), "Claim Shopify Replay Job");
+  assert.equal(target("Is Delivery Retry Generation?", 0), "Load Delivery Retry Envelope");
+  assert.equal(target("Is Delivery Retry Generation?", 1), "Atomic Claim Intervention");
+  assert.equal(target("Delivery Retry Envelope Valid?", 0), "Build Delivery Retry Payload");
+  assert.equal(target("Build Delivery Retry Payload"), "Call HENVALT_DELIVERY");
+  assert.equal(target("Delivery Retryable?", 0), "Create Delivery Retry Generation Job");
+  assert.equal(target("Create Delivery Retry Generation Job"), "Delivery Retry Enqueued?");
+  assert.equal(target("Delivery Retry Enqueued?", 0), "Claim Shopify Replay Job");
+  assert.equal(target("Delivery Retry Enqueued?", 1), "Complete Job");
+
+  const retryPayload = nodes.get("Build Delivery Retry Payload").parameters.jsCode;
+  assert.match(retryPayload, /delivery_request_id/);
+  assert.match(retryPayload, /idempotency_key/);
+  assert.doesNotMatch(retryPayload, /Grok Generate|Create Tracking Token|Create Unsubscribe Token/);
+  assert.equal(nodes.get("Call HENVALT_DELIVERY").parameters.workflowId.value, "00000000-0000-4000-8000-999999999996");
 });
