@@ -111,6 +111,51 @@ CREATE UNIQUE INDEX ux_delivery_request_intervention
 CREATE UNIQUE INDEX delivery_requests_tenant_id_idempotency_key_key
   ON henvalt.delivery_requests(tenant_id,idempotency_key);
 
+CREATE OR REPLACE FUNCTION henvalt.authorize_delivery_request(
+  p_tenant_id uuid,p_delivery_request_id uuid,p_intervention_id uuid,
+  p_recovery_id uuid,p_opportunity_id uuid,p_recipient text,p_idempotency_key text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $
+DECLARE v_request henvalt.delivery_requests%ROWTYPE;
+BEGIN
+  SELECT * INTO v_request FROM henvalt.delivery_requests
+  WHERE id = p_delivery_request_id AND tenant_id = p_tenant_id FOR UPDATE;
+  IF NOT FOUND OR v_request.intervention_id <> p_intervention_id THEN
+    RETURN jsonb_build_object('can_send',false,'reason','DELIVERY_REQUEST_MISMATCH');
+  END IF;
+  IF v_request.status <> 'PENDING' THEN
+    RETURN jsonb_build_object('can_send',false,'reason','REQUEST_NOT_PENDING');
+  END IF;
+  UPDATE henvalt.delivery_requests SET status='UNKNOWN',updated_at=clock_timestamp()
+   WHERE id=v_request.id AND tenant_id=p_tenant_id AND status='PENDING';
+  IF NOT FOUND THEN RETURN jsonb_build_object('can_send',false,'reason','REQUEST_CLAIM_LOST'); END IF;
+  RETURN jsonb_build_object('can_send',true,'reason','AUTHORIZED','delivery_request_id',v_request.id);
+END;
+$;
+
+CREATE OR REPLACE FUNCTION henvalt.get_mailersend_token_for_delivery(
+  p_tenant_id uuid,p_delivery_request_id uuid
+) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $
+BEGIN
+  UPDATE henvalt.delivery_requests dr
+     SET provider_claimed_at = clock_timestamp(),
+         updated_at = now()
+   WHERE dr.id = p_delivery_request_id
+     AND dr.tenant_id = p_tenant_id
+     AND dr.status = 'UNKNOWN'
+     AND (
+       dr.status = 'UNKNOWN'
+       OR (
+         dr.tenant_id = '6d769024-cd44-4da4-be1d-a25a3dca0660'::uuid
+         AND dr.opportunity_id = '871ad489-d120-4771-9164-db32fe7015b6'::uuid
+         AND dr.recipient_reference = 'urmuhammadrehan18@gmail.com'
+         AND dr.idempotency_key = 'henvalt-one-off-email-test-2026-11-14-v1'
+         AND EXISTS (SELECT 1 FROM henvalt.messages tm WHERE tm.id = dr.message_reference AND tm.tenant_id = dr.tenant_id AND tm.metadata->>'test_only' = 'true')
+       )
+     );
+  RETURN CASE WHEN FOUND THEN 'token' ELSE NULL END;
+END;
+$;
+
 CREATE TABLE henvalt.delivery_attempts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -205,15 +250,22 @@ CREATE OR REPLACE FUNCTION henvalt.record_delivery_result(
   p_provider_status_code integer,p_state henvalt.delivery_state,
   p_error_class text,p_retryable boolean,p_provider_response jsonb
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,public AS $$
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,public AS $
+DECLARE v_tenant_id uuid; v_intervention_id uuid; v_current_state henvalt.delivery_state;
 BEGIN
+  SELECT tenant_id,intervention_id,status
+    INTO v_tenant_id,v_intervention_id,v_current_state
+    FROM henvalt.delivery_requests
+   WHERE id=p_delivery_request_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Delivery request not found: %',p_delivery_request_id; END IF;
   UPDATE henvalt.delivery_requests
      SET provider_message_id=coalesce(provider_message_id,p_provider_message_id),
          status=p_state,updated_at=clock_timestamp()
    WHERE id=p_delivery_request_id;
   RETURN p_delivery_request_id;
 END;
-$$;
+$;
 
 CREATE OR REPLACE FUNCTION henvalt.process_mailersend_webhook_event(
   p_payload jsonb,p_raw_body_base64 text
