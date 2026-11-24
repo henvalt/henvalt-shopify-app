@@ -7,6 +7,8 @@ on:
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
+      - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
+      - "tests/delivery-generation-retry-job-acceptance.sql"
       - "tests/delivery-generation-production-shaped-webhook-routing.sql"
       - "tests/delivery-generation-production-shaped-late-acceptance.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
@@ -18,6 +20,8 @@ on:
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
+      - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
+      - "tests/delivery-generation-retry-job-acceptance.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   workflow_dispatch:
@@ -68,3 +72,7 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql
       - name: Verify MailerSend exact-tag webhook routing
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-webhook-routing.sql
+      - name: Apply queued immutable delivery retry generation candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611240001_delivery_retry_generation_jobs.sql
+      - name: Verify retry job creation, generation limits and immutable envelope loading
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-job-acceptance.sql
