@@ -242,7 +242,8 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     normalizerCode,
     'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;',
     'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;\n' +
-    'const tenantId = j.tenant_id != null ? j.tenant_id : (payload.tenant_id != null ? payload.tenant_id : null);\n' +
+    'const payloadTenantId = payload.tenant_id != null ? payload.tenant_id : null;\n' +
+    'const tenantId = j.tenant_id != null ? j.tenant_id : payloadTenantId;\n' +
     'const deliveryRequestId = payload.delivery_request_id != null ? payload.delivery_request_id : null;\n' +
     'const generationNumber = payload.generation_number != null ? Number(payload.generation_number) : null;\n' +
     'const jobType = j.job_type != null ? j.job_type : null;\n' +
@@ -250,7 +251,7 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     'const claimValid = jobType === "execute_intervention"\n' +
     '  ? validUuid(interventionId)\n' +
     '  : jobType === "execute_delivery_retry_generation"\n' +
-    '    ? validUuid(interventionId) && validUuid(tenantId) && validUuid(deliveryRequestId) && Number.isInteger(generationNumber) && generationNumber >= 2 && generationNumber <= 3\n' +
+    '    ? validUuid(interventionId) && validUuid(j.tenant_id) && validUuid(payloadTenantId) && j.tenant_id === payloadTenantId && validUuid(deliveryRequestId) && Number.isInteger(generationNumber) && generationNumber >= 2 && generationNumber <= 3\n' +
     '    : false;',
     "generation retry claim normalization"
   );
