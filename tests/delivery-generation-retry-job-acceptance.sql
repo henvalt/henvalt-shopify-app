@@ -97,6 +97,20 @@ BEGIN
   IF (SELECT job_type FROM henvalt.background_jobs WHERE id=v_retry_job)<>'execute_delivery_retry_generation' THEN
     RAISE EXCEPTION 'wrong retry job type';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM henvalt.delivery_retry_jobs
+     WHERE tenant_id=v_tenant AND intervention_id=v_intervention
+       AND retry_command_id=v_attempt AND delivery_request_id=v_retry_request
+       AND job_id=v_retry_job
+  ) THEN RAISE EXCEPTION 'append-only retry job mapping missing'; END IF;
+  BEGIN
+    UPDATE henvalt.delivery_retry_jobs SET job_id=gen_random_uuid()
+     WHERE tenant_id=v_tenant AND intervention_id=v_intervention
+       AND retry_command_id=v_attempt;
+    RAISE EXCEPTION 'retry job mapping update was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='retry job mapping update was accepted' THEN RAISE; END IF;
+  END;
   IF (SELECT payload->>'delivery_request_id' FROM henvalt.background_jobs WHERE id=v_retry_job)<>v_retry_request::text THEN
     RAISE EXCEPTION 'retry job is not bound to exact new delivery request';
   END IF;
