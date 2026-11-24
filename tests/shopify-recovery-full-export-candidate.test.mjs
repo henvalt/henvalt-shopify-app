@@ -144,7 +144,7 @@ test("retry enqueue errors preserve the source job for an idempotent retry; ambi
   assert.equal(w.connections["Resume Delivery Retry Generation"].main[1][0].node, "Retry Delivery Retry Resume Job");
   assert.equal(w.connections["Load Delivery Retry Envelope"].main[1][0].node, "Retry Delivery Retry Job");
   assert.equal(w.connections["Create Delivery Retry Generation Job"].main[1][0].node, "Retry Delivery Generation Enqueue Job");
-  assert.equal(w.connections["Delivery Retry Enqueued?"].main[0][0].node, "Loop Interventions");
+  assert.equal(w.connections["Delivery Retry Enqueued?"].main[0][0].node, "Claim Shopify Replay Job");
   assert.equal(w.connections["Delivery Retry Enqueued?"].main[1][0].node, "Complete Job");
   const retry = w.nodes.find((n) => n.name === "Retry Delivery Generation Enqueue Job").parameters.options.queryReplacement;
   assert.match(retry, /DELIVERY_RETRY_GENERATION_ENQUEUE_FAILED/);
