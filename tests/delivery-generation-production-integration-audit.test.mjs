@@ -188,6 +188,9 @@ test("pre-provider delivery retry creates a dedicated bounded generation job wit
   assert.match(retryJobMigration, /render_sender_identity_footer/);
   assert.match(retryJobMigration, /render_email_plain_text/);
   assert.match(retryJobMigration, /DELIVERY_RETRY_JOB_CLAIM_INVALID/);
+  assert.match(retryJobMigration, /p_expected_delivery_attempt_id uuid/);
+  assert.match(retryJobMigration, /DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE/);
+  assert.match(retryJobMigration, /render_sender_identity_footer/);
   assert.match(retryJobMigration, /DELIVERY_RETRY_GENERATION_NOT_CURRENT/);
   assert.match(retryJobMigration, /REVOKE ALL ON FUNCTION/);
   assert.match(retryJobMigration, /GRANT EXECUTE ON FUNCTION/);
@@ -195,6 +198,8 @@ test("pre-provider delivery retry creates a dedicated bounded generation job wit
   assert.match(retryJobAcceptance, /source intervention job was not completed atomically/);
   assert.match(retryJobAcceptance, /immutable message envelope/);
   assert.match(retryJobAcceptance, /wrong worker loaded a delivery retry envelope/);
+  assert.match(retryJobAcceptance, /mismatched attempt identity was accepted/);
+  assert.match(retryJobAcceptance, /frozen intervention exposed a retry envelope/);
   assert.match(retryJobAcceptance, /ambiguous provider outcome incorrectly queued retry/);
   assert.match(retryJobAcceptance, /generation limit did not terminally dead-letter/);
 });
