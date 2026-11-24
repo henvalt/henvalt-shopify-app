@@ -15,6 +15,42 @@ CREATE TYPE henvalt.delivery_state AS ENUM ('PENDING','ACCEPTED','DELIVERED','FA
 CREATE TYPE henvalt.channel_type AS ENUM ('EMAIL','SMS');
 CREATE TYPE henvalt.delivery_mode AS ENUM ('HENVALT_MANAGED','MERCHANT_MANAGED');
 CREATE TYPE henvalt.intervention_status AS ENUM ('PENDING','SCHEDULED','READY','SENDING','SENT','DELIVERED','FAILED','SKIPPED','CANCELLED');
+CREATE TYPE henvalt.job_status AS ENUM ('QUEUED','CLAIMED','RUNNING','RETRY_WAIT','SUCCEEDED','FAILED','DEAD_LETTER');
+
+CREATE TABLE henvalt.background_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid,
+  job_type text NOT NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  status henvalt.job_status NOT NULL DEFAULT 'QUEUED',
+  priority integer NOT NULL DEFAULT 100,
+  attempts integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 5,
+  run_at timestamptz NOT NULL DEFAULT now(),
+  next_run_at timestamptz,
+  locked_at timestamptz,
+  locked_by text,
+  last_error text,
+  completed_at timestamptz,
+  correlation_id uuid,
+  idempotency_key text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE henvalt.messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  intervention_id uuid NOT NULL,
+  channel henvalt.channel_type NOT NULL,
+  recipient text NOT NULL,
+  subject text,
+  body text NOT NULL,
+  tracking_token_id uuid,
+  rendered_at timestamptz,
+  metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
 CREATE TABLE henvalt.recovery_interventions (
   id uuid PRIMARY KEY,
@@ -24,6 +60,22 @@ CREATE TABLE henvalt.recovery_interventions (
   status henvalt.intervention_status NOT NULL,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+CREATE OR REPLACE FUNCTION henvalt.resolve_intervention_send_failure(
+  p_intervention_id uuid,p_final_status henvalt.intervention_status,p_reason text
+) RETURNS boolean
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $
+DECLARE v_rows integer;
+BEGIN
+  UPDATE henvalt.recovery_interventions
+     SET status=p_final_status,updated_at=now()
+   WHERE id=p_intervention_id AND status='SENDING';
+  GET DIAGNOSTICS v_rows=ROW_COUNT;
+  IF v_rows=1 THEN RETURN true; END IF;
+  RETURN EXISTS(SELECT 1 FROM henvalt.recovery_interventions WHERE id=p_intervention_id AND status=p_final_status);
+END;
+$;
+
 CREATE TABLE henvalt.delivery_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
