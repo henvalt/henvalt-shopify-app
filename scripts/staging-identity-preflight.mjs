@@ -29,8 +29,8 @@ if (process.env.HENVALT_STAGE_SUPABASE_PROJECT_REF === productionProjectRef) err
 if (process.env.HENVALT_STAGE_PROVIDER_MODE && process.env.HENVALT_STAGE_PROVIDER_MODE !== "stub") errors.push("provider mode must be stub");
 if (process.env.HENVALT_STAGE_NETWORK_EGRESS_DENIED !== "true") errors.push("outbound network egress denial must be explicitly confirmed");
 if (process.env.HENVALT_STAGE_NO_SEND !== "true") errors.push("no-send safety flag must be explicitly true");
-if (process.env.HENVALT_STAGE_N8N_BASE_URL && /henvalt26\\.app\\.n8n\\.cloud|prod/i.test(process.env.HENVALT_STAGE_N8N_BASE_URL)) errors.push("n8n URL appears to identify production");
-if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\\.myshopify\\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
+if (process.env.HENVALT_STAGE_N8N_BASE_URL && /henvalt26\.app\.n8n\\.cloud|prod/i.test(process.env.HENVALT_STAGE_N8N_BASE_URL)) errors.push("n8n URL appears to identify production");
+if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\.myshopify\\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
 if (errors.length) {
   console.error("STAGING PREFLIGHT: FAIL");
   for (const error of errors) console.error(` - ${error}`);
