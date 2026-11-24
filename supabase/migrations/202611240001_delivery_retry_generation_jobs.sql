@@ -118,6 +118,9 @@ BEGIN
     RETURN jsonb_build_object('action','CONTINUE_NORMAL');
   END IF;
 
+  -- Snapshot-only precheck. The underlying generation RPC re-locks the
+  -- request before it locks and validates this reservation, preserving
+  -- intervention -> request -> reservation ordering.
   SELECT * INTO v_reservation
     FROM henvalt.email_usage_reservations
    WHERE tenant_id=p_tenant_id AND delivery_request_id=v_previous.id;
