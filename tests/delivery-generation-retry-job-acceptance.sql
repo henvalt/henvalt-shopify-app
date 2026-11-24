@@ -11,6 +11,7 @@ DECLARE
   v_retry_job uuid;
   v_retry_request uuid;
   v_generation integer;
+  v_count integer;
   v_env record;
 
   v_tenant_amb uuid := gen_random_uuid();
@@ -77,7 +78,7 @@ BEGIN
   );
 
   v_result := henvalt.enqueue_delivery_retry_generation_job(
-    v_tenant,v_intervention,v_source_job,'recovery-worker-1'
+    v_intervention,v_source_job,'recovery-worker-1',v_request,v_attempt
   );
   IF v_result->>'action'<>'RETRY_QUEUED' THEN
     RAISE EXCEPTION 'expected RETRY_QUEUED, got %',v_result;
@@ -134,6 +135,15 @@ BEGIN
     IF SQLERRM<>'DELIVERY_RETRY_JOB_CLAIM_INVALID' THEN RAISE; END IF;
   END;
 
+  UPDATE henvalt.recovery_interventions
+     SET delivery_frozen_at=clock_timestamp(),delivery_freeze_reason='TEST_FROZEN_RETRY_PARENT'
+   WHERE id=v_intervention;
+  SELECT count(*) INTO v_count
+    FROM henvalt.load_delivery_retry_envelope(
+      v_retry_job,'delivery-worker-2',v_tenant,v_intervention,v_retry_request,2
+    );
+  IF v_count<>0 THEN RAISE EXCEPTION 'frozen intervention exposed a retry envelope'; END IF;
+
   -- Ambiguous/provider-side evidence is not a retry. It remains held and does
   -- not create another generation or a retry job.
   INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
@@ -161,8 +171,17 @@ BEGIN
     jsonb_build_object('tenant_id',v_tenant_amb,'intervention_id',v_intervention_amb),
     'CLAIMED','recovery-worker-amb'
   );
+  BEGIN
+    PERFORM henvalt.enqueue_delivery_retry_generation_job(
+      v_intervention_amb,v_job_amb,'recovery-worker-amb',v_request_amb,gen_random_uuid()
+    );
+    RAISE EXCEPTION 'mismatched attempt identity was accepted';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='mismatched attempt identity was accepted' THEN RAISE; END IF;
+    IF SQLERRM<>'DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE' THEN RAISE; END IF;
+  END;
   v_result := henvalt.enqueue_delivery_retry_generation_job(
-    v_tenant_amb,v_intervention_amb,v_job_amb,'recovery-worker-amb'
+    v_intervention_amb,v_job_amb,'recovery-worker-amb'
   );
   IF v_result->>'action'<>'CONTINUE_NORMAL' THEN
     RAISE EXCEPTION 'ambiguous provider outcome incorrectly queued retry: %',v_result;
