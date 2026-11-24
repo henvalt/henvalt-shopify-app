@@ -80,6 +80,8 @@ BEGIN
   IF NOT FOUND
      OR v_source_job.status <> 'CLAIMED'
      OR v_source_job.locked_by IS DISTINCT FROM p_worker_id
+     OR v_source_job.locked_at IS NULL
+     OR v_source_job.locked_at < clock_timestamp()-interval '900 seconds'
      OR v_source_job.job_type NOT IN ('execute_intervention','execute_delivery_retry_generation')
      OR v_source_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
      OR (v_source_job.payload ? 'tenant_id'
