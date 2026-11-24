@@ -91,6 +91,17 @@ BEGIN
     IF SQLERRM<>'DELIVERY_RETRY_JOB_CLAIM_INVALID' THEN RAISE; END IF;
   END;
 
+  -- A NULL generation is malformed identity, not a valid lease.
+  BEGIN
+    PERFORM henvalt.renew_delivery_retry_job_lease(
+      v_tenant,v_request,v_job,v_worker,NULL
+    );
+    RAISE EXCEPTION 'NULL retry generation renewed a lease';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='NULL retry generation renewed a lease' THEN RAISE; END IF;
+    IF SQLERRM<>'DELIVERY_RETRY_EGRESS_IDENTITY_REQUIRED' THEN RAISE; END IF;
+  END;
+
   -- A fresh lease still cannot be used by a different worker identity.
   UPDATE henvalt.background_jobs SET locked_at=clock_timestamp() WHERE id=v_job;
   BEGIN
