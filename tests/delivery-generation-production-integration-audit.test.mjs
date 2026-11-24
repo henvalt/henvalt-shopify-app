@@ -191,7 +191,8 @@ test("pre-provider delivery retry creates a dedicated bounded generation job wit
   assert.match(retryJobMigration, /p_expected_delivery_attempt_id uuid/);
   assert.match(retryJobMigration, /DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE/);
   assert.match(retryJobMigration, /render_sender_identity_footer/);
-  assert.match(retryJobMigration, /DELIVERY_RETRY_GENERATION_NOT_CURRENT/);
+  assert.match(retryJobMigration, /v_request\.status <> 'PENDING'/);
+  assert.match(retryJobMigration, /m\.id=v_request\.message_reference/);
   assert.match(retryJobMigration, /REVOKE ALL ON FUNCTION/);
   assert.match(retryJobMigration, /GRANT EXECUTE ON FUNCTION/);
   assert.match(retryJobAcceptance, /expected RETRY_QUEUED/);
