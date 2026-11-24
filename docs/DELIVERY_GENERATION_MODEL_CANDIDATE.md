@@ -301,3 +301,32 @@ The direct `record_delivery_result` callers are therefore not limited to the SQL
 The existing webhook route still calls the legacy processor, whose live catalog implementation matches only by tenant + provider message ID and invokes the terminal-state-protected result RPC. The generation work must add exact delivery-tag correlation for late acceptance without silently changing ordinary bounce, unsubscribe, inbound-reply, tracking or suppression behavior.
 
 **No n8n workflow was changed, executed, published, deactivated or otherwise mutated during this inspection.** The snapshot is a static integration contract only; it does not itself prove that the live routes are safe for generation retries.
+
+
+## 15. Queued retry jobs and pre-egress crash recovery — candidate, 2026-11-24
+
+The delivery retry path is now represented as an immutable, tenant-bound background job rather than an in-memory retry inside the delivery workflow:
+
+- A retry job is created only from the exact failed request and attempt, a trusted `pre_provider` failure classification, and the matching append-only `RELEASED` quota evidence.
+- The source job completion and retry-job insertion are transactional. Generations are bounded at 1–3; ambiguous provider outcomes and any provider-response-stage failure are not automatically retried.
+- The retry worker validates tenant, intervention, request, generation, job and worker identity. It loads the original persisted message and idempotency key; it does not regenerate content, recipient, tracking token or message identity.
+- Authorization renews the exact retry-job lease. The final provider-egress RPC revalidates the same lease and generation immediately before the provider boundary. A stale worker cannot cross egress.
+- A late provider acceptance freezes the parent intervention and blocks any queued later generation. Both lock-order race cases are exercised in the disposable PostgreSQL 17 production-shaped suite.
+
+### Recovery after a worker crash before provider egress
+
+A retry request can be in `UNKNOWN` after authorization even though the worker crashed before the durable provider-egress marker. The retry-envelope loader now permits reclamation only when all of the following are true:
+
+1. The exact retry job is still claimed by the current worker with a fresh lease.
+2. The parent intervention is still `SENDING` and is not frozen.
+3. The request is the current generation and has no provider-egress marker.
+4. There is no delivery-attempt row and no provider-event row for that request.
+5. The existing quota reservation is still `RESERVED`.
+
+Under the parent → request → job lock order, the loader resets only that provably unegressed request to `PENDING`, clears its stale provider-claim timestamp, and returns the original immutable envelope. The billing entitlement trigger still checks that the account is active; it reuses the existing reserved hold instead of reserving the same delivery twice. If any attempt, provider event, egress marker, expired lease, or freeze exists, this recovery path does not reset or resend.
+
+### Verification and deployment boundary
+
+The production-shaped PostgreSQL 17 migration suite now covers retry generation creation, generation ceilings, immutable mappings and envelopes, worker-lease validation, quota reuse, billing cancellation, unegressed crash recovery, and both orders of the retry-versus-late-acceptance race.
+
+This remains a candidate branch and draft PR. **No production SQL migration has been applied; no Edge Function candidate has been deployed; no active n8n workflow has been edited, executed or published; and no provider email has been sent.** Staging and end-to-end verification remain mandatory before any production cutover.
