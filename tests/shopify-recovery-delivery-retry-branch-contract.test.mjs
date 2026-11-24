@@ -157,8 +157,8 @@ test("generated recovery graph routes retry generations through the existing del
   assert.equal(target("Claimed Job Valid?", 1), "Complete Job");
   assert.equal(target("Resume Delivery Retry Decision?", 0), "Is Delivery Retry Generation Job?");
   assert.equal(target("Resume Delivery Retry Decision?", 1), "Claim Shopify Replay Job");
-  assert.equal(target("Is Delivery Retry Generation?", 0), "Load Delivery Retry Envelope");
-  assert.equal(target("Is Delivery Retry Generation?", 1), "Atomic Claim Intervention");
+  assert.equal(target("Is Delivery Retry Generation Job?", 0), "Load Delivery Retry Envelope");
+  assert.equal(target("Is Delivery Retry Generation Job?", 1), "Atomic Claim Intervention");
   assert.equal(target("Delivery Retry Envelope Valid?", 0), "Build Delivery Retry Payload");
   assert.equal(target("Build Delivery Retry Payload"), "Call HENVALT_DELIVERY");
   assert.equal(target("Delivery Retryable?", 0), "Create Delivery Retry Generation Job");
