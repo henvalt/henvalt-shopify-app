@@ -123,9 +123,6 @@ test("retry job terminal outcomes preserve fair replay scheduling in the existin
   assert.equal(contract.workflow_count, 3);
 });
 
-import test from "node:test";
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { buildRecoveryCandidate } from "../n8n/shopify-recovery-candidate-builder.mjs";
 
 const recoveryFixture = JSON.parse(readFileSync(
