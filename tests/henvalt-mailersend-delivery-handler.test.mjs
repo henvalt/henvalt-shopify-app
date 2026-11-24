@@ -360,3 +360,119 @@ test("ambiguous egress-fence RPC transport failure never falls through to Mailer
   ]);
   assert.ok(!calls.includes("https://api.mailersend.com/v1/email"));
 });
+
+
+function validRetryBody() {
+  return {
+    ...validBody(),
+    delivery_generation_retry: true,
+    retry_job_id: "33333333-3333-4333-8333-333333333333",
+    retry_worker_id: "retry-worker-test",
+    retry_generation_number: 2,
+  };
+}
+
+test("retry worker lease is checked before credential release", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      assert.equal(url, SUPABASE_URL + "/rest/v1/rpc/renew_delivery_retry_job_lease");
+      return new Response("false", { status: 200 });
+    },
+  });
+  const response = await handler(request(validRetryBody()));
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    error: "delivery_retry_job_claim_invalid",
+    henvalt_delivery_stage: "pre_provider",
+  });
+  assert.equal(calls.length, 1);
+  assert.ok(!calls.some((call) => call.url.endsWith("/get_mailersend_token_for_delivery")));
+  assert.ok(!calls.some((call) => call.url === "https://api.mailersend.com/v1/email"));
+  assert.deepEqual(JSON.parse(calls[0].init.body), {
+    p_tenant_id: TENANT_ID,
+    p_delivery_request_id: DELIVERY_ID,
+    p_retry_job_id: "33333333-3333-4333-8333-333333333333",
+    p_retry_worker_id: "retry-worker-test",
+    p_generation_number: 2,
+  });
+});
+
+test("retry delivery revalidates exact job lease at final egress and sends only after both checks", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url, init) => {
+      calls.push({ url, init });
+      if (url === SUPABASE_URL + "/rest/v1/rpc/renew_delivery_retry_job_lease") {
+        return new Response("true", { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+        return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started") {
+        return new Response("true", { status: 200 });
+      }
+      if (url === "https://api.mailersend.com/v1/email") {
+        return new Response(JSON.stringify({ message_id: "provider-retry-message" }), { status: 202 });
+      }
+      throw new Error("unexpected retry delivery URL: " + url);
+    },
+  });
+  const response = await handler(request(validRetryBody()));
+  assert.equal(response.status, 202);
+  const urls = calls.map((call) => call.url);
+  assert.deepEqual(urls, [
+    SUPABASE_URL + "/rest/v1/rpc/renew_delivery_retry_job_lease",
+    SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery",
+    SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope",
+    SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started",
+    "https://api.mailersend.com/v1/email",
+  ]);
+  assert.deepEqual(JSON.parse(calls[3].init.body), {
+    p_tenant_id: TENANT_ID,
+    p_delivery_request_id: DELIVERY_ID,
+    p_retry_job_id: "33333333-3333-4333-8333-333333333333",
+    p_retry_worker_id: "retry-worker-test",
+    p_generation_number: 2,
+  });
+});
+
+test("retry lease lost between preflight and final egress never calls the provider", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url === SUPABASE_URL + "/rest/v1/rpc/renew_delivery_retry_job_lease") {
+        return new Response("true", { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+        return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started") {
+        return new Response("false", { status: 200 });
+      }
+      throw new Error("provider must remain unreachable after final retry lease loss");
+    },
+  });
+  const response = await handler(request(validRetryBody()));
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    error: "delivery_provider_egress_fence_rejected",
+    henvalt_delivery_stage: "pre_provider",
+  });
+  assert.equal(calls.length, 4);
+  assert.ok(!calls.includes("https://api.mailersend.com/v1/email"));
+});
