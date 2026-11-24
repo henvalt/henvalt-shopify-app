@@ -321,7 +321,7 @@ BEGIN
        AND lower(COALESCE(dr.provider, '')) = 'mailersend'
        AND dr.provider_message_id = v_mid
      ORDER BY dr.created_at DESC
-     LIMIT 1;
+     LIMIT 1 FOR UPDATE;
 
     IF v_req IS NULL THEN RAISE EXCEPTION 'Provider event is not yet linked to a delivery request'; END IF;
     UPDATE henvalt.provider_events
