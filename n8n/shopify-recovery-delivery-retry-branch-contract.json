@@ -8,7 +8,7 @@
     "inspected_active_version": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
     "baseline_node_count": 46,
     "candidate_export": "n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json",
-    "candidate_node_count": 75
+    "candidate_node_count": 74
   },
   "job_model": {
     "existing_job_type": "execute_intervention",
