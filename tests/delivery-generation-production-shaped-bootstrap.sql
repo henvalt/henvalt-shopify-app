@@ -25,6 +25,30 @@ CREATE TYPE henvalt.delivery_mode AS ENUM ('HENVALT_MANAGED','MERCHANT_MANAGED')
 CREATE TYPE henvalt.intervention_status AS ENUM ('PENDING','SCHEDULED','READY','SENDING','SENT','DELIVERED','FAILED','SKIPPED','CANCELLED');
 CREATE TYPE henvalt.job_status AS ENUM ('QUEUED','CLAIMED','RUNNING','RETRY_WAIT','SUCCEEDED','DEAD_LETTER');
 
+CREATE TABLE henvalt.billing_accounts (
+  tenant_id uuid PRIMARY KEY,
+  status text NOT NULL,
+  test_mode boolean NOT NULL DEFAULT false,
+  activated_at timestamptz,
+  currency char(3) NOT NULL DEFAULT 'USD',
+  usage_cap_amount numeric(18,2) NOT NULL DEFAULT 100000,
+  monthly_email_limit integer NOT NULL DEFAULT 2000
+);
+CREATE TABLE henvalt.billing_measurements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  currency char(3) NOT NULL,
+  henvalt_fee numeric(18,4) NOT NULL,
+  status text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE henvalt.email_usage_measurements (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  delivery_attempt_id uuid NOT NULL UNIQUE,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE henvalt.background_jobs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid,
