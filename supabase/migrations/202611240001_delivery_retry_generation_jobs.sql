@@ -61,9 +61,9 @@ BEGIN
   END IF;
 
   -- Canonical lifecycle lock order: intervention -> request -> reservation.
-  SELECT * INTO v_intervention
-    FROM henvalt.recovery_interventions
-   WHERE id=p_intervention_id AND tenant_id=p_tenant_id
+  SELECT ri.* INTO v_intervention
+    FROM henvalt.recovery_interventions ri
+   WHERE ri.id=p_intervention_id AND ri.tenant_id=p_tenant_id
    FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'INTERVENTION_NOT_FOUND'; END IF;
 
@@ -380,12 +380,12 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT * INTO v_request
-    FROM henvalt.delivery_requests
-   WHERE id=p_delivery_request_id
-     AND tenant_id=p_tenant_id
-     AND intervention_id=p_intervention_id
-     AND generation_number=p_generation_number
+  SELECT dr.* INTO v_request
+    FROM henvalt.delivery_requests dr
+   WHERE dr.id=p_delivery_request_id
+     AND dr.tenant_id=p_tenant_id
+     AND dr.intervention_id=p_intervention_id
+     AND dr.generation_number=p_generation_number
    FOR UPDATE;
   IF NOT FOUND OR v_request.status <> 'PENDING'
      OR v_request.channel <> 'EMAIL'
