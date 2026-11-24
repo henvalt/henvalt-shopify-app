@@ -51,6 +51,7 @@ DECLARE
   v_retry_command_id uuid;
   v_generation integer;
   v_rows integer;
+  v_reservation_found boolean := false;
 BEGIN
   IF auth.role() IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
@@ -716,7 +717,7 @@ BEGIN
     RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
   END IF;
   IF p_tenant_id IS NULL OR p_intervention_id IS NULL
-     OR p_delivery_request_id IS NULL OR p_generation_number NOT IN (2,3)
+     OR p_delivery_request_id IS NULL OR p_generation_number IS NULL OR p_generation_number NOT IN (2,3)
      OR p_retry_job_id IS NULL OR NULLIF(btrim(p_retry_worker_id),'') IS NULL THEN
     RAISE EXCEPTION 'DELIVERY_RETRY_ENVELOPE_FAILURE_IDENTITY_REQUIRED' USING ERRCODE='22023';
   END IF;
@@ -782,6 +783,7 @@ BEGIN
     FROM henvalt.email_usage_reservations
    WHERE tenant_id=p_tenant_id AND delivery_request_id=p_delivery_request_id
    FOR UPDATE;
+  v_reservation_found := FOUND;
 
   SELECT * INTO v_job
     FROM henvalt.background_jobs
@@ -792,11 +794,23 @@ BEGIN
      OR v_job.status <> 'CLAIMED'
      OR v_job.locked_by IS DISTINCT FROM p_retry_worker_id
      OR v_job.locked_at IS NULL
-     OR v_job.locked_at < clock_timestamp()-interval '900 seconds' THEN
+     OR v_job.locked_at < clock_timestamp()-interval '900 seconds'
+     OR v_job.tenant_id IS DISTINCT FROM p_tenant_id
+     OR v_job.payload->>'tenant_id' IS DISTINCT FROM p_tenant_id::text
+     OR v_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
+     OR v_job.payload->>'delivery_request_id' IS DISTINCT FROM p_delivery_request_id::text
+     OR v_job.payload->>'generation_number' IS DISTINCT FROM p_generation_number::text
+     OR NOT EXISTS (
+       SELECT 1 FROM henvalt.delivery_retry_jobs rj
+        WHERE rj.tenant_id=p_tenant_id
+          AND rj.intervention_id=p_intervention_id
+          AND rj.delivery_request_id=p_delivery_request_id
+          AND rj.job_id=p_retry_job_id
+     ) THEN
     RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_LOST' USING ERRCODE='55000';
   END IF;
 
-  IF FOUND AND v_reservation.status='RESERVED' THEN
+  IF v_reservation_found AND v_reservation.status='RESERVED' THEN
     UPDATE henvalt.email_usage_reservations
        SET status='RELEASED',
            status_reason='DELIVERY_RETRY_ENVELOPE_INVALID',
