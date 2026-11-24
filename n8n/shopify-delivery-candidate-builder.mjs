@@ -44,6 +44,18 @@ export function buildDeliveryCandidate(source) {
       if (clean.type === "n8n-nodes-base.webhook" && typeof clean.parameters.path === "string") {
         clean.parameters.path = "henvalt/candidate-no-send/" + clean.parameters.path.replace(/^henvalt\//, "");
       }
+      if (clean.name === "Authorize & Context") {
+        clean.parameters.url = clean.parameters.url.replace(
+          "/rpc/authorize_delivery_request",
+          "/rpc/authorize_delivery_request_with_retry_lease"
+        );
+        clean.parameters.jsonBody = replaceOne(
+          clean.parameters.jsonBody,
+          "p_idempotency_key: $json.idempotency_key }",
+          "p_idempotency_key: $json.idempotency_key, p_retry_job_id: $json.retry_job_id || null, p_retry_worker_id: $json.retry_worker_id || null, p_generation_number: $json.retry_generation_number || null }",
+          "authorize with exact retry job lease before claiming request"
+        );
+      }
       if (clean.name === "Validate & Normalize") {
         clean.parameters.jsCode = replaceOne(
           clean.parameters.jsCode,
@@ -108,7 +120,7 @@ export function buildDeliveryCandidate(source) {
         code = replaceOne(
           code,
           'if (v.precheck_ok !== true) {',
-          'if (send && send.body && send.body.retry_job_claim_lost === true) {\n  state = "REJECTED"; errorClass = "RETRY_JOB_CLAIM_LOST"; http_status = 409; provider_response = send.body; retryJobClaimLost = true;\n} else if (v.precheck_ok !== true) {',
+          'if ((authBody && authBody.retry_job_claim_lost === true) || (send && send.body && send.body.retry_job_claim_lost === true)) {\n  state = "REJECTED"; errorClass = "RETRY_JOB_CLAIM_LOST"; http_status = 409; provider_response = (authBody && authBody.retry_job_claim_lost === true) ? authBody : send.body; retryJobClaimLost = true;\n} else if (v.precheck_ok !== true) {',
           "do not record a result after retry job claim loss"
         );
         code = replaceOne(
