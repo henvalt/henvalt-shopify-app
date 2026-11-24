@@ -390,6 +390,67 @@ BEGIN
      AND dr.intervention_id=p_intervention_id
      AND dr.generation_number=p_generation_number
    FOR UPDATE;
+
+  -- Reclaim a retry request that was claimed by a worker which crashed before
+  -- the one-way provider-egress marker. No provider HTTP call can precede that
+  -- marker. Require the same live job lease, a RESERVED quota hold, and zero
+  -- attempt/provider-event evidence before returning it to PENDING.
+  IF FOUND
+     AND v_request.status='UNKNOWN'
+     AND v_request.provider_egress_started_at IS NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM henvalt.delivery_attempts da
+        WHERE da.tenant_id=p_tenant_id
+          AND da.delivery_request_id=p_delivery_request_id
+     )
+     AND NOT EXISTS (
+       SELECT 1 FROM henvalt.provider_events pe
+        WHERE pe.tenant_id=p_tenant_id
+          AND pe.delivery_request_id=p_delivery_request_id
+     )
+     AND EXISTS (
+       SELECT 1 FROM henvalt.email_usage_reservations eur
+        WHERE eur.tenant_id=p_tenant_id
+          AND eur.delivery_request_id=p_delivery_request_id
+          AND eur.status='RESERVED'
+     ) THEN
+    SELECT * INTO v_job
+      FROM henvalt.background_jobs
+     WHERE id=p_job_id
+     FOR UPDATE;
+    IF NOT FOUND
+       OR v_job.job_type <> 'execute_delivery_retry_generation'
+       OR v_job.status <> 'CLAIMED'
+       OR v_job.locked_by IS DISTINCT FROM p_worker_id
+       OR v_job.locked_at IS NULL
+       OR v_job.locked_at < clock_timestamp()-interval '900 seconds'
+       OR v_job.tenant_id IS DISTINCT FROM p_tenant_id
+       OR v_job.payload->>'tenant_id' IS DISTINCT FROM p_tenant_id::text
+       OR v_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
+       OR v_job.payload->>'delivery_request_id' IS DISTINCT FROM p_delivery_request_id::text
+       OR (v_job.payload->>'generation_number')::integer IS DISTINCT FROM p_generation_number THEN
+      RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_INVALID' USING ERRCODE='55000';
+    END IF;
+
+    UPDATE henvalt.delivery_requests
+       SET status='PENDING',
+           provider_claimed_at=NULL,
+           updated_at=clock_timestamp()
+     WHERE id=p_delivery_request_id
+       AND tenant_id=p_tenant_id
+       AND status='UNKNOWN'
+       AND provider_egress_started_at IS NULL;
+    IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_RETRY_RECOVERY_COMPARE_AND_SET_LOST'; END IF;
+
+    SELECT dr.* INTO v_request
+      FROM henvalt.delivery_requests dr
+     WHERE dr.id=p_delivery_request_id
+       AND dr.tenant_id=p_tenant_id
+       AND dr.intervention_id=p_intervention_id
+       AND dr.generation_number=p_generation_number
+     FOR UPDATE;
+  END IF;
+
   IF NOT FOUND OR v_request.status <> 'PENDING'
      OR v_request.channel <> 'EMAIL'
      OR lower(COALESCE(v_request.provider,'')) <> 'mailersend'
@@ -867,5 +928,37 @@ GRANT EXECUTE ON FUNCTION henvalt.fail_delivery_retry_envelope_safely(uuid,uuid,
 
 COMMENT ON FUNCTION henvalt.fail_delivery_retry_envelope_safely(uuid,uuid,uuid,integer,uuid,text) IS
   'Fails a corrupt retry envelope only after exact tenant/request/generation/job ownership is revalidated under parent-first locks. Frozen or stale generations are no-ops; only a still-current PENDING generation may release its reservation and fail the intervention.';
+
+-- A reclaimed retry can reuse its already-RESERVED quota hold. The normal
+-- PENDING -> UNKNOWN billing trigger must not reserve the same request twice.
+-- This early return is permitted only when no attempt, provider event or
+-- provider-egress marker exists; the existing reservation continues to count.
+DO $retry_quota_reuse_patch$
+DECLARE
+  v_oid regprocedure;
+  v_definition text;
+  v_patched text;
+BEGIN
+  v_oid := to_regprocedure('henvalt.enforce_billing_entitlement_before_delivery()');
+  IF v_oid IS NULL THEN
+    RAISE EXCEPTION 'RETRY_QUOTA_REUSE_BILLING_TRIGGER_MISSING';
+  END IF;
+  v_definition := pg_get_functiondef(v_oid);
+  IF position('HENVALT_RETRY_RESERVED_HOLD_REUSE' IN v_definition) > 0 THEN
+    RAISE EXCEPTION 'RETRY_QUOTA_REUSE_ALREADY_PATCHED';
+  END IF;
+  v_patched := regexp_replace(
+    v_definition,
+    'BEGIN\\s+IF OLD\\.status = ''PENDING'' AND NEW\\.status = ''UNKNOWN'' THEN',
+    E'BEGIN\\n  -- HENVALT_RETRY_RESERVED_HOLD_REUSE\\n  IF OLD.status = ''PENDING'' AND NEW.status = ''UNKNOWN''\\n     AND NEW.provider_egress_started_at IS NULL\\n     AND EXISTS (SELECT 1 FROM henvalt.email_usage_reservations eur WHERE eur.tenant_id=NEW.tenant_id AND eur.delivery_request_id=NEW.id AND eur.status=''RESERVED'')\\n     AND NOT EXISTS (SELECT 1 FROM henvalt.delivery_attempts da WHERE da.tenant_id=NEW.tenant_id AND da.delivery_request_id=NEW.id)\\n     AND NOT EXISTS (SELECT 1 FROM henvalt.provider_events pe WHERE pe.tenant_id=NEW.tenant_id AND pe.delivery_request_id=NEW.id) THEN\\n    RETURN NEW;\\n  END IF;\\n  IF OLD.status = ''PENDING'' AND NEW.status = ''UNKNOWN'' THEN',
+    'n'
+  );
+  IF v_patched = v_definition
+     OR position('HENVALT_RETRY_RESERVED_HOLD_REUSE' IN v_patched) = 0 THEN
+    RAISE EXCEPTION 'RETRY_QUOTA_REUSE_PATCH_ANCHOR_MISMATCH';
+  END IF;
+  EXECUTE v_patched;
+END;
+$retry_quota_reuse_patch$;
 
 COMMIT;
