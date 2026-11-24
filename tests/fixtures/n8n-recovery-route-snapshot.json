@@ -1,6 +1,6 @@
 {
   "workflowId": "3GEDoeCA4paXTaDF",
-  "activeVersionId": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+  "activeVersionId": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
   "schedulerTrigger": "Every Minute",
   "claimNode": "Claim Due Job",
   "claimFunction": "henvalt.claim_next_job",
@@ -56,5 +56,6 @@
       "FAILED with next retry timestamp",
       "FAILED dead-letter after 60 attempts"
     ]
-  }
+  },
+  "lastReadOnlyCheckedAt": "2026-11-24"
 }
