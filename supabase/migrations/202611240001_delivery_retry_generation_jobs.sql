@@ -5,28 +5,30 @@
 
 BEGIN;
 
-ALTER TABLE henvalt.delivery_retry_commands
-  ADD COLUMN IF NOT EXISTS retry_job_id uuid;
+-- Keep the retry command ledger append-only. The separate mapping is
+-- also append-only, so a command can be linked to one queued job without
+-- mutating the immutable generation command record.
+CREATE TABLE IF NOT EXISTS henvalt.delivery_retry_jobs (
+  tenant_id uuid NOT NULL,
+  intervention_id uuid NOT NULL,
+  retry_command_id uuid NOT NULL,
+  delivery_request_id uuid NOT NULL UNIQUE
+    REFERENCES henvalt.delivery_requests(id) ON DELETE RESTRICT,
+  job_id uuid NOT NULL UNIQUE
+    REFERENCES henvalt.background_jobs(id) ON DELETE RESTRICT,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (tenant_id,intervention_id,retry_command_id),
+  FOREIGN KEY (tenant_id,intervention_id,retry_command_id)
+    REFERENCES henvalt.delivery_retry_commands(tenant_id,intervention_id,retry_command_id)
+    ON DELETE RESTRICT
+);
 
-DO $retry_job_fk$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint
-     WHERE conrelid='henvalt.delivery_retry_commands'::regclass
-       AND conname='delivery_retry_commands_retry_job_fk'
-  ) THEN
-    ALTER TABLE henvalt.delivery_retry_commands
-      ADD CONSTRAINT delivery_retry_commands_retry_job_fk
-      FOREIGN KEY (retry_job_id)
-      REFERENCES henvalt.background_jobs(id)
-      ON DELETE RESTRICT;
-  END IF;
-END;
-$retry_job_fk$;
-
-CREATE UNIQUE INDEX IF NOT EXISTS ux_delivery_retry_commands_retry_job
-  ON henvalt.delivery_retry_commands(retry_job_id)
-  WHERE retry_job_id IS NOT NULL;
+ALTER TABLE henvalt.delivery_retry_jobs ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON henvalt.delivery_retry_jobs FROM PUBLIC,anon,authenticated,service_role;
+DROP TRIGGER IF EXISTS delivery_retry_jobs_append_only ON henvalt.delivery_retry_jobs;
+CREATE TRIGGER delivery_retry_jobs_append_only
+  BEFORE UPDATE OR DELETE ON henvalt.delivery_retry_jobs
+  FOR EACH ROW EXECUTE FUNCTION henvalt.reject_delivery_generation_ledger_mutation();
 
 CREATE OR REPLACE FUNCTION henvalt.enqueue_delivery_retry_generation_job(
   p_tenant_id uuid,
@@ -187,8 +189,8 @@ BEGIN
     RAISE EXCEPTION 'DELIVERY_RETRY_GENERATION_RESULT_INVALID';
   END IF;
 
-  SELECT retry_job_id INTO v_retry_job_id
-    FROM henvalt.delivery_retry_commands
+  SELECT job_id INTO v_retry_job_id
+    FROM henvalt.delivery_retry_jobs
    WHERE tenant_id=p_tenant_id
      AND intervention_id=p_intervention_id
      AND retry_command_id=v_retry_command_id
@@ -213,12 +215,11 @@ BEGIN
       'delivery-retry:'||v_retry_command_id::text
     ) RETURNING id INTO v_retry_job_id;
 
-    UPDATE henvalt.delivery_retry_commands
-       SET retry_job_id=v_retry_job_id
-     WHERE tenant_id=p_tenant_id
-       AND intervention_id=p_intervention_id
-       AND retry_command_id=v_retry_command_id;
-    IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_RETRY_COMMAND_LEDGER_MISSING'; END IF;
+    INSERT INTO henvalt.delivery_retry_jobs(
+      tenant_id,intervention_id,retry_command_id,delivery_request_id,job_id
+    ) VALUES (
+      p_tenant_id,p_intervention_id,v_retry_command_id,v_new_request,v_retry_job_id
+    );
   END IF;
 
   UPDATE henvalt.background_jobs
@@ -401,11 +402,11 @@ BEGIN
   END IF;
 
   IF NOT EXISTS (
-    SELECT 1 FROM henvalt.delivery_retry_commands rc
-     WHERE rc.tenant_id=p_tenant_id
-       AND rc.intervention_id=p_intervention_id
-       AND rc.delivery_request_id=p_delivery_request_id
-       AND rc.retry_job_id=p_job_id
+    SELECT 1 FROM henvalt.delivery_retry_jobs rj
+     WHERE rj.tenant_id=p_tenant_id
+       AND rj.intervention_id=p_intervention_id
+       AND rj.delivery_request_id=p_delivery_request_id
+       AND rj.job_id=p_job_id
   ) THEN
     RETURN;
   END IF;
