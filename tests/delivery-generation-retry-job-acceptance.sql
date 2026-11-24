@@ -191,8 +191,19 @@ BEGIN
   END;
   UPDATE henvalt.background_jobs
      SET tenant_id=v_tenant,
-         payload=jsonb_set(payload,'{tenant_id}',to_jsonb(v_tenant::text),true)
+         payload=jsonb_set(payload,'{tenant_id}',to_jsonb(v_tenant::text),true),
+         locked_at=clock_timestamp()-interval '901 seconds'
    WHERE id=v_retry_job;
+  BEGIN
+    PERFORM henvalt.enqueue_delivery_retry_generation_job(
+      v_tenant,v_intervention,v_retry_job,'delivery-worker-2'
+    );
+    RAISE EXCEPTION 'expired retry source-job lease was accepted';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='expired retry source-job lease was accepted' THEN RAISE; END IF;
+    IF SQLERRM<>'DELIVERY_RETRY_SOURCE_JOB_CLAIM_INVALID' THEN RAISE; END IF;
+  END;
+  UPDATE henvalt.background_jobs SET locked_at=clock_timestamp() WHERE id=v_retry_job;
 
   UPDATE henvalt.recovery_interventions
      SET delivery_frozen_at=clock_timestamp(),delivery_freeze_reason='TEST_FROZEN_RETRY_PARENT'
