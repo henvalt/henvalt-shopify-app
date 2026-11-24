@@ -544,3 +544,23 @@ test("authorization-time retry lease loss is propagated without claiming or reco
   assert.equal(recoveryResult.retryable, false);
   assert.equal(recoveryResult.final_status, "SENDING");
 });
+
+
+test("retry source-job lease and tenant identity are enforced before generation creation", () => {
+  assert.ok(migration.includes("v_source_job.locked_at IS NULL"));
+  assert.ok(migration.includes("v_source_job.locked_at < clock_timestamp()-interval '900 seconds'"));
+  assert.ok(migration.includes("v_source_job.payload ? 'tenant_id'"));
+  assert.ok(migration.includes("v_source_job.job_type='execute_delivery_retry_generation'"));
+  assert.ok(migration.includes("v_source_job.tenant_id IS DISTINCT FROM p_tenant_id"));
+  assert.ok(acceptance.includes("expired normal source-job lease queued a retry"));
+  assert.ok(acceptance.includes("expired retry source-job lease was accepted"));
+  assert.ok(acceptance.includes("cross-tenant retry source job identity was accepted"));
+});
+
+test("reserved quota reuse remains after monetary and monthly email billing checks", () => {
+  const patch = migration.slice(migration.indexOf("DO $retry_quota_reuse_patch$"));
+  assert.ok(patch.includes("RETURN NEW;\\\\s+END;"));
+  assert.ok(patch.includes("HENVALT_RETRY_RESERVED_HOLD_REUSE"));
+  assert.ok(acceptance.includes("retry quota reuse bypassed monetary usage cap"));
+  assert.ok(acceptance.includes("retry quota reuse bypassed monthly email limit"));
+});
