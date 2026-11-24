@@ -416,4 +416,8 @@ test("recovery retry payload carries exact job lease identity through delivery n
   assert.equal(normalized.retry_worker_id, workerId);
   assert.equal(normalized.retry_generation_number, 2);
   assert.equal(normalized.delivery_request_id, requestId);
+  assert.match(deliveryBuilder, /retry_job_id/);
+  assert.match(deliveryBuilder, /retry_worker_id/);
+  assert.match(deliveryBuilder, /retry_generation_number/);
+  assert.match(deliveryBuilder, /delivery_generation_retry/);
 });
