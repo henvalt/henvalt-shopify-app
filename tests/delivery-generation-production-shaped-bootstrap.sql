@@ -114,7 +114,7 @@ CREATE UNIQUE INDEX delivery_requests_tenant_id_idempotency_key_key
 CREATE OR REPLACE FUNCTION henvalt.authorize_delivery_request(
   p_tenant_id uuid,p_delivery_request_id uuid,p_intervention_id uuid,
   p_recovery_id uuid,p_opportunity_id uuid,p_recipient text,p_idempotency_key text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $auth$
 DECLARE v_request henvalt.delivery_requests%ROWTYPE;
 BEGIN
   SELECT * INTO v_request FROM henvalt.delivery_requests
@@ -130,11 +130,11 @@ BEGIN
   IF NOT FOUND THEN RETURN jsonb_build_object('can_send',false,'reason','REQUEST_CLAIM_LOST'); END IF;
   RETURN jsonb_build_object('can_send',true,'reason','AUTHORIZED','delivery_request_id',v_request.id);
 END;
-$;
+$auth$;
 
 CREATE OR REPLACE FUNCTION henvalt.get_mailersend_token_for_delivery(
   p_tenant_id uuid,p_delivery_request_id uuid
-) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $
+) RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $auth$
 BEGIN
   UPDATE henvalt.delivery_requests dr
      SET provider_claimed_at = clock_timestamp(),
@@ -154,7 +154,7 @@ BEGIN
      );
   RETURN CASE WHEN FOUND THEN 'token' ELSE NULL END;
 END;
-$;
+$auth$;
 
 CREATE TABLE henvalt.delivery_attempts (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
