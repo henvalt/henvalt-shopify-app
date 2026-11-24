@@ -82,7 +82,11 @@ BEGIN
      OR v_source_job.locked_by IS DISTINCT FROM p_worker_id
      OR v_source_job.job_type NOT IN ('execute_intervention','execute_delivery_retry_generation')
      OR v_source_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
-     OR (v_source_job.tenant_id IS NOT NULL AND v_source_job.tenant_id <> p_tenant_id) THEN
+     OR (v_source_job.payload ? 'tenant_id'
+         AND v_source_job.payload->>'tenant_id' IS DISTINCT FROM p_tenant_id::text)
+     OR (v_source_job.tenant_id IS NOT NULL AND v_source_job.tenant_id <> p_tenant_id)
+     OR (v_source_job.job_type='execute_delivery_retry_generation'
+         AND v_source_job.tenant_id IS DISTINCT FROM p_tenant_id) THEN
     RAISE EXCEPTION 'DELIVERY_RETRY_SOURCE_JOB_CLAIM_INVALID' USING ERRCODE='55000';
   END IF;
 
