@@ -124,6 +124,7 @@ test("retry job terminal outcomes preserve fair replay scheduling in the existin
 });
 
 import { buildRecoveryCandidate } from "../n8n/shopify-recovery-candidate-builder.mjs";
+import { buildDeliveryCandidate } from "../n8n/shopify-delivery-candidate-builder.mjs";
 
 const recoveryFixture = JSON.parse(readFileSync(
   "n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json",
@@ -278,4 +279,87 @@ test("delivery failure classifier retries only a server-marked FAILED pre-provid
     delivery_attempt_id: "55555555-5555-4555-8555-555555555555",
   });
   assert.equal(rejected.retryable, false);
+});
+
+
+const deliveryFixture = JSON.parse(readFileSync(
+  "n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json",
+  "utf8",
+));
+
+test("delivery candidate propagates the exact recorded attempt and trusted pre-provider marker into recovery retry classifier", () => {
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: recovery } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const nodeCode = (workflow, name) => workflow.nodes.find((node) => node.name === name).parameters.jsCode;
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  const interventionId = "22222222-2222-4222-8222-222222222222";
+  const requestId = "33333333-3333-4333-8333-333333333333";
+  const attemptId = "44444444-4444-4444-8444-444444444444";
+  const correlationId = "55555555-5555-4555-8555-555555555555";
+
+  const classifyDelivery = new Function("$", "$json", nodeCode(delivery, "Classify Result"))(
+    (name) => ({
+      item: { json: ({
+        "Validate & Normalize": {
+          precheck_ok: true,
+          tenant_id: tenantId,
+          intervention_id: interventionId,
+          recovery_id: "66666666-6666-4666-8666-666666666666",
+          opportunity_id: "77777777-7777-4777-8777-777777777777",
+          correlation_id: correlationId,
+        },
+        "Authorize & Context": {
+          statusCode: 200,
+          body: { can_send: true, delivery_request_id: requestId, provider: "mailersend" },
+        },
+        "No-Send Provider Stub": {
+          statusCode: 409,
+          body: {
+            error: "tenant_provider_credential_unavailable",
+            henvalt_delivery_stage: "pre_provider",
+          },
+        },
+      })[name] },
+    }),
+    {},
+  );
+
+  assert.equal(classifyDelivery.state, "FAILED");
+  assert.equal(classifyDelivery.provider_response.henvalt_delivery_stage, "pre_provider");
+  assert.equal(classifyDelivery.should_record_result, true);
+
+  const buildResponse = new Function("$", "$json", nodeCode(delivery, "Build Delivery Response"))(
+    (name) => ({
+      item: { json: name === "Classify Result"
+        ? classifyDelivery
+        : { body: JSON.stringify(attemptId) } },
+    }),
+    {},
+  ).json;
+
+  assert.equal(buildResponse.body.state, "FAILED");
+  assert.equal(buildResponse.body.delivery_request_id, requestId);
+  assert.equal(buildResponse.body.delivery_attempt_id, attemptId);
+  assert.equal(buildResponse.body.pre_provider_failure, true);
+
+  const recoveryIdentity = {
+    intervention_id: interventionId,
+    tenant_id: tenantId,
+    job_id: "88888888-8888-4888-8888-888888888888",
+    worker_id: "recovery-worker-contract",
+  };
+  const classifyRecovery = new Function("$", "$json", nodeCode(recovery, "Classify Delivery Failure"))(
+    () => ({ item: { json: recoveryIdentity } }),
+    { body: buildResponse.body, statusCode: buildResponse.statusCode },
+  ).json;
+
+  assert.equal(classifyRecovery.retryable, true);
+  assert.equal(classifyRecovery.delivery_request_id, requestId);
+  assert.equal(classifyRecovery.delivery_attempt_id, attemptId);
+  assert.equal(classifyRecovery.pre_provider_failure, true);
+  assert.equal(classifyRecovery.reason, "PRE_PROVIDER_FAILURE");
 });
