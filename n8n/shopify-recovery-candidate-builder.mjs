@@ -219,7 +219,9 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     clean.parameters = JSON.parse(JSON.stringify(clean.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid"));
     if (clean.name === "Claim Due Job") clean.alwaysOutputData = true;
     if (clean.name === "Return One-Off Email Preview" && clean.parameters?.jsCode) {
-      clean.parameters.jsCode = clean.parameters.jsCode.replace(/recipient:\s*["'][^"']*["']/, "recipient: null");
+      clean.parameters.jsCode = clean.parameters.jsCode
+        .replace(/sender:\s*["'][^"']*["']/, "sender: null")
+        .replace(/recipient:\s*["'][^"']*["']/, "recipient: null");
     }
     return clean;
   });
