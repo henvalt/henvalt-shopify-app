@@ -250,6 +250,62 @@ BEGIN
   IF (SELECT count(*) FROM henvalt.delivery_requests WHERE intervention_id=v_intervention_max)<>1 THEN
     RAISE EXCEPTION 'generation limit created an extra request';
   END IF;
+
+  -- A durable egress marker always wins over a stale/misclassified
+  -- pre-provider response. Even if quota was released, the request cannot
+  -- produce another generation after the one-way provider fence committed.
+  DECLARE
+    v_tenant_fenced uuid := gen_random_uuid();
+    v_intervention_fenced uuid := gen_random_uuid();
+    v_job_fenced uuid := gen_random_uuid();
+    v_request_fenced uuid := gen_random_uuid();
+    v_attempt_fenced uuid;
+  BEGIN
+    INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
+    VALUES(v_intervention_fenced,v_tenant_fenced,gen_random_uuid(),'EMAIL','FAILED');
+    INSERT INTO henvalt.delivery_requests(
+      id,tenant_id,intervention_id,channel,delivery_mode,recipient_reference,
+      status,provider,idempotency_key,correlation_id,generation_number,
+      provider_egress_started_at
+    ) VALUES(
+      v_request_fenced,v_tenant_fenced,v_intervention_fenced,'EMAIL','HENVALT_MANAGED',
+      'egress-fenced@example.test','FAILED','mailersend','egress-fenced-key',
+      gen_random_uuid(),1,clock_timestamp()
+    );
+    INSERT INTO henvalt.delivery_attempts(
+      tenant_id,delivery_request_id,attempt_number,state,provider_status_code,provider_response
+    ) VALUES(
+      v_tenant_fenced,v_request_fenced,1,'FAILED',409,
+      '{"henvalt_delivery_stage":"pre_provider","error":"stale_pre_provider_marker"}'::jsonb
+    ) RETURNING id INTO v_attempt_fenced;
+    INSERT INTO henvalt.email_usage_reservations(
+      tenant_id,delivery_request_id,status,status_reason,last_attempt_id
+    ) VALUES(v_tenant_fenced,v_request_fenced,'RELEASED','PRE_PROVIDER_FAILURE',v_attempt_fenced);
+    INSERT INTO henvalt.email_usage_reservation_events(
+      reservation_id,tenant_id,delivery_request_id,event_type,previous_status,
+      new_status,delivery_attempt_id,reason
+    )
+    SELECT id,v_tenant_fenced,v_request_fenced,'RELEASED','RESERVED','RELEASED',
+           v_attempt_fenced,'PRE_PROVIDER_FAILURE'
+      FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_fenced;
+    INSERT INTO henvalt.background_jobs(
+      id,tenant_id,job_type,payload,status,locked_by
+    ) VALUES(
+      v_job_fenced,v_tenant_fenced,'execute_intervention',
+      jsonb_build_object('tenant_id',v_tenant_fenced,'intervention_id',v_intervention_fenced),
+      'CLAIMED','recovery-worker-fenced'
+    );
+    v_result := henvalt.enqueue_delivery_retry_generation_job(
+      v_intervention_fenced,v_job_fenced,'recovery-worker-fenced',
+      v_request_fenced,v_attempt_fenced
+    );
+    IF v_result->>'action'<>'CONTINUE_NORMAL' THEN
+      RAISE EXCEPTION 'durable provider egress fence did not block retry: %',v_result;
+    END IF;
+    IF (SELECT count(*) FROM henvalt.delivery_requests WHERE intervention_id=v_intervention_fenced)<>1 THEN
+      RAISE EXCEPTION 'durable provider egress fence allowed a second generation';
+    END IF;
+  END;
 END;
 $tests$;
 
