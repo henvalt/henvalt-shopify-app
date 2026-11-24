@@ -365,6 +365,7 @@ BEGIN
      OR v_job.locked_at IS NULL
      OR v_job.locked_at < clock_timestamp() - interval '900 seconds'
      OR v_job.tenant_id IS DISTINCT FROM p_tenant_id
+     OR v_job.payload->>'tenant_id' IS DISTINCT FROM p_tenant_id::text
      OR v_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
      OR v_job.payload->>'delivery_request_id' IS DISTINCT FROM p_delivery_request_id::text
      OR (v_job.payload->>'generation_number')::integer IS DISTINCT FROM p_generation_number THEN
