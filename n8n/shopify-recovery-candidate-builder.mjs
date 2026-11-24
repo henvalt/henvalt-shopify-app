@@ -216,6 +216,70 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     }
     return clean;
   });
+
+  const claimDue = workflow.nodes.find((node) => node.name === "Claim Due Job");
+  claimDue.parameters.query = "SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention','execute_delivery_retry_generation']::text[])";
+
+  const normalizer = workflow.nodes.find((node) => node.name === "Normalize & Guard");
+  let normalizerCode = normalizer.parameters.jsCode;
+  normalizerCode = replaceOne(
+    normalizerCode,
+    'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;',
+    'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;\\n' +
+    'const tenantId = j.tenant_id != null ? j.tenant_id : (payload.tenant_id != null ? payload.tenant_id : null);\\n' +
+    'const deliveryRequestId = payload.delivery_request_id != null ? payload.delivery_request_id : null;\\n' +
+    'const generationNumber = payload.generation_number != null ? Number(payload.generation_number) : null;\\n' +
+    'const jobType = j.job_type != null ? j.job_type : null;\\n' +
+    'const claimValid = jobType === "execute_intervention"\\n' +
+    '  ? interventionId != null\\n' +
+    '  : jobType === "execute_delivery_retry_generation"\\n' +
+    '    ? interventionId != null && tenantId != null && deliveryRequestId != null && Number.isInteger(generationNumber)\\n' +
+    '    : false;',
+    "generation retry claim normalization"
+  );
+  normalizerCode = replaceOne(
+    normalizerCode,
+    'tenant_id: payload.tenant_id != null ? payload.tenant_id : null,',
+    'tenant_id: tenantId,\\n  delivery_request_id: deliveryRequestId,\\n  generation_number: generationNumber,',
+    "retry job tenant and generation identity"
+  );
+  normalizerCode = replaceOne(
+    normalizerCode,
+    'has_job: jobId != null && interventionId != null,',
+    'has_job: jobId != null,\\n  claim_valid: claimValid,',
+    "claimed job validity gate"
+  );
+  normalizer.parameters.jsCode = normalizerCode;
+
+  const deliveryFailure = workflow.nodes.find((node) => node.name === "Classify Delivery Failure");
+  deliveryFailure.parameters.jsCode = [
+    'const response = $json || {};',
+    'const body = response.body && typeof response.body === "object" ? response.body : {};',
+    'const state = String(body.state || "UNKNOWN").toUpperCase();',
+    'const reason = String(body.failure_category || "DELIVERY_RESULT_UNAVAILABLE").toUpperCase();',
+    'const validUuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);',
+    'const deliveryRequestId = body.delivery_request_id || null;',
+    'const deliveryAttemptId = body.delivery_attempt_id || null;',
+    'const preProviderFailure = body.pre_provider_failure === true && state === "FAILED" && validUuid(deliveryRequestId) && validUuid(deliveryAttemptId);',
+    'const retryable = preProviderFailure;',
+    'const final_status = state === "REJECTED" ? "SKIPPED" : "FAILED";',
+    'const ng = $("Normalize & Guard").item.json;',
+    'return { json: {',
+    '  intervention_id: ng.intervention_id,',
+    '  tenant_id: ng.tenant_id,',
+    '  job_id: ng.job_id,',
+    '  worker_id: ng.worker_id,',
+    '  delivery_request_id: deliveryRequestId,',
+    '  delivery_attempt_id: deliveryAttemptId,',
+    '  pre_provider_failure: preProviderFailure,',
+    '  retryable,',
+    '  final_status,',
+    '  reason: preProviderFailure ? "PRE_PROVIDER_FAILURE" : reason,',
+    '  delivery_state: state,',
+    '  http_status: response.statusCode || null',
+    '} };'
+  ].join("\\n");
+
   const added = buildNodes(manifest, normalizerSource);
   const allNames = new Set(workflow.nodes.map((node) => node.name));
   for (const node of added) {
