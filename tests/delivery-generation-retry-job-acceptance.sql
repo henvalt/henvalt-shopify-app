@@ -31,6 +31,12 @@ DECLARE
   v_job_unmarked uuid := gen_random_uuid();
   v_request_unmarked uuid := gen_random_uuid();
   v_attempt_unmarked uuid;
+
+  v_tenant_invalid uuid := gen_random_uuid();
+  v_intervention_invalid uuid := gen_random_uuid();
+  v_request_invalid uuid := gen_random_uuid();
+  v_retry_command_invalid uuid := gen_random_uuid();
+  v_retry_job_invalid uuid := gen_random_uuid();
 BEGIN
   PERFORM set_config('request.jwt.claim.role','service_role',true);
 
@@ -379,19 +385,53 @@ BEGIN
      OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_retry_request)<>'RESERVED' THEN
     RAISE EXCEPTION 'frozen retry envelope failure changed intervention or quota state';
   END IF;
-  -- With the same exact current claim but no freeze, a genuinely empty
-  -- pending envelope fails closed and releases only its own reservation.
-  UPDATE henvalt.recovery_interventions
-     SET delivery_frozen_at=NULL,delivery_freeze_reason=NULL,status='SENDING'
-   WHERE id=v_intervention AND tenant_id=v_tenant;
+  -- Test a genuinely invalid current envelope on a separate, unfrozen
+  -- intervention. Delivery freezes are intentionally irreversible; the
+  -- test must never clear one just to reuse the same fixture.
+  INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
+  VALUES(v_intervention_invalid,v_tenant_invalid,gen_random_uuid(),'EMAIL','SENDING');
+  INSERT INTO henvalt.delivery_requests(
+    id,tenant_id,intervention_id,channel,delivery_mode,recipient_reference,
+    status,provider,idempotency_key,correlation_id,generation_number
+  ) VALUES(
+    v_request_invalid,v_tenant_invalid,v_intervention_invalid,'EMAIL','HENVALT_MANAGED',
+    'invalid-envelope@example.test','PENDING','mailersend','invalid-envelope-key',
+    gen_random_uuid(),2
+  );
+  INSERT INTO henvalt.delivery_retry_commands(
+    tenant_id,intervention_id,retry_command_id,generation_number,delivery_request_id
+  ) VALUES(
+    v_tenant_invalid,v_intervention_invalid,v_retry_command_invalid,2,v_request_invalid
+  );
+  INSERT INTO henvalt.background_jobs(
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
+  ) VALUES(
+    v_retry_job_invalid,v_tenant_invalid,'execute_delivery_retry_generation',
+    jsonb_build_object(
+      'tenant_id',v_tenant_invalid,'intervention_id',v_intervention_invalid,
+      'delivery_request_id',v_request_invalid,'generation_number',2
+    ),
+    'CLAIMED','retry-envelope-invalid-test',clock_timestamp()
+  );
+  INSERT INTO henvalt.delivery_retry_jobs(
+    tenant_id,intervention_id,retry_command_id,delivery_request_id,job_id
+  ) VALUES(
+    v_tenant_invalid,v_intervention_invalid,v_retry_command_invalid,
+    v_request_invalid,v_retry_job_invalid
+  );
+  INSERT INTO henvalt.email_usage_reservations(
+    tenant_id,delivery_request_id,status,status_reason
+  ) VALUES(v_tenant_invalid,v_request_invalid,'RESERVED','DELIVERY_CLAIMED');
+
   v_result := henvalt.fail_delivery_retry_envelope_safely(
-    v_tenant,v_intervention,v_retry_request,2,v_retry_job,'retry-envelope-freeze-test'
+    v_tenant_invalid,v_intervention_invalid,v_request_invalid,2,
+    v_retry_job_invalid,'retry-envelope-invalid-test'
   );
   IF v_result->>'action'<>'FAILED' THEN
     RAISE EXCEPTION 'invalid current retry envelope did not fail safely: %',v_result;
   END IF;
-  IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention)<>'FAILED'
-     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_retry_request)<>'RELEASED' THEN
+  IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention_invalid)<>'FAILED'
+     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_invalid)<>'RELEASED' THEN
     RAISE EXCEPTION 'invalid retry envelope did not resolve intervention and release its reservation';
   END IF;
 END;
