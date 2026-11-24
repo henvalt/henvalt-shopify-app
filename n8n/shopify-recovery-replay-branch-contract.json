@@ -5,7 +5,7 @@
   "recovery_workflow": {
     "name": "HENVALT_RECOVERY",
     "id": "3GEDoeCA4paXTaDF",
-    "inspected_active_version": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+    "inspected_active_version": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
     "existing_intervention_claim": {
       "node": "Claim Due Job",
       "sql": "SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention']::text[])",
