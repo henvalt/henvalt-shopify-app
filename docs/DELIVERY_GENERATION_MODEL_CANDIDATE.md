@@ -323,7 +323,7 @@ A retry request can be in `UNKNOWN` after authorization even though the worker c
 4. There is no delivery-attempt row and no provider-event row for that request.
 5. The existing quota reservation is still `RESERVED`.
 
-Under the parent → request → job lock order, the loader resets only that provably unegressed request to `PENDING`, clears its stale provider-claim timestamp, and returns the original immutable envelope. The billing entitlement trigger still checks that the account is active; it reuses the existing reserved hold instead of reserving the same delivery twice. If any attempt, provider event, egress marker, expired lease, or freeze exists, this recovery path does not reset or resend.
+Under the parent → request → job lock order, the loader resets only that provably unegressed request to `PENDING`, clears its stale provider-claim timestamp, and returns the original immutable envelope. The billing entitlement trigger still checks the account's ACTIVE/test-mode state, monetary usage cap, and monthly email ceiling before reusing the existing reserved hold; it does not reserve the same delivery twice or bypass current billing limits. Retry authorization rejects NULL generation numbers, requires the retry job's tenant column to match its payload tenant, and validates a fresh 900-second source-job lease before creating a new generation. The recovery candidate applies the same strict tenant-column/payload match before routing retry jobs. If any attempt, provider event, egress marker, expired lease, tenant mismatch, or freeze exists, the retry path does not reset or resend.
 
 ### Verification and deployment boundary
 
