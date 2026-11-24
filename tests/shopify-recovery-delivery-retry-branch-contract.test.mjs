@@ -107,8 +107,8 @@ test("acceptance proves ambiguous outcomes do not retry and generation three is 
 
 
 test("retry job terminal outcomes preserve fair replay scheduling in the existing worker", () => {
-  assert.match(recoveryBuilder, /Resume Delivery Retry Decision\?\"] = \{ main: \[\[edge\("Is Delivery Retry Generation Job\?"\)\], \[edge\("Claim Shopify Replay Job"\)\]\] \}/);
-  assert.match(recoveryBuilder, /Delivery Retry Enqueued\?\"] = \{ main: \[\[edge\("Claim Shopify Replay Job"\)\], \[edge\("Complete Job"\)\]\] \}/);
-  assert.match(recoveryBuilder, /Retry Delivery Generation Enqueue Job\"] = \{ main: \[\[edge\("Claim Shopify Replay Job"\)/);
+  assert.ok(recoveryBuilder.includes(`c["Resume Delivery Retry Decision?"] = { main: [[edge("Is Delivery Retry Generation Job?")], [edge("Claim Shopify Replay Job")]] };`));
+  assert.ok(recoveryBuilder.includes(`c["Delivery Retry Enqueued?"] = { main: [[edge("Claim Shopify Replay Job")], [edge("Complete Job")]] };`));
+  assert.ok(recoveryBuilder.includes(`c["Retry Delivery Generation Enqueue Job"] = { main: [[edge("Claim Shopify Replay Job")]`));
   assert.equal(contract.workflow_count, 3);
 });
