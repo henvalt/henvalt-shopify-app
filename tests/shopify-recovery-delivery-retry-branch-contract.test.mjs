@@ -52,8 +52,8 @@ test("retry job is created only from exact pre-provider failure and released quo
 });
 
 test("exact request and attempt identity are locked before retry generation creation", () => {
-  const coreStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.enqueue_delivery_retry_generation_job(\\n  p_tenant_id");
-  const coreEnd = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.enqueue_delivery_retry_generation_job(\\n  p_intervention_id", coreStart + 1);
+  const coreStart = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.enqueue_delivery_retry_generation_job(\n  p_tenant_id");
+  const coreEnd = migration.indexOf("CREATE OR REPLACE FUNCTION henvalt.enqueue_delivery_retry_generation_job(\n  p_intervention_id", coreStart + 1);
   const core = migration.slice(coreStart, coreEnd);
   const reservationStart = core.indexOf("FROM henvalt.email_usage_reservations");
   const reservationEnd = core.indexOf("IF NOT FOUND", reservationStart);
