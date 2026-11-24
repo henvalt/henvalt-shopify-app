@@ -17,10 +17,11 @@ test("full recovery graph builds as a distinct inactive no-send export", () => {
   assert.equal(w.name, "HENVALT_RECOVERY_CANDIDATE_NO_SEND");
   assert.equal(w.active, false);
   assert.equal(w.settings.availableInMCP, false);
-  assert.equal(w.nodes.length, 75);
-  assert.equal(result.audit.candidate_nodes, 75);
-  assert.equal(result.audit.unique_node_ids, 75);
-  assert.equal(result.audit.unique_node_names, 75);
+  assert.equal(w.nodes.length, 74);
+  assert.equal(w.nodeCount, w.nodes.length);
+  assert.equal(result.audit.candidate_nodes, 74);
+  assert.equal(result.audit.unique_node_ids, 74);
+  assert.equal(result.audit.unique_node_names, 74);
   assert.equal(result.audit.credentials_removed, true);
   assert.equal(result.audit.webhook_ids_removed, true);
   assert.equal(result.audit.provider_send_nodes, 0);
@@ -52,7 +53,7 @@ test("recovery replay can call only the isolated INGEST candidate", () => {
 
 test("all intervention terminal paths and empty-claim paths reach the replay scheduler safely", () => {
   const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
-  for (const name of ["Complete Job","Retry Job","Retry Preflight Job","Retry Delivery Job","Retry Pipeline Job"]) {
+  for (const name of ["Complete Job","Retry Job","Retry Preflight Job","Retry Pipeline Job"]) {
     assert.equal(w.connections[name].main[0][0].node, "Claim Shopify Replay Job", name);
   }
   assert.equal(w.connections["Job Claimed?"].main[1][0].node, "Claim Shopify Replay Job");
@@ -153,4 +154,28 @@ test("retry enqueue errors preserve the source job for an idempotent retry; ambi
   assert.equal(w.connections["Delivery Retry Enqueued?"].main[1][0].node, "Complete Job");
   const retry = w.nodes.find((n) => n.name === "Retry Delivery Generation Enqueue Job").parameters.options.queryReplacement;
   assert.match(retry, /DELIVERY_RETRY_GENERATION_ENQUEUE_FAILED/);
+});
+
+
+test("generated recovery candidate has no unreachable orphan nodes", () => {
+  const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
+  const names = new Set(w.nodes.map((node) => node.name));
+  const starts = w.nodes
+    .filter((node) => /trigger|webhook|schedule/i.test(node.type))
+    .map((node) => node.name);
+  const visited = new Set(starts);
+  const queue = [...starts];
+  while (queue.length) {
+    const source = queue.shift();
+    for (const output of w.connections[source]?.main || []) {
+      for (const edge of output || []) {
+        assert.ok(names.has(edge.node), "connection target must exist: " + edge.node);
+        if (!visited.has(edge.node)) {
+          visited.add(edge.node);
+          queue.push(edge.node);
+        }
+      }
+    }
+  }
+  assert.deepEqual([...names].filter((name) => !visited.has(name)), []);
 });
