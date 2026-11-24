@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "status": "candidate-only; no active n8n workflow or production database changed",
+  "workflow_count": 3,
+  "target": {
+    "name": "HENVALT_RECOVERY",
+    "workflow_id": "3GEDoeCA4paXTaDF",
+    "inspected_active_version": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
+    "baseline_node_count": 46,
+    "candidate_export": "n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json"
+  },
+  "job_model": {
+    "existing_job_type": "execute_intervention",
+    "new_job_type": "execute_delivery_retry_generation",
+    "claim_rpc": "henvalt.claim_next_job",
+    "allowed_types": [
+      "execute_intervention",
+      "execute_delivery_retry_generation"
+    ],
+    "retry_job_payload_fields": [
+      "tenant_id",
+      "intervention_id",
+      "delivery_request_id",
+      "generation_number",
+      "source_retry_command_id"
+    ],
+    "max_total_generations": 3,
+    "max_automatic_retries": 2,
+    "retry_command_identity": "delivery_attempts.id",
+    "source_job_completion": "atomic with new generation and retry job insert"
+  },
+  "retry_eligibility": {
+    "state": "FAILED",
+    "server_marker": "provider_response.henvalt_delivery_stage === pre_provider",
+    "requires_exact_delivery_request_id": true,
+    "requires_exact_delivery_attempt_id": true,
+    "quota_reservation_status": "RELEASED",
+    "requires_append_only_release_event": true,
+    "provider_event_must_not_exist": true,
+    "provider_egress_started_at_must_be_null": true,
+    "ambiguous_provider_outcomes_retryable": false,
+    "provider_response_stage_retryable": false
+  },
+  "immutable_envelope": {
+    "source": "delivery_requests.message_reference -> henvalt.messages",
+    "content_regenerated": false,
+    "recipient_replaced": false,
+    "tracking_token_replaced": false,
+    "html_renderer": "henvalt.render_sender_identity_footer",
+    "text_renderer": "henvalt.render_email_plain_text",
+    "loader": "henvalt.load_delivery_retry_envelope",
+    "loader_requires_claimed_job": true,
+    "loader_requires_current_generation": true,
+    "loader_requires_unfrozen_sending_parent": true,
+    "loader_requires_pending_unclaimed_request": true,
+    "loader_requires_mailersend_email": true
+  },
+  "candidate_graph_nodes": [
+    "Claimed Job Valid?",
+    "Resume Delivery Retry Generation",
+    "Resume Delivery Retry Decision?",
+    "Is Delivery Retry Generation Job?",
+    "Load Delivery Retry Envelope",
+    "Delivery Retry Envelope Valid?",
+    "Build Delivery Retry Payload",
+    "Create Delivery Retry Generation Job",
+    "Delivery Retry Enqueued?"
+  ],
+  "failure_paths": {
+    "resume_rpc_error": "retry same source job with constant non-PII reason",
+    "envelope_database_error": "retry same retry-generation job",
+    "invalid_or_stale_envelope": "fail intervention closed and complete job",
+    "generation_enqueue_error": "retry same source job; retry command is attempt-idempotent",
+    "max_generation_reached": "DEAD_LETTER"
+  },
+  "safety": {
+    "active_recovery_workflow_modified": false,
+    "active_delivery_workflow_modified": false,
+    "workflow_published": false,
+    "workflow_executed": false,
+    "provider_sending_enabled": false,
+    "production_database_changed": false,
+    "fourth_workflow_created": false,
+    "candidate_delivery_subworkflow_is_no_send": true
+  }
+}
