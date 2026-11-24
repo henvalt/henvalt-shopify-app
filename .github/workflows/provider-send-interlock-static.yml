@@ -228,7 +228,7 @@ jobs:
       - name: Generate full offline no-send HENVALT_RECOVERY candidate export
         run: node n8n/shopify-recovery-candidate-builder.mjs
       - name: Parse and verify generated recovery candidate JSON
-        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json", "utf8")); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999997" || w.nodes.length !== 60) process.exit(1)'
+        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json", "utf8")); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999997" || w.nodes.length !== 74) process.exit(1)'
       - name: Upload offline no-send recovery workflow candidate
         uses: actions/upload-artifact@v4
         with:
