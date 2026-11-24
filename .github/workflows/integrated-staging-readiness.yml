@@ -1,0 +1,30 @@
+name: HENVALT integrated staging readiness contract
+
+on:
+  pull_request:
+    paths:
+      - "tests/integrated-staging-readiness.test.mjs"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - ".github/workflows/integrated-staging-readiness.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "tests/integrated-staging-readiness.test.mjs"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - ".github/workflows/integrated-staging-readiness.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run integrated staging readiness contract
+        run: node --test tests/integrated-staging-readiness.test.mjs
