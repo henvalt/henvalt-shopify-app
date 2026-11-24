@@ -3,11 +3,11 @@ SET request.jwt.claim.role='service_role';
 
 DO $test$
 DECLARE
-  v_tenant uuid := 'd1000000-0000-4000-8000-000000000001';
-  v_intervention uuid := 'd2000000-0000-4000-8000-000000000001';
-  v_request uuid := 'd3000000-0000-4000-8000-000000000001';
-  v_job uuid := 'd4000000-0000-4000-8000-000000000001';
-  v_retry_command uuid := 'd5000000-0000-4000-8000-000000000001';
+  v_tenant uuid := gen_random_uuid();
+  v_intervention uuid := gen_random_uuid();
+  v_request uuid := gen_random_uuid();
+  v_job uuid := gen_random_uuid();
+  v_retry_command uuid := gen_random_uuid();
   v_worker text := 'retry-authorize-worker';
   v_result jsonb;
 BEGIN
