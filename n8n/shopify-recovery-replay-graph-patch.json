@@ -4,9 +4,10 @@
   "target": {
     "name": "HENVALT_RECOVERY",
     "workflow_id": "3GEDoeCA4paXTaDF",
-    "inspected_active_version": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+    "inspected_active_version": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
     "baseline_node_count": 46,
-    "keep_total_workflows": 3
+    "keep_total_workflows": 3,
+    "inspected_at": "2026-11-24"
   },
   "safety": {
     "active_workflows_modified": false,
@@ -517,5 +518,6 @@
       "query": "SELECT henvalt.retry_shopify_replay_job($1, $2, $3, $4, $5) AS result",
       "queryReplacement": "={{ [$('Normalize Shopify Replay Claim').item.json.job_id, $('Normalize Shopify Replay Claim').item.json.worker_id, $('Normalize Shopify Replay Claim').item.json.lease_id, 'SHOPIFY_REPLAY_PROCESSING_FAILED', 300] }}"
     }
-  }
+  },
+  "source_snapshot": "n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json"
 }
