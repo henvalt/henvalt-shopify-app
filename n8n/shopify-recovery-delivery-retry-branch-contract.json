@@ -7,7 +7,8 @@
     "workflow_id": "3GEDoeCA4paXTaDF",
     "inspected_active_version": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
     "baseline_node_count": 46,
-    "candidate_export": "n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json"
+    "candidate_export": "n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json",
+    "candidate_node_count": 74
   },
   "job_model": {
     "existing_job_type": "execute_intervention",
@@ -27,7 +28,9 @@
     "max_total_generations": 3,
     "max_automatic_retries": 2,
     "retry_command_identity": "delivery_attempts.id",
-    "source_job_completion": "atomic with new generation and retry job insert"
+    "source_job_completion": "atomic with new generation and retry job insert",
+    "retry_job_mapping_table": "henvalt.delivery_retry_jobs",
+    "retry_job_mapping_append_only": true
   },
   "retry_eligibility": {
     "state": "FAILED",
@@ -53,7 +56,11 @@
     "loader_requires_current_generation": true,
     "loader_requires_unfrozen_sending_parent": true,
     "loader_requires_pending_unclaimed_request": true,
-    "loader_requires_mailersend_email": true
+    "loader_requires_mailersend_email": true,
+    "canonical_content_helpers": [
+      "henvalt.render_sender_identity_footer",
+      "henvalt.render_email_plain_text"
+    ]
   },
   "candidate_graph_nodes": [
     "Claimed Job Valid?",
@@ -82,5 +89,12 @@
     "production_database_changed": false,
     "fourth_workflow_created": false,
     "candidate_delivery_subworkflow_is_no_send": true
+  },
+  "delivery_response_contract": {
+    "delivery_attempt_id": "Record Delivery Result.attempt_id",
+    "pre_provider_failure": "trusted response body marker henvalt_delivery_stage=pre_provider",
+    "retry_requires_both_ids": true,
+    "retry_state": "FAILED",
+    "ambiguous_state_retryable": false
   }
 }
