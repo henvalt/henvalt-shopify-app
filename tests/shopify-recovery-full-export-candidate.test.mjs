@@ -200,12 +200,26 @@ test("claimed intervention and generation retry jobs require complete UUID-bound
   assert.equal(legacyNormal.claim_valid, true, "legacy intervention jobs do not require a top-level tenant_id");
   const retry = execute({
     ...base,
+    tenant_id: tenant,
     job_type: "execute_delivery_retry_generation",
     payload: { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request, generation_number: 2 }
   });
   assert.equal(retry.claim_valid, true);
   assert.equal(retry.delivery_request_id, request);
   assert.equal(retry.generation_number, 2);
+  const mismatchedTenant = execute({
+    ...base,
+    tenant_id: "99999999-9999-4999-8999-999999999999",
+    job_type: "execute_delivery_retry_generation",
+    payload: { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request, generation_number: 2 }
+  });
+  assert.equal(mismatchedTenant.claim_valid, false, "retry job tenant column must match payload tenant");
+  const missingTenantColumn = execute({
+    ...base,
+    job_type: "execute_delivery_retry_generation",
+    payload: { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request, generation_number: 2 }
+  });
+  assert.equal(missingTenantColumn.claim_valid, false, "retry jobs require a tenant-bound job row");
   for (const payload of [
     { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request },
     { tenant_id: tenant, intervention_id: intervention, delivery_request_id: "not-a-uuid", generation_number: 2 },
