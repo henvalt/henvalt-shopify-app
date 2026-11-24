@@ -279,7 +279,8 @@ test("billing execution is attached to the existing recovery scheduler in an ina
   assert.equal(workflow.name, "HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY");
   assert.equal(workflow.active, false);
   assert.equal(workflow.settings.availableInMCP, false);
-  assert.equal(workflow.nodes.length, 77);
+  assert.equal(workflow.nodes.length, 76);
+  assert.equal(workflow.nodeCount, workflow.nodes.length);
   assert.equal(result.audit.workflow_count, 3);
   assert.equal(result.audit.maximum_shops_per_tick, 10);
   assert.ok(discovery.parameters.query.includes("rl.entry_type = 'RECOVERY'"));
