@@ -248,7 +248,7 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     'const jobType = j.job_type != null ? j.job_type : null;\n' +
     'const validUuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);\n' +
     'const claimValid = jobType === "execute_intervention"\n' +
-    '  ? validUuid(interventionId) && validUuid(tenantId)\n' +
+    '  ? validUuid(interventionId)\n' +
     '  : jobType === "execute_delivery_retry_generation"\n' +
     '    ? validUuid(interventionId) && validUuid(tenantId) && validUuid(deliveryRequestId) && Number.isInteger(generationNumber) && generationNumber >= 2 && generationNumber <= 3\n' +
     '    : false;',
