@@ -310,8 +310,13 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     allIds.add(node.id);
   }
   workflow.nodes.push(...added);
+  // The legacy generic delivery retry node is superseded by generation-aware retry jobs.
+  // It has no inbound edges after the branch replacement and must not ship as dead code.
+  workflow.nodes = workflow.nodes.filter((node) => node.name !== "Retry Delivery Job");
+  workflow.nodeCount = workflow.nodes.length;
   const c = JSON.parse(JSON.stringify(workflow.connections));
-  for (const name of ["Complete Job", "Retry Job", "Retry Preflight Job", "Retry Delivery Job", "Retry Pipeline Job"]) {
+  delete c["Retry Delivery Job"];
+  for (const name of ["Complete Job", "Retry Job", "Retry Preflight Job", "Retry Pipeline Job"]) {
     c[name] = { main: [[edge("Claim Shopify Replay Job")]] };
   }
   c["Job Claimed?"].main[1] = [edge("Claim Shopify Replay Job")];
