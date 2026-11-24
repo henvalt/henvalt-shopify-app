@@ -13,6 +13,7 @@ on:
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
       - "tests/delivery-generation-retry-job-acceptance.sql"
+      - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
       - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
       - "tests/delivery-generation-retry-egress-lease-acceptance.sql"
       - "tests/delivery-generation-production-shaped-webhook-routing.sql"
@@ -33,6 +34,7 @@ on:
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
       - "tests/delivery-generation-retry-job-acceptance.sql"
+      - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
       - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
       - "tests/delivery-generation-retry-egress-lease-acceptance.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
@@ -97,6 +99,8 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611240001_delivery_retry_generation_jobs.sql
       - name: Verify retry job creation, generation limits and immutable envelope loading
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-job-acceptance.sql
+      - name: Verify retry lease before delivery request authorization
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-authorization-lease-acceptance.sql
       - name: Verify retry lease heartbeat and final provider-egress ownership
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-egress-lease-acceptance.sql
       - name: Race retry generation against late acceptance in both lock orders
