@@ -371,9 +371,9 @@ BEGIN
 
   -- Parent-first lock order is shared with authorization, result, webhook and
   -- generation creation. The provider egress RPC rechecks this state again.
-  SELECT * INTO v_intervention
-    FROM henvalt.recovery_interventions
-   WHERE id=p_intervention_id AND tenant_id=p_tenant_id
+  SELECT ri.* INTO v_intervention
+    FROM henvalt.recovery_interventions ri
+   WHERE ri.id=p_intervention_id AND ri.tenant_id=p_tenant_id
    FOR UPDATE;
   IF NOT FOUND OR v_intervention.delivery_frozen_at IS NOT NULL
      OR v_intervention.status <> 'SENDING' THEN
