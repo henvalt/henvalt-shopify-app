@@ -396,6 +396,19 @@ BEGIN
      OR v_request.tracking_token IS NULL
      OR v_request.provider_claimed_at IS NOT NULL
      OR v_request.provider_egress_started_at IS NOT NULL
+     -- A persisted attempt or provider event is contradictory evidence for a
+     -- never-attempted retry request. Do not load an envelope while webhook
+     -- settlement or an unmarked send outcome may still be in flight.
+     OR EXISTS (
+       SELECT 1 FROM henvalt.delivery_attempts da
+        WHERE da.tenant_id=p_tenant_id
+          AND da.delivery_request_id=p_delivery_request_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM henvalt.provider_events pe
+        WHERE pe.tenant_id=p_tenant_id
+          AND pe.delivery_request_id=p_delivery_request_id
+     )
      OR EXISTS (
        SELECT 1 FROM henvalt.delivery_requests newer
         WHERE newer.tenant_id=p_tenant_id
@@ -749,7 +762,17 @@ BEGIN
      OR v_intervention.status <> 'SENDING'
      OR v_request.status <> 'PENDING'
      OR v_request.provider_claimed_at IS NOT NULL
-     OR v_request.provider_egress_started_at IS NOT NULL THEN
+     OR v_request.provider_egress_started_at IS NOT NULL
+     OR EXISTS (
+       SELECT 1 FROM henvalt.delivery_attempts da
+        WHERE da.tenant_id=p_tenant_id
+          AND da.delivery_request_id=p_delivery_request_id
+     )
+     OR EXISTS (
+       SELECT 1 FROM henvalt.provider_events pe
+        WHERE pe.tenant_id=p_tenant_id
+          AND pe.delivery_request_id=p_delivery_request_id
+     ) THEN
     RETURN jsonb_build_object('action','STALE','reason','DELIVERY_RETRY_REQUEST_NOT_FAILABLE');
   END IF;
 
