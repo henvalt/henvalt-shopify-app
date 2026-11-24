@@ -44,6 +44,26 @@ export function buildDeliveryCandidate(source) {
       if (clean.type === "n8n-nodes-base.webhook" && typeof clean.parameters.path === "string") {
         clean.parameters.path = "henvalt/candidate-no-send/" + clean.parameters.path.replace(/^henvalt\//, "");
       }
+      if (clean.name === "Validate & Normalize") {
+        clean.parameters.jsCode = replaceOne(
+          clean.parameters.jsCode,
+          "  metadata: b.metadata || {},",
+          "  metadata: b.metadata || {},\\n" +
+          "  delivery_generation_retry: b.delivery_generation_retry === true || (b.metadata && b.metadata.delivery_generation_retry === true),\\n" +
+          "  retry_job_id: b.retry_job_id || null,\\n" +
+          "  retry_worker_id: b.retry_worker_id || null,\\n" +
+          "  retry_generation_number: b.retry_generation_number != null ? Number(b.retry_generation_number) : null,",
+          "preserve exact retry lease identity from recovery worker"
+        );
+      }
+      if (clean.name === "MailerSend Send") {
+        clean.parameters.jsonBody = replaceOne(
+          clean.parameters.jsonBody,
+          "text_body: $('Authorize & Context').item.json.body.text_body } }",
+          "text_body: $('Authorize & Context').item.json.body.text_body, delivery_generation_retry: $('Validate & Normalize').item.json.delivery_generation_retry, retry_job_id: $('Validate & Normalize').item.json.retry_job_id, retry_worker_id: $('Validate & Normalize').item.json.retry_worker_id, retry_generation_number: $('Validate & Normalize').item.json.retry_generation_number } }",
+          "pass exact retry lease identity to Edge Function"
+        );
+      }
       if (clean.name === "MailerSend Send") {
         clean.name = "No-Send Provider Stub";
         clean.type = "n8n-nodes-base.code";
