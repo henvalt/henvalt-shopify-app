@@ -36,7 +36,8 @@ const NODE_IDS = [
   "10000000-0000-4000-8000-000000000025",
   "10000000-0000-4000-8000-000000000026",
   "10000000-0000-4000-8000-000000000027",
-  "10000000-0000-4000-8000-000000000028"
+  "10000000-0000-4000-8000-000000000028",
+  "10000000-0000-4000-8000-000000000029"
 ];
 
 function edge(node, index = 0) {
@@ -192,7 +193,9 @@ function buildNodes(manifest, normalizerSource) {
       "SELECT henvalt.retry_job($1,$2,$3,$4) AS result",
       "={{ [$('Normalize & Guard').item.json.job_id, $('Normalize & Guard').item.json.worker_id, 'DELIVERY_RETRY_GENERATION_ENQUEUE_FAILED', 300] }}",
       [7240, 1500], { onError: "continueErrorOutput" }),
-    { id: id[27], name: "Stop Delivery Retry Job Claim Lost", type: "n8n-nodes-base.noOp", typeVersion: 1, position: [7680, 1500], parameters: {} }
+    { id: id[27], name: "Stop Delivery Retry Job Claim Lost", type: "n8n-nodes-base.noOp", typeVersion: 1, position: [7680, 1500], parameters: {} },
+    ifNode("Retry Job Claim Lost?", id[28],
+      "={{ $('Classify Delivery Failure').item.json.retry_job_claim_lost === true }}", [7000, 1140])
   ];
   return n;
 }
@@ -273,9 +276,10 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     'const validUuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);',
     'const deliveryRequestId = body.delivery_request_id || null;',
     'const deliveryAttemptId = body.delivery_attempt_id || null;',
-    'const preProviderFailure = body.pre_provider_failure === true && state === "FAILED" && validUuid(deliveryRequestId) && validUuid(deliveryAttemptId);',
+    'const retryJobClaimLost = body.retry_job_claim_lost === true;',
+    'const preProviderFailure = !retryJobClaimLost && body.pre_provider_failure === true && state === "FAILED" && validUuid(deliveryRequestId) && validUuid(deliveryAttemptId);',
     'const retryable = preProviderFailure;',
-    'const final_status = state === "REJECTED" ? "SKIPPED" : "FAILED";',
+    'const final_status = retryJobClaimLost ? "SENDING" : (state === "REJECTED" ? "SKIPPED" : "FAILED");',
     'const ng = $("Normalize & Guard").item.json;',
     'return { json: {',
     '  intervention_id: ng.intervention_id,',
@@ -285,6 +289,7 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     '  delivery_request_id: deliveryRequestId,',
     '  delivery_attempt_id: deliveryAttemptId,',
     '  pre_provider_failure: preProviderFailure,',
+    '  retry_job_claim_lost: retryJobClaimLost,',
     '  retryable,',
     '  final_status,',
     '  reason: preProviderFailure ? "PRE_PROVIDER_FAILURE" : reason,',
@@ -338,6 +343,8 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   c["Build Delivery Retry Payload"] = { main: [[edge("Call HENVALT_DELIVERY")]] };
   c["Fail Delivery Retry Envelope"] = { main: [[edge("Complete Job")], [edge("Stop Delivery Retry Job Claim Lost")]] };
   c["Retry Delivery Retry Job"] = { main: [[edge("Claim Shopify Replay Job")], [edge("Stop Delivery Retry Job Claim Lost")]] };
+  c["Classify Delivery Failure"] = { main: [[edge("Retry Job Claim Lost?")]] };
+  c["Retry Job Claim Lost?"] = { main: [[edge("Stop Delivery Retry Job Claim Lost")], [edge("Resolve Delivery Failure")]] };
   c["Delivery Retryable?"] = { main: [[edge("Create Delivery Retry Generation Job")], [edge("Complete Job")]] };
   c["Create Delivery Retry Generation Job"] = { main: [[edge("Delivery Retry Enqueued?")], [edge("Retry Delivery Generation Enqueue Job")]] };
   c["Delivery Retry Enqueued?"] = { main: [[edge("Claim Shopify Replay Job")], [edge("Complete Job")]] };
