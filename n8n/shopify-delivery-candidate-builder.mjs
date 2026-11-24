@@ -90,9 +90,27 @@ export function buildDeliveryCandidate(source) {
           '    pre_provider_failure: !!(c.provider_response && c.provider_response.henvalt_delivery_stage === "pre_provider")',
           "propagate stable delivery attempt identity and trusted pre-provider stage"
         );
+        clean.parameters.jsCode = replaceOne(
+          clean.parameters.jsCode,
+          '    pre_provider_failure: !!(c.provider_response && c.provider_response.henvalt_delivery_stage === "pre_provider")',
+          '    pre_provider_failure: !!(c.provider_response && c.provider_response.henvalt_delivery_stage === "pre_provider"),\\n    retry_job_claim_lost: c.retry_job_claim_lost === true',
+          "propagate retry job claim-loss signal"
+        );
       }
       if (clean.name === "Classify Result") {
         let code = clean.parameters.jsCode;
+        code = replaceOne(
+          code,
+          'let retryable = false;',
+          'let retryable = false;\\nlet retryJobClaimLost = false;',
+          "retry job claim-loss state"
+        );
+        code = replaceOne(
+          code,
+          'if (v.precheck_ok !== true) {',
+          'if (send && send.body && send.body.retry_job_claim_lost === true) {\\n  state = "REJECTED"; errorClass = "RETRY_JOB_CLAIM_LOST"; http_status = 409; provider_response = send.body; retryJobClaimLost = true;\\n} else if (v.precheck_ok !== true) {',
+          "do not record a result after retry job claim loss"
+        );
         code = replaceOne(
           code,
           'else if (!send || send.statusCode === undefined || send.statusCode === null) {',
@@ -120,8 +138,14 @@ export function buildDeliveryCandidate(source) {
         code = replaceOne(
           code,
           "should_record_result: authorized,",
-          "should_record_result: authorized && !(send && send.body && send.body.no_send_candidate === true),",
-          "prevent no-send result persistence"
+          "should_record_result: authorized && !retryJobClaimLost && !(send && send.body && send.body.no_send_candidate === true),",
+          "prevent no-send and stale-claim result persistence"
+        );
+        code = replaceOne(
+          code,
+          "should_record_result: authorized && !retryJobClaimLost && !(send && send.body && send.body.no_send_candidate === true),",
+          "should_record_result: authorized && !retryJobClaimLost && !(send && send.body && send.body.no_send_candidate === true),\\n  retry_job_claim_lost: retryJobClaimLost,",
+          "propagate retry claim-loss state to recovery"
         );
         clean.parameters.jsCode = code;
       }
