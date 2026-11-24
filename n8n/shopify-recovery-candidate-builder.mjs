@@ -246,10 +246,11 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     'const deliveryRequestId = payload.delivery_request_id != null ? payload.delivery_request_id : null;\n' +
     'const generationNumber = payload.generation_number != null ? Number(payload.generation_number) : null;\n' +
     'const jobType = j.job_type != null ? j.job_type : null;\n' +
+    'const validUuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);\n' +
     'const claimValid = jobType === "execute_intervention"\n' +
-    '  ? interventionId != null\n' +
+    '  ? validUuid(interventionId) && validUuid(tenantId)\n' +
     '  : jobType === "execute_delivery_retry_generation"\n' +
-    '    ? interventionId != null && tenantId != null && deliveryRequestId != null && Number.isInteger(generationNumber)\n' +
+    '    ? validUuid(interventionId) && validUuid(tenantId) && validUuid(deliveryRequestId) && Number.isInteger(generationNumber) && generationNumber >= 2 && generationNumber <= 3\n' +
     '    : false;',
     "generation retry claim normalization"
   );
