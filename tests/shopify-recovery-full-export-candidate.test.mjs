@@ -179,3 +179,41 @@ test("generated recovery candidate has no unreachable orphan nodes", () => {
   }
   assert.deepEqual([...names].filter((name) => !visited.has(name)), []);
 });
+
+
+test("claimed intervention and generation retry jobs require complete UUID-bound identities", () => {
+  const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
+  const code = w.nodes.find((n) => n.name === "Normalize & Guard").parameters.jsCode;
+  const execute = (row) => new Function("$", "$json", code)(
+    () => ({ first: () => ({ json: { worker_id: "worker-test" } }) }),
+    row
+  ).json;
+  const tenant = "11111111-1111-4111-8111-111111111111";
+  const intervention = "22222222-2222-4222-8222-222222222222";
+  const request = "33333333-3333-4333-8333-333333333333";
+  const job = "44444444-4444-4444-8444-444444444444";
+  const base = { id: job, job_type: "execute_intervention", payload: { tenant_id: tenant, intervention_id: intervention } };
+  const normal = execute(base);
+  assert.equal(normal.claim_valid, true);
+  assert.equal(normal.tenant_id, tenant);
+  const retry = execute({
+    ...base,
+    job_type: "execute_delivery_retry_generation",
+    payload: { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request, generation_number: 2 }
+  });
+  assert.equal(retry.claim_valid, true);
+  assert.equal(retry.delivery_request_id, request);
+  assert.equal(retry.generation_number, 2);
+  for (const payload of [
+    { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request },
+    { tenant_id: tenant, intervention_id: intervention, delivery_request_id: "not-a-uuid", generation_number: 2 },
+    { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request, generation_number: 1 },
+    { tenant_id: tenant, intervention_id: intervention, delivery_request_id: request, generation_number: 4 },
+    { tenant_id: "bad-tenant", intervention_id: intervention, delivery_request_id: request, generation_number: 2 },
+    { tenant_id: tenant, intervention_id: "bad-intervention", delivery_request_id: request, generation_number: 2 }
+  ]) {
+    const invalid = execute({ ...base, job_type: "execute_delivery_retry_generation", payload });
+    assert.equal(invalid.claim_valid, false, JSON.stringify(payload));
+  }
+  assert.equal(execute({ ...base, job_type: "unexpected_job_type" }).claim_valid, false);
+});
