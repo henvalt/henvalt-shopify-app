@@ -432,14 +432,14 @@ BEGIN
       RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_INVALID' USING ERRCODE='55000';
     END IF;
 
-    UPDATE henvalt.delivery_requests
+    UPDATE henvalt.delivery_requests AS dr
        SET status='PENDING',
            provider_claimed_at=NULL,
            updated_at=clock_timestamp()
-     WHERE id=p_delivery_request_id
-       AND tenant_id=p_tenant_id
-       AND status='UNKNOWN'
-       AND provider_egress_started_at IS NULL;
+     WHERE dr.id=p_delivery_request_id
+       AND dr.tenant_id=p_tenant_id
+       AND dr.status='UNKNOWN'
+       AND dr.provider_egress_started_at IS NULL;
     IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_RETRY_RECOVERY_COMPARE_AND_SET_LOST'; END IF;
 
     SELECT dr.* INTO v_request
