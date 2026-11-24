@@ -60,7 +60,7 @@ export function buildDeliveryCandidate(source) {
           clean.parameters.jsCode,
           '    correlation_id: c.correlation_id || null',
           '    correlation_id: c.correlation_id || null,\n' +
-          '    delivery_attempt_id: (() => { try { const result = $("Record Delivery Result").item.json || {}; const raw = result.attempt_id || result.body || (result.data && result.data.attempt_id) || null; const value = typeof raw === "string" ? raw.trim().replace(/^["']|["']$/g, "") : null; return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null; } catch (e) { return null; } })(),\n' +
+          '    delivery_attempt_id: (() => { try { const result = $("Record Delivery Result").item.json || {}; const raw = result.attempt_id || result.body || (result.data && result.data.attempt_id) || null; const value = typeof raw === "string" ? raw.trim().replace(/^["\']|["\']$/g, "") : null; return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : null; } catch (e) { return null; } })(),\n' +
           '    pre_provider_failure: !!(c.provider_response && c.provider_response.henvalt_delivery_stage === "pre_provider")',
           "propagate stable delivery attempt identity and trusted pre-provider stage"
         );
