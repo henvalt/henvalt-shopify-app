@@ -20,6 +20,8 @@ on:
       - "tests/delivery-generation-production-shaped-late-acceptance.sql"
       - "tests/delivery-generation-production-shaped-bootstrap.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
+      - "tests/integrated-staging-readiness.test.mjs"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
       - ".github/workflows/delivery-generation-production-shape.yml"
   push:
     branches:
@@ -97,6 +99,8 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql
       - name: Verify MailerSend exact-tag webhook routing
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-webhook-routing.sql
+      - name: Verify integrated staging readiness contract and no-send boundaries
+        run: node --test tests/integrated-staging-readiness.test.mjs
       - name: Apply queued immutable delivery retry generation candidate
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611240001_delivery_retry_generation_jobs.sql
       - name: Verify retry job creation, generation limits and immutable envelope loading
