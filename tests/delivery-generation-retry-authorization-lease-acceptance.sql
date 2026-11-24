@@ -54,6 +54,14 @@ BEGIN
   IF v_result->>'can_send'<>'false' OR v_result->>'retry_job_claim_lost'<>'true' THEN
     RAISE EXCEPTION 'wrong retry worker was not rejected before request claim: %',v_result;
   END IF;
+  v_result := henvalt.authorize_delivery_request_with_retry_lease(
+    v_tenant,v_request,v_intervention,NULL,NULL,
+    'retry-authorize@example.test','retry-authorize-g2',
+    v_job,v_worker,NULL
+  );
+  IF v_result->>'can_send'<>'false' OR v_result->>'retry_job_claim_lost'<>'true' THEN
+    RAISE EXCEPTION 'NULL retry generation was not rejected before request claim: %',v_result;
+  END IF;
   IF (SELECT status::text FROM henvalt.delivery_requests WHERE id=v_request)<>'PENDING' THEN
     RAISE EXCEPTION 'wrong retry worker mutated delivery request before authorization';
   END IF;
