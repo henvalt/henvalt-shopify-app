@@ -379,6 +379,21 @@ BEGIN
      OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_retry_request)<>'RESERVED' THEN
     RAISE EXCEPTION 'frozen retry envelope failure changed intervention or quota state';
   END IF;
+  -- With the same exact current claim but no freeze, a genuinely empty
+  -- pending envelope fails closed and releases only its own reservation.
+  UPDATE henvalt.recovery_interventions
+     SET delivery_frozen_at=NULL,delivery_freeze_reason=NULL,status='SENDING'
+   WHERE id=v_intervention AND tenant_id=v_tenant;
+  v_result := henvalt.fail_delivery_retry_envelope_safely(
+    v_tenant,v_intervention,v_retry_request,2,v_retry_job,'retry-envelope-freeze-test'
+  );
+  IF v_result->>'action'<>'FAILED' THEN
+    RAISE EXCEPTION 'invalid current retry envelope did not fail safely: %',v_result;
+  END IF;
+  IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention)<>'FAILED'
+     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_retry_request)<>'RELEASED' THEN
+    RAISE EXCEPTION 'invalid retry envelope did not resolve intervention and release its reservation';
+  END IF;
 END;
 $tests$;
 
