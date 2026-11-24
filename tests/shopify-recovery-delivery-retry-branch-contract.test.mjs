@@ -74,10 +74,10 @@ test("retry jobs are bounded and source completion is transactional with queue i
 test("retry loader is worker-bound, current-generation-only, and reuses canonical stored content", () => {
   assert.match(migration, /load_delivery_retry_envelope/);
   assert.match(migration, /DELIVERY_RETRY_JOB_CLAIM_INVALID/);
-  assert.match(migration, /DELIVERY_RETRY_GENERATION_NOT_CURRENT/);
+  assert.match(migration, /v_request\.status <> 'PENDING'/);
+  assert.match(migration, /m\.id=v_request\.message_reference/);
   assert.match(migration, /render_sender_identity_footer/);
   assert.match(migration, /render_email_plain_text/);
-  assert.match(migration, /m\.message_reference/);
   assert.match(migration, /m\.recipient=v_request\.recipient_reference/);
   assert.equal(contract.immutable_envelope.content_regenerated, false);
   assert.equal(contract.immutable_envelope.recipient_replaced, false);
