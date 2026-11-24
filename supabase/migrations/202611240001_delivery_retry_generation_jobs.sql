@@ -120,8 +120,7 @@ BEGIN
 
   SELECT * INTO v_reservation
     FROM henvalt.email_usage_reservations
-   WHERE tenant_id=p_tenant_id AND delivery_request_id=v_previous.id
-   FOR UPDATE;
+   WHERE tenant_id=p_tenant_id AND delivery_request_id=v_previous.id;
   IF NOT FOUND OR v_reservation.status <> 'RELEASED'
      OR v_reservation.last_attempt_id IS DISTINCT FROM v_attempt.id THEN
     RETURN jsonb_build_object('action','CONTINUE_NORMAL');
@@ -305,8 +304,7 @@ BEGIN
    WHERE tenant_id=v_intervention.tenant_id
      AND delivery_request_id=v_request.id
    ORDER BY attempt_number DESC
-   LIMIT 1
-   FOR UPDATE;
+   LIMIT 1;
   IF NOT FOUND OR v_attempt.id IS DISTINCT FROM p_expected_delivery_attempt_id THEN
     RAISE EXCEPTION 'DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE' USING ERRCODE='55000';
   END IF;
