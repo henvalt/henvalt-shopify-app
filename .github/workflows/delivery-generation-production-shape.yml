@@ -9,6 +9,7 @@ on:
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
       - "tests/delivery-generation-retry-job-acceptance.sql"
+      - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
       - "tests/delivery-generation-production-shaped-webhook-routing.sql"
       - "tests/delivery-generation-production-shaped-late-acceptance.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
@@ -22,6 +23,7 @@ on:
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
       - "tests/delivery-generation-retry-job-acceptance.sql"
+      - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   workflow_dispatch:
@@ -76,3 +78,5 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611240001_delivery_retry_generation_jobs.sql
       - name: Verify retry job creation, generation limits and immutable envelope loading
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-job-acceptance.sql
+      - name: Race retry generation against late acceptance in both lock orders
+        run: bash tests/delivery-generation-retry-late-acceptance-race-postgres.sh
