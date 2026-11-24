@@ -240,7 +240,7 @@ jobs:
       - name: Generate recovery billing scheduler staging-only candidate
         run: node n8n/shopify-recovery-billing-candidate-builder.mjs
       - name: Parse and verify recovery billing scheduler candidate JSON
-        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY.json", "utf8")); const s = JSON.stringify(w); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999995" || w.nodes.length !== 77 || !s.includes("supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing") || s.includes("ocyplckdojdubyrsxcxa.supabase.co")) process.exit(1)'
+        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY.json", "utf8")); const s = JSON.stringify(w); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999995" || w.nodes.length !== 76 || !s.includes("supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing") || s.includes("ocyplckdojdubyrsxcxa.supabase.co")) process.exit(1)'
       - name: Upload recovery billing scheduler staging-only candidate
         uses: actions/upload-artifact@v4
         with:
