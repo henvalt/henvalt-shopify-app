@@ -90,6 +90,7 @@ test("recovery candidate claims retry jobs and routes them through stored envelo
   assert.match(recoveryBuilder, /Load Delivery Retry Envelope/);
   assert.match(recoveryBuilder, /Build Delivery Retry Payload/);
   assert.match(recoveryBuilder, /Create Delivery Retry Generation Job/);
+  assert.match(recoveryBuilder, /Claim Shopify Replay Job/);
   assert.match(recoveryBuilder, /body\.pre_provider_failure === true/);
   assert.match(recoveryBuilder, /const retryable = preProviderFailure/);
   assert.doesNotMatch(recoveryBuilder, /const retryable = state === "REJECTED"/);
@@ -102,4 +103,12 @@ test("acceptance proves ambiguous outcomes do not retry and generation three is 
   assert.match(acceptance, /generation limit did not terminally dead-letter/);
   assert.match(acceptance, /wrong worker loaded a delivery retry envelope/);
   assert.match(acceptance, /immutable message envelope/);
+});
+
+
+test("retry job terminal outcomes preserve fair replay scheduling in the existing worker", () => {
+  assert.match(recoveryBuilder, /Resume Delivery Retry Decision\?\"] = \{ main: \[\[edge\("Is Delivery Retry Generation Job\?"\)\], \[edge\("Claim Shopify Replay Job"\)\]\] \}/);
+  assert.match(recoveryBuilder, /Delivery Retry Enqueued\?\"] = \{ main: \[\[edge\("Claim Shopify Replay Job"\)\], \[edge\("Complete Job"\)\]\] \}/);
+  assert.match(recoveryBuilder, /Retry Delivery Generation Enqueue Job\"] = \{ main: \[\[edge\("Claim Shopify Replay Job"\)/);
+  assert.equal(contract.workflow_count, 3);
 });
