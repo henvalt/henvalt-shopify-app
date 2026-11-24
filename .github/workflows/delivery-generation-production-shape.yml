@@ -7,8 +7,8 @@ on:
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
       - "supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql"
-      - "tests/delivery-lifecycle-lock-order-acceptance.sql"
-      - "tests/legacy-one-off-delivery-disable-acceptance.sql"
+      - "tests/delivery-generation-parent-first-lock-order-acceptance.sql"
+      - "tests/delivery-generation-legacy-one-off-disable-acceptance.sql"
       - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
@@ -27,8 +27,8 @@ on:
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
       - "supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql"
-      - "tests/delivery-lifecycle-lock-order-acceptance.sql"
-      - "tests/legacy-one-off-delivery-disable-acceptance.sql"
+      - "tests/delivery-generation-parent-first-lock-order-acceptance.sql"
+      - "tests/delivery-generation-legacy-one-off-disable-acceptance.sql"
       - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
@@ -78,11 +78,11 @@ jobs:
       - name: Apply parent-first delivery lifecycle lock-order candidate
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql
       - name: Verify parent-first delivery lifecycle lock order
-        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-lifecycle-lock-order-acceptance.sql
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-parent-first-lock-order-acceptance.sql
       - name: Disable legacy one-off delivery path
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql
       - name: Verify legacy one-off delivery path is disabled
-        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/legacy-one-off-delivery-disable-acceptance.sql
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-legacy-one-off-disable-acceptance.sql
       - name: Apply late provider acceptance incident candidate
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230006_late_provider_acceptance_incidents.sql
       - name: Verify generation, evidence, idempotency and immutable fences
