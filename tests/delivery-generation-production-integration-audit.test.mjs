@@ -18,6 +18,8 @@ const lateAcceptanceMigration = read("../supabase/migrations/202611230006_late_p
 const webhookRoutingMigration = read("../supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql");
 const lateAcceptanceAcceptance = read("./delivery-generation-production-shaped-late-acceptance.sql");
 const webhookRoutingAcceptance = read("./delivery-generation-production-shaped-webhook-routing.sql");
+const retryJobMigration = read("../supabase/migrations/202611240001_delivery_retry_generation_jobs.sql");
+const retryJobAcceptance = read("./delivery-generation-retry-job-acceptance.sql");
 const prodShapeAcceptance = read("./delivery-generation-production-shaped-acceptance.sql");
 
 test("live delivery-generation audit is explicitly read-only and pinned to the inspected active workflow", () => {
@@ -173,4 +175,26 @@ test("MailerSend sent and delivered webhooks resolve exact delivery tags before 
   assert.match(webhookRoutingAcceptance, /normal activity\.sent did not settle current generation/);
   assert.match(webhookRoutingAcceptance, /late webhook did not freeze parent/);
   assert.match(webhookRoutingAcceptance, /mismatched delivery tag was accepted/);
+});
+
+
+test("pre-provider delivery retry creates a dedicated bounded generation job with immutable envelope", () => {
+  assert.match(retryJobMigration, /enqueue_delivery_retry_generation_job/);
+  assert.match(retryJobMigration, /execute_delivery_retry_generation/);
+  assert.match(retryJobMigration, /retry_job_id uuid/);
+  assert.match(retryJobMigration, /provider_response->>'henvalt_delivery_stage' <> 'pre_provider'/);
+  assert.match(retryJobMigration, /v_previous\.generation_number >= 3/);
+  assert.match(retryJobMigration, /load_delivery_retry_envelope/);
+  assert.match(retryJobMigration, /render_sender_identity_footer/);
+  assert.match(retryJobMigration, /render_email_plain_text/);
+  assert.match(retryJobMigration, /DELIVERY_RETRY_JOB_CLAIM_INVALID/);
+  assert.match(retryJobMigration, /DELIVERY_RETRY_GENERATION_NOT_CURRENT/);
+  assert.match(retryJobMigration, /REVOKE ALL ON FUNCTION/);
+  assert.match(retryJobMigration, /GRANT EXECUTE ON FUNCTION/);
+  assert.match(retryJobAcceptance, /expected RETRY_QUEUED/);
+  assert.match(retryJobAcceptance, /source intervention job was not completed atomically/);
+  assert.match(retryJobAcceptance, /immutable message envelope/);
+  assert.match(retryJobAcceptance, /wrong worker loaded a delivery retry envelope/);
+  assert.match(retryJobAcceptance, /ambiguous provider outcome incorrectly queued retry/);
+  assert.match(retryJobAcceptance, /generation limit did not terminally dead-letter/);
 });
