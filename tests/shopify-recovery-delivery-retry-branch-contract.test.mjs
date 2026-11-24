@@ -67,6 +67,9 @@ test("retry jobs are bounded and source completion is transactional with queue i
   assert.match(migration, /'execute_delivery_retry_generation'/);
   assert.match(migration, /status='SUCCEEDED',completed_at=clock_timestamp\(\)/);
   assert.match(migration, /delivery_retry_jobs/);
+  assert.match(migration, /delivery_retry_jobs_append_only/);
+  assert.match(acceptance, /append-only retry job mapping missing/);
+  assert.match(acceptance, /retry job mapping update was accepted/);
   assert.equal(contract.job_model.max_total_generations, 3);
   assert.equal(contract.job_model.max_automatic_retries, 2);
 });
