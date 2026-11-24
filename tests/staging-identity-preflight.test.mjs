@@ -12,7 +12,7 @@ const valid = {
   HENVALT_STAGE_SHOPIFY_STORE: "henvalt-stage.myshopify.com",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
-  HENVALT_STAGE_NO_SEND: "true",
+  HENVALT_STAGE_NO_SEND: "true",\n  HENVALT_STAGE_WORKFLOWS_INACTIVE: "true",\n  HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED: "true",
 };
 const run = (env) => spawnSync(process.execPath, [script], {
   encoding: "utf8",
@@ -55,4 +55,17 @@ test("preflight rejects incomplete staging inventory", () => {
   const result = run({ ...valid, HENVALT_STAGE_DELIVERY_WORKFLOW_ID: "" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /missing required staging metadata/);
+});
+
+test("preflight refuses if imported workflows may be active or store is not confirmed development", () => {
+  const result = run({ ...valid, HENVALT_STAGE_WORKFLOWS_INACTIVE: "false", HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED: "false" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /workflows must be confirmed inactive/);
+  assert.match(result.stderr, /development store must be explicitly confirmed/);
+});
+
+test("preflight rejects insecure staging n8n URL", () => {
+  const result = run({ ...valid, HENVALT_STAGE_N8N_BASE_URL: "http://staging-n8n.example.invalid" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /must be HTTPS/);
 });
