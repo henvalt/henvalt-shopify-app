@@ -249,6 +249,9 @@ SET search_path TO pg_catalog, henvalt, pg_temp
 AS $function$
 DECLARE
   v_account henvalt.billing_accounts%ROWTYPE;
+  v_cycle_start timestamptz;
+  v_measured_fee numeric(18,2) := 0;
+  v_email_count integer := 0;
 BEGIN
   IF OLD.status='PENDING' AND NEW.status='UNKNOWN' THEN
     SELECT * INTO v_account
@@ -260,6 +263,33 @@ BEGIN
       OR (v_account.status='PENDING' AND v_account.test_mode IS TRUE)
     ) THEN
       RAISE EXCEPTION 'HENVALT billing entitlement is not active; delivery denied'
+        USING ERRCODE = '42501';
+    END IF;
+
+    v_cycle_start := coalesce(v_account.activated_at, now())
+      + floor(greatest(0, extract(epoch FROM (now() - coalesce(v_account.activated_at, now()))) / 2592000))
+        * interval '30 days';
+
+    SELECT coalesce(sum(bm.henvalt_fee), 0)
+      INTO v_measured_fee
+      FROM henvalt.billing_measurements bm
+     WHERE bm.tenant_id=NEW.tenant_id
+       AND bm.currency=v_account.currency
+       AND bm.created_at>=v_cycle_start
+       AND bm.created_at<v_cycle_start+interval '30 days'
+       AND bm.status IN ('MEASURED','BILLED');
+    IF v_measured_fee>=v_account.usage_cap_amount THEN
+      RAISE EXCEPTION 'HENVALT usage cap reached; delivery denied until the next billing interval'
+        USING ERRCODE = '42501';
+    END IF;
+
+    SELECT count(*)::integer INTO v_email_count
+      FROM henvalt.email_usage_measurements eum
+     WHERE eum.tenant_id=NEW.tenant_id
+       AND eum.created_at>=v_cycle_start
+       AND eum.created_at<v_cycle_start+interval '30 days';
+    IF v_email_count>=v_account.monthly_email_limit THEN
+      RAISE EXCEPTION 'HENVALT email usage limit reached; delivery denied until the next billing interval'
         USING ERRCODE = '42501';
     END IF;
   END IF;
