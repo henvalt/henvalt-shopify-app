@@ -41,7 +41,7 @@ test("retry branch remains pinned to the current three-workflow recovery baselin
 });
 
 test("retry job is created only from exact pre-provider failure and released quota evidence", () => {
-  assert.match(migration, /provider_response->>'henvalt_delivery_stage' <> 'pre_provider'/);
+  assert.match(migration, /provider_response->>'henvalt_delivery_stage' IS DISTINCT FROM 'pre_provider'/);
   assert.match(migration, /v_reservation.status <> 'RELEASED'/);
   assert.match(migration, /last_attempt_id IS DISTINCT FROM v_attempt.id/);
   assert.match(migration, /event_type='RELEASED'/);
