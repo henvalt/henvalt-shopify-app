@@ -51,7 +51,6 @@ DECLARE
   v_retry_command_id uuid;
   v_generation integer;
   v_rows integer;
-  v_reservation_found boolean := false;
 BEGIN
   IF auth.role() IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
@@ -712,6 +711,7 @@ DECLARE
   v_job henvalt.background_jobs%ROWTYPE;
   v_latest_generation integer;
   v_rows integer;
+  v_reservation_found boolean := false;
 BEGIN
   IF auth.role() IS DISTINCT FROM 'service_role' THEN
     RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
