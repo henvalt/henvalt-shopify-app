@@ -18,6 +18,7 @@ on:
       - "tests/delivery-generation-retry-egress-lease-acceptance.sql"
       - "tests/delivery-generation-production-shaped-webhook-routing.sql"
       - "tests/delivery-generation-production-shaped-late-acceptance.sql"
+      - "tests/delivery-generation-production-shaped-bootstrap.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   push:
@@ -37,6 +38,7 @@ on:
       - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
       - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
       - "tests/delivery-generation-retry-egress-lease-acceptance.sql"
+      - "tests/delivery-generation-production-shaped-bootstrap.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - ".github/workflows/delivery-generation-production-shape.yml"
   workflow_dispatch:
