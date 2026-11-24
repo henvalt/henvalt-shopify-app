@@ -30,7 +30,17 @@
     "retry_command_identity": "delivery_attempts.id",
     "source_job_completion": "atomic with new generation and retry job insert",
     "retry_job_mapping_table": "henvalt.delivery_retry_jobs",
-    "retry_job_mapping_append_only": true
+    "retry_job_mapping_append_only": true,
+    "claim_lease_seconds": 900,
+    "lease_renewal": "service-role RPC before token release and again at final provider egress",
+    "final_egress_binding": [
+      "tenant_id",
+      "delivery_request_id",
+      "retry_job_id",
+      "retry_worker_id",
+      "generation_number"
+    ],
+    "lock_order": "intervention -> delivery_request -> background_job"
   },
   "retry_eligibility": {
     "state": "FAILED",
@@ -82,7 +92,7 @@
     "invalid_or_stale_envelope": "fail intervention closed and complete job",
     "generation_enqueue_error": "retry same source job; retry command is attempt-idempotent",
     "max_generation_reached": "DEAD_LETTER",
-    "retry_worker_lease_lost": "stop without recording a delivery attempt or resolving the intervention"
+    "retry_worker_lease_lost": "return retry_job_claim_lost; do not record a delivery attempt or resolve the intervention; stop stale worker"
   },
   "safety": {
     "active_recovery_workflow_modified": false,
@@ -99,6 +109,7 @@
     "pre_provider_failure": "trusted response body marker henvalt_delivery_stage=pre_provider",
     "retry_requires_both_ids": true,
     "retry_state": "FAILED",
-    "ambiguous_state_retryable": false
+    "ambiguous_state_retryable": false,
+    "retry_job_claim_lost": "trusted Edge Function response flag; skip result persistence and stop before intervention resolution"
   }
 }
