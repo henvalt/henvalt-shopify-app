@@ -78,8 +78,51 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
         return preProviderJson(400, "message_content_required");
       }
 
-      // This RPC is the sole credential-release boundary. A closed/missing
-      // database interlock must reject here, before any provider network call.
+      const retryDelivery = body.delivery_generation_retry === true ||
+        (body.metadata && body.metadata.delivery_generation_retry === true);
+      const retryJobId = body.retry_job_id;
+      const retryWorkerId = body.retry_worker_id;
+      const retryGenerationNumber = Number(body.retry_generation_number);
+      const retryIdentityPresent = retryJobId != null || retryWorkerId != null || body.retry_generation_number != null;
+      if (retryDelivery && (!isUuid(retryJobId) ||
+          typeof retryWorkerId !== "string" || retryWorkerId.trim().length < 1 || retryWorkerId.length > 120 ||
+          !Number.isInteger(retryGenerationNumber) || ![2, 3].includes(retryGenerationNumber))) {
+        return preProviderJson(400, "delivery_retry_identity_invalid");
+      }
+      if (!retryDelivery && retryIdentityPresent) {
+        return preProviderJson(400, "delivery_retry_identity_invalid");
+      }
+
+      // Refresh and validate the exact retry-job lease before the credential
+      // RPC can claim the delivery request. The final egress RPC repeats this
+      // check under the same parent -> request -> job lock order.
+      if (retryDelivery) {
+        const leaseResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/renew_delivery_retry_job_lease", {
+          method: "POST",
+          redirect: "error",
+          headers: {
+            apikey: serviceRoleKey,
+            authorization: "Bearer " + serviceRoleKey,
+            "content-type": "application/json",
+            accept: "application/json",
+            "accept-profile": "henvalt",
+            "content-profile": "henvalt",
+          },
+          body: JSON.stringify({
+            p_tenant_id: tenantId,
+            p_delivery_request_id: deliveryRequestId,
+            p_retry_job_id: retryJobId,
+            p_retry_worker_id: retryWorkerId,
+            p_generation_number: retryGenerationNumber,
+          }),
+        });
+        if (!leaseResponse.ok) return preProviderJson(409, "delivery_retry_job_claim_invalid");
+        const leaseRenewed = await leaseResponse.json().catch(() => false);
+        if (leaseRenewed !== true) return preProviderJson(409, "delivery_retry_job_claim_invalid");
+      }
+
+      // This RPC is the credential-release boundary. A closed/missing
+      // database interlock must reject before any provider network call.
       const tokenResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/get_mailersend_token_for_delivery", {
         method: "POST",
         redirect: "error",
@@ -148,6 +191,18 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
       // Commit the durable, one-way generation fence after all database
       // envelope checks and immediately before the provider HTTP request.
       // A failed/ambiguous fence call must never fall through to MailerSend.
+      const egressFenceBody = retryDelivery
+        ? {
+            p_tenant_id: tenantId,
+            p_delivery_request_id: deliveryRequestId,
+            p_retry_job_id: retryJobId,
+            p_retry_worker_id: retryWorkerId,
+            p_generation_number: retryGenerationNumber,
+          }
+        : {
+            p_tenant_id: tenantId,
+            p_delivery_request_id: deliveryRequestId,
+          };
       const egressFenceResponse = await fetchImpl(supabaseUrl + "/rest/v1/rpc/mark_mailersend_provider_egress_started", {
         method: "POST",
         redirect: "error",
@@ -159,10 +214,7 @@ export function createDeliveryHandler({ supabaseUrl, serviceRoleKey, fetchImpl =
           "accept-profile": "henvalt",
           "content-profile": "henvalt",
         },
-        body: JSON.stringify({
-          p_tenant_id: tenantId,
-          p_delivery_request_id: deliveryRequestId,
-        }),
+        body: JSON.stringify(egressFenceBody),
       });
       if (!egressFenceResponse.ok) return preProviderJson(409, "delivery_provider_egress_fence_rejected");
       const egressFenceStarted = await egressFenceResponse.json().catch(() => false);
