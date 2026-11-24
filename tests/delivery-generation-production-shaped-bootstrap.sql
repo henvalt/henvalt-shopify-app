@@ -250,7 +250,7 @@ CREATE OR REPLACE FUNCTION henvalt.record_delivery_result(
   p_provider_status_code integer,p_state henvalt.delivery_state,
   p_error_class text,p_retryable boolean,p_provider_response jsonb
 ) RETURNS uuid
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,public AS $
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,public AS $result$
 DECLARE v_tenant_id uuid; v_intervention_id uuid; v_current_state henvalt.delivery_state;
 BEGIN
   SELECT
@@ -271,7 +271,7 @@ BEGIN
    WHERE id=p_delivery_request_id;
   RETURN p_delivery_request_id;
 END;
-$;
+$result$;
 
 CREATE OR REPLACE FUNCTION henvalt.process_mailersend_webhook_event(
   p_payload jsonb,p_raw_body_base64 text
