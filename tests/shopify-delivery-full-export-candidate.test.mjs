@@ -73,7 +73,7 @@ test("no-send response is rejected and is never persisted as a provider result",
   const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
   assert.match(classifier, /send = \$\("No-Send Provider Stub"\)\.item\.json/);
   assert.match(classifier, /NO_SEND_CANDIDATE/);
-  assert.match(classifier, /should_record_result: authorized && !\(send && send\.body && send\.body\.no_send_candidate === true\)/);
+  assert.match(classifier, /should_record_result: authorized && !retryJobClaimLost && !\(send && send\.body && send\.body\.no_send_candidate === true\)/);
   assert.equal(w.connections["Should Record Provider Result?"].main[1][0].node, "Build Delivery Response");
 });
 
@@ -173,4 +173,33 @@ test("executed no-send stub and delivery classifier cannot report provider accep
   assert.equal(response.json.body.failure_category, "NO_SEND_CANDIDATE");
   assert.equal(response.json.body.pre_provider_failure, false);
   assert.equal(response.json.body.delivery_attempt_id, null);
+});
+
+
+test("no-send candidate never records provider result after successful authorization", () => {
+  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
+  const context = {
+    "Validate & Normalize": { item: { json: {
+      precheck_ok: true, tenant_id: "tenant", delivery_request_id: "request",
+      intervention_id: "intervention", recovery_id: "recovery", opportunity_id: "opportunity",
+      correlation_id: "correlation"
+    }}},
+    "Authorize & Context": { item: { json: { statusCode: 200, body: {
+      can_send: true, delivery_request_id: "request", provider: "mailersend"
+    }}}},
+    "No-Send Provider Stub": { item: { json: {
+      statusCode: 503, body: { no_send_candidate: true }
+    }}}
+  };
+  const result = new Function("$", "$json", classifier)(
+    (name) => context[name],
+    {}
+  );
+  assert.equal(result.state, "REJECTED");
+  assert.equal(result.error_class, "NO_SEND_CANDIDATE");
+  assert.equal(result.provider, "none");
+  assert.equal(result.retryable, false);
+  assert.equal(result.should_record_result, false);
+  assert.equal(result.retry_job_claim_lost, false);
 });
