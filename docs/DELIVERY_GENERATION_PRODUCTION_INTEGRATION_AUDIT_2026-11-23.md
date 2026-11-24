@@ -293,3 +293,16 @@ Candidate migration `202611240001_delivery_retry_generation_jobs.sql` adds the d
 The production-shaped PostgreSQL 17 acceptance added with this migration covers generation/job creation, source-job completion, envelope identity, wrong-worker rejection, ambiguous-outcome non-retry, and the generation ceiling.
 
 **Important remaining integration work:** the active recovery graph still does not claim or route `execute_delivery_retry_generation`, and the active delivery graph does not yet expose the delivery attempt ID plus trusted pre-provider marker to the recovery caller. Those graph changes must be built into the inactive no-send candidate and tested before any staging cutover. The migration is candidate-only; no production schema or active n8n workflow was changed.
+
+
+### Recovery and delivery candidate graph wired — 2026-11-24
+
+The inactive no-send candidate builders now contain the missing graph contract:
+
+- The recovery candidate claims both `execute_intervention` and `execute_delivery_retry_generation` from the existing worker queue. It first attempts idempotent recovery of a previously recorded pre-provider failure, then routes retry jobs through the persisted message envelope and the existing `HENVALT_DELIVERY` subworkflow. It does not add a fourth workflow or regenerate AI content for retries.
+- The failure classifier requires both the exact delivery request UUID and delivery attempt UUID, plus the trusted `pre_provider_failure` marker and FAILED state. Generic REJECTED, provider-side and ambiguous outcomes do not enter the generation retry path.
+- The delivery candidate now parses the scalar UUID returned by the `record_delivery_result` PostgREST RPC, validates it as a UUID, and exposes it alongside the server-owned pre-provider marker. Missing or malformed attempt IDs fail closed.
+- Retry job-to-command linkage is stored in a separate `delivery_retry_jobs` table with an append-only trigger. The first candidate design attempted to update the immutable `delivery_retry_commands` ledger; PostgreSQL correctly rejected that mutation, so the implementation was redesigned rather than weakening the ledger guard.
+- The recovery candidate contains 74 nodes (46-node inspected baseline plus the replay and retry branches). The billing staging candidate shares the same graph and now has its node-count contract updated.
+
+The graph changes are still only in the generated no-send candidate. The active `HENVALT_RECOVERY` and `HENVALT_DELIVERY` workflows have not been updated or published. The delivery candidate intentionally cannot send provider email.
