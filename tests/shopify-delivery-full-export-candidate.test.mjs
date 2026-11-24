@@ -14,6 +14,7 @@ test("delivery candidate is an inactive sanitized export with no credentials or 
   assert.equal(w.active, false);
   assert.equal(w.settings.availableInMCP, false);
   assert.equal(w.nodes.length, 54);
+  assert.equal(w.nodeCount, w.nodes.length);
   assert.equal(result.audit.credentials_removed, true);
   assert.equal(result.audit.webhook_ids_removed, true);
   assert.ok(w.nodes.every((n) => !n.credentials && !n.webhookId));
