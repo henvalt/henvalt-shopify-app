@@ -74,3 +74,14 @@ This plan closes the gap between individually passing PostgreSQL/Node/Deno check
 The new static regression test `tests/integrated-staging-readiness.test.mjs` checks that the repository's staging contract remains tied to the exact three-workflow topology and existing retry/race/reservation acceptance artifacts. It is deliberately not a claim that staging has run.
 
 The final gate is **NO-GO** until batches 19 and 20 have real environment evidence. The current connected production project has no verified isolated development branch, so this branch must not attempt to substitute production for staging.
+## Preflight tool
+
+Before any staging mutation, run:
+
+```bash
+node scripts/staging-identity-preflight.mjs
+```
+
+The tool requires explicit metadata for the staging Supabase ref, n8n URL and three distinct workflow IDs, Shopify development store, provider stub mode, network-denial proof and no-send flag. It rejects the known production Supabase project ref and known production n8n hostname. It makes no network requests and does not access credentials. Passing it is identity/safety preflight only, not integrated acceptance.
+
+Environment variables are intentionally not documented as values here; populate them from verified staging inventory only. Never paste production secrets.
