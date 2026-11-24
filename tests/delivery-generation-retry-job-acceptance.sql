@@ -623,8 +623,8 @@ BEGIN
   UPDATE henvalt.billing_accounts
      SET usage_cap_amount=100000,monthly_email_limit=1
    WHERE tenant_id=v_tenant_resume;
-  INSERT INTO henvalt.email_usage_measurements(tenant_id,delivery_attempt_id)
-  VALUES(v_tenant_resume,gen_random_uuid());
+  INSERT INTO henvalt.email_usage_measurements(tenant_id,delivery_attempt_id,created_at)
+  VALUES(v_tenant_resume,gen_random_uuid(),clock_timestamp()+interval '1 second');
   BEGIN
     UPDATE henvalt.delivery_requests SET status='UNKNOWN'
      WHERE id=v_request_resume AND tenant_id=v_tenant_resume;
