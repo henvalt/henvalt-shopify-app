@@ -356,6 +356,8 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
       credentials_removed: true,
       webhook_ids_removed: true,
       provider_send_nodes: 0,
+      delivery_retry_generation_branch: true,
+      claimed_job_types: ['execute_intervention','execute_delivery_retry_generation'],
       active: false,
       available_in_mcp: false
     }
