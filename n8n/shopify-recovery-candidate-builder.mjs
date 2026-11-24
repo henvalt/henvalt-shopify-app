@@ -311,6 +311,26 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   c["Retry Shopify Replay Job"] = { main: [[edge("Replay Retry Accepted?")], [edge("Stop Replay Lease Lost")]] };
   c["Replay Retry Accepted?"] = { main: [[edge("Loop Interventions")], [edge("Stop Replay Lease Lost")]] };
   c["Stop Replay Lease Lost"] = { main: [] };
+
+  // Every claimed job first checks for a recoverable prior pre-provider failure.
+  // The dedicated retry job branch reuses the persisted message and never
+  // regenerates AI content or the delivery idempotency key.
+  c["Job Claimed?"] = { main: [[edge("Claimed Job Valid?")], [edge("Claim Shopify Replay Job")]] };
+  c["Claimed Job Valid?"] = { main: [[edge("Resume Delivery Retry Generation")], [edge("Complete Job")]] };
+  c["Resume Delivery Retry Generation"] = { main: [[edge("Resume Delivery Retry Decision?")], [edge("Retry Delivery Retry Resume Job")]] };
+  c["Resume Delivery Retry Decision?"] = { main: [[edge("Is Delivery Retry Generation Job?")], [edge("Loop Interventions")]] };
+  c["Is Delivery Retry Generation Job?"] = { main: [[edge("Load Delivery Retry Envelope")], [edge("Atomic Claim Intervention")]] };
+  c["Load Delivery Retry Envelope"] = { main: [[edge("Delivery Retry Envelope Valid?")], [edge("Retry Delivery Retry Job")]] };
+  c["Delivery Retry Envelope Valid?"] = { main: [[edge("Build Delivery Retry Payload")], [edge("Fail Delivery Retry Envelope")]] };
+  c["Build Delivery Retry Payload"] = { main: [[edge("Call HENVALT_DELIVERY")]] };
+  c["Fail Delivery Retry Envelope"] = { main: [[edge("Complete Job")], [edge("Stop Delivery Retry Job Claim Lost")]] };
+  c["Retry Delivery Retry Job"] = { main: [[edge("Loop Interventions")], [edge("Stop Delivery Retry Job Claim Lost")]] };
+  c["Delivery Retryable?"] = { main: [[edge("Create Delivery Retry Generation Job")], [edge("Complete Job")]] };
+  c["Create Delivery Retry Generation Job"] = { main: [[edge("Delivery Retry Enqueued?")], [edge("Retry Delivery Generation Enqueue Job")]] };
+  c["Delivery Retry Enqueued?"] = { main: [[edge("Loop Interventions")], [edge("Complete Job")]] };
+  c["Retry Delivery Generation Enqueue Job"] = { main: [[edge("Loop Interventions")], [edge("Stop Delivery Retry Job Claim Lost")]] };
+  c["Retry Delivery Retry Resume Job"] = { main: [[edge("Loop Interventions")], [edge("Stop Delivery Retry Job Claim Lost")]] };
+  c["Stop Delivery Retry Job Claim Lost"] = { main: [] };
   workflow.connections = c;
   const ids = workflow.nodes.map((node) => node.id);
   const names = workflow.nodes.map((node) => node.name);
