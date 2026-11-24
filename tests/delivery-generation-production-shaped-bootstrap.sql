@@ -13,11 +13,11 @@ $$;
 
 
 CREATE OR REPLACE FUNCTION henvalt.render_sender_identity_footer(p_tenant_id uuid,p_html text)
-RETURNS text LANGUAGE sql IMMUTABLE AS $ SELECT COALESCE(p_html,'') $;
+RETURNS text LANGUAGE sql IMMUTABLE AS $fn$ SELECT COALESCE(p_html,'') $fn$;
 CREATE OR REPLACE FUNCTION henvalt.render_email_plain_text(p_html text)
-RETURNS text LANGUAGE sql IMMUTABLE AS $
+RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
   SELECT NULLIF(btrim(regexp_replace(COALESCE(p_html,''),'<[^>]*>',' ','g')),'')
-$;
+$fn$;
 
 CREATE TYPE henvalt.delivery_state AS ENUM ('PENDING','ACCEPTED','DELIVERED','FAILED','REJECTED','UNKNOWN');
 CREATE TYPE henvalt.channel_type AS ENUM ('EMAIL','SMS');
@@ -72,7 +72,7 @@ CREATE TABLE henvalt.recovery_interventions (
 CREATE OR REPLACE FUNCTION henvalt.resolve_intervention_send_failure(
   p_intervention_id uuid,p_final_status henvalt.intervention_status,p_reason text
 ) RETURNS boolean
-LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $
+LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,pg_temp AS $fn$
 DECLARE v_rows integer;
 BEGIN
   UPDATE henvalt.recovery_interventions
@@ -82,7 +82,7 @@ BEGIN
   IF v_rows=1 THEN RETURN true; END IF;
   RETURN EXISTS(SELECT 1 FROM henvalt.recovery_interventions WHERE id=p_intervention_id AND status=p_final_status);
 END;
-$;
+$fn$;
 
 CREATE TABLE henvalt.delivery_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
