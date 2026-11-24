@@ -225,15 +225,15 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   normalizerCode = replaceOne(
     normalizerCode,
     'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;',
-    'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;\\n' +
-    'const tenantId = j.tenant_id != null ? j.tenant_id : (payload.tenant_id != null ? payload.tenant_id : null);\\n' +
-    'const deliveryRequestId = payload.delivery_request_id != null ? payload.delivery_request_id : null;\\n' +
-    'const generationNumber = payload.generation_number != null ? Number(payload.generation_number) : null;\\n' +
-    'const jobType = j.job_type != null ? j.job_type : null;\\n' +
-    'const claimValid = jobType === "execute_intervention"\\n' +
-    '  ? interventionId != null\\n' +
-    '  : jobType === "execute_delivery_retry_generation"\\n' +
-    '    ? interventionId != null && tenantId != null && deliveryRequestId != null && Number.isInteger(generationNumber)\\n' +
+    'const interventionId = payload.intervention_id != null ? payload.intervention_id : null;\n' +
+    'const tenantId = j.tenant_id != null ? j.tenant_id : (payload.tenant_id != null ? payload.tenant_id : null);\n' +
+    'const deliveryRequestId = payload.delivery_request_id != null ? payload.delivery_request_id : null;\n' +
+    'const generationNumber = payload.generation_number != null ? Number(payload.generation_number) : null;\n' +
+    'const jobType = j.job_type != null ? j.job_type : null;\n' +
+    'const claimValid = jobType === "execute_intervention"\n' +
+    '  ? interventionId != null\n' +
+    '  : jobType === "execute_delivery_retry_generation"\n' +
+    '    ? interventionId != null && tenantId != null && deliveryRequestId != null && Number.isInteger(generationNumber)\n' +
     '    : false;',
     "generation retry claim normalization"
   );
@@ -278,7 +278,7 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
     '  delivery_state: state,',
     '  http_status: response.statusCode || null',
     '} };'
-  ].join("\\n");
+  ].join("\n");
 
   const added = buildNodes(manifest, normalizerSource);
   const allNames = new Set(workflow.nodes.map((node) => node.name));
