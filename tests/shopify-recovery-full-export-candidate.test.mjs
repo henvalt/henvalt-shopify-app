@@ -265,3 +265,15 @@ test("retry generation payload carries the exact claimed job lease and immutable
   assert.equal(w.connections["Is Delivery Retry Generation Job?"].main[0][0].node, "Load Delivery Retry Envelope");
   assert.equal(w.connections["Is Delivery Retry Generation Job?"].main[1][0].node, "Atomic Claim Intervention");
 });
+
+
+test("empty retry envelope cannot overwrite a frozen late-acceptance intervention", () => {
+  const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
+  const fail = w.nodes.find((n) => n.name === "Fail Delivery Retry Envelope");
+  assert.match(fail.parameters.query, /fail_delivery_retry_envelope_safely/);
+  for (const field of ["tenant_id","intervention_id","delivery_request_id","generation_number","job_id","worker_id"]) {
+    assert.match(fail.parameters.options.queryReplacement, new RegExp(field));
+  }
+  assert.equal(w.connections["Fail Delivery Retry Envelope"].main[0][0].node, "Complete Job");
+  assert.equal(w.connections["Fail Delivery Retry Envelope"].main[1][0].node, "Stop Delivery Retry Job Claim Lost");
+});
