@@ -181,7 +181,7 @@ test("MailerSend sent and delivered webhooks resolve exact delivery tags before 
 test("pre-provider delivery retry creates a dedicated bounded generation job with immutable envelope", () => {
   assert.match(retryJobMigration, /enqueue_delivery_retry_generation_job/);
   assert.match(retryJobMigration, /execute_delivery_retry_generation/);
-  assert.match(retryJobMigration, /retry_job_id uuid/);
+  assert.match(retryJobMigration, /CREATE TABLE IF NOT EXISTS henvalt\.delivery_retry_jobs/);
   assert.match(retryJobMigration, /provider_response->>'henvalt_delivery_stage' <> 'pre_provider'/);
   assert.match(retryJobMigration, /v_previous\.generation_number >= 3/);
   assert.match(retryJobMigration, /load_delivery_retry_envelope/);
