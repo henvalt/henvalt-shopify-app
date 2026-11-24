@@ -95,11 +95,11 @@ BEGIN
     FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request;
 
   INSERT INTO henvalt.background_jobs(
-    id,tenant_id,job_type,payload,status,locked_by
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
   ) VALUES(
     v_source_job,v_tenant,'execute_intervention',
     jsonb_build_object('tenant_id',v_tenant,'intervention_id',v_intervention),
-    'CLAIMED','recovery-worker-1'
+    'CLAIMED','recovery-worker-1',clock_timestamp()
   );
 
   v_result := henvalt.enqueue_delivery_retry_generation_job(
@@ -228,7 +228,7 @@ BEGIN
   ) VALUES(
     v_job_amb,v_tenant_amb,'execute_intervention',
     jsonb_build_object('tenant_id',v_tenant_amb,'intervention_id',v_intervention_amb),
-    'CLAIMED','recovery-worker-amb'
+    'CLAIMED','recovery-worker-amb',clock_timestamp()
   );
   BEGIN
     PERFORM henvalt.enqueue_delivery_retry_generation_job(
@@ -281,7 +281,7 @@ BEGIN
   ) VALUES(
     v_job_unmarked,v_tenant_unmarked,'execute_intervention',
     jsonb_build_object('tenant_id',v_tenant_unmarked,'intervention_id',v_intervention_unmarked),
-    'CLAIMED','recovery-worker-unmarked'
+    'CLAIMED','recovery-worker-unmarked',clock_timestamp()
   );
   v_result := henvalt.enqueue_delivery_retry_generation_job(
     v_intervention_unmarked,v_job_unmarked,'recovery-worker-unmarked',
@@ -327,7 +327,7 @@ BEGIN
     v_job_max,v_tenant_max,'execute_delivery_retry_generation',
     jsonb_build_object('tenant_id',v_tenant_max,'intervention_id',v_intervention_max,
       'delivery_request_id',v_request_max,'generation_number',3),
-    'CLAIMED','recovery-worker-max'
+    'CLAIMED','recovery-worker-max',clock_timestamp()
   );
   v_result := henvalt.enqueue_delivery_retry_generation_job(
     v_tenant_max,v_intervention_max,v_job_max,'recovery-worker-max'
@@ -380,11 +380,11 @@ BEGIN
            v_attempt_fenced,'PRE_PROVIDER_FAILURE'
       FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_fenced;
     INSERT INTO henvalt.background_jobs(
-      id,tenant_id,job_type,payload,status,locked_by
+      id,tenant_id,job_type,payload,status,locked_by,locked_at
     ) VALUES(
       v_job_fenced,v_tenant_fenced,'execute_intervention',
       jsonb_build_object('tenant_id',v_tenant_fenced,'intervention_id',v_intervention_fenced),
-      'CLAIMED','recovery-worker-fenced'
+      'CLAIMED','recovery-worker-fenced',clock_timestamp()
     );
     v_result := henvalt.enqueue_delivery_retry_generation_job(
       v_intervention_fenced,v_job_fenced,'recovery-worker-fenced',
