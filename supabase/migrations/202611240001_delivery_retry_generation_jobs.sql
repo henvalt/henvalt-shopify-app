@@ -687,4 +687,148 @@ COMMENT ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uuid,uuid
 COMMENT ON FUNCTION henvalt.load_delivery_retry_envelope(uuid,text,uuid,uuid,uuid,integer) IS
   'Loads the immutable stored message envelope only for the currently claimed retry-generation job; parent-first lock order and egress checks are repeated before delivery authorization.';
 
+
+-- An empty retry envelope is not always a corrupt message: the intervention may
+-- have been frozen by late provider acceptance, or the job/request may have
+-- become stale after the loader's initial checks. Revalidate under parent-first
+-- locks before releasing quota or changing intervention state.
+CREATE OR REPLACE FUNCTION henvalt.fail_delivery_retry_envelope_safely(
+  p_tenant_id uuid,
+  p_intervention_id uuid,
+  p_delivery_request_id uuid,
+  p_generation_number integer,
+  p_retry_job_id uuid,
+  p_retry_worker_id text
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, auth, pg_temp
+AS $function$
+DECLARE
+  v_intervention henvalt.recovery_interventions%ROWTYPE;
+  v_request henvalt.delivery_requests%ROWTYPE;
+  v_reservation henvalt.email_usage_reservations%ROWTYPE;
+  v_job henvalt.background_jobs%ROWTYPE;
+  v_latest_generation integer;
+  v_rows integer;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
+  END IF;
+  IF p_tenant_id IS NULL OR p_intervention_id IS NULL
+     OR p_delivery_request_id IS NULL OR p_generation_number NOT IN (2,3)
+     OR p_retry_job_id IS NULL OR NULLIF(btrim(p_retry_worker_id),'') IS NULL THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_ENVELOPE_FAILURE_IDENTITY_REQUIRED' USING ERRCODE='22023';
+  END IF;
+
+  SELECT * INTO v_intervention
+    FROM henvalt.recovery_interventions
+   WHERE id=p_intervention_id AND tenant_id=p_tenant_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_INTERVENTION_NOT_FOUND'; END IF;
+  IF v_intervention.delivery_frozen_at IS NOT NULL THEN
+    RETURN jsonb_build_object('action','FROZEN','reason','INTERVENTION_DELIVERY_FROZEN');
+  END IF;
+
+  SELECT * INTO v_request
+    FROM henvalt.delivery_requests
+   WHERE id=p_delivery_request_id
+     AND tenant_id=p_tenant_id
+     AND intervention_id=p_intervention_id
+     AND generation_number=p_generation_number
+   FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('action','STALE','reason','DELIVERY_RETRY_REQUEST_NOT_CURRENT');
+  END IF;
+
+  SELECT max(generation_number) INTO v_latest_generation
+    FROM henvalt.delivery_requests
+   WHERE tenant_id=p_tenant_id AND intervention_id=p_intervention_id;
+  IF v_latest_generation IS DISTINCT FROM p_generation_number
+     OR v_intervention.status <> 'SENDING'
+     OR v_request.status <> 'PENDING'
+     OR v_request.provider_claimed_at IS NOT NULL
+     OR v_request.provider_egress_started_at IS NOT NULL THEN
+    RETURN jsonb_build_object('action','STALE','reason','DELIVERY_RETRY_REQUEST_NOT_FAILABLE');
+  END IF;
+
+  -- Read first without a child lock, then lock after reservation to preserve
+  -- intervention -> request -> reservation -> background-job ordering.
+  SELECT * INTO v_job
+    FROM henvalt.background_jobs
+   WHERE id=p_retry_job_id;
+  IF NOT FOUND
+     OR v_job.job_type <> 'execute_delivery_retry_generation'
+     OR v_job.status <> 'CLAIMED'
+     OR v_job.locked_by IS DISTINCT FROM p_retry_worker_id
+     OR v_job.locked_at IS NULL
+     OR v_job.locked_at < clock_timestamp()-interval '900 seconds'
+     OR v_job.tenant_id IS DISTINCT FROM p_tenant_id
+     OR v_job.payload->>'tenant_id' IS DISTINCT FROM p_tenant_id::text
+     OR v_job.payload->>'intervention_id' IS DISTINCT FROM p_intervention_id::text
+     OR v_job.payload->>'delivery_request_id' IS DISTINCT FROM p_delivery_request_id::text
+     OR v_job.payload->>'generation_number' IS DISTINCT FROM p_generation_number::text
+     OR NOT EXISTS (
+       SELECT 1 FROM henvalt.delivery_retry_jobs rj
+        WHERE rj.tenant_id=p_tenant_id
+          AND rj.intervention_id=p_intervention_id
+          AND rj.delivery_request_id=p_delivery_request_id
+          AND rj.job_id=p_retry_job_id
+     ) THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_INVALID' USING ERRCODE='55000';
+  END IF;
+
+  SELECT * INTO v_reservation
+    FROM henvalt.email_usage_reservations
+   WHERE tenant_id=p_tenant_id AND delivery_request_id=p_delivery_request_id
+   FOR UPDATE;
+
+  SELECT * INTO v_job
+    FROM henvalt.background_jobs
+   WHERE id=p_retry_job_id
+   FOR UPDATE;
+  IF NOT FOUND
+     OR v_job.job_type <> 'execute_delivery_retry_generation'
+     OR v_job.status <> 'CLAIMED'
+     OR v_job.locked_by IS DISTINCT FROM p_retry_worker_id
+     OR v_job.locked_at IS NULL
+     OR v_job.locked_at < clock_timestamp()-interval '900 seconds' THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_LOST' USING ERRCODE='55000';
+  END IF;
+
+  IF FOUND AND v_reservation.status='RESERVED' THEN
+    UPDATE henvalt.email_usage_reservations
+       SET status='RELEASED',
+           status_reason='DELIVERY_RETRY_ENVELOPE_INVALID',
+           released_at=coalesce(released_at,clock_timestamp()),
+           updated_at=clock_timestamp()
+     WHERE id=v_reservation.id;
+    GET DIAGNOSTICS v_rows=ROW_COUNT;
+    IF v_rows=1 THEN
+      INSERT INTO henvalt.email_usage_reservation_events(
+        reservation_id,tenant_id,delivery_request_id,event_type,
+        previous_status,new_status,delivery_attempt_id,provider_status_code,reason
+      ) VALUES(
+        v_reservation.id,p_tenant_id,p_delivery_request_id,'RELEASED',
+        'RESERVED','RELEASED',NULL,NULL,'DELIVERY_RETRY_ENVELOPE_INVALID'
+      );
+    END IF;
+  END IF;
+
+  PERFORM henvalt.resolve_intervention_send_failure(
+    p_intervention_id,'FAILED'::henvalt.intervention_status,
+    'DELIVERY_RETRY_ENVELOPE_INVALID'
+  );
+  RETURN jsonb_build_object('action','FAILED','reason','DELIVERY_RETRY_ENVELOPE_INVALID');
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.fail_delivery_retry_envelope_safely(uuid,uuid,uuid,integer,uuid,text)
+  FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.fail_delivery_retry_envelope_safely(uuid,uuid,uuid,integer,uuid,text)
+  TO service_role;
+
+COMMENT ON FUNCTION henvalt.fail_delivery_retry_envelope_safely(uuid,uuid,uuid,integer,uuid,text) IS
+  'Fails a corrupt retry envelope only after exact tenant/request/generation/job ownership is revalidated under parent-first locks. Frozen or stale generations are no-ops; only a still-current PENDING generation may release its reservation and fail the intervention.';
+
 COMMIT;
