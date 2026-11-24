@@ -559,7 +559,7 @@ test("retry source-job lease and tenant identity are enforced before generation 
 
 test("reserved quota reuse remains after monetary and monthly email billing checks", () => {
   const patch = migration.slice(migration.indexOf("DO $retry_quota_reuse_patch$"));
-  assert.ok(patch.includes("RETURN NEW;\\\\s+END;"));
+  assert.ok(patch.includes("'RETURN NEW;"));
   assert.ok(patch.includes("HENVALT_RETRY_RESERVED_HOLD_REUSE"));
   assert.ok(acceptance.includes("retry quota reuse bypassed monetary usage cap"));
   assert.ok(acceptance.includes("retry quota reuse bypassed monthly email limit"));
