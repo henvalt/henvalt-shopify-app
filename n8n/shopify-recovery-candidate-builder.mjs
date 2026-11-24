@@ -176,8 +176,8 @@ function buildNodes(manifest, normalizerSource) {
       }
     },
     postgresNode("Fail Delivery Retry Envelope", id[22],
-      "SELECT henvalt.resolve_intervention_send_failure($1,'FAILED'::henvalt.intervention_status,'DELIVERY_RETRY_ENVELOPE_INVALID') AS resolved",
-      "={{ [$('Normalize & Guard').item.json.intervention_id] }}",
+      "SELECT henvalt.fail_delivery_retry_envelope_safely($1,$2,$3,$4,$5,$6) AS result",
+      "={{ [$('Normalize & Guard').item.json.tenant_id, $('Normalize & Guard').item.json.intervention_id, $('Normalize & Guard').item.json.delivery_request_id, $('Normalize & Guard').item.json.generation_number, $('Normalize & Guard').item.json.job_id, $('Normalize & Guard').item.json.worker_id] }}",
       [8560, 820], { onError: "continueErrorOutput" }),
     postgresNode("Retry Delivery Retry Job", id[23],
       "SELECT henvalt.retry_job($1,$2,$3,$4) AS result",
