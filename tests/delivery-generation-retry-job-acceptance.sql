@@ -420,8 +420,8 @@ BEGIN
     v_request_invalid,v_retry_job_invalid
   );
   INSERT INTO henvalt.email_usage_reservations(
-    tenant_id,delivery_request_id,status,status_reason
-  ) VALUES(v_tenant_invalid,v_request_invalid,'RESERVED','DELIVERY_CLAIMED');
+    tenant_id,delivery_request_id,cycle_start,status,status_reason
+  ) VALUES(v_tenant_invalid,v_request_invalid,clock_timestamp(),'RESERVED','DELIVERY_CLAIMED');
 
   v_result := henvalt.fail_delivery_retry_envelope_safely(
     v_tenant_invalid,v_intervention_invalid,v_request_invalid,2,
