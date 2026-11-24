@@ -1,5 +1,12 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
+function replaceOne(source, search, replacement, label) {
+  if (typeof source !== "string" || !source.includes(search)) {
+    throw new Error("Missing source anchor: " + label);
+  }
+  return source.replace(search, replacement);
+}
+
 const CANDIDATE_ID = "00000000-0000-4000-8000-999999999997";
 const NODE_IDS = [
   "10000000-0000-4000-8000-000000000001",
