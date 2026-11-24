@@ -326,3 +326,37 @@ test("all credential, authorization and provider requests refuse redirects", asy
   assert.ok(calls.every((call) => call.init.redirect === "error"));
   assert.equal(calls[3].url, "https://api.mailersend.com/v1/email");
 });
+
+
+test("ambiguous egress-fence RPC transport failure never falls through to MailerSend", async () => {
+  const calls = [];
+  const handler = createDeliveryHandler({
+    supabaseUrl: SUPABASE_URL,
+    serviceRoleKey: SERVICE_KEY,
+    fetchImpl: async (url) => {
+      calls.push(url);
+      if (url === SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery") {
+        return new Response(JSON.stringify(PROVIDER_TOKEN), { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope") {
+        return new Response("true", { status: 200 });
+      }
+      if (url === SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started") {
+        throw new Error("synthetic egress fence response lost after possible commit");
+      }
+      throw new Error("MailerSend must remain unreachable after an ambiguous fence RPC");
+    },
+  });
+  const response = await handler(request(validBody()));
+  assert.equal(response.status, 500);
+  assert.deepEqual(await response.json(), {
+    error: "delivery_preflight_failed",
+    henvalt_delivery_stage: "pre_provider",
+  });
+  assert.deepEqual(calls, [
+    SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery",
+    SUPABASE_URL + "/rest/v1/rpc/assert_mailersend_delivery_envelope",
+    SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started",
+  ]);
+  assert.ok(!calls.includes("https://api.mailersend.com/v1/email"));
+});
