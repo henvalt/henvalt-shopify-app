@@ -8,7 +8,7 @@
     "inspected_active_version": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
     "baseline_node_count": 46,
     "candidate_export": "n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json",
-    "candidate_node_count": 74
+    "candidate_node_count": 75
   },
   "job_model": {
     "existing_job_type": "execute_intervention",
@@ -42,7 +42,9 @@
     "provider_event_must_not_exist": true,
     "provider_egress_started_at_must_be_null": true,
     "ambiguous_provider_outcomes_retryable": false,
-    "provider_response_stage_retryable": false
+    "provider_response_stage_retryable": false,
+    "retry_job_claim_lost_is_retryable": false,
+    "retry_job_claim_lost_behavior": "stop stale worker; leave request and job to current owner"
   },
   "immutable_envelope": {
     "source": "delivery_requests.message_reference -> henvalt.messages",
@@ -71,14 +73,16 @@
     "Delivery Retry Envelope Valid?",
     "Build Delivery Retry Payload",
     "Create Delivery Retry Generation Job",
-    "Delivery Retry Enqueued?"
+    "Delivery Retry Enqueued?",
+    "Retry Job Claim Lost?"
   ],
   "failure_paths": {
     "resume_rpc_error": "retry same source job with constant non-PII reason",
     "envelope_database_error": "retry same retry-generation job",
     "invalid_or_stale_envelope": "fail intervention closed and complete job",
     "generation_enqueue_error": "retry same source job; retry command is attempt-idempotent",
-    "max_generation_reached": "DEAD_LETTER"
+    "max_generation_reached": "DEAD_LETTER",
+    "retry_worker_lease_lost": "stop without recording a delivery attempt or resolving the intervention"
   },
   "safety": {
     "active_recovery_workflow_modified": false,
