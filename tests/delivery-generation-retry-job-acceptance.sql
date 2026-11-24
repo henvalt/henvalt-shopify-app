@@ -239,6 +239,20 @@ BEGIN
     IF SQLERRM='mismatched attempt identity was accepted' THEN RAISE; END IF;
     IF SQLERRM<>'DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE' THEN RAISE; END IF;
   END;
+  UPDATE henvalt.background_jobs
+     SET locked_at=clock_timestamp()-interval '901 seconds'
+   WHERE id=v_job_amb;
+  BEGIN
+    PERFORM henvalt.enqueue_delivery_retry_generation_job(
+      v_intervention_amb,v_job_amb,'recovery-worker-amb'
+    );
+    RAISE EXCEPTION 'expired normal source-job lease queued a retry';
+  EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM='expired normal source-job lease queued a retry' THEN RAISE; END IF;
+    IF SQLERRM<>'DELIVERY_RETRY_SOURCE_JOB_CLAIM_INVALID' THEN RAISE; END IF;
+  END;
+  UPDATE henvalt.background_jobs SET locked_at=clock_timestamp() WHERE id=v_job_amb;
+
   v_result := henvalt.enqueue_delivery_retry_generation_job(
     v_intervention_amb,v_job_amb,'recovery-worker-amb'
   );
