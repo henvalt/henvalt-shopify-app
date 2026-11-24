@@ -59,7 +59,7 @@ export function buildDeliveryCandidate(source) {
         clean.parameters.jsCode = replaceOne(
           clean.parameters.jsCode,
           '    correlation_id: c.correlation_id || null',
-          '    correlation_id: c.correlation_id || null,\\n' +
+          '    correlation_id: c.correlation_id || null,\n' +
           '    delivery_attempt_id: (() => { try { const result = $("Record Delivery Result").item.json || {}; return result.attempt_id || null; } catch (e) { return null; } })(),\\n' +
           '    pre_provider_failure: !!(c.provider_response && c.provider_response.henvalt_delivery_stage === "pre_provider")',
           "propagate stable delivery attempt identity and trusted pre-provider stage"
