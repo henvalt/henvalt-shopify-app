@@ -162,6 +162,9 @@ test("generated recovery graph routes retry generations through the existing del
   assert.equal(target("Is Delivery Retry Generation Job?", 1), "Atomic Claim Intervention");
   assert.equal(target("Delivery Retry Envelope Valid?", 0), "Build Delivery Retry Payload");
   assert.equal(target("Build Delivery Retry Payload"), "Call HENVALT_DELIVERY");
+  assert.equal(target("Classify Delivery Failure"), "Retry Job Claim Lost?");
+  assert.equal(target("Retry Job Claim Lost?", 0), "Stop Delivery Retry Job Claim Lost");
+  assert.equal(target("Retry Job Claim Lost?", 1), "Resolve Delivery Failure");
   assert.equal(target("Delivery Retryable?", 0), "Create Delivery Retry Generation Job");
   assert.equal(target("Create Delivery Retry Generation Job"), "Delivery Retry Enqueued?");
   assert.equal(target("Delivery Retry Enqueued?", 0), "Claim Shopify Replay Job");
@@ -279,6 +282,15 @@ test("delivery failure classifier retries only a server-marked FAILED pre-provid
     delivery_attempt_id: "55555555-5555-4555-8555-555555555555",
   });
   assert.equal(rejected.retryable, false);
+  const claimLost = classify({
+    state: "REJECTED",
+    retry_job_claim_lost: true,
+    delivery_request_id: "44444444-4444-4444-8444-444444444444",
+    delivery_attempt_id: null,
+  });
+  assert.equal(claimLost.retry_job_claim_lost, true);
+  assert.equal(claimLost.retryable, false);
+  assert.equal(claimLost.final_status, "SENDING");
 });
 
 
@@ -420,4 +432,57 @@ test("recovery retry payload carries exact job lease identity through delivery n
   assert.match(deliveryBuilder, /retry_worker_id/);
   assert.match(deliveryBuilder, /retry_generation_number/);
   assert.match(deliveryBuilder, /delivery_generation_retry/);
+});
+
+
+test("retry job claim loss stops before result persistence and leaves recovery intervention untouched", () => {
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: recovery } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const nodeCode = (workflow, name) => workflow.nodes.find((node) => node.name === name).parameters.jsCode;
+  const identity = {
+    precheck_ok: true,
+    tenant_id: "11111111-1111-4111-8111-111111111111",
+    intervention_id: "22222222-2222-4222-8222-222222222222",
+    recovery_id: "33333333-3333-4333-8333-333333333333",
+    opportunity_id: "44444444-4444-4444-8444-444444444444",
+    correlation_id: "55555555-5555-4555-8555-555555555555",
+  };
+  const classifyDelivery = new Function("$", "$json", nodeCode(delivery, "Classify Result"))(
+    (name) => ({ item: { json: ({
+      "Validate & Normalize": identity,
+      "Authorize & Context": { statusCode: 200, body: { can_send: true, delivery_request_id: "66666666-6666-4666-8666-666666666666", provider: "mailersend" } },
+      "No-Send Provider Stub": { statusCode: 409, body: {
+        state: "REJECTED",
+        failure_category: "RETRY_JOB_CLAIM_LOST",
+        retry_job_claim_lost: true,
+      } },
+    })[name] } }),
+    {},
+  );
+  assert.equal(classifyDelivery.retry_job_claim_lost, true);
+  assert.equal(classifyDelivery.should_record_result, false);
+
+  const deliveryResponse = new Function("$", "$json", nodeCode(delivery, "Build Delivery Response"))(
+    (name) => ({ item: { json: name === "Classify Result" ? classifyDelivery : {} } }),
+    {},
+  ).json;
+  assert.equal(deliveryResponse.body.retry_job_claim_lost, true);
+  assert.equal(deliveryResponse.body.delivery_attempt_id, null);
+
+  const classifyRecovery = new Function("$", "$json", nodeCode(recovery, "Classify Delivery Failure"))(
+    () => ({ item: { json: {
+      intervention_id: identity.intervention_id,
+      tenant_id: identity.tenant_id,
+      job_id: "77777777-7777-4777-8777-777777777777",
+      worker_id: "stale-worker",
+    } } }),
+    { body: deliveryResponse.body, statusCode: deliveryResponse.statusCode },
+  ).json;
+  assert.equal(classifyRecovery.retry_job_claim_lost, true);
+  assert.equal(classifyRecovery.retryable, false);
+  assert.equal(classifyRecovery.final_status, "SENDING");
 });
