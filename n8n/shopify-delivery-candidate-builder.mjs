@@ -58,6 +58,9 @@ export function buildDeliveryCandidate(source) {
           ].join("\n")
         };
       }
+      if (/(?:api\\.mailersend\\.com|api\\.sendgrid\\.com|api\\.resend\\.com|api\\.mailgun\\.net|api\\.postmarkapp\\.com)/i.test(JSON.stringify(clean.parameters || {}))) {
+        throw new Error("Provider API endpoint remains in candidate: " + clean.name);
+      }
       if (clean.name === "Build Delivery Response") {
         clean.parameters.jsCode = replaceOne(
           clean.parameters.jsCode,
