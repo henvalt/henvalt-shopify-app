@@ -387,7 +387,9 @@ test("retry worker lease is checked before credential release", async () => {
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), {
     error: "delivery_retry_job_claim_invalid",
-    henvalt_delivery_stage: "pre_provider",
+    state: "REJECTED",
+    failure_category: "RETRY_JOB_CLAIM_LOST",
+    retry_job_claim_lost: true,
   });
   assert.equal(calls.length, 1);
   assert.ok(!calls.some((call) => call.url.endsWith("/get_mailersend_token_for_delivery")));
@@ -470,8 +472,10 @@ test("retry lease lost between preflight and final egress never calls the provid
   const response = await handler(request(validRetryBody()));
   assert.equal(response.status, 409);
   assert.deepEqual(await response.json(), {
-    error: "delivery_provider_egress_fence_rejected",
-    henvalt_delivery_stage: "pre_provider",
+    error: "delivery_retry_job_claim_invalid",
+    state: "REJECTED",
+    failure_category: "RETRY_JOB_CLAIM_LOST",
+    retry_job_claim_lost: true,
   });
   assert.equal(calls.length, 4);
   assert.ok(!calls.includes("https://api.mailersend.com/v1/email"));
