@@ -453,7 +453,11 @@ $function$;
 -- The loader check is not sufficient on its own: a worker can lose its
 -- 15-minute background-job lease after loading the immutable envelope.
 -- Lock order remains intervention -> delivery request -> background job.
-CREATE OR REPLACE FUNCTION henvalt.mark_mailersend_provider_egress_started(
+
+-- Renew a retry job lease only while the exact worker still owns the current
+-- generation. Called before token release and again atomically at final egress.
+-- Canonical lock order: intervention -> request -> background job.
+CREATE OR REPLACE FUNCTION henvalt.renew_delivery_retry_job_lease(
   p_tenant_id uuid,
   p_delivery_request_id uuid,
   p_retry_job_id uuid,
@@ -521,17 +525,60 @@ BEGIN
     RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_INVALID' USING ERRCODE='55000';
   END IF;
 
-  IF v_request.generation_number IS DISTINCT FROM p_generation_number THEN
-    RAISE EXCEPTION 'DELIVERY_RETRY_GENERATION_STALE' USING ERRCODE='55000';
+  IF v_intervention.status <> 'SENDING'
+     OR v_intervention.delivery_frozen_at IS NOT NULL
+     OR v_request.generation_number IS DISTINCT FROM p_generation_number
+     OR v_request.status NOT IN ('PENDING','UNKNOWN')
+     OR v_request.channel <> 'EMAIL'
+     OR lower(COALESCE(v_request.provider,'')) <> 'mailersend'
+     OR v_request.provider_egress_started_at IS NOT NULL
+     OR EXISTS (
+       SELECT 1 FROM henvalt.delivery_requests newer
+        WHERE newer.tenant_id=p_tenant_id
+          AND newer.intervention_id=v_intervention_id
+          AND newer.generation_number>p_generation_number
+     ) THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_GENERATION_NOT_SENDABLE' USING ERRCODE='55000';
   END IF;
 
-  -- Reuse the canonical two-argument fence after validating retry ownership.
-  -- It rechecks parent/request state, latest generation and global send gate.
+  UPDATE henvalt.background_jobs
+     SET locked_at=clock_timestamp(),updated_at=clock_timestamp()
+   WHERE id=p_retry_job_id AND status='CLAIMED' AND locked_by=p_retry_worker_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_LOST' USING ERRCODE='55000'; END IF;
+  RETURN true;
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION henvalt.mark_mailersend_provider_egress_started(
+  p_tenant_id uuid,
+  p_delivery_request_id uuid,
+  p_retry_job_id uuid,
+  p_retry_worker_id text,
+  p_generation_number integer
+) RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, auth, pg_temp
+AS $function$
+BEGIN
+  IF henvalt.renew_delivery_retry_job_lease(
+    p_tenant_id,p_delivery_request_id,p_retry_job_id,p_retry_worker_id,p_generation_number
+  ) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_JOB_CLAIM_INVALID' USING ERRCODE='55000';
+  END IF;
+  -- The helper's parent/request/job locks remain held for this transaction.
+  -- Reuse the canonical provider fence for the final send-state and global
+  -- interlock checks, then commit the job heartbeat and egress marker together.
   RETURN henvalt.mark_mailersend_provider_egress_started(
     p_tenant_id,p_delivery_request_id
   );
 END;
 $function$;
+
+REVOKE ALL ON FUNCTION henvalt.renew_delivery_retry_job_lease(uuid,uuid,uuid,text,integer)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.renew_delivery_retry_job_lease(uuid,uuid,uuid,text,integer)
+  TO service_role;
 
 REVOKE ALL ON FUNCTION henvalt.mark_mailersend_provider_egress_started(uuid,uuid,uuid,text,integer)
   FROM PUBLIC, anon, authenticated;
