@@ -1,6 +1,11 @@
 -- Queue-backed immutable delivery retry generations.
--- Depends on 202611230002_delivery_generation_schema_and_retry_rpc.sql and
--- the existing background_jobs worker table. Candidate only; do not deploy
+-- Depends on 202611230001_email_usage_reservations.sql,
+-- 202611230002_delivery_generation_schema_and_retry_rpc.sql,
+-- 202611230003_delivery_provider_egress_fence.sql,
+-- 202611230004_delivery_lifecycle_parent_first_lock_order.sql,
+-- 202611230006_late_provider_acceptance_incidents.sql,
+-- 202611230007_mailersend_webhook_generation_routing.sql, and the
+-- existing background_jobs worker table. Candidate only; do not deploy
 -- until the coordinated recovery/delivery graph and isolated staging pass.
 
 BEGIN;
