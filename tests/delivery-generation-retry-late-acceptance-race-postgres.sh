@@ -103,7 +103,7 @@ UPDATE henvalt.background_jobs
    SET status='CLAIMED',locked_by='delivery-worker-after-late',locked_at=clock_timestamp()
  WHERE id='$retry_job_a';
 SQL
-loadable_a="$(psql -Atqc "SELECT count(*) FROM henvalt.load_delivery_retry_envelope(
+loadable_a="$(psql -Atqc "SET request.jwt.claim.role='service_role'; SELECT count(*) FROM henvalt.load_delivery_retry_envelope(
   '$retry_job_a','delivery-worker-after-late','$tenant_a','$parent_a',
   (SELECT delivery_request_id FROM henvalt.delivery_retry_jobs WHERE job_id='$retry_job_a'),2
 );")"
