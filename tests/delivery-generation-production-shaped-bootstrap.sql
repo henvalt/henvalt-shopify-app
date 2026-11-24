@@ -253,11 +253,17 @@ CREATE OR REPLACE FUNCTION henvalt.record_delivery_result(
 LANGUAGE plpgsql SECURITY DEFINER SET search_path=henvalt,public AS $
 DECLARE v_tenant_id uuid; v_intervention_id uuid; v_current_state henvalt.delivery_state;
 BEGIN
-  SELECT tenant_id,intervention_id,status
-    INTO v_tenant_id,v_intervention_id,v_current_state
-    FROM henvalt.delivery_requests
-   WHERE id=p_delivery_request_id
-   FOR UPDATE;
+  SELECT
+    tenant_id,
+    intervention_id,
+    status
+  INTO
+    v_tenant_id,
+    v_intervention_id,
+    v_current_state
+  FROM henvalt.delivery_requests
+  WHERE id = p_delivery_request_id
+  FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Delivery request not found: %',p_delivery_request_id; END IF;
   UPDATE henvalt.delivery_requests
      SET provider_message_id=coalesce(provider_message_id,p_provider_message_id),
