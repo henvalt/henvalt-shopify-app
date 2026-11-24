@@ -263,6 +263,59 @@ BEGIN
 END;
 $function$;
 
+CREATE OR REPLACE FUNCTION henvalt.enqueue_delivery_retry_generation_job(
+  p_intervention_id uuid,
+  p_source_job_id uuid,
+  p_worker_id text,
+  p_expected_delivery_request_id uuid,
+  p_expected_delivery_attempt_id uuid
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, auth, pg_temp
+AS $function$
+DECLARE
+  v_intervention henvalt.recovery_interventions%ROWTYPE;
+  v_request henvalt.delivery_requests%ROWTYPE;
+  v_attempt henvalt.delivery_attempts%ROWTYPE;
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
+  END IF;
+  SELECT * INTO v_intervention
+    FROM henvalt.recovery_interventions
+   WHERE id=p_intervention_id
+   FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'INTERVENTION_NOT_FOUND'; END IF;
+
+  SELECT * INTO v_request
+    FROM henvalt.delivery_requests
+   WHERE tenant_id=v_intervention.tenant_id
+     AND intervention_id=p_intervention_id
+   ORDER BY generation_number DESC
+   LIMIT 1
+   FOR UPDATE;
+  IF NOT FOUND OR v_request.id IS DISTINCT FROM p_expected_delivery_request_id THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_EXPECTED_REQUEST_STALE' USING ERRCODE='55000';
+  END IF;
+
+  SELECT * INTO v_attempt
+    FROM henvalt.delivery_attempts
+   WHERE tenant_id=v_intervention.tenant_id
+     AND delivery_request_id=v_request.id
+   ORDER BY attempt_number DESC
+   LIMIT 1
+   FOR UPDATE;
+  IF NOT FOUND OR v_attempt.id IS DISTINCT FROM p_expected_delivery_attempt_id THEN
+    RAISE EXCEPTION 'DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE' USING ERRCODE='55000';
+  END IF;
+
+  RETURN henvalt.enqueue_delivery_retry_generation_job(
+    v_intervention.tenant_id,p_intervention_id,p_source_job_id,p_worker_id
+  );
+END;
+$function$;
+
 CREATE OR REPLACE FUNCTION henvalt.load_delivery_retry_envelope(
   p_job_id uuid,
   p_worker_id text,
@@ -394,6 +447,11 @@ GRANT EXECUTE ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uui
 REVOKE ALL ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uuid,text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uuid,text)
+  TO service_role;
+
+REVOKE ALL ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uuid,text,uuid,uuid)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.enqueue_delivery_retry_generation_job(uuid,uuid,text,uuid,uuid)
   TO service_role;
 
 REVOKE ALL ON FUNCTION henvalt.load_delivery_retry_envelope(uuid,text,uuid,uuid,uuid,integer)
