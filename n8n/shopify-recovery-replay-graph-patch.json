@@ -496,7 +496,7 @@
   ],
   "graph_integrity_evidence": {
     "baseline_source": "Read-only active HENVALT_RECOVERY workflow export",
-    "active_version_id": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+    "active_version_id": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
     "baseline_node_count": 46,
     "required_connections_have_known_endpoints": true,
     "active_workflow_not_modified": true
