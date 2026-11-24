@@ -224,7 +224,7 @@ BEGIN
     tenant_id,delivery_request_id,status,status_reason,last_attempt_id
   ) VALUES(v_tenant_amb,v_request_amb,'CONSUMED','AMBIGUOUS_PROVIDER_OUTCOME',v_attempt_amb);
   INSERT INTO henvalt.background_jobs(
-    id,tenant_id,job_type,payload,status,locked_by
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
   ) VALUES(
     v_job_amb,v_tenant_amb,'execute_intervention',
     jsonb_build_object('tenant_id',v_tenant_amb,'intervention_id',v_intervention_amb),
@@ -277,7 +277,7 @@ BEGIN
          v_attempt_unmarked,'PRE_PROVIDER_FAILURE'
     FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_unmarked;
   INSERT INTO henvalt.background_jobs(
-    id,tenant_id,job_type,payload,status,locked_by
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
   ) VALUES(
     v_job_unmarked,v_tenant_unmarked,'execute_intervention',
     jsonb_build_object('tenant_id',v_tenant_unmarked,'intervention_id',v_intervention_unmarked),
@@ -322,7 +322,7 @@ BEGIN
   SELECT id,v_tenant_max,v_request_max,'RELEASED','RESERVED','RELEASED',v_attempt_max,'PRE_PROVIDER_FAILURE'
     FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_max;
   INSERT INTO henvalt.background_jobs(
-    id,tenant_id,job_type,payload,status,locked_by
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
   ) VALUES(
     v_job_max,v_tenant_max,'execute_delivery_retry_generation',
     jsonb_build_object('tenant_id',v_tenant_max,'intervention_id',v_intervention_max,
