@@ -11,6 +11,14 @@ RETURNS text LANGUAGE sql STABLE AS $$
   SELECT current_setting('request.jwt.claim.role', true)
 $$;
 
+
+CREATE OR REPLACE FUNCTION henvalt.render_sender_identity_footer(p_tenant_id uuid,p_html text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $ SELECT COALESCE(p_html,'') $;
+CREATE OR REPLACE FUNCTION henvalt.render_email_plain_text(p_html text)
+RETURNS text LANGUAGE sql IMMUTABLE AS $
+  SELECT NULLIF(btrim(regexp_replace(COALESCE(p_html,''),'<[^>]*>',' ','g')),'')
+$;
+
 CREATE TYPE henvalt.delivery_state AS ENUM ('PENDING','ACCEPTED','DELIVERED','FAILED','REJECTED','UNKNOWN');
 CREATE TYPE henvalt.channel_type AS ENUM ('EMAIL','SMS');
 CREATE TYPE henvalt.delivery_mode AS ENUM ('HENVALT_MANAGED','MERCHANT_MANAGED');
