@@ -33,11 +33,11 @@ SELECT id,'$tenant','$request','RELEASED','RESERVED','RELEASED',
        :'attempt_id','PRE_PROVIDER_FAILURE'
 FROM henvalt.email_usage_reservations WHERE delivery_request_id='$request';
 INSERT INTO henvalt.background_jobs(
-  id,tenant_id,job_type,payload,status,locked_by
+  id,tenant_id,job_type,payload,status,locked_by,locked_at
 ) VALUES(
   '$job','$tenant','execute_intervention',
   jsonb_build_object('tenant_id','$tenant'::uuid,'intervention_id','$parent'::uuid),
-  'CLAIMED','$worker'
+  'CLAIMED','$worker',clock_timestamp()
 );
 SQL
 }
