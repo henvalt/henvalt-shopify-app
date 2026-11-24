@@ -172,3 +172,110 @@ test("generated recovery graph routes retry generations through the existing del
   assert.doesNotMatch(retryPayload, /Grok Generate|Create Tracking Token|Create Unsubscribe Token/);
   assert.equal(nodes.get("Call HENVALT_DELIVERY").parameters.workflowId.value, "00000000-0000-4000-8000-999999999996");
 });
+
+
+test("generated recovery worker guard validates complete retry-generation identity", () => {
+  const { workflow } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const code = workflow.nodes.find((node) => node.name === "Normalize & Guard").parameters.jsCode;
+  const run = (row) => new Function("$", "$json", code)(
+    (name) => ({ first: () => ({ json: { worker_id: "recovery-worker-test" } }) }),
+    row,
+  );
+  const intervention = run({
+    id: "11111111-1111-4111-8111-111111111111",
+    job_type: "execute_intervention",
+    payload: { intervention_id: "22222222-2222-4222-8222-222222222222" },
+  });
+  assert.equal(intervention.json.claim_valid, true);
+  const retry = run({
+    id: "33333333-3333-4333-8333-333333333333",
+    job_type: "execute_delivery_retry_generation",
+    tenant_id: "44444444-4444-4444-8444-444444444444",
+    payload: {
+      tenant_id: "44444444-4444-4444-8444-444444444444",
+      intervention_id: "55555555-5555-4555-8555-555555555555",
+      delivery_request_id: "66666666-6666-4666-8666-666666666666",
+      generation_number: 2,
+    },
+  });
+  assert.equal(retry.json.claim_valid, true);
+  const missingIdentity = run({
+    id: "77777777-7777-4777-8777-777777777777",
+    job_type: "execute_delivery_retry_generation",
+    payload: {
+      intervention_id: "55555555-5555-4555-8555-555555555555",
+      delivery_request_id: "66666666-6666-4666-8666-666666666666",
+      generation_number: 2,
+    },
+  });
+  assert.equal(missingIdentity.json.claim_valid, false);
+  const fractionalGeneration = run({
+    id: "88888888-8888-4888-8888-888888888888",
+    job_type: "execute_delivery_retry_generation",
+    tenant_id: "44444444-4444-4444-8444-444444444444",
+    payload: {
+      intervention_id: "55555555-5555-4555-8555-555555555555",
+      delivery_request_id: "66666666-6666-4666-8666-666666666666",
+      generation_number: 2.5,
+    },
+  });
+  assert.equal(fractionalGeneration.json.claim_valid, false);
+});
+
+test("delivery failure classifier retries only a server-marked FAILED pre-provider response with both exact IDs", () => {
+  const { workflow } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const code = workflow.nodes.find((node) => node.name === "Classify Delivery Failure").parameters.jsCode;
+  const identity = {
+    intervention_id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "22222222-2222-4222-8222-222222222222",
+    job_id: "33333333-3333-4333-8333-333333333333",
+    worker_id: "recovery-worker-test",
+  };
+  const classify = (body) => new Function("$", "$json", code)(
+    (name) => ({ item: { json: identity } }),
+    { body },
+  ).json;
+  const accepted = classify({
+    state: "FAILED",
+    pre_provider_failure: true,
+    delivery_request_id: "44444444-4444-4444-8444-444444444444",
+    delivery_attempt_id: "55555555-5555-4555-8555-555555555555",
+  });
+  assert.equal(accepted.retryable, true);
+  const ambiguous = classify({
+    state: "UNKNOWN",
+    pre_provider_failure: false,
+    delivery_request_id: "44444444-4444-4444-8444-444444444444",
+    delivery_attempt_id: "55555555-5555-4555-8555-555555555555",
+  });
+  assert.equal(ambiguous.retryable, false);
+  const providerResponse = classify({
+    state: "FAILED",
+    pre_provider_failure: false,
+    delivery_request_id: "44444444-4444-4444-8444-444444444444",
+    delivery_attempt_id: "55555555-5555-4555-8555-555555555555",
+  });
+  assert.equal(providerResponse.retryable, false);
+  const missingAttempt = classify({
+    state: "FAILED",
+    pre_provider_failure: true,
+    delivery_request_id: "44444444-4444-4444-8444-444444444444",
+    delivery_attempt_id: null,
+  });
+  assert.equal(missingAttempt.retryable, false);
+  const rejected = classify({
+    state: "REJECTED",
+    pre_provider_failure: true,
+    delivery_request_id: "44444444-4444-4444-8444-444444444444",
+    delivery_attempt_id: "55555555-5555-4555-8555-555555555555",
+  });
+  assert.equal(rejected.retryable, false);
+});
