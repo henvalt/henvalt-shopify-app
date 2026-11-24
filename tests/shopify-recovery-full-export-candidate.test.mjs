@@ -196,6 +196,8 @@ test("claimed intervention and generation retry jobs require complete UUID-bound
   const normal = execute(base);
   assert.equal(normal.claim_valid, true);
   assert.equal(normal.tenant_id, tenant);
+  const legacyNormal = execute({ id: job, job_type: "execute_intervention", payload: { intervention_id: intervention } });
+  assert.equal(legacyNormal.claim_valid, true, "legacy intervention jobs do not require a top-level tenant_id");
   const retry = execute({
     ...base,
     job_type: "execute_delivery_retry_generation",
