@@ -149,6 +149,7 @@ test("generated recovery graph routes retry generations through the existing del
   const target = (name, output = 0) => workflow.connections[name]?.main?.[output]?.[0]?.node ?? null;
 
   assert.equal(workflow.nodes.length, contract.target.candidate_node_count);
+  assert.equal(workflow.nodeCount, workflow.nodes.length);
   assert.equal(workflow.active, false);
   assert.equal(workflow.settings.availableInMCP, false);
   assert.equal(audit.delivery_retry_generation_branch, true);
