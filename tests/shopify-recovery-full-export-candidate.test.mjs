@@ -17,10 +17,10 @@ test("full recovery graph builds as a distinct inactive no-send export", () => {
   assert.equal(w.name, "HENVALT_RECOVERY_CANDIDATE_NO_SEND");
   assert.equal(w.active, false);
   assert.equal(w.settings.availableInMCP, false);
-  assert.equal(w.nodes.length, 74);
-  assert.equal(result.audit.candidate_nodes, 74);
-  assert.equal(result.audit.unique_node_ids, 74);
-  assert.equal(result.audit.unique_node_names, 74);
+  assert.equal(w.nodes.length, 75);
+  assert.equal(result.audit.candidate_nodes, 75);
+  assert.equal(result.audit.unique_node_ids, 75);
+  assert.equal(result.audit.unique_node_names, 75);
   assert.equal(result.audit.credentials_removed, true);
   assert.equal(result.audit.webhook_ids_removed, true);
   assert.equal(result.audit.provider_send_nodes, 0);
