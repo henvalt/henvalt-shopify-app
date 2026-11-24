@@ -116,7 +116,7 @@ function buildNodes(manifest, normalizerSource) {
       "SELECT henvalt.retry_shopify_replay_job($1, $2, $3, $4, $5) AS result", retryExpr, [6580, 560],
       { onError: "continueErrorOutput" }),
     ifNode("Replay Retry Accepted?", id[12], "={{ $json.result === true }}", [6800, 560]),
-    { id: id[13], name: "Stop Replay Lease Lost", type: "n8n-nodes-base.noOp", typeVersion: 1, position: [7020, 760], parameters: {} }
+    { id: id[13], name: "Stop Replay Lease Lost", type: "n8n-nodes-base.noOp", typeVersion: 1, position: [7020, 760], parameters: {} },
     ifNode("Claimed Job Valid?", id[14], "={{ $json.claim_valid === true }}", [7240, 720]),
     postgresNode("Resume Delivery Retry Generation", id[15],
       "SELECT henvalt.enqueue_delivery_retry_generation_job($1,$2,$3) AS result",
