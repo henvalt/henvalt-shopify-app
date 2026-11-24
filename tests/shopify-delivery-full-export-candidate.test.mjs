@@ -104,6 +104,16 @@ test("pre-provider Edge Function failures are classified as definitive non-egres
   assert.equal(classifier.provider_response.henvalt_delivery_stage, "pre_provider");
   assert.equal(classifier.should_record_result, true);
   assert.equal(classifier.retryable, false);
+  const response = new Function("$", "$json", nodes.get("Build Delivery Response").parameters.jsCode)(
+    (name) => name === "Classify Result"
+      ? { item: { json: classifier } }
+      : name === "Record Delivery Result"
+        ? { item: { json: { attempt_id: "attempt-0001" } } }
+        : { item: { json: {} } },
+    {}
+  );
+  assert.equal(response.json.body.pre_provider_failure, true);
+  assert.equal(response.json.body.delivery_attempt_id, "attempt-0001");
 });
 
 test("candidate webhooks use isolated path prefixes and graph connections resolve", () => {
@@ -152,4 +162,6 @@ test("executed no-send stub and delivery classifier cannot report provider accep
   assert.equal(response.json.statusCode, 503);
   assert.equal(response.json.body.state, "REJECTED");
   assert.equal(response.json.body.failure_category, "NO_SEND_CANDIDATE");
+  assert.equal(response.json.body.pre_provider_failure, false);
+  assert.equal(response.json.body.delivery_attempt_id, null);
 });
