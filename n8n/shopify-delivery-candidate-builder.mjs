@@ -38,6 +38,9 @@ export function buildDeliveryCandidate(source) {
       const clean = { ...node, parameters: JSON.parse(JSON.stringify(node.parameters || {}).replace(/https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co/gi, "https://supabase-staging.invalid").replace(/https:\/\/henvalt-reply-ai\.chmuhammadrehan18\.workers\.dev/gi, "https://reply-ai-staging.invalid")) };
       delete clean.credentials;
       delete clean.webhookId;
+      if (clean.type === "n8n-nodes-base.code" && /\\bfetch\\s*\\(|\\baxios\\b|\\bXMLHttpRequest\\b|\\bhttps?\\.(?:request|get)\\s*\\(|\\bnet\\.connect\\s*\\(|(?:this\\.)?helpers\\.httpRequest\\b|\\$http\\b|\\b(?:got|superagent|undici)\\s*\\(/i.test(clean.parameters?.jsCode || "")) {
+        throw new Error("Inline network-capable code remains in delivery candidate: " + clean.name);
+      }
       if (clean.type === "n8n-nodes-base.webhook" && typeof clean.parameters.path === "string") {
         clean.parameters.path = "henvalt/candidate-no-send/" + clean.parameters.path.replace(/^henvalt\//, "");
       }
