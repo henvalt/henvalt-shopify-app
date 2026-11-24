@@ -217,3 +217,49 @@ test("claimed intervention and generation retry jobs require complete UUID-bound
   }
   assert.equal(execute({ ...base, job_type: "unexpected_job_type" }).claim_valid, false);
 });
+
+
+test("delivery failure retry branch is claim-loss fenced and follows only the generation RPC", () => {
+  const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
+  const c = w.connections;
+  assert.equal(c["Classify Delivery Failure"].main[0][0].node, "Retry Job Claim Lost?");
+  assert.equal(c["Retry Job Claim Lost?"].main[0][0].node, "Stop Delivery Retry Job Claim Lost");
+  assert.equal(c["Retry Job Claim Lost?"].main[1][0].node, "Resolve Delivery Failure");
+  assert.equal(c["Resolve Delivery Failure"].main[0][0].node, "Delivery Retryable?");
+  assert.equal(c["Delivery Retryable?"].main[0][0].node, "Create Delivery Retry Generation Job");
+  assert.equal(c["Delivery Retryable?"].main[1][0].node, "Complete Job");
+  assert.equal(c["Create Delivery Retry Generation Job"].main[0][0].node, "Delivery Retry Enqueued?");
+  assert.equal(c["Create Delivery Retry Generation Job"].main[1][0].node, "Retry Delivery Generation Enqueue Job");
+  assert.equal(c["Delivery Retry Enqueued?"].main[0][0].node, "Claim Shopify Replay Job");
+  assert.equal(c["Delivery Retry Enqueued?"].main[1][0].node, "Complete Job");
+  const classify = w.nodes.find((n) => n.name === "Classify Delivery Failure").parameters.jsCode;
+  assert.match(classify, /body\.retry_job_claim_lost === true/);
+  assert.match(classify, /validUuid\(deliveryRequestId\)/);
+  assert.match(classify, /validUuid\(deliveryAttemptId\)/);
+  assert.match(classify, /state === "FAILED"/);
+  assert.match(classify, /retryable = preProviderFailure/);
+  const create = w.nodes.find((n) => n.name === "Create Delivery Retry Generation Job");
+  assert.match(create.parameters.query, /enqueue_delivery_retry_generation_job\(\$1,\$2,\$3,\$4,\$5\)/);
+  assert.match(create.parameters.options.queryReplacement, /delivery_request_id/);
+  assert.match(create.parameters.options.queryReplacement, /delivery_attempt_id/);
+});
+
+test("retry generation payload carries the exact claimed job lease and immutable delivery envelope", () => {
+  const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
+  const payload = w.nodes.find((n) => n.name === "Build Delivery Retry Payload").parameters.jsCode;
+  for (const field of [
+    "delivery_request_id", "delivery_generation_retry", "retry_job_id", "retry_worker_id",
+    "retry_generation_number", "message_id", "tenant_id", "recovery_id", "opportunity_id",
+    "intervention_id", "channel", "recipient", "subject", "html_body", "text_body",
+    "tracking_token", "correlation_id", "idempotency_key"
+  ]) assert.match(payload, new RegExp(field));
+  assert.match(payload, /metadata: \{ delivery_generation_retry: true \}/);
+  assert.doesNotMatch(payload, /Grok Generate|Validate AI Output|Create Tracking Token/);
+  const load = w.nodes.find((n) => n.name === "Load Delivery Retry Envelope");
+  assert.match(load.parameters.query, /load_delivery_retry_envelope/);
+  assert.match(load.parameters.options.queryReplacement, /generation_number/);
+  const route = w.nodes.find((n) => n.name === "Is Delivery Retry Generation Job?");
+  assert.match(route.parameters.conditions.conditions[0].leftValue, /job_type === 'execute_delivery_retry_generation'/);
+  assert.equal(w.connections["Is Delivery Retry Generation Job?"].main[0][0].node, "Load Delivery Retry Envelope");
+  assert.equal(w.connections["Is Delivery Retry Generation Job?"].main[1][0].node, "Atomic Claim Intervention");
+});
