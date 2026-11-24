@@ -40,7 +40,7 @@ test("both provider-send entry points are blocked and one-off test branch is rem
 test("delivery candidate rejects alternate provider egress hidden in an ordinary HTTP node", () => {
   const directProvider = structuredClone(fixture.workflow);
   directProvider.nodes.find((n) => n.name === "Authorize & Context").parameters.url = "https://api.mailersend.com/v1/email";
-  assert.throws(() => buildDeliveryCandidate(directProvider), /Non-candidate HTTP egress/);
+  assert.throws(() => buildDeliveryCandidate(directProvider), /Provider API endpoint remains in candidate/);
 
   const unknownExternal = structuredClone(fixture.workflow);
   unknownExternal.nodes.find((n) => n.name === "Authorize & Context").parameters.url = "https://example.invalid/send";
