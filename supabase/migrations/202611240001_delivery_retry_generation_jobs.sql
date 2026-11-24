@@ -114,7 +114,7 @@ BEGIN
    LIMIT 1;
   IF NOT FOUND
      OR v_attempt.state::text NOT IN ('FAILED','REJECTED')
-     OR v_attempt.provider_response->>'henvalt_delivery_stage' <> 'pre_provider' THEN
+     OR v_attempt.provider_response->>'henvalt_delivery_stage' IS DISTINCT FROM 'pre_provider' THEN
     RETURN jsonb_build_object('action','CONTINUE_NORMAL');
   END IF;
 
