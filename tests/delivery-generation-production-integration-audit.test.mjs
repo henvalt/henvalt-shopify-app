@@ -183,7 +183,7 @@ test("pre-provider delivery retry creates a dedicated bounded generation job wit
   assert.match(retryJobMigration, /execute_delivery_retry_generation/);
   assert.match(retryJobMigration, /CREATE TABLE IF NOT EXISTS henvalt\.delivery_retry_jobs/);
   assert.match(retryJobMigration, /delivery_retry_jobs_append_only/);
-  assert.match(retryJobMigration, /provider_response->>'henvalt_delivery_stage' <> 'pre_provider'/);
+  assert.match(retryJobMigration, /provider_response->>'henvalt_delivery_stage' IS DISTINCT FROM 'pre_provider'/);
   assert.match(retryJobMigration, /v_previous\.generation_number >= 3/);
   assert.match(retryJobMigration, /load_delivery_retry_envelope/);
   assert.match(retryJobMigration, /render_sender_identity_footer/);
