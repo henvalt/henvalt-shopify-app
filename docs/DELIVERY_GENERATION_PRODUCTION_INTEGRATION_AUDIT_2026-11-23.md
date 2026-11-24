@@ -270,3 +270,26 @@ A separate production-shaped candidate now covers the gap between the already-te
 ### Egress-boundary audit correction — 2026-11-23
 
 The initial audit fixture incorrectly described the candidate handler as using only a process-local boolean. Re-reading `supabase/functions/henvalt-mailersend-delivery/handler.mjs` showed that it already calls `mark_mailersend_provider_egress_started` after envelope authorization, requires a successful `true` response, and only then calls MailerSend. The boolean remains solely for response classification after the provider boundary. The static audit contract and this report now distinguish the candidate handler from the unchanged production Edge Function/database. No handler behavior was changed for this correction.
+
+
+## Generation-aware recovery job integration — 2026-11-24
+
+A read-only inspection of the connected active n8n workspace exposed the missing worker integration:
+
+- The active `HENVALT_RECOVERY` graph claims only `execute_intervention` jobs.
+- The existing delivery failure branch requeues the same intervention job.
+- `Validate AI Output` derives the stable key `deliver:<intervention_id>`, so the next pass resolves the same terminal delivery request rather than creating a new immutable generation.
+- The database generation RPC existed in the candidate branch, but no active recovery node called it and the production database had not received its schema.
+
+Candidate migration `202611240001_delivery_retry_generation_jobs.sql` adds the database half of the missing path:
+
+1. It recognizes only a latest FAILED/REJECTED attempt carrying the exact server-owned `henvalt_delivery_stage=pre_provider` marker, a matching RELEASED quota reservation and its append-only release event, with no provider event.
+2. It creates the next immutable delivery generation and a dedicated `execute_delivery_retry_generation` background job in the same transaction.
+3. It completes the source worker job atomically, preventing the old intervention job from replaying the terminal request.
+4. It caps the sequence at three total generations (two retries); further pre-provider failures are dead-lettered.
+5. The retry envelope loader requires the exact claimed retry job, current generation, unfrozen SENDING intervention, PENDING request and stored tenant-owned message. It returns the original message, rendered through the canonical sender-footer and plain-text helpers; it does not regenerate AI copy or substitute recipient/content.
+6. Provider-side or ambiguous outcomes do not create another generation.
+
+The production-shaped PostgreSQL 17 acceptance added with this migration covers generation/job creation, source-job completion, envelope identity, wrong-worker rejection, ambiguous-outcome non-retry, and the generation ceiling.
+
+**Important remaining integration work:** the active recovery graph still does not claim or route `execute_delivery_retry_generation`, and the active delivery graph does not yet expose the delivery attempt ID plus trusted pre-provider marker to the recovery caller. Those graph changes must be built into the inactive no-send candidate and tested before any staging cutover. The migration is candidate-only; no production schema or active n8n workflow was changed.
