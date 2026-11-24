@@ -559,7 +559,7 @@ BEGIN
   END IF;
   IF p_tenant_id IS NULL OR p_delivery_request_id IS NULL
      OR p_retry_job_id IS NULL OR NULLIF(btrim(p_retry_worker_id),'') IS NULL
-     OR p_generation_number NOT IN (2,3) THEN
+     OR p_generation_number IS NULL OR p_generation_number NOT IN (2,3) THEN
     RAISE EXCEPTION 'DELIVERY_RETRY_EGRESS_IDENTITY_REQUIRED' USING ERRCODE='22023';
   END IF;
 
@@ -662,7 +662,7 @@ BEGIN
   END IF;
 
   IF p_retry_job_id IS NULL OR NULLIF(btrim(p_retry_worker_id),'') IS NULL
-     OR p_generation_number NOT IN (2,3) THEN
+     OR p_generation_number IS NULL OR p_generation_number NOT IN (2,3) THEN
     RETURN jsonb_build_object(
       'can_send',false,
       'reason','RETRY_JOB_CLAIM_LOST',
