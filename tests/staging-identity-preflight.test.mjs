@@ -50,3 +50,9 @@ test("preflight rejects live provider mode and production n8n identity", () => {
   assert.match(result.stderr, /provider mode must be stub/);
   assert.match(result.stderr, /n8n URL appears to identify production/);
 });
+
+test("preflight rejects incomplete staging inventory", () => {
+  const result = run({ ...valid, HENVALT_STAGE_DELIVERY_WORKFLOW_ID: "" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /missing required staging metadata/);
+});
