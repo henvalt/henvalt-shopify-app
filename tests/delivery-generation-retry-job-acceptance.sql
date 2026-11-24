@@ -119,6 +119,7 @@ BEGIN
      OR v_env.subject<>'Your cart is ready'
      OR v_env.html_body NOT LIKE '%tracking.example.test%'
      OR v_env.html_body NOT LIKE '%unsubscribe.example.test%'
+     OR NULLIF(btrim(v_env.text_body),'') IS NULL
      OR v_env.tracking_token<>'tracking-token-1' THEN
     RAISE EXCEPTION 'loaded retry envelope does not match the original immutable message';
   END IF;
