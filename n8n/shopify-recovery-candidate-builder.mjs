@@ -249,13 +249,13 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   normalizerCode = replaceOne(
     normalizerCode,
     'tenant_id: payload.tenant_id != null ? payload.tenant_id : null,',
-    'tenant_id: tenantId,\\n  delivery_request_id: deliveryRequestId,\\n  generation_number: generationNumber,',
+    'tenant_id: tenantId,\n  delivery_request_id: deliveryRequestId,\n  generation_number: generationNumber,',
     "retry job tenant and generation identity"
   );
   normalizerCode = replaceOne(
     normalizerCode,
     'has_job: jobId != null && interventionId != null,',
-    'has_job: jobId != null,\\n  claim_valid: claimValid,',
+    'has_job: jobId != null,\n  claim_valid: claimValid,',
     "claimed job validity gate"
   );
   normalizer.parameters.jsCode = normalizerCode;
