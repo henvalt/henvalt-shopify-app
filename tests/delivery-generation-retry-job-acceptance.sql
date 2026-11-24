@@ -144,7 +144,7 @@ BEGIN
       v_retry_job,'wrong-worker',v_tenant,v_intervention,v_retry_request,2
     );
     RAISE EXCEPTION 'wrong worker loaded a delivery retry envelope';
-  EXCEPTION WHEN raise_exception THEN
+  EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='wrong worker loaded a delivery retry envelope' THEN RAISE; END IF;
     IF SQLERRM<>'DELIVERY_RETRY_JOB_CLAIM_INVALID' THEN RAISE; END IF;
   END;
@@ -190,7 +190,7 @@ BEGIN
       v_intervention_amb,v_job_amb,'recovery-worker-amb',v_request_amb,gen_random_uuid()
     );
     RAISE EXCEPTION 'mismatched attempt identity was accepted';
-  EXCEPTION WHEN raise_exception THEN
+  EXCEPTION WHEN OTHERS THEN
     IF SQLERRM='mismatched attempt identity was accepted' THEN RAISE; END IF;
     IF SQLERRM<>'DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE' THEN RAISE; END IF;
   END;
