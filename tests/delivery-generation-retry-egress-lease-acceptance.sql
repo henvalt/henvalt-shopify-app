@@ -8,6 +8,7 @@ DECLARE
   v_request uuid := 'f3000000-0000-4000-8000-000000000001';
   v_message uuid := 'f5000000-0000-4000-8000-000000000001';
   v_job uuid := 'f4000000-0000-4000-8000-000000000001';
+  v_retry_command uuid := 'f6000000-0000-4000-8000-000000000001';
   v_worker text := 'retry-egress-worker';
   v_result boolean;
   v_marker timestamptz;
@@ -44,9 +45,13 @@ BEGIN
     'CLAIMED',v_worker,clock_timestamp()
   );
 
+  INSERT INTO henvalt.delivery_retry_commands(
+    tenant_id,intervention_id,retry_command_id,generation_number,delivery_request_id
+  ) VALUES(v_tenant,v_intervention,v_retry_command,2,v_request);
+
   INSERT INTO henvalt.delivery_retry_jobs(
-    tenant_id,intervention_id,retry_command_id,generation_number,delivery_request_id,job_id
-  ) VALUES(v_tenant,v_intervention,gen_random_uuid(),2,v_request,v_job);
+    tenant_id,intervention_id,retry_command_id,delivery_request_id,job_id
+  ) VALUES(v_tenant,v_intervention,v_retry_command,v_request,v_job);
 
   -- The envelope loader itself must reject an expired claim and return the
   -- exact persisted message only while the retry worker lease is fresh.
