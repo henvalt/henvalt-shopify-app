@@ -160,6 +160,7 @@ export function buildRecoveryBillingCandidate(source, manifest, normalizerSource
     }
   }
 
+  workflow.nodeCount = workflow.nodes.length;
   const serialized = JSON.stringify(workflow);
   if (workflow.active !== false || workflow.settings?.availableInMCP !== false) {
     throw new Error("Billing candidate must remain inactive and unavailable in MCP");
