@@ -266,7 +266,7 @@ test("does not pretend reconciliation is persisted when the database RPC fails",
 
 
 test("billing execution is attached to the existing recovery scheduler in an inactive staging-only candidate", () => {
-  const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-recovery-active-2026-11-21.sanitized.json", "utf8"));
+  const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json", "utf8"));
   const manifest = JSON.parse(readFileSync("n8n/shopify-recovery-replay-graph-patch.json", "utf8"));
   const normalizer = readFileSync("n8n/shopify-replay-claim-normalizer-node-candidate.js", "utf8");
   const result = buildRecoveryBillingCandidate(fixture.workflow, manifest, normalizer);
@@ -279,7 +279,7 @@ test("billing execution is attached to the existing recovery scheduler in an ina
   assert.equal(workflow.name, "HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY");
   assert.equal(workflow.active, false);
   assert.equal(workflow.settings.availableInMCP, false);
-  assert.equal(workflow.nodes.length, 62);
+  assert.equal(workflow.nodes.length, 76);
   assert.equal(result.audit.workflow_count, 3);
   assert.equal(result.audit.maximum_shops_per_tick, 10);
   assert.ok(discovery.parameters.query.includes("rl.entry_type = 'RECOVERY'"));
