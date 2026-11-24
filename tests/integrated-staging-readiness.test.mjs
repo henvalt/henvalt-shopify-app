@@ -80,9 +80,9 @@ test("recovery candidate routes retry jobs through the existing delivery workflo
 });
 
 test("the isolated race matrix contains both retry-vs-late-acceptance orderings and egress-vs-late-acceptance", () => {
-  assert.match(raceRetryWins, /delivery-generation-retry-wins-late-acceptance-race-postgres/);
-  assert.match(raceLateWins, /delivery-generation-late-acceptance-race-postgres/);
-  assert.match(raceEgressWins, /delivery-generation-egress-before-late-acceptance-race-postgres/);
+  assert.match(raceRetryWins, /production-shaped retry-generation vs late-acceptance lock races passed in both orders/);
+  assert.match(raceLateWins, /late acceptance before provider-egress race passed/);
+  assert.match(raceEgressWins, /provider egress before late acceptance race passed/);
   assert.match(retryAcceptance, /late provider acceptance/);
   assert.match(retryAcceptance, /retry generation/);
 });
@@ -92,7 +92,7 @@ test("email reservation and parent-first lock-order acceptance are present in th
   assert.match(reservationAcceptance, /concurrent|concurrency/i);
   assert.match(lifecycleAcceptance, /intervention/);
   assert.match(lifecycleAcceptance, /delivery_requests|delivery request/i);
-  assert.match(lifecycleAcceptance, /reservation/i);
+  assert.match(lifecycleAcceptance, /delivery lifecycle parent-first lock order acceptance passed/);
 });
 
 test("candidate workflow builders preserve inactive, no-send isolation", () => {
