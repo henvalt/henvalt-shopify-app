@@ -225,6 +225,7 @@ export function buildDeliveryCandidate(source) {
   if (!classifier.includes("NO_SEND_CANDIDATE") || !classifier.includes("should_record_result: authorized && !")) {
     throw new Error("No-send classifier does not fail closed");
   }
+  workflow.nodeCount = workflow.nodes.length;
   if (workflow.active !== false || workflow.settings.availableInMCP !== false) throw new Error("Candidate must remain inactive and hidden from MCP");
   if (workflow.nodes.length !== 54) throw new Error("Unexpected delivery candidate node count: " + workflow.nodes.length);
   return {
