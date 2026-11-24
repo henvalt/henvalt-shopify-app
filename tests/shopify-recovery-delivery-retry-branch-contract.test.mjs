@@ -428,6 +428,11 @@ test("recovery retry payload carries exact job lease identity through delivery n
   assert.equal(normalized.retry_worker_id, workerId);
   assert.equal(normalized.retry_generation_number, 2);
   assert.equal(normalized.delivery_request_id, requestId);
+  const authorizeNode = delivery.nodes.find((node) => node.name === "Authorize & Context");
+  assert.ok(authorizeNode.parameters.url.endsWith("/rpc/authorize_delivery_request_with_retry_lease"));
+  assert.match(authorizeNode.parameters.jsonBody, /p_retry_job_id/);
+  assert.match(authorizeNode.parameters.jsonBody, /p_retry_worker_id/);
+  assert.match(authorizeNode.parameters.jsonBody, /p_generation_number/);
   assert.match(deliveryBuilder, /retry_job_id/);
   assert.match(deliveryBuilder, /retry_worker_id/);
   assert.match(deliveryBuilder, /retry_generation_number/);
@@ -485,4 +490,56 @@ test("retry job claim loss stops before result persistence and leaves recovery i
   assert.equal(classifyRecovery.retry_job_claim_lost, true);
   assert.equal(classifyRecovery.retryable, false);
   assert.equal(classifyRecovery.final_status, "SENDING");
+});
+
+
+test("authorization-time retry lease loss is propagated without claiming or recording a delivery", () => {
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: recovery } = buildRecoveryCandidate(
+    recoveryFixture.workflow,
+    replayManifest,
+    replayNormalizer,
+  );
+  const nodeCode = (workflow, name) => workflow.nodes.find((node) => node.name === name).parameters.jsCode;
+  const identity = {
+    precheck_ok: true,
+    tenant_id: "11111111-1111-4111-8111-111111111111",
+    intervention_id: "22222222-2222-4222-8222-222222222222",
+    recovery_id: "33333333-3333-4333-8333-333333333333",
+    opportunity_id: "44444444-4444-4444-8444-444444444444",
+    correlation_id: "55555555-5555-4555-8555-555555555555",
+  };
+  const classified = new Function("$", "$json", nodeCode(delivery, "Classify Result"))(
+    (name) => ({ item: { json: ({
+      "Validate & Normalize": identity,
+      "Authorize & Context": {
+        statusCode: 200,
+        body: { can_send: false, retry_job_claim_lost: true, reason: "RETRY_JOB_CLAIM_LOST" },
+      },
+      "No-Send Provider Stub": undefined,
+    })[name] } }),
+    {},
+  );
+  assert.equal(classified.retry_job_claim_lost, true);
+  assert.equal(classified.should_record_result, false);
+
+  const response = new Function("$", "$json", nodeCode(delivery, "Build Delivery Response"))(
+    (name) => ({ item: { json: name === "Classify Result" ? classified : {} } }),
+    {},
+  ).json;
+  assert.equal(response.body.retry_job_claim_lost, true);
+  assert.equal(response.body.delivery_attempt_id, null);
+
+  const recoveryResult = new Function("$", "$json", nodeCode(recovery, "Classify Delivery Failure"))(
+    () => ({ item: { json: {
+      intervention_id: identity.intervention_id,
+      tenant_id: identity.tenant_id,
+      job_id: "77777777-7777-4777-8777-777777777777",
+      worker_id: "stale-worker",
+    } } }),
+    { body: response.body, statusCode: response.statusCode },
+  ).json;
+  assert.equal(recoveryResult.retry_job_claim_lost, true);
+  assert.equal(recoveryResult.retryable, false);
+  assert.equal(recoveryResult.final_status, "SENDING");
 });
