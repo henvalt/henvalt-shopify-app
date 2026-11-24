@@ -43,6 +43,13 @@ DECLARE
   v_request_stale uuid := gen_random_uuid();
   v_retry_command_stale uuid := gen_random_uuid();
   v_retry_job_stale uuid := gen_random_uuid();
+
+  v_tenant_resume uuid := gen_random_uuid();
+  v_intervention_resume uuid := gen_random_uuid();
+  v_request_resume uuid := gen_random_uuid();
+  v_message_resume uuid := gen_random_uuid();
+  v_retry_command_resume uuid := gen_random_uuid();
+  v_retry_job_resume uuid := gen_random_uuid();
 BEGIN
   PERFORM set_config('request.jwt.claim.role','service_role',true);
 
@@ -495,6 +502,87 @@ BEGIN
   IF (SELECT status::text FROM henvalt.recovery_interventions WHERE id=v_intervention_stale)<>'SENDING'
      OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_stale)<>'RESERVED' THEN
     RAISE EXCEPTION 'stale retry envelope changed intervention or quota state';
+  END IF;
+
+  -- A worker may crash after PENDING -> UNKNOWN authorization but before the
+  -- one-way egress marker. With no attempt/event and a still-RESERVED hold,
+  -- the next owner of the exact retry job may safely reclaim the same request.
+  INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
+  VALUES(v_intervention_resume,v_tenant_resume,gen_random_uuid(),'EMAIL','SENDING');
+  INSERT INTO henvalt.messages(
+    id,tenant_id,intervention_id,channel,recipient,subject,body,
+    tracking_token_id,rendered_at,metadata
+  ) VALUES(
+    v_message_resume,v_tenant_resume,v_intervention_resume,'EMAIL',
+    'resume-before-egress@example.test','Resume stored message',
+    '<html><body><p>Stored retry content</p><a href="https://unsubscribe.example.test/r">Unsubscribe</a></body></html>',
+    gen_random_uuid(),clock_timestamp(),
+    jsonb_build_object('unsubscribe_url','https://unsubscribe.example.test/r')
+  );
+  INSERT INTO henvalt.delivery_requests(
+    id,tenant_id,intervention_id,channel,delivery_mode,recipient_reference,
+    message_reference,template_reference,tracking_token,status,provider,
+    idempotency_key,correlation_id,generation_number,provider_claimed_at
+  ) VALUES(
+    v_request_resume,v_tenant_resume,v_intervention_resume,'EMAIL','HENVALT_MANAGED',
+    'resume-before-egress@example.test',v_message_resume,'recovery-v1',
+    'resume-before-egress-token','UNKNOWN','mailersend','resume-before-egress-key',
+    gen_random_uuid(),2,clock_timestamp()
+  );
+  INSERT INTO henvalt.delivery_retry_commands(
+    tenant_id,intervention_id,retry_command_id,generation_number,delivery_request_id
+  ) VALUES(
+    v_tenant_resume,v_intervention_resume,v_retry_command_resume,2,v_request_resume
+  );
+  INSERT INTO henvalt.background_jobs(
+    id,tenant_id,job_type,payload,status,locked_by,locked_at
+  ) VALUES(
+    v_retry_job_resume,v_tenant_resume,'execute_delivery_retry_generation',
+    jsonb_build_object(
+      'tenant_id',v_tenant_resume,'intervention_id',v_intervention_resume,
+      'delivery_request_id',v_request_resume,'generation_number',2
+    ),
+    'CLAIMED','retry-resume-worker',clock_timestamp()
+  );
+  INSERT INTO henvalt.delivery_retry_jobs(
+    tenant_id,intervention_id,retry_command_id,delivery_request_id,job_id
+  ) VALUES(
+    v_tenant_resume,v_intervention_resume,v_retry_command_resume,
+    v_request_resume,v_retry_job_resume
+  );
+  INSERT INTO henvalt.email_usage_reservations(
+    tenant_id,delivery_request_id,cycle_start,status,status_reason
+  ) VALUES(
+    v_tenant_resume,v_request_resume,clock_timestamp(),'RESERVED','DELIVERY_CLAIMED'
+  );
+  INSERT INTO henvalt.email_usage_reservation_events(
+    reservation_id,tenant_id,delivery_request_id,event_type,previous_status,new_status,reason
+  )
+  SELECT id,v_tenant_resume,v_request_resume,'RESERVED',NULL,'RESERVED','DELIVERY_CLAIMED'
+    FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_resume;
+
+  SELECT count(*) INTO v_count
+    FROM henvalt.load_delivery_retry_envelope(
+      v_retry_job_resume,'retry-resume-worker',v_tenant_resume,
+      v_intervention_resume,v_request_resume,2
+    );
+  IF v_count<>1 THEN
+    RAISE EXCEPTION 'unegressed UNKNOWN retry request was not safely reclaimed';
+  END IF;
+  IF (SELECT status::text FROM henvalt.delivery_requests WHERE id=v_request_resume)<>'PENDING'
+     OR (SELECT provider_claimed_at FROM henvalt.delivery_requests WHERE id=v_request_resume) IS NOT NULL
+     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_resume)<>'RESERVED' THEN
+    RAISE EXCEPTION 'pre-egress retry recovery did not preserve request identity and reserved quota';
+  END IF;
+
+  -- The canonical PENDING -> UNKNOWN authorization transition must reuse the
+  -- existing RESERVED hold rather than insert a second quota reservation.
+  UPDATE henvalt.delivery_requests
+     SET status='UNKNOWN'
+   WHERE id=v_request_resume AND tenant_id=v_tenant_resume AND status='PENDING';
+  IF (SELECT count(*) FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_resume)<>1
+     OR (SELECT status FROM henvalt.email_usage_reservations WHERE delivery_request_id=v_request_resume)<>'RESERVED' THEN
+    RAISE EXCEPTION 'retry authorization duplicated or released its existing quota hold';
   END IF;
 END;
 $tests$;
