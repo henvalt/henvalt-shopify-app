@@ -550,6 +550,79 @@ BEGIN
 END;
 $function$;
 
+
+-- Authorization wrapper validates and renews retry ownership before the
+-- canonical authorization RPC can transition the request from PENDING to
+-- UNKNOWN. Normal deliveries pass NULL retry fields and retain old behavior.
+CREATE OR REPLACE FUNCTION henvalt.authorize_delivery_request_with_retry_lease(
+  p_tenant_id uuid,
+  p_delivery_request_id uuid,
+  p_intervention_id uuid,
+  p_recovery_id uuid,
+  p_opportunity_id uuid,
+  p_recipient text,
+  p_idempotency_key text,
+  p_retry_job_id uuid,
+  p_retry_worker_id text,
+  p_generation_number integer
+) RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO pg_catalog, henvalt, auth, pg_temp
+AS $function$
+BEGIN
+  IF auth.role() IS DISTINCT FROM 'service_role' THEN
+    RAISE EXCEPTION 'SERVICE_ROLE_REQUIRED' USING ERRCODE='42501';
+  END IF;
+
+  IF p_retry_job_id IS NULL AND p_retry_worker_id IS NULL AND p_generation_number IS NULL THEN
+    RETURN henvalt.authorize_delivery_request(
+      p_tenant_id,p_delivery_request_id,p_intervention_id,p_recovery_id,
+      p_opportunity_id,p_recipient,p_idempotency_key
+    );
+  END IF;
+
+  IF p_retry_job_id IS NULL OR NULLIF(btrim(p_retry_worker_id),'') IS NULL
+     OR p_generation_number NOT IN (2,3) THEN
+    RETURN jsonb_build_object(
+      'can_send',false,
+      'reason','RETRY_JOB_CLAIM_LOST',
+      'retry_job_claim_lost',true
+    );
+  END IF;
+
+  BEGIN
+    PERFORM henvalt.renew_delivery_retry_job_lease(
+      p_tenant_id,p_delivery_request_id,p_retry_job_id,
+      p_retry_worker_id,p_generation_number
+    );
+  EXCEPTION
+    WHEN SQLSTATE '55000' OR SQLSTATE '22023' OR SQLSTATE 'P0001' THEN
+      RETURN jsonb_build_object(
+        'can_send',false,
+        'reason','RETRY_JOB_CLAIM_LOST',
+        'retry_job_claim_lost',true
+      );
+  END;
+
+  -- The lease helper holds intervention -> request -> job locks until this
+  -- transaction completes. The canonical authorization RPC then claims the
+  -- request under the same parent-first lifecycle order.
+  RETURN henvalt.authorize_delivery_request(
+    p_tenant_id,p_delivery_request_id,p_intervention_id,p_recovery_id,
+    p_opportunity_id,p_recipient,p_idempotency_key
+  );
+END;
+$function$;
+
+REVOKE ALL ON FUNCTION henvalt.authorize_delivery_request_with_retry_lease(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,integer)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION henvalt.authorize_delivery_request_with_retry_lease(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,integer)
+  TO service_role;
+
+COMMENT ON FUNCTION henvalt.authorize_delivery_request_with_retry_lease(uuid,uuid,uuid,uuid,uuid,text,text,uuid,text,integer) IS
+  'Delivery authorization wrapper. For retry generations it validates and renews the exact current retry worker lease before the canonical authorization RPC claims the delivery request; normal sends pass NULL retry identity.';
+
 CREATE OR REPLACE FUNCTION henvalt.mark_mailersend_provider_egress_started(
   p_tenant_id uuid,
   p_delivery_request_id uuid,
