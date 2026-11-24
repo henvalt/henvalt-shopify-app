@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildRecoveryCandidate } from "../n8n/shopify-recovery-candidate-builder.mjs";
 
-const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-recovery-active-2026-11-21.sanitized.json", "utf8"));
+const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json", "utf8"));
 const manifest = JSON.parse(readFileSync("n8n/shopify-recovery-replay-graph-patch.json", "utf8"));
 const normalizer = readFileSync("n8n/shopify-replay-claim-normalizer-node-candidate.js", "utf8");
 const candidateId = "00000000-0000-4000-8000-999999999997";
