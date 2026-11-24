@@ -20,6 +20,9 @@ BEGIN
 
   INSERT INTO henvalt.recovery_interventions(id,tenant_id,opportunity_id,channel,status)
   VALUES(v_intervention,v_tenant,gen_random_uuid(),'EMAIL','FAILED');
+  INSERT INTO henvalt.billing_accounts(
+    tenant_id,status,test_mode,activated_at,monthly_email_limit
+  ) VALUES(v_tenant,'ACTIVE',false,clock_timestamp(),1000);
 
   INSERT INTO henvalt.delivery_requests(
     id,tenant_id,intervention_id,recovery_id,opportunity_id,channel,delivery_mode,
