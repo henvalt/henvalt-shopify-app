@@ -48,10 +48,10 @@ export function buildDeliveryCandidate(source) {
         clean.parameters.jsCode = replaceOne(
           clean.parameters.jsCode,
           "  metadata: b.metadata || {},",
-          "  metadata: b.metadata || {},\\n" +
-          "  delivery_generation_retry: b.delivery_generation_retry === true || (b.metadata && b.metadata.delivery_generation_retry === true),\\n" +
-          "  retry_job_id: b.retry_job_id || null,\\n" +
-          "  retry_worker_id: b.retry_worker_id || null,\\n" +
+          "  metadata: b.metadata || {},\n" +
+          "  delivery_generation_retry: b.delivery_generation_retry === true || (b.metadata && b.metadata.delivery_generation_retry === true),\n" +
+          "  retry_job_id: b.retry_job_id || null,\n" +
+          "  retry_worker_id: b.retry_worker_id || null,\n" +
           "  retry_generation_number: b.retry_generation_number != null ? Number(b.retry_generation_number) : null,",
           "preserve exact retry lease identity from recovery worker"
         );
