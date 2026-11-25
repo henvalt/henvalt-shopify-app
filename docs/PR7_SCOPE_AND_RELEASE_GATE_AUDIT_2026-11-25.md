@@ -331,3 +331,21 @@ The candidate remains restricted to test-mode subscriptions. No migration was ap
 - Shopify app configuration `45543942530`: static validation and billing-lock job **success**; deployment job **skipped**.
 
 All 9/9 PR-triggered workflows completed successfully on the exact code commit above. This proves the candidate's automated contracts only; it does not prove an isolated Supabase/n8n runtime or Shopify provider acceptance. The overall release decision remains **NO-GO**.
+
+
+## Ninth-pass live boundary and snapshot-drift audit — 2026-11-25
+
+### Live account inspection (read-only)
+- Supabase account inventory returned four HENVALT-related projects: one active healthy project and three inactive projects. The active project is the existing production project. No inactive project was independently verified as isolated staging; none was restored and no new project was created.
+- n8n search returned exactly three HENVALT workflows: INGEST (51 nodes), RECOVERY (46 nodes), DELIVERY (62 nodes). All three are active and their published version IDs match the current active versions. A separate search for staging workflows returned zero.
+- The live INGEST workflow was inspected read-only and contains direct calls to the production Supabase host plus live webhook/credential references. No active workflow was executed, modified, unpublished or republished.
+- Result: isolated end-to-end staging remains unavailable. Reusing active workflows or the active Supabase project is prohibited; restoring/creating infrastructure may incur cost and was not attempted.
+
+### Additional candidate builder defect found and fixed
+The DELIVERY candidate builder previously pinned the source workflow ID and 62-node count but did not pin the active version. A stale snapshot with the same ID/node count could therefore pass the builder's source check. The builder now requires exact active version `621ae6ce-a006-4fed-a70e-acf774c360fb`, and its CLI verifies the sanitized fixture's source-version metadata before generating the candidate. Regression tests cover both stale and missing version IDs.
+
+### Billing envelope acceptance expanded
+The final billing egress PostgreSQL acceptance now also attempts authorization with a modified amount and with a modified currency. Both must return `CHARGE_CLAIM_STALE`, and neither may create another egress authorization audit record. The billing safety workflow already includes this acceptance file; exact-head CI is pending.
+
+### Exact candidate head
+Code/test changes are on `3a42873820c6b5e51f025fa8689b4bd989a9dd5a`; the staging-boundary documentation update follows at `48ebb97a5f3d126da7bcbe588306f67b2d325ea5`. Exact-head CI for the latest code/test commit is running; do not infer success until all required workflows complete. PR #7 remains draft and unmerged. The overall release gate remains **NO-GO**.
