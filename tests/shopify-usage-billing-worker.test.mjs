@@ -100,6 +100,8 @@ test("claims one usage measurement and sends exact amount with persisted Shopify
   assert.equal(authorization.p_charge_id, charge.chargeId);
   assert.equal(authorization.p_idempotency_key, charge.idempotencyKey);
   assert.equal(authorization.p_subscription_line_item_id, charge.subscriptionLineItemId);
+  assert.equal(authorization.p_amount, charge.amount);
+  assert.equal(authorization.p_currency, charge.currency);
   assert.equal(authorization.p_attempt, charge.attempt);
 });
 
