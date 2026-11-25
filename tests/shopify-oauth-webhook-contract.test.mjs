@@ -28,6 +28,11 @@ test("webhook verification requires exactly one subscription at the intended ing
   ), { verified: true, id: "gid://shopify/WebhookSubscription/1" });
   assert.deepEqual(verifyWebhookDestination([], "ORDERS_CREATE", "https://staging-ingress.invalid/shopify/webhooks"),
     { verified: false, reason: "WEBHOOK_SUBSCRIPTION_MISSING", id: null });
+  assert.deepEqual(verifyWebhookDestination(
+    [{ topic: "ORDERS_CREATE", uri: "https://staging-ingress.invalid/shopify/webhooks" }],
+    "ORDERS_CREATE",
+    "https://staging-ingress.invalid/shopify/webhooks",
+  ), { verified: false, reason: "WEBHOOK_SUBSCRIPTION_ID_MISSING", id: null });
 });
 
 test("webhook verification rejects stale destinations and duplicate topic subscriptions", () => {
