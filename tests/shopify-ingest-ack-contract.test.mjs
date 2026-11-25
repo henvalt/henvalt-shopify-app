@@ -41,27 +41,27 @@ test("new durable ingest returns 200 only when a replay job is durably active", 
   const result = classifyIngestResponse({
     statusCode: 201,
     body: [{
-      webhook_id: "wh-1",
+      webhook_id: "11111111-1111-4111-8111-111111111111",
       is_duplicate: false,
       should_process: true,
       processing_status: "PROCESSING",
-      replay_job_id: "job-1",
+      replay_job_id: "22222222-2222-4222-8222-222222222222",
       replay_job_status: "QUEUED",
     }],
   }, context);
   assert.equal(result.http, 200);
   assert.equal(result.asyncProcessingGuaranteed, true);
   assert.equal(Object.hasOwn(result, "asyncProcessingGuaranteed"), true);
-  assert.equal(result.webhookId, "wh-1");
+  assert.equal(result.webhookId, "11111111-1111-4111-8111-111111111111");
   assert.equal(result.body.status, "accepted");
-  assert.equal(result.body.replay_job_id, "job-1");
+  assert.equal(result.body.replay_job_id, "22222222-2222-4222-8222-222222222222");
 });
 
 test("processed and actively queued duplicates return 200 without duplicate processing", () => {
   const processed = classifyIngestResponse({
     statusCode: 200,
     body: [{
-      webhook_id: "wh-2",
+      webhook_id: "33333333-3333-4333-8333-333333333333",
       is_duplicate: true,
       should_process: false,
       processing_status: "PROCESSED",
@@ -70,11 +70,11 @@ test("processed and actively queued duplicates return 200 without duplicate proc
   const processing = classifyIngestResponse({
     statusCode: 200,
     body: [{
-      webhook_id: "wh-3",
+      webhook_id: "44444444-4444-4444-8444-444444444444",
       is_duplicate: true,
       should_process: false,
       processing_status: "PROCESSING",
-      replay_job_id: "job-3",
+      replay_job_id: "55555555-5555-4555-8555-555555555555",
       replay_job_status: "RUNNING",
     }],
   }, context);
@@ -89,29 +89,47 @@ test("processed and actively queued duplicates return 200 without duplicate proc
 test("missing durable ID, decision or active replay job returns retryable 503", () => {
   for (const body of [
     [{ is_duplicate: false, should_process: true }],
-    [{ webhook_id: "wh-4", is_duplicate: false }],
-    [{ webhook_id: "wh-5", should_process: false, processing_status: "UNKNOWN" }],
-    [{ webhook_id: "wh-6", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],
+    [{ webhook_id: "66666666-6666-4666-8666-666666666666", is_duplicate: false }],
+    [{ webhook_id: "77777777-7777-4777-8777-777777777777", should_process: false, processing_status: "UNKNOWN" }],
+    [{ webhook_id: "88888888-8888-4888-8888-888888888888", is_duplicate: false, should_process: true, processing_status: "PROCESSING" }],
     [{
-      webhook_id: "wh-7",
+      webhook_id: "99999999-9999-4999-8999-999999999999",
       is_duplicate: false,
       should_process: true,
       processing_status: "PROCESSING",
-      replay_job_id: "job-7",
+      replay_job_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       replay_job_status: "DEAD_LETTER",
     }],
     [{
-      webhook_id: "wh-8",
+      webhook_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
       is_duplicate: true,
       should_process: false,
       processing_status: "PROCESSING",
-      replay_job_id: "job-8",
+      replay_job_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
       replay_job_status: "DEAD_LETTER",
     }],
   ]) {
     const result = classifyIngestResponse({ statusCode: 200, body }, context);
     assert.equal(result.http, 503);
     assert.equal(result.asyncProcessingGuaranteed, false);
+  }
+});
+
+
+test("non-UUID durable identifiers are rejected to match the Cloudflare edge contract", () => {
+  for (const override of [
+    { webhook_id: "not-a-uuid" },
+    { replay_job_id: "not-a-uuid" },
+  ]) {
+    const result = classifyIngestResponse({ statusCode: 200, body: [{
+      webhook_id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      should_process: true,
+      processing_status: "PROCESSING",
+      replay_job_id: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+      replay_job_status: "QUEUED",
+      ...override,
+    }] }, context);
+    assert.equal(result.http, 503);
   }
 });
 
