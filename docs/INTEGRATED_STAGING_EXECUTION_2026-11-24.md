@@ -2,9 +2,11 @@
 
 **Status: PREPARATION / NOT STAGING-EXECUTED / NO-GO.**  
 **Candidate base:** `56358cfd922b343240231614af44a40aaea527c8`  
-**Work branch:** `work/integrated-staging-no-send-2026-11-24`
+**Work branch:** `work/48h-system-readiness-2026-11-21`
 
 This plan closes the gap between individually passing PostgreSQL/Node/Deno checks and a real integrated environment. It does not claim that disposable PostgreSQL is equivalent to Supabase staging.
+
+**Latest repository verification (25 November 2026):** candidate head `ce2dbd06531538bb3aa52e5db834f22f5cc5046f`. The integrated staging readiness contract, delivery-generation production-shaped migration suite, delivery-generation model/race suite, lifecycle lock-order suite, quota reservation concurrency suite, billing-lock safety suite, privacy/pixel safety suite, offline Shopify privacy HMAC contract, and Shopify static configuration checks all completed successfully on this head. These are CI/disposable-fixture results only; they do not change the NO-GO staging decision.
 
 ## Hard safety boundary
 
