@@ -6,8 +6,19 @@ import { buildDeliveryCandidate } from "../n8n/shopify-delivery-candidate-builde
 const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json", "utf8"));
 const candidateId = "00000000-0000-4000-8000-999999999996";
 
+test("delivery builder rejects a stale or unreviewed active workflow version", () => {
+  assert.throws(
+    () => buildDeliveryCandidate(fixture.workflow, "stale-version"),
+    /Active delivery version drift/
+  );
+  assert.throws(
+    () => buildDeliveryCandidate(fixture.workflow),
+    /Active delivery version drift/
+  );
+});
+
 test("delivery candidate is an inactive sanitized export with no credentials or webhook IDs", () => {
-  const result = buildDeliveryCandidate(fixture.workflow);
+  const result = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id);
   const w = result.workflow;
   assert.equal(w.id, candidateId);
   assert.equal(w.name, "HENVALT_DELIVERY_CANDIDATE_NO_SEND");
@@ -22,7 +33,7 @@ test("delivery candidate is an inactive sanitized export with no credentials or 
 });
 
 test("both provider-send entry points are blocked and one-off test branch is removed", () => {
-  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const w = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id).workflow;
   const names = new Set(w.nodes.map((n) => n.name));
   for (const removed of [
     "One-Off Test Email Trigger","Prepare One-Off Test Delivery","One-Off Test Authorized?",
@@ -70,7 +81,7 @@ test("delivery candidate rejects provider calls hidden inside code nodes", () =>
 });
 
 test("no-send response is rejected and is never persisted as a provider result", () => {
-  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const w = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id).workflow;
   const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
   assert.match(classifier, /send = \$\("No-Send Provider Stub"\)\.item\.json/);
   assert.match(classifier, /NO_SEND_CANDIDATE/);
@@ -79,7 +90,7 @@ test("no-send response is rejected and is never persisted as a provider result",
 });
 
 test("pre-provider Edge Function failures are classified as definitive non-egress outcomes", () => {
-  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const w = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id).workflow;
   const nodes = new Map(w.nodes.map((n) => [n.name, n]));
   const context = {
     "Validate & Normalize": { item: { json: {
@@ -127,7 +138,7 @@ test("pre-provider Edge Function failures are classified as definitive non-egres
 });
 
 test("candidate webhooks use isolated path prefixes and graph connections resolve", () => {
-  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const w = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id).workflow;
   const names = new Set(w.nodes.map((n) => n.name));
   const webhookPaths = w.nodes.filter((n) => n.type === "n8n-nodes-base.webhook").map((n) => n.parameters.path);
   assert.ok(webhookPaths.length > 0);
@@ -140,7 +151,7 @@ test("candidate webhooks use isolated path prefixes and graph connections resolv
 
 
 test("executed no-send stub and delivery classifier cannot report provider acceptance", () => {
-  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const w = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id).workflow;
   const nodes = new Map(w.nodes.map((n) => [n.name, n]));
   const stub = new Function("$", "$json", nodes.get("No-Send Provider Stub").parameters.jsCode)(() => ({}), {});
   assert.equal(stub.json.statusCode, 503);
@@ -178,7 +189,7 @@ test("executed no-send stub and delivery classifier cannot report provider accep
 
 
 test("no-send candidate never records provider result after successful authorization", () => {
-  const w = buildDeliveryCandidate(fixture.workflow).workflow;
+  const w = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id).workflow;
   const classifier = w.nodes.find((n) => n.name === "Classify Result").parameters.jsCode;
   const context = {
     "Validate & Normalize": { item: { json: {
