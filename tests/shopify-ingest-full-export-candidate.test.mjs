@@ -8,6 +8,12 @@ const map = JSON.parse(readFileSync("n8n/shopify-ingest-replay-write-map.json","
 const pinned = "6368d539-708f-494a-8be8-b9601d0e8607";
 const findNode = (w,name) => w.nodes.find(n=>n.name===name);
 
+test("INGEST builder rejects missing or stale active-version evidence", () => {
+  assert.throws(() => buildCandidate(source,map), /Active workflow version drift/);
+  assert.throws(() => buildCandidate(source,map,"stale-version"), /Active workflow version drift/);
+  assert.throws(() => buildCandidate(source,map,null), /Active workflow version drift/);
+});
+
 test("full pinned 51-node active INGEST export builds an isolated no-send candidate", () => {
   const result = buildCandidate(source,map,pinned);
   const w = result.workflow;
