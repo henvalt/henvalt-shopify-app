@@ -10,6 +10,8 @@ const required = [
   "HENVALT_STAGE_RECOVERY_WORKFLOW_ID",
   "HENVALT_STAGE_DELIVERY_WORKFLOW_ID",
   "HENVALT_STAGE_SHOPIFY_STORE",
+  "HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL",
+  "HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL",
   "HENVALT_STAGE_PROVIDER_MODE",
   "HENVALT_STAGE_NETWORK_EGRESS_DENIED",
   "HENVALT_STAGE_NO_SEND",
@@ -53,6 +55,29 @@ try {
 } catch { if (process.env.HENVALT_STAGE_N8N_BASE_URL) errors.push("staging n8n URL is malformed"); }
 if (process.env.HENVALT_STAGE_N8N_BASE_URL && /henvalt26\.app\.n8n\.cloud|prod/i.test(process.env.HENVALT_STAGE_N8N_BASE_URL)) errors.push("n8n URL appears to identify production");
 if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\.myshopify\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
+try {
+  const callback = new URL(process.env.HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL);
+  const expectedHost = process.env.HENVALT_STAGE_SUPABASE_PROJECT_REF + ".supabase.co";
+  if (callback.protocol !== "https:" || callback.username || callback.password ||
+      callback.hostname !== expectedHost ||
+      callback.pathname !== "/functions/v1/henvalt-shopify-oauth/callback") {
+    errors.push("Shopify OAuth callback must use the exact staging Supabase project and callback path");
+  }
+} catch {
+  if (process.env.HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL) errors.push("Shopify OAuth callback URL is malformed");
+}
+try {
+  const ingress = new URL(process.env.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL);
+  if (ingress.protocol !== "https:" || ingress.username || ingress.password ||
+      ingress.pathname !== "/shopify/webhooks") {
+    errors.push("Shopify webhook ingress must be an HTTPS /shopify/webhooks URL without embedded credentials");
+  }
+  if (ingress.hostname === "henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev") {
+    errors.push("Shopify webhook ingress matches the live production Cloudflare Worker");
+  }
+} catch {
+  if (process.env.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL) errors.push("Shopify webhook ingress URL is malformed");
+}
 if (errors.length) {
   console.error("STAGING PREFLIGHT: FAIL");
   for (const error of errors) console.error(` - ${error}`);
