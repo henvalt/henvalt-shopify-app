@@ -1,0 +1,40 @@
+name: HENVALT generated three-workflow candidate package
+
+on:
+  pull_request:
+    paths:
+      - "n8n/**"
+      - "tests/shopify-three-workflow-candidate-package.test.mjs"
+      - ".github/workflows/three-workflow-candidate-package.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "n8n/**"
+      - "tests/shopify-three-workflow-candidate-package.test.mjs"
+      - ".github/workflows/three-workflow-candidate-package.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Generate isolated INGEST candidate
+        run: >-
+          node n8n/shopify-ingest-candidate-builder.mjs
+          n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json
+          n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json
+          6368d539-708f-494a-8be8-b9601d0e8607
+      - name: Generate isolated RECOVERY candidate
+        run: node n8n/shopify-recovery-candidate-builder.mjs
+      - name: Generate isolated DELIVERY candidate
+        run: node n8n/shopify-delivery-candidate-builder.mjs
+      - name: Verify the three generated workflows as one package
+        run: node --test tests/shopify-three-workflow-candidate-package.test.mjs
