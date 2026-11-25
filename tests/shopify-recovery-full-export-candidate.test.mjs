@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildRecoveryCandidate } from "../n8n/shopify-recovery-candidate-builder.mjs";
+import { buildRecoveryBillingCandidate } from "../n8n/shopify-recovery-billing-candidate-builder.mjs";
 
 const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json", "utf8"));
 const manifest = JSON.parse(readFileSync("n8n/shopify-recovery-replay-graph-patch.json", "utf8"));
@@ -19,6 +20,17 @@ test("recovery builder rejects missing or stale active-version evidence", () => 
       /Active recovery version mismatch/
     );
   }
+});
+
+test("recovery billing candidate composes from the same pinned active-version snapshot", () => {
+  const result = buildRecoveryBillingCandidate(fixture.workflow, manifest, normalizer);
+  assert.equal(result.workflow.id, "00000000-0000-4000-8000-999999999995");
+  assert.equal(result.workflow.active, false);
+  assert.equal(result.workflow.nodes.length, 76);
+  const serialized = JSON.stringify(result.workflow);
+  assert.ok(serialized.includes("https://supabase-staging.invalid"));
+  assert.ok(serialized.includes("https://supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing"));
+  assert.equal(serialized.includes("ocyplckdojdubyrsxcxa.supabase.co"), false);
 });
 
 test("full recovery graph builds as a distinct inactive no-send export", () => {
