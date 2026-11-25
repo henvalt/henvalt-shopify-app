@@ -19,6 +19,29 @@ async function signature() {
   return btoa(String.fromCharCode(...bytes));
 }
 
+
+test("Shopify ingress rejects lookalike shop domains before forwarding", async () => {
+  const hmac = await signature();
+  const request = new Request("https://ingress.example.test/shopify/webhooks", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-shopify-hmac-sha256": hmac,
+      "x-shopify-shop-domain": "synthetic-shop.myshopify.com.attacker.test",
+      "x-shopify-topic": "orders/paid",
+      "x-shopify-webhook-id": "synthetic-delivery-002",
+    },
+    body,
+  });
+  let forwarded = false;
+  const response = await handleRequest(request, {
+    SHOPIFY_API_SECRET: secret,
+    N8N_INGEST_URL: "https://ingest.example.test/webhook/henvalt/ingest",
+  }, async () => { forwarded = true; return Response.json({ status: "accepted" }); });
+  assert.equal(response.status, 400);
+  assert.equal(forwarded, false);
+});
+
 test("Shopify ingress forwards only the signed delivery envelope to n8n", async () => {
   const hmac = await signature();
   const request = new Request("https://ingress.example.test/shopify/webhooks", {
