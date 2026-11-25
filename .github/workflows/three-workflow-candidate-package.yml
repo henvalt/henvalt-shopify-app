@@ -32,8 +32,8 @@ jobs:
           n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json
           n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json
           6368d539-708f-494a-8be8-b9601d0e8607
-      - name: Generate isolated RECOVERY candidate
-        run: node n8n/shopify-recovery-candidate-builder.mjs
+      - name: Generate isolated RECOVERY candidate with the billing scheduler branch
+        run: node n8n/shopify-recovery-billing-candidate-builder.mjs
       - name: Generate isolated DELIVERY candidate
         run: node n8n/shopify-delivery-candidate-builder.mjs
       - name: Verify the three generated workflows as one package
