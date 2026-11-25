@@ -12,6 +12,11 @@ const pixel = readFileSync(
   "utf8",
 );
 
+test("collector binds recovery destination URLs to the submitting storefront origin", () => {
+  assert.match(worker, /url\.origin !== expectedOrigin/);
+  assert.match(worker, /safePageUrl\(payload\.page_url, origin\)/);
+});
+
 test("collector accepts cart removal and rejects analytics-denied events before Supabase", () => {
   assert.match(worker, /"product_removed_from_cart"/);
   assert.match(worker, /payload\.analytics_consent !== true/);
