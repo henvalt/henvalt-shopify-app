@@ -358,3 +358,20 @@ The first run after introducing the DELIVERY source-version pin correctly reject
 ### PR history/review-surface recheck
 
 GitHub compare reports the current PR branch as 1,660 commits ahead and zero behind its merge base, with 247 changed files. The PR remains draft and unmerged. This is an unusually large review surface; do not merge based solely on GitHub's mergeability flag. A deliberate commit-lineage and scope review remains necessary before release approval.
+
+
+### Exact-head CI result after delivery snapshot-pin correction
+
+All 9 PR-triggered workflows completed successfully on code commit `924bf379a76ac291dff8341d6bc8f522459d2d7e`:
+
+- Safety and Pixel consent — run `45547879664`: success, 88/88 steps.
+- Billing lock safety — run `45547879862`: success, 19/19 steps, including the expanded amount/currency mismatch PostgreSQL acceptance.
+- Shopify app configuration — run `45547879677`: success; static validation and billing lock checks passed; deployment job skipped.
+- Email usage reservation — run `45547879788`: success.
+- Production-shaped delivery generation migration — run `45547879863`: success.
+- Delivery generation PostgreSQL model — run `45547879667`: success.
+- Delivery lifecycle parent-first lock order — run `45547879933`: success.
+- Integrated staging readiness contract — run `45547879682`: success.
+- Offline Shopify privacy HMAC — run `45547879689`: success.
+
+The preceding failed run was useful: it exposed incomplete test call sites after the stricter source-version guard. Those call sites were corrected, and the full rerun above passed. The latest documentation-only audit update follows the verified code commit; no deployment job ran.
