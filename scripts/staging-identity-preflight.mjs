@@ -12,7 +12,9 @@ const required = [
   "HENVALT_STAGE_SHOPIFY_STORE",
   "HENVALT_STAGE_PROVIDER_MODE",
   "HENVALT_STAGE_NETWORK_EGRESS_DENIED",
-  "HENVALT_STAGE_NO_SEND",\n  "HENVALT_STAGE_WORKFLOWS_INACTIVE",\n  "HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED",
+  "HENVALT_STAGE_NO_SEND",
+  "HENVALT_STAGE_WORKFLOWS_INACTIVE",
+  "HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED",
 ];
 const productionProjectRef = "ocyplckdojdubyrsxcxa";
 const errors = [];
@@ -28,7 +30,13 @@ if (ids.length === 3 && new Set(ids).size !== 3) errors.push("staging n8n workfl
 if (process.env.HENVALT_STAGE_SUPABASE_PROJECT_REF === productionProjectRef) errors.push("staging project ref matches production");
 if (process.env.HENVALT_STAGE_PROVIDER_MODE && process.env.HENVALT_STAGE_PROVIDER_MODE !== "stub") errors.push("provider mode must be stub");
 if (process.env.HENVALT_STAGE_NETWORK_EGRESS_DENIED !== "true") errors.push("outbound network egress denial must be explicitly confirmed");
-if (process.env.HENVALT_STAGE_NO_SEND !== "true") errors.push("no-send safety flag must be explicitly true");\nif (process.env.HENVALT_STAGE_WORKFLOWS_INACTIVE !== "true") errors.push("all imported staging workflows must be confirmed inactive");\nif (process.env.HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED !== "true") errors.push("Shopify development store must be explicitly confirmed");\ntry {\n  const n8nUrl = new URL(process.env.HENVALT_STAGE_N8N_BASE_URL);\n  if (n8nUrl.protocol !== "https:" || n8nUrl.username || n8nUrl.password) errors.push("staging n8n URL must be HTTPS without embedded credentials");\n} catch { if (process.env.HENVALT_STAGE_N8N_BASE_URL) errors.push("staging n8n URL is malformed"); }
+if (process.env.HENVALT_STAGE_NO_SEND !== "true") errors.push("no-send safety flag must be explicitly true");
+if (process.env.HENVALT_STAGE_WORKFLOWS_INACTIVE !== "true") errors.push("all imported staging workflows must be confirmed inactive");
+if (process.env.HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED !== "true") errors.push("Shopify development store must be explicitly confirmed");
+try {
+  const n8nUrl = new URL(process.env.HENVALT_STAGE_N8N_BASE_URL);
+  if (n8nUrl.protocol !== "https:" || n8nUrl.username || n8nUrl.password) errors.push("staging n8n URL must be HTTPS without embedded credentials");
+} catch { if (process.env.HENVALT_STAGE_N8N_BASE_URL) errors.push("staging n8n URL is malformed"); }
 if (process.env.HENVALT_STAGE_N8N_BASE_URL && /henvalt26\.app\.n8n\.cloud|prod/i.test(process.env.HENVALT_STAGE_N8N_BASE_URL)) errors.push("n8n URL appears to identify production");
 if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\.myshopify\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
 if (errors.length) {
