@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const worker = readFileSync(new URL("../cloudflare/pixel-collector.js", import.meta.url), "utf8");
+const { safePageUrl } = await import("data:text/javascript;base64," + Buffer.from(worker).toString("base64"));
 const migration = readFileSync(
   new URL("../supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql", import.meta.url),
   "utf8",
@@ -11,6 +12,22 @@ const pixel = readFileSync(
   new URL("../extensions/henvalt-pixel/src/index.js", import.meta.url),
   "utf8",
 );
+
+test("same-origin storefront URLs are retained while external destinations are rejected", () => {
+  assert.equal(
+    safePageUrl("https://store.example.test/products/item?email=private#details", "https://store.example.test"),
+    "https://store.example.test/products/item",
+  );
+  for (const value of [
+    "https://attacker.example.test/phishing",
+    "https://sub.store.example.test/products/item",
+    "http://store.example.test/products/item",
+    "https://user:pass@store.example.test/products/item",
+    "not a URL",
+  ]) {
+    assert.equal(safePageUrl(value, "https://store.example.test"), null, value);
+  }
+});
 
 test("collector binds recovery destination URLs to the submitting storefront origin", () => {
   assert.match(worker, /url\.origin !== expectedOrigin/);
