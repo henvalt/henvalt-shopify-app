@@ -133,3 +133,20 @@ test("public Shopify ingress always responds explicitly while replay subflow ret
   assert.match(byName.get("Build Success Response").parameters.assignments.assignments.find(a=>a.name==="mark_webhook_processed").value,/replay_context/);
   assert.equal(byName.get("Build Deferred Payment Response").parameters.assignments.assignments.find(a=>a.name==="deferred_payment_handoff").value,true);
 });
+
+
+test("every Supabase endpoint in the generated INGEST candidate is non-routable staging-only", () => {
+  const w=buildCandidate(source,map,pinned).workflow;
+  const serialized=JSON.stringify(w.nodes);
+  assert.ok(!serialized.includes("ocyplckdojdubyrsxcxa.supabase.co"),"production Supabase host leaked into candidate");
+  const endpoints=w.nodes
+    .map(n=>({name:n.name,url:n.parameters?.url}))
+    .filter(x=>typeof x.url==="string" && x.url.includes("supabase"));
+  assert.ok(endpoints.length>0,"candidate must retain its Supabase operations");
+  for(const endpoint of endpoints) {
+    assert.ok(endpoint.url.includes("https://supabase-staging.invalid/"),endpoint.name+" must use the non-routable staging placeholder");
+  }
+  assert.equal(w.active,false);
+  assert.equal(w.settings.availableInMCP,false);
+  assert.ok(w.nodes.every(n=>!n.credentials && !n.webhookId));
+});
