@@ -48,12 +48,31 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   } catch {
     return Response.json({ error: "ingest_unavailable" }, { status: 503 });
   }
-  // Never acknowledge a delivery after following a redirect or receiving a non-2xx response.
-  if (!upstream.ok || (upstream.status >= 300 && upstream.status < 400)) {
+  // Only the exact durable-ingest acknowledgement contract may stop Shopify retries.
+  // A generic 2xx, empty 204, malformed JSON, or proxy-generated success is not proof
+  // that the webhook row and replay job were committed.
+  if (upstream.status !== 200) {
     return Response.json({ error: "ingest_unavailable" }, { status: 503 });
   }
-  const text = await upstream.text();
-  return new Response(text || JSON.stringify({ accepted: true }), { status: 200, headers: { "content-type": "application/json", "cache-control": "no-store" } });
+  let acknowledgement;
+  try {
+    acknowledgement = await upstream.json();
+  } catch {
+    return Response.json({ error: "ingest_unavailable" }, { status: 503 });
+  }
+  const isUuid = (value) => typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  const status = acknowledgement && acknowledgement.status;
+  const durableWebhook = isUuid(acknowledgement?.webhook_id);
+  const terminalDuplicate = status === "duplicate" && durableWebhook;
+  const queuedAcceptance = ["accepted", "replay_accepted", "already_processing"].includes(status) &&
+    durableWebhook &&
+    isUuid(acknowledgement?.replay_job_id) &&
+    ["QUEUED", "CLAIMED", "RUNNING", "RETRY_WAIT"].includes(String(acknowledgement?.replay_job_status || "").toUpperCase());
+  if (!terminalDuplicate && !queuedAcceptance) {
+    return Response.json({ error: "ingest_unavailable" }, { status: 503 });
+  }
+  return Response.json(acknowledgement, { status: 200, headers: { "cache-control": "no-store" } });
 }
 
 export default {
