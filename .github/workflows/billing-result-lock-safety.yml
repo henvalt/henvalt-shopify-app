@@ -4,9 +4,13 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
+      - "supabase/migrations/202611250001_billing_egress_final_authorization.sql"
+      - "tests/billing-egress-final-authorization-postgres-acceptance.sql"
       - "supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql"
       - "supabase/migrations/202611220015_billing_claim_subscription_lock.sql"
       - "supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql"
+      - "supabase/migrations/202611250001_billing_egress_final_authorization.sql"
+      - "tests/billing-egress-final-authorization-postgres-acceptance.sql"
       - "tests/billing-refund-credit-offsets.test.mjs"
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/billing-refund-credit-concurrency-postgres.sh"
@@ -84,5 +88,13 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
+      - name: Apply final billing egress authorization migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611250001_billing_egress_final_authorization.sql
+      - name: Prove cancelled subscriptions and stale workers are blocked before egress
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/billing-egress-final-authorization-postgres-acceptance.sql
       - name: Exercise concurrent refund credit allocation
         run: bash tests/billing-refund-credit-concurrency-postgres.sh
