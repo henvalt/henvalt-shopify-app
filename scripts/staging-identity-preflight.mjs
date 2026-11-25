@@ -27,6 +27,20 @@ const ids = [
   process.env.HENVALT_STAGE_DELIVERY_WORKFLOW_ID,
 ].filter(Boolean);
 if (ids.length === 3 && new Set(ids).size !== 3) errors.push("staging n8n workflow IDs must be three distinct identifiers");
+const liveProductionWorkflowIds = new Set([
+  "VTpfGKNtu1CSQ4Rv", // HENVALT_INGEST
+  "3GEDoeCA4paXTaDF", // HENVALT_RECOVERY
+  "CvVyybGJZSnklxiZ", // HENVALT_DELIVERY
+]);
+for (const [key, value] of Object.entries({
+  HENVALT_STAGE_INGEST_WORKFLOW_ID: process.env.HENVALT_STAGE_INGEST_WORKFLOW_ID,
+  HENVALT_STAGE_RECOVERY_WORKFLOW_ID: process.env.HENVALT_STAGE_RECOVERY_WORKFLOW_ID,
+  HENVALT_STAGE_DELIVERY_WORKFLOW_ID: process.env.HENVALT_STAGE_DELIVERY_WORKFLOW_ID,
+})) {
+  if (value && liveProductionWorkflowIds.has(value)) {
+    errors.push(`${key} matches a live production workflow ID`);
+  }
+}
 if (process.env.HENVALT_STAGE_SUPABASE_PROJECT_REF === productionProjectRef) errors.push("staging project ref matches production");
 if (process.env.HENVALT_STAGE_PROVIDER_MODE && process.env.HENVALT_STAGE_PROVIDER_MODE !== "stub") errors.push("provider mode must be stub");
 if (process.env.HENVALT_STAGE_NETWORK_EGRESS_DENIED !== "true") errors.push("outbound network egress denial must be explicitly confirmed");
