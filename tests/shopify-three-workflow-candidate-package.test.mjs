@@ -29,6 +29,36 @@ test("the isolated package contains exactly three distinct inactive candidate wo
   }
 });
 
+test("synthetic checkout ingestion reaches opportunity and recovery-sequence creation", () => {
+  const nodes = byName(ingest);
+  for (const name of ["Supabase Ingest RPC", "Is Checkout Event?", "Has Checkout Data?", "Upsert Customer", "Upsert Checkout", "Score Recovery Intent", "High Intent?", "Create Opportunity", "Create Recovery Sequence"]) {
+    assert.ok(nodes.has(name), "missing checkout-path node: " + name);
+  }
+  assert.equal(nodes.get("Supabase Ingest RPC").parameters.url,
+    "https://supabase-staging.invalid/rest/v1/rpc/receive_shopify_webhook_v1");
+  assert.equal(ingest.connections["Has Checkout Data?"].main[0][0].node, "Upsert Customer");
+  assert.equal(ingest.connections["Upsert Customer"].main[0][0].node, "Upsert Checkout");
+  assert.equal(ingest.connections["Upsert Checkout"].main[0][0].node, "Score Recovery Intent");
+  assert.equal(ingest.connections["Score Recovery Intent"].main[0][0].node, "High Intent?");
+  assert.equal(ingest.connections["High Intent?"].main[0][0].node, "Create Opportunity");
+});
+
+test("paid-order attribution is stopped, posted to the ledger and measured before webhook completion", () => {
+  const nodes = byName(ingest);
+  for (const name of ["Project Order From Event", "Evaluate Order Attribution", "Stop Recovery After Order", "Post Recovery To Ledger", "Process Shopify Order Edit Adjustment"]) {
+    assert.ok(nodes.has(name), "missing order-attribution node: " + name);
+  }
+  assert.equal(ingest.connections["Is Order Event?"].main[0][0].node, "Project Order From Event");
+  assert.equal(ingest.connections["Project Order From Event"].main[0][0].node, "Is Order Cancelled?");
+  assert.equal(ingest.connections["Is Order Cancelled?"].main[1][0].node, "Evaluate Order Attribution");
+  assert.equal(ingest.connections["Evaluate Order Attribution"].main[0][0].node, "Stop Recovery After Order");
+  assert.equal(ingest.connections["Stop Recovery After Order"].main[0][0].node, "Post Recovery To Ledger");
+  assert.match(nodes.get("Post Recovery To Ledger").parameters.url,
+    /https:\/\/supabase-staging\.invalid\/rest\/v1\/rpc\/post_recovery_to_ledger_and_measure_billing/);
+  assert.equal(ingest.connections["Post Recovery To Ledger"].main[0][0].node, "Process Shopify Order Edit Adjustment");
+  assert.equal(ingest.connections["Process Shopify Order Edit Adjustment"].main[0][0].node, "Mark Webhook Processed");
+});
+
 test("recovery subworkflow calls resolve only to the two candidate workflow IDs", () => {
   const nodes = byName(recovery);
   assert.equal(nodes.get("Call HENVALT_INGEST Replay Entry").parameters.workflowId.value, ids.ingest);
