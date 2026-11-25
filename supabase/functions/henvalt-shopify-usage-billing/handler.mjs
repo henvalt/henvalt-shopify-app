@@ -1,6 +1,7 @@
 const SHOPIFY_API_VERSION = "2026-10";
 const CLAIM_RPC = "control_plane_claim_billing_usage";
 const TOKEN_RPC = "get_shopify_access_token_for_control_plane";
+const EGRESS_AUTH_RPC = "control_plane_authorize_billing_usage_egress";
 const RESULT_RPC = "control_plane_record_billing_usage_result";
 
 const BILLING_MUTATION = `mutation HenvaltCreateUsageRecord(
@@ -228,6 +229,32 @@ export function createShopifyUsageBillingHandler({
       return json(503, { error: "shopify_token_unavailable", retryable: true });
     }
     if (accessToken.length < 20) return json(503, { error: "shopify_token_unavailable", retryable: true });
+
+    // Recheck subscription, shop, line item and attempt after token retrieval and
+    // immediately before external egress. A stale/cancelled claim never reaches Shopify.
+    let egressAuthorization;
+    try {
+      egressAuthorization = await rpc(EGRESS_AUTH_RPC, {
+        p_shop_domain: shop,
+        p_charge_id: chargeId,
+        p_idempotency_key: idempotencyKey,
+        p_subscription_line_item_id: lineItem,
+        p_attempt: attempt,
+      });
+    } catch (error) {
+      logger.error("Billing egress authorization failed", error instanceof Error ? error.message : "unknown");
+      return json(503, { error: "billing_egress_authorization_unavailable", retryable: true });
+    }
+    if (egressAuthorization?.authorized !== true) {
+      return json(409, {
+        claimed: true,
+        state: "PENDING",
+        retryable: false,
+        reason: typeof egressAuthorization?.reason === "string"
+          ? egressAuthorization.reason
+          : "BILLING_EGRESS_NOT_AUTHORIZED",
+      });
+    }
 
     let upstream;
     try {
