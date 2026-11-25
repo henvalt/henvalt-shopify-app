@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { classifyShopifyIngressAck } from "../n8n/shopify-ingest-ack-classifier-candidate.mjs";
 
 globalThis.crypto ??= webcrypto;
 const workerSource = readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
@@ -179,6 +180,24 @@ test("generic, empty, malformed, or non-durable 2xx upstream responses never ack
     const response = await handleRequest(request(await sign(rawBody)), env, async () => upstream);
     assert.equal(response.status, 503);
     assert.equal((await response.json()).error, "ingest_unavailable");
+  }
+});
+
+
+test("Cloudflare edge accepts only the exact candidate n8n acknowledgement envelopes", async () => {
+  const rows = [
+    { http_status: 200, result_status: "accepted", webhook_id: "11111111-1111-4111-8111-111111111111", replay_job_id: "22222222-2222-4222-8222-222222222222", replay_job_status: "QUEUED", processing_status: "PROCESSING" },
+    { http_status: 200, result_status: "replay_accepted", webhook_id: "33333333-3333-4333-8333-333333333333", replay_job_id: "44444444-4444-4444-8444-444444444444", replay_job_status: "RUNNING", processing_status: "PROCESSING" },
+    { http_status: 200, result_status: "duplicate", webhook_id: "55555555-5555-4555-8555-555555555555", processing_status: "PROCESSED" },
+  ];
+  for (const row of rows) {
+    const classified = classifyShopifyIngressAck(row);
+    assert.equal(classified.ok, true);
+    const response = await handleRequest(request(await sign(rawBody)), env, async () =>
+      Response.json(classified.body, { status: classified.http_status })
+    );
+    assert.equal(response.status, 200, JSON.stringify(classified.body));
+    assert.deepEqual(await response.json(), classified.body);
   }
 });
 
