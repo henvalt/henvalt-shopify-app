@@ -136,7 +136,7 @@ test("valid signatures cover exact UTF-8 bytes without text re-encoding", async 
   const forwarded = [];
   const response = await handleRequest(request(await sign(unicodeBody), unicodeBody), env, async (url, init) => {
     forwarded.push(init.body);
-    return Response.json({ accepted: true });
+    return Response.json({ status: "accepted", webhook_id: "11111111-1111-4111-8111-111111111111", replay_job_id: "22222222-2222-4222-8222-222222222222", replay_job_status: "QUEUED" });
   });
   assert.equal(response.status, 200);
   assert.equal(new TextDecoder().decode(forwarded[0]), unicodeBody);
