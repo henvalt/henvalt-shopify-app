@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { buildShopifyCompletionUrl } from "./completion-url.mjs";
 import { isOAuthCallbackBoundToSupabase, resolveOAuthInfrastructure } from "./infrastructure-config.mjs";
-import { SHOPIFY_WEBHOOK_SPECS } from "./webhook-specs.mjs";
+import { SHOPIFY_WEBHOOK_SPECS, verifyWebhookDestination } from "./webhook-specs.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
@@ -334,21 +334,47 @@ Deno.serve(async (req: Request) => {
       if(!res.ok||d.errors?.length) throw new Error("graphql_failed");
       return d.data;
     }
-    for(const spec of specs) {
+    for (const spec of specs) {
       try {
-        let nodes=(await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } } }")).webhookSubscriptions?.nodes??[];
-        let found=nodes.find((x:any)=>x.topic===spec.gql&&x.uri===webhookUri);
-        if(!found) {
-          const d=await gql("mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) { webhookSubscriptionCreate(topic:$topic,webhookSubscription:$input) { userErrors { message } webhookSubscription { id topic uri } } }",{topic:spec.gql,input:{uri:webhookUri,format:"JSON"}});
-          const p=d.webhookSubscriptionCreate;
-          if(p?.userErrors?.length||!p?.webhookSubscription?.id){results.push({topic:spec.topic,ok:false,error:(p?.userErrors??[]).map((e:any)=>e.message).join("; ")||"not_created"});continue;}
+        const nodes = (await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } }")).webhookSubscriptions?.nodes ?? [];
+        const sameTopic = nodes.filter((item: any) => item.topic === spec.gql);
+        if (sameTopic.length > 1) {
+          results.push({ topic: spec.topic, ok: false, error: "duplicate_topic_subscriptions" });
+          continue;
         }
-        results.push({topic:spec.topic,ok:true});
-      } catch { results.push({topic:spec.topic,ok:false,error:"registration_failed"}); }
+        if (sameTopic.length === 1 && sameTopic[0].uri !== webhookUri) {
+          // Do not silently create a second destination while the old subscription
+          // may still deliver to production or another ingress.
+          results.push({ topic: spec.topic, ok: false, error: "existing_subscription_destination_mismatch" });
+          continue;
+        }
+        if (sameTopic.length === 0) {
+          const d = await gql("mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) { webhookSubscriptionCreate(topic:$topic,webhookSubscription:$input) { userErrors { message } webhookSubscription { id topic uri } } }", { topic: spec.gql, input: { uri: webhookUri, format: "JSON" } });
+          const p = d.webhookSubscriptionCreate;
+          if (p?.userErrors?.length || !p?.webhookSubscription?.id) {
+            results.push({ topic: spec.topic, ok: false, error: (p?.userErrors ?? []).map((e: any) => e.message).join("; ") || "not_created" });
+            continue;
+          }
+        }
+        results.push({ topic: spec.topic, ok: true });
+      } catch {
+        results.push({ topic: spec.topic, ok: false, error: "registration_failed" });
+      }
     }
-    let finalNodes:any[]=[];
-    try{finalNodes=(await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } } }")).webhookSubscriptions?.nodes??[];}catch{}
-    for(const r of results){const s=specs.find(x=>x.topic===r.topic);const f=s&&finalNodes.find((x:any)=>x.topic===s.gql&&x.uri===webhookUri);r.verified=!!f;r.ok=r.ok===true&&!!f;if(f)r.id=f.id;}
+    let finalNodes: any[] = [];
+    try {
+      finalNodes = (await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } }")).webhookSubscriptions?.nodes ?? [];
+    } catch {}
+    for (const result of results) {
+      const webhookSpec = specs.find((item) => item.topic === result.topic);
+      const verification = webhookSpec
+        ? verifyWebhookDestination(finalNodes, webhookSpec.gql, webhookUri)
+        : { verified: false, reason: "WEBHOOK_SPEC_MISSING" };
+      result.verified = verification.verified;
+      result.ok = result.ok === true && verification.verified;
+      if (verification.id) result.id = verification.id;
+      if (!verification.verified && !result.error) result.error = verification.reason;
+    }
     const allWebhooksRegistered=results.length===specs.length&&results.every(x=>x.ok===true&&x.verified===true);
     // Store per-topic verification for support and dashboard diagnostics.
     const webhookAudit = await db("/rest/v1/audit_log", {
