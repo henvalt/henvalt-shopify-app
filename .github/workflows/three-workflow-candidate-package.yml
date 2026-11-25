@@ -38,3 +38,13 @@ jobs:
         run: node n8n/shopify-delivery-candidate-builder.mjs
       - name: Verify the three generated workflows as one package
         run: node --test tests/shopify-three-workflow-candidate-package.test.mjs
+      - name: Upload verified inactive no-send workflow exports
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-three-workflow-no-send-candidates
+          path: |
+            n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json
+            n8n/HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY.json
+            n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json
+          if-no-files-found: error
+          retention-days: 7
