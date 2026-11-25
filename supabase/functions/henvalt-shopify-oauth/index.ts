@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { buildShopifyCompletionUrl } from "./completion-url.mjs";
-import { resolveOAuthInfrastructure } from "./infrastructure-config.mjs";
+import { isOAuthCallbackBoundToSupabase, resolveOAuthInfrastructure } from "./infrastructure-config.mjs";
 import { SHOPIFY_WEBHOOK_SPECS } from "./webhook-specs.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -53,7 +53,7 @@ async function db(path: string, init: RequestInit = {}, schema = "henvalt"): Pro
   });
 }
 function configOk(): boolean {
-  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && SHOPIFY_REDIRECT_URI && OAUTH_INFRASTRUCTURE.valid);
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && isOAuthCallbackBoundToSupabase(SUPABASE_URL, SHOPIFY_REDIRECT_URI) && OAUTH_INFRASTRUCTURE.valid);
 }
 async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
   const supplied = params.get("hmac");
