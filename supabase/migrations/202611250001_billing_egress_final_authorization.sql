@@ -4,6 +4,10 @@
 -- It cannot make a remote Shopify HTTP request atomic with a later cancellation.
 BEGIN;
 
+ALTER TABLE henvalt.billing_usage_charges
+  ADD COLUMN IF NOT EXISTS egress_authorized_at timestamptz,
+  ADD COLUMN IF NOT EXISTS egress_authorized_attempt integer;
+
 CREATE OR REPLACE FUNCTION henvalt.control_plane_authorize_billing_usage_egress(
   p_shop_domain text,
   p_charge_id uuid,
@@ -25,6 +29,7 @@ DECLARE
   v_test_mode boolean;
   v_active_shop_count integer;
   v_charge henvalt.billing_usage_charges%ROWTYPE;
+  v_authorized_at timestamptz;
 BEGIN
   IF v_shop !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com'
      OR v_shop <> (split_part(v_shop,'.',1) || '.myshopify.com')
@@ -108,11 +113,40 @@ BEGIN
     RETURN jsonb_build_object('authorized', false, 'reason', 'CHARGE_CLAIM_STALE');
   END IF;
 
+  -- Persist a one-time point-of-no-return for this exact attempt. A repeat
+  -- authorization of the same attempt is idempotent; a later attempt must pass
+  -- the complete active-subscription checks again and receives a fresh marker.
+  IF v_charge.egress_authorized_attempt IS DISTINCT FROM p_attempt THEN
+    v_authorized_at := clock_timestamp();
+    UPDATE henvalt.billing_usage_charges
+       SET egress_authorized_at = v_authorized_at,
+           egress_authorized_attempt = p_attempt,
+           updated_at = v_authorized_at
+     WHERE id = v_charge.id
+       AND tenant_id = v_tenant_id;
+
+    INSERT INTO henvalt.audit_log(
+      tenant_id,event_name,entity_type,entity_id,actor_type,actor_reference,payload
+    ) VALUES (
+      v_tenant_id,'BILLING_USAGE_EGRESS_AUTHORIZED','BILLING_USAGE_CHARGE',
+      v_charge.id,'SYSTEM','henvalt-shopify-usage-billing',
+      jsonb_build_object(
+        'attempt',p_attempt,
+        'idempotencyKey',p_idempotency_key,
+        'amount',v_charge.amount,
+        'currency',v_charge.currency::text,
+        'authorizedAt',v_authorized_at
+      )
+    );
+  ELSE
+    v_authorized_at := v_charge.egress_authorized_at;
+  END IF;
+
   RETURN jsonb_build_object(
     'authorized', true,
     'chargeId', v_charge.id,
     'attempt', v_charge.attempt_count,
-    'authorizedAt', clock_timestamp()
+    'authorizedAt', v_authorized_at
   );
 END;
 $function$;
@@ -123,7 +157,7 @@ GRANT EXECUTE ON FUNCTION henvalt.control_plane_authorize_billing_usage_egress(t
   TO service_role;
 
 COMMENT ON FUNCTION henvalt.control_plane_authorize_billing_usage_egress(text,uuid,text,text,integer) IS
-  'Final test-subscription, active-shop and exact charge-envelope revalidation immediately before Shopify usage mutation. Serializes against local cancellation; remote HTTP remains a separate system boundary.';
+  'Final test-subscription, active-shop and exact charge-envelope revalidation immediately before Shopify usage mutation. Persists the per-attempt authorization point-of-no-return; cancellation after authorization does not revoke an already-authorized in-flight request. Remote HTTP remains a separate system boundary.';
 
 COMMIT;
 
