@@ -1,4 +1,5 @@
 -- Revalidate the subscription and charge envelope at the last database boundary
+-- Acceptance: tests/billing-egress-final-authorization-postgres-acceptance.sql
 -- before the worker sends appUsageRecordCreate to Shopify.
 -- This serializes the authorization decision against cancellation and stale workers.
 -- It cannot make a remote Shopify HTTP request atomic with a later cancellation.
