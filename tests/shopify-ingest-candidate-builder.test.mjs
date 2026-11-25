@@ -233,3 +233,28 @@ test("builder rejects workflow or active-version drift", () => {
   assert.throws(()=>buildCandidate({...fixture(),id:"wrong"},map,"6368d539-708f-494a-8be8-b9601d0e8607"),/Wrong HENVALT_INGEST/);
   assert.throws(()=>buildCandidate(fixture(),map,"changed-version"),/version drift/);
 });
+
+
+test("internal replay returns a terminal subworkflow result without invoking the webhook responder", () => {
+  const workflow=buildCandidate(fixture(),map,"6368d539-708f-494a-8be8-b9601d0e8607").workflow;
+  const incoming=[];
+  for (const [source,outputs] of Object.entries(workflow.connections)) {
+    for (const output of outputs.main || []) {
+      for (const edge of output || []) if (edge.node === "Respond to Shopify") incoming.push(source);
+    }
+  }
+  assert.deepEqual(incoming.sort(),[
+    "Build Invalid Ingress Response",
+    "Build Unsupported Internal Source Response",
+    "Replay Pipeline?"
+  ].sort());
+  assert.equal(workflow.connections["Build Success Response"],undefined);
+  assert.equal(workflow.connections["Build Deferred Payment Response"],undefined);
+  assert.equal(workflow.connections["Build Already Processed Replay Result"],undefined);
+  const success=workflow.nodes.find(n=>n.name==="Build Success Response");
+  const deferred=workflow.nodes.find(n=>n.name==="Build Deferred Payment Response");
+  const already=workflow.nodes.find(n=>n.name==="Build Already Processed Replay Result");
+  assert.ok(success.parameters.assignments.assignments.some(a=>a.name==="mark_webhook_processed" && a.value.includes("replay_context")));
+  assert.ok(deferred.parameters.assignments.assignments.some(a=>a.name==="deferred_payment_handoff" && a.value===true));
+  assert.ok(already.parameters.assignments.assignments.some(a=>a.name==="mark_webhook_processed" && a.value===true));
+});
