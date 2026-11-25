@@ -32,3 +32,9 @@ test("Shopify app version creation is manual and explicitly opt-in", () => {
   assert.match(workflow, /if: github\.event_name == 'workflow_dispatch' && vars\.HENVALT_ALLOW_SHOPIFY_VERSION_CREATION == 'true'/);
   assert.doesNotMatch(workflow, /if: github\.event_name != 'pull_request'/);
 });
+
+test("Shopify static configuration validation runs on the active candidate branch", () => {
+  const workflow = readFileSync(".github/workflows/shopify-config-validation.yml", "utf8");
+  assert.match(workflow, /push:\s*\n\s*branches: \[main, work\/48h-system-readiness-2026-11-21\]/);
+  assert.match(workflow, /static-validation:/);
+});
