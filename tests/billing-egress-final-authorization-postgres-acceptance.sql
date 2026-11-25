@@ -101,6 +101,41 @@ BEGIN
     RAISE EXCEPTION 'REPEATED_AUTHORIZATION_CREATED_DUPLICATE_AUDIT_RECORD';
   END IF;
 
+  -- The final gate must reject any amount or currency drift even when the
+  -- worker still holds the correct charge ID, idempotency key and attempt.
+  SELECT henvalt.control_plane_authorize_billing_usage_egress(
+    'billing-egress.myshopify.com',
+    'babababa-baba-4bab-8bab-babababababa',
+    'henvalt-egress-authorization-test',
+    'gid://shopify/AppSubscriptionLineItem/egress-1',
+    7.26,'USD',1
+  ) INTO v_result;
+  IF v_result->>'authorized' IS DISTINCT FROM 'false'
+     OR v_result->>'reason' IS DISTINCT FROM 'CHARGE_CLAIM_STALE' THEN
+    RAISE EXCEPTION 'CHANGED_CHARGE_AMOUNT_PASSED_FINAL_EGRESS_GATE: %',v_result;
+  END IF;
+
+  SELECT henvalt.control_plane_authorize_billing_usage_egress(
+    'billing-egress.myshopify.com',
+    'babababa-baba-4bab-8bab-babababababa',
+    'henvalt-egress-authorization-test',
+    'gid://shopify/AppSubscriptionLineItem/egress-1',
+    7.25,'EUR',1
+  ) INTO v_result;
+  IF v_result->>'authorized' IS DISTINCT FROM 'false'
+     OR v_result->>'reason' IS DISTINCT FROM 'CHARGE_CLAIM_STALE' THEN
+    RAISE EXCEPTION 'CHANGED_CHARGE_CURRENCY_PASSED_FINAL_EGRESS_GATE: %',v_result;
+  END IF;
+
+  SELECT count(*) INTO v_audit_count
+    FROM henvalt.audit_log
+   WHERE tenant_id='abababab-abab-4bab-8bab-abababababab'
+     AND event_name='BILLING_USAGE_EGRESS_AUTHORIZED'
+     AND entity_id='babababa-baba-4bab-8bab-babababababa';
+  IF v_audit_count <> 1 THEN
+    RAISE EXCEPTION 'INVALID_CHARGE_ENVELOPE_CREATED_EGRESS_AUDIT';
+  END IF;
+
   -- Cancellation committed after the worker's initial claim must be observed
   -- by the final egress gate, before any external Shopify request.
   UPDATE henvalt.billing_accounts
