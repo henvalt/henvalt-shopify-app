@@ -196,3 +196,76 @@ The PR remains draft and unmerged. The independent staging-identity/network-egre
 - Exact-head CI on documentation head `270b6378f51e75b9f4be28b3a9ab786fa132ccc2`: all nine PR-triggered workflows completed successfully. Run IDs: 45540290776, 45540290771, 45540290999, 45540290828, 45540290744, 45540291031, 45540290740, 45540290739 and 45540290752. Shopify deployment was skipped.
 
 These checks strengthen offline graph and SQL-map consistency evidence only. They do not prove runtime n8n import/execution, real isolated database credentials, network-denied egress, or the complete synthetic event-to-ledger lifecycle. The PR remains NO-GO for merge/deployment; production remains untouched.
+
+
+## Sixth-pass exact-head and live-environment inventory — 2026-11-25
+
+### Exact latest candidate CI
+
+Rechecked PR #7 at exact head `7411964dce727270daf2cafa1b572f8dff568517`:
+
+- All nine PR-triggered workflows completed successfully.
+- Safety / Pixel-consent run `45540559992` completed all 88 steps with zero failed steps.
+- Shopify configuration run `45540560150`: static validation and billing-lock safety succeeded; `deploy-shopify-version` was explicitly **skipped**.
+- Other exact-head runs: integrated staging contract `45540560155`, offline privacy HMAC `45540560048`, delivery lifecycle lock order `45540560100`, production-shaped delivery migration `45540560011`, delivery-generation model `45540560078`, billing lock safety `45540560190`, and email usage reservation `45540560018`; all succeeded.
+
+This is candidate CI evidence only. No Shopify deployment occurred.
+
+### Fresh Supabase and n8n isolation inventory
+
+Read-only inventory on 25 November established:
+
+- Supabase organization plan: Free.
+- Connected production project `ocyplckdojdubyrsxcxa`: `ACTIVE_HEALTHY`.
+- Production project development-branch inventory: **zero branches**.
+- Three other projects in the organization (`wrsediuhepdyajnihjoz`, `rurszafcjcmuudnoovfx`, `oajuebiofteafuootmxy`) are `INACTIVE`; none was restored.
+- The Supabase branch quote for this organization is **USD 0.01344 per hour**. No branch or project was created. Restoring an inactive project or creating a branch was not attempted.
+- n8n project search returns one personal project; team projects are not enabled. There is no separate n8n staging project available through the connected account.
+- The n8n instance still exposes exactly three HENVALT workflows, all active:
+  - INGEST `VTpfGKNtu1CSQ4Rv`, active version `6368d539-708f-494a-8be8-b9601d0e8607`, 51 nodes.
+  - RECOVERY `3GEDoeCA4paXTaDF`, active version `3fd9fca9-a83f-4c2a-8618-24496a695eb8`, 46 nodes.
+  - DELIVERY `CvVyybGJZSnklxiZ`, active version `621ae6ce-a006-4fed-a70e-acf774c360fb`, 62 nodes.
+
+**Conclusion:** there is no independently isolated Supabase + n8n staging environment in the connected inventory. The production n8n project must not be used as a staging substitute. No branch, project, workflow, or deployment was created or changed.
+
+### Fresh active-vs-candidate recovery configuration drift
+
+Retrieved the exact active n8n RECOVERY version and compared its token-refresh query with the current generated candidates:
+
+- Active production workflow version `3fd9fca9-a83f-4c2a-8618-24496a695eb8` selects offline tokens expiring within **5 minutes**.
+- The current candidate builders select within **10 minutes**, matching candidate migration `202611210004_align_shopify_token_refresh_window.sql`.
+- The candidate's intended 10-minute behavior therefore differs from the current active production scheduler. This is a deliberate candidate configuration change, not evidence that production has already adopted it. Isolated acceptance must verify the scheduler query and database claim threshold together before any cutover.
+- The live RECOVERY claim query still filters only `execute_intervention`; its guard requires an `intervention_id`. It does not yet implement the candidate `process_shopify_webhook` replay-job route. The live workflow was not edited.
+
+This fresh read supersedes older audit wording that described the current live scheduler as already using a 10-minute window.
+
+### Current-head generated artifact provenance
+
+Downloaded and inspected the actual artifacts attached to the exact-head safety run `45540559992`. They are offline exports, not imported workflows:
+
+| Artifact | Artifact ID | Nodes | SHA-256 |
+|---|---:|---:|---|
+| INGEST candidate no-send | 14988079101 | 71 | `61ab4f84a0144f7b38cce66b32ac7d30a7270252655cf55dd6d27e3d0351cc41` |
+| RECOVERY candidate no-send | 14988723098 | 74 | `29282b48f22b30dadc02eb780735ee85dcbe7469321819c20e702786a3b7cc7f` |
+| RECOVERY candidate billing staging-only | 14988857713 | 76 | `e6fda1bdb32d0daabaf4f4d9d7bf285c8c7891a2cc2eda3f866cf9f3026db600` |
+| DELIVERY candidate no-send | 14988508484 | 54 | `55adae40e925ca111281058d6e1d61296d6afb9ee14611bc5f7131a4bf6059dc` |
+
+Direct JSON inspection confirmed for all four exports:
+
+- `active=false`, `availableInMCP=false`, and no bound credential references.
+- No production Supabase hostname and no MailerSend API hostname.
+- Supabase destinations use the non-routable `.invalid` staging hostname.
+- Delivery uses the deterministic no-send provider stub; inbound MailerSend signature/event routes remain separate from outbound sending.
+- The billing-specific recovery artifact adds a measured-revenue billing-shop query and a worker call to the non-routable staging endpoint. Its SQL requires active tenants, active test-mode billing accounts, confirmed billable recovery ledger entries and eligible reconciliation state. The worker credential is intentionally absent and documented as a dedicated staging-only binding requirement.
+- These properties establish offline artifact hygiene, not runtime import acceptance, working credentials, network-egress denial or successful end-to-end execution.
+
+### PR review and scope status
+
+- PR #7 remains open, draft, unmerged; GitHub reports mergeable, which is not approval.
+- Current compare from main: 1,637 commits ahead, 0 behind; 245 changed files; +45,943 / -287.
+- GitHub returned no submitted review records and no inline review threads. The issue timeline contains author/bot comments, not an independent code approval.
+- The PR remains too broad for routine release review. Do not rewrite its history, merge it, or treat green CI as reviewer sign-off.
+
+### Release decision
+
+**NO-GO remains.** The missing isolated Supabase/n8n environment is a hard blocker; the quoted branch cost is nonzero and no paid resource was created. Full-schema compatibility, real workflow import/execution, independently enforced provider-egress denial, retention/redaction evidence, fresh Shopify event-to-ledger acceptance, legacy billing route disposition, and explicit owner approval remain open. Production database, Edge Functions, Cloudflare Workers, active n8n workflows, Shopify release, provider credentials, emails and billing charges remain untouched.
