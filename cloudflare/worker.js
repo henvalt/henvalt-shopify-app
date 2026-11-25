@@ -24,7 +24,7 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
   const webhookId = request.headers.get("x-shopify-webhook-id") || "";
-  if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop) || !topic || !hmac || !webhookId) return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) || !topic || !hmac || !webhookId) return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
 
   const contentLength = Number(request.headers.get("content-length") || "0");
   if (Number.isFinite(contentLength) && contentLength > 1_000_000) return Response.json({ error: "body_too_large" }, { status: 413 });
