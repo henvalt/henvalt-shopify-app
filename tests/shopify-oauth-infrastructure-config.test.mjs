@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { resolveOAuthInfrastructure } from "../supabase/functions/henvalt-shopify-oauth/infrastructure-config.mjs";
+import { isOAuthCallbackBoundToSupabase, resolveOAuthInfrastructure } from "../supabase/functions/henvalt-shopify-oauth/infrastructure-config.mjs";
 
 test("OAuth requires explicitly configured HTTPS ingress and pixel collector endpoints", () => {
   const result = resolveOAuthInfrastructure({
@@ -23,6 +23,23 @@ test("OAuth infrastructure rejects missing, insecure, credentialed, or malformed
     { ingressBaseUrl: "https://ingress.example.invalid/path", pixelCollectorUrl: "https://pixel.example.invalid/v1/events" },
     { ingressBaseUrl: "https://ingress.example.invalid", pixelCollectorUrl: "https://pixel.example.invalid/other" },
   ]) assert.equal(resolveOAuthInfrastructure(config).valid, false);
+});
+
+test("OAuth callback must be the exact callback path on the configured Supabase project", () => {
+  assert.equal(isOAuthCallbackBoundToSupabase(
+    "https://staging-project.supabase.co",
+    "https://staging-project.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
+  ), true);
+  assert.equal(isOAuthCallbackBoundToSupabase(
+    "https://staging-project.supabase.co",
+    "https://production-project.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
+  ), false);
+  for (const redirect of [
+    "http://staging-project.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
+    "https://staging-project.supabase.co/functions/v1/other/callback",
+    "https://user:pass@staging-project.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
+    "https://staging-project.supabase.co/functions/v1/henvalt-shopify-oauth/callback?next=https://evil.invalid",
+  ]) assert.equal(isOAuthCallbackBoundToSupabase("https://staging-project.supabase.co", redirect), false);
 });
 
 test("Shopify app version creation is manual and explicitly opt-in", () => {
