@@ -286,7 +286,9 @@ export function createShopifyUsageBillingHandler({
       return await ambiguousOutcome(shop, chargeId, "SHOPIFY_TRANSPORT_OUTCOME_UNKNOWN", attempt);
     }
 
-    if (upstream.status === 429 || upstream.status >= 500) {
+    // A timeout or early-data retry response can arrive after the upstream has begun processing.
+    // Treat these statuses as ambiguous; only explicit non-transient 4xx rejections are deterministic.
+    if (upstream.status === 408 || upstream.status === 425 || upstream.status === 429 || upstream.status >= 500) {
       return await ambiguousOutcome(shop, chargeId, "SHOPIFY_TRANSIENT_HTTP", attempt);
     }
     if (!upstream.ok) {
