@@ -81,7 +81,7 @@ test("full pinned 51-node active INGEST export builds an isolated no-send candid
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.webhook_id\)/);
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/isUuid\(row\.replay_job_id\)/);
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/replay_job_status: String\(row\.replay_job_status \|\| ""\)\.toUpperCase\(\)/);
-  assert.match(findNode(w,"Classify Result").parameters.jsCode,/row\\.result_status === "already_processing"/);
+  assert.match(findNode(w,"Classify Result").parameters.jsCode,/row\.result_status === "already_processing"/);
   assert.match(findNode(w,"Classify Result").parameters.jsCode,/state === "PROCESSING"/);
   const orderEdit = findNode(w,"Process Shopify Order Edit Adjustment");
   assert.ok(orderEdit);
