@@ -57,3 +57,27 @@ The candidate n8n ingress contract uses a single-round-trip durable receive RPC 
 ## Safety boundary
 
 This audit was read-only. No Worker upload, route/domain change, secret read, n8n mutation/execution, Supabase migration, Shopify release, email, charge, or production data write occurred.
+
+
+## Production activity and database-advisor cross-check (read-only)
+
+### n8n execution metadata since 1 November 2026
+
+- `HENVALT_INGEST`: 0 execution records.
+- `HENVALT_DELIVERY`: 0 execution records.
+- `HENVALT_RECOVERY`: 10,004 execution records (10,003 successful scheduled executions and 1 error).
+- The most recent observed recovery execution succeeded at `2026-11-25T12:44:28Z`; the single observed error was on `2026-11-18T17:48:28Z`.
+- The error execution was inspected metadata-only. No node input/output data or customer payload was retrieved.
+
+This does not prove that no Shopify webhooks reached Supabase by another path. It does prove that the connected n8n INGEST and DELIVERY workflows have no execution records in this window, while the minute scheduler continues to run.
+
+### Supabase advisor results (25 November 2026)
+
+- Health advisor: no findings.
+- Security advisor: 11 RLS-enabled tables have no policies. A separate privilege query found no direct `anon`, `authenticated` or `PUBLIC` table grants on those 11 tables; the warning is not evidence of direct table access by itself.
+- Security advisor also flags `henvalt.is_tenant_member(uuid)` as SECURITY DEFINER and executable by `authenticated`. Do not revoke it blindly: inspect its use in RLS policies and intended boolean membership-check contract before changing privileges.
+- Supabase Auth leaked-password protection is disabled. This is an Auth configuration decision, not a SQL migration; it remains an owner security-hardening item.
+- Performance advisor reports one unindexed foreign key on `henvalt.shopify_privacy_requests.tenant_id`. Candidate migration `202611210012_shopify_privacy_tenant_fk_index.sql` adds the covering index, but it is not applied to production.
+- The advisor lists 63 unused indexes. With no current ingress/delivery workload, do not drop indexes based on that signal alone.
+
+No production setting, privilege, index, workflow or Worker was changed during these checks.
