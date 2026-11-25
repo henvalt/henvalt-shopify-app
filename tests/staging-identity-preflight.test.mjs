@@ -10,6 +10,8 @@ const valid = {
   HENVALT_STAGE_RECOVERY_WORKFLOW_ID: "staging-recovery-2",
   HENVALT_STAGE_DELIVERY_WORKFLOW_ID: "staging-delivery-3",
   HENVALT_STAGE_SHOPIFY_STORE: "henvalt-stage.myshopify.com",
+  HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://staging-project-ref-123.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
+  HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://staging-ingress.example.invalid/shopify/webhooks",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
   HENVALT_STAGE_NO_SEND: "true",
@@ -83,4 +85,25 @@ test("preflight rejects insecure staging n8n URL", () => {
   const result = run({ ...valid, HENVALT_STAGE_N8N_BASE_URL: "http://staging-n8n.example.invalid" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /must be HTTPS/);
+});
+
+test("preflight rejects a production Supabase OAuth callback", () => {
+  const result = run({ ...valid, HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-oauth/callback" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /exact staging Supabase project/);
+});
+
+test("preflight rejects the live production Cloudflare webhook ingress", () => {
+  const result = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /live production Cloudflare Worker/);
+});
+
+test("preflight rejects malformed or insecure Shopify staging endpoints", () => {
+  const callback = run({ ...valid, HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "http://staging-project-ref-123.supabase.co/functions/v1/henvalt-shopify-oauth/callback" });
+  assert.notEqual(callback.status, 0);
+  assert.match(callback.stderr, /exact staging Supabase project/);
+  const ingress = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "http://staging-ingress.example.invalid/shopify/webhooks" });
+  assert.notEqual(ingress.status, 0);
+  assert.match(ingress.stderr, /HTTPS \/shopify\/webhooks URL/);
 });
