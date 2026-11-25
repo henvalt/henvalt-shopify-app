@@ -35,6 +35,20 @@ export function classifyShopifyIngressAck(input) {
       body: { status: "duplicate", webhook_id: row.webhook_id },
     };
   }
+  if (result === "already_processing") {
+    const jobStatus = String(row.replay_job_status || "").toUpperCase();
+    if (String(row.processing_status || "").toUpperCase() !== "PROCESSING" ||
+        !UUID_RE.test(String(row.replay_job_id || "")) || !ACTIVE_JOB_STATES.has(jobStatus)) {
+      return fail(503, "temporarily_unavailable", "In-flight webhook has no verifiable active replay job.");
+    }
+    return {
+      ok: true, terminate_ingress: true, http_status: 200,
+      body: {
+        status: "already_processing", webhook_id: row.webhook_id,
+        replay_job_id: row.replay_job_id, replay_job_status: jobStatus,
+      },
+    };
+  }
   if (result === "accepted" || result === "replay_accepted") {
     const jobStatus = String(row.replay_job_status || "").toUpperCase();
     if (!UUID_RE.test(String(row.replay_job_id || "")) || !ACTIVE_JOB_STATES.has(jobStatus)) {
