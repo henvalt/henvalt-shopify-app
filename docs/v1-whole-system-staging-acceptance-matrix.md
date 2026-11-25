@@ -73,7 +73,7 @@
 | DEL-08 | Idempotency and retries | No duplicate provider attempts |
 | DEL-09 | Provider timeout ambiguity | State remains ambiguous; no unsafe automatic resend |
 | DEL-10 | Provider emergency revocation | Documented and tested separately; database gate cannot recall a credential already released to an in-flight request |
-| DEL-11 | Non-send routes while closed | Unsubscribe, tracking, privacy, signed provider events and inbound replies remain functional |
+| DEL-11 | Non-send routes while closed | Unsubscribe, tracking, privacy, signed provider events and inbound replies remain functional |\n| DEL-12 | Shopify usage billing egress | `HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED` is unset; worker refuses before database/token/provider calls; runtime firewall independently denies outbound Shopify GraphQL |
 
 ## Dashboard, attribution and billing
 | ID | Test | Expected evidence |
@@ -92,7 +92,7 @@
 | BILL-02 | Billing period/charge | No charge until a verified measurement and explicit billing policy |
 | BILL-03 | Uninstall/cancel | Sending and billing entitlements stop; retained records follow documented policy |
 | BILL-04 | Refund fee credit | Negative confirmed adjustment fees offset later positive Shopify usage charges exactly once; partial credits reduce charges, full credits void them, and retries preserve the original net amount |
-| BILL-05 | Adjustment fee measurement | A negative fee measurement is created only when the original confirmed recovery has a positive measured fee; unmeasured recoveries cannot generate future credits |
+| BILL-05 | Adjustment fee measurement | A negative fee measurement is created only when the original confirmed recovery has a positive measured fee; unmeasured recoveries cannot generate future credits |\n| BILL-06 | No-send billing acceptance | Measure fees from confirmed ledger rows only; do not create a usage charge or invoke `appUsageRecordCreate`; verify the billing worker default-deny flag and outbound network deny |
 
 ## Privacy, retention and operations
 | ID | Test | Expected evidence |
