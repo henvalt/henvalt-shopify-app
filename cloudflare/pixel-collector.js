@@ -23,11 +23,11 @@ function validId(value, max) {
   return typeof value === "string" && value.length > 0 && value.length <= max;
 }
 
-function safePageUrl(value) {
+export function safePageUrl(value, expectedOrigin) {
   if (typeof value !== "string" || value.length > 4096) return null;
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:") return null;
+    if (url.protocol !== "https:" || url.username || url.password || url.origin !== expectedOrigin) return null;
     // Never persist query strings or fragments; they can contain customer data.
     return url.origin + url.pathname.slice(0, 1000);
   } catch {
@@ -146,7 +146,7 @@ export default {
       customer_reference: validId(payload.customer_reference, 200) ? payload.customer_reference : null,
       analytics_consent: payload.analytics_consent === true,
       marketing_consent: payload.marketing_consent === true,
-      page_url: safePageUrl(payload.page_url),
+      page_url: safePageUrl(payload.page_url, origin),
       product: payload.product ? {
         id: validId(payload.product.id, 200) ? payload.product.id : null,
         title: typeof payload.product.title === "string" ? payload.product.title.slice(0, 200) : null,
