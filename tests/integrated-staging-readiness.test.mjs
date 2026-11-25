@@ -112,6 +112,8 @@ test("staging is not inferred from CI and network denial remains mandatory", () 
   assert.match(matrix, /workflow version|workflow IDs/i);
   assert.match(matrix, /HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED/);
   assert.match(matrix, /appUsageRecordCreate/);
+  assert.match(matrix, /billing_usage_charges/);
+  assert.match(matrix, /Shopify Admin GraphQL/);
   assert.match(billingWorker, /HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED !== "true"/);
   assert.match(billingWorker, /billing_egress_disabled/);
 });
