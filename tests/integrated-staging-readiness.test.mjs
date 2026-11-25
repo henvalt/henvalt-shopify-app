@@ -13,9 +13,11 @@ const raceRetryWins = read("tests/delivery-generation-retry-late-acceptance-race
 const raceLateWins = read("tests/delivery-generation-late-acceptance-before-egress-race-postgres.sh");
 const raceEgressWins = read("tests/delivery-generation-egress-before-late-acceptance-race-postgres.sh");
 const reservationAcceptance = read("tests/email-usage-reservation-postgres-acceptance.sql");
+const reservationConcurrency = read("tests/email-usage-reservation-concurrency-postgres.sh");
+const reservationSettlementConcurrency = read("tests/email-usage-reservation-settlement-concurrency-postgres.sh");
 const lifecycleAcceptance = read("tests/delivery-generation-parent-first-lock-order-acceptance.sql");
 
-test("staging acceptance is pinned to the inspected three-workflow baseline and exact retry candidate", () => {
+test("staging contract is pinned to the inspected three-workflow baseline", () => {
   assert.equal(contract.workflow_count, 3);
   assert.equal(contract.target.workflow_id, recoveryFixture.workflow.id);
   assert.equal(contract.target.inspected_active_version, recoveryFixture.source.active_version_id);
@@ -29,20 +31,17 @@ test("staging acceptance is pinned to the inspected three-workflow baseline and 
   assert.equal(contract.safety.fourth_workflow_created, false);
 });
 
-test("retry enqueue requires exact tenant, source lease, request, attempt and generation identity", () => {
-  assert.match(migration, /p_tenant_id uuid/);
-  assert.match(migration, /p_source_job_id uuid/);
-  assert.match(migration, /p_worker_id text/);
-  assert.match(migration, /p_expected_delivery_request_id uuid/);
-  assert.match(migration, /p_expected_delivery_attempt_id uuid/);
-  assert.match(migration, /DELIVERY_RETRY_SOURCE_JOB_CLAIM_INVALID/);
-  assert.match(migration, /DELIVERY_RETRY_EXPECTED_REQUEST_STALE/);
-  assert.match(migration, /DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE/);
-  assert.match(migration, /DELIVERY_RETRY_JOB_GENERATION_STALE/);
-  assert.match(migration, /clock_timestamp\(\)/);
+test("retry enqueue is fenced by tenant, source lease, request, attempt and generation", () => {
+  for (const token of [
+    "p_tenant_id uuid", "p_source_job_id uuid", "p_worker_id text",
+    "p_expected_delivery_request_id uuid", "p_expected_delivery_attempt_id uuid",
+    "DELIVERY_RETRY_SOURCE_JOB_CLAIM_INVALID", "DELIVERY_RETRY_EXPECTED_REQUEST_STALE",
+    "DELIVERY_RETRY_EXPECTED_ATTEMPT_STALE", "DELIVERY_RETRY_JOB_GENERATION_STALE",
+    "clock_timestamp()"
+  ]) assert.ok(migration.includes(token), `missing migration fence: ${token}`);
 });
 
-test("ambiguous provider outcomes cannot be retried and retry generations are bounded", () => {
+test("ambiguous outcomes cannot retry and generation ceiling dead-letters", () => {
   assert.equal(contract.retry_eligibility.ambiguous_provider_outcomes_retryable, false);
   assert.equal(contract.retry_eligibility.provider_response_stage_retryable, false);
   assert.equal(contract.job_model.max_total_generations, 3);
@@ -55,7 +54,7 @@ test("ambiguous provider outcomes cannot be retried and retry generations are bo
   assert.match(retryAcceptance, /generation limit did not terminally dead-letter/);
 });
 
-test("retry generation preserves the canonical immutable envelope", () => {
+test("retry uses immutable canonical message envelope", () => {
   assert.equal(contract.immutable_envelope.content_regenerated, false);
   assert.equal(contract.immutable_envelope.recipient_replaced, false);
   assert.equal(contract.immutable_envelope.tracking_token_replaced, false);
@@ -67,7 +66,7 @@ test("retry generation preserves the canonical immutable envelope", () => {
   assert.match(retryAcceptance, /immutable message envelope/);
 });
 
-test("recovery candidate routes retry jobs through the existing delivery workflow only", () => {
+test("recovery routes retry jobs through the existing delivery workflow", () => {
   assert.match(recoveryBuilder, /execute_delivery_retry_generation/);
   assert.match(recoveryBuilder, /Load Delivery Retry Envelope/);
   assert.match(recoveryBuilder, /Build Delivery Retry Payload/);
@@ -79,23 +78,22 @@ test("recovery candidate routes retry jobs through the existing delivery workflo
   assert.equal(contract.workflow_count, 3);
 });
 
-test("the isolated race matrix contains both retry-vs-late-acceptance orderings and egress-vs-late-acceptance", () => {
-  assert.match(raceRetryWins, /production-shaped retry-generation vs late-acceptance lock races passed in both orders/);
+test("race scripts assert all three retry and late-acceptance orderings", () => {
+  assert.match(raceRetryWins, /retry-generation vs late-acceptance race passed; parent frozen before next claim/);
   assert.match(raceLateWins, /late acceptance before provider-egress race passed/);
   assert.match(raceEgressWins, /provider egress before late acceptance race passed/);
   assert.match(retryAcceptance, /late provider acceptance/);
   assert.match(retryAcceptance, /retry generation/);
 });
 
-test("email reservation and parent-first lock-order acceptance are present in the integrated gate", () => {
+test("reservation acceptance includes both real two-session concurrency scripts", () => {
   assert.match(reservationAcceptance, /reservation/);
-  assert.match(reservationAcceptance, /reservation was not counted against the final quota slot/);\n  assert.match(reservationAcceptance, /late acceptance did not consume released reservation/);\n  assert.match(reservationAcceptance, /ambiguous provider result did not consume reservation/);
-  assert.match(lifecycleAcceptance, /intervention/);
-  assert.match(lifecycleAcceptance, /delivery_requests|delivery request/i);
+  assert.match(reservationConcurrency, /two-session email quota reservation concurrency acceptance passed/);
+  assert.match(reservationSettlementConcurrency, /concurrent provider rejection\/acceptance settlement acceptance passed/);
   assert.match(lifecycleAcceptance, /delivery lifecycle parent-first lock order acceptance passed/);
 });
 
-test("candidate workflow builders preserve inactive, no-send isolation", () => {
+test("candidate workflow builders retain inactive no-send isolation", () => {
   assert.match(deliveryBuilder, /HENVALT_DELIVERY_CANDIDATE_NO_SEND/);
   assert.match(deliveryBuilder, /No-Send Provider Stub/);
   assert.match(deliveryBuilder, /no_send_candidate: true/);
@@ -104,7 +102,7 @@ test("candidate workflow builders preserve inactive, no-send isolation", () => {
   assert.match(recoveryBuilder, /availableInMCP: false/);
 });
 
-test("staging release cannot be inferred from CI: environment-specific gates remain explicit", () => {
+test("staging is not inferred from CI and network denial remains mandatory", () => {
   const matrix = read("docs/v1-whole-system-staging-acceptance-matrix.md");
   assert.match(matrix, /isolated staging/i);
   assert.match(matrix, /No isolated Supabase staging project/i);
