@@ -22,3 +22,33 @@ test("only the verified production Pages hostname can run live dashboard operati
   assert.match(source, /https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co\/functions\/v1\/henvalt-merchant-dashboard/);
   assert.match(source, /https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co\/functions\/v1\/henvalt-billing-reconciliation/);
 });
+
+test("preview guard executes before Supabase client creation and all application handlers", () => {
+  const scripts = [...source.matchAll(/<script>\\s*([\\s\\S]*?)<\\/script>/g)];
+  assert.ok(scripts.length > 0, "inline dashboard application script must exist");
+  const appScript = scripts[scripts.length - 1][1];
+  let rendered = "";
+  let clientInitializations = 0;
+  const document = {
+    body: {
+      set innerHTML(value) { rendered = String(value); },
+    },
+  };
+  const supabase = {
+    createClient() {
+      clientInitializations += 1;
+      throw new Error("production client must not initialize on preview");
+    },
+  };
+  assert.throws(
+    () => new Function("location", "document", "supabase", appScript)(
+      { hostname: "work-48h-system-readiness-20.henvalt-dashboard-preview.pages.dev" },
+      document,
+      supabase,
+    ),
+    /PREVIEW_BUILD_LIVE_API_DISABLED/,
+  );
+  assert.equal(clientInitializations, 0);
+  assert.match(rendered, /Preview environment/);
+  assert.match(rendered, /customer data are disabled here/);
+});
