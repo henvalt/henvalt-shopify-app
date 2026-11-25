@@ -24,7 +24,7 @@ test("only the verified production Pages hostname can run live dashboard operati
 });
 
 test("preview guard executes before Supabase client creation and all application handlers", () => {
-  const scripts = [...source.matchAll(/<script>\\s*([\\s\\S]*?)<\\/script>/g)];
+  const scripts = [...source.matchAll(/<script>\s*([\s\S]*?)<\/script>/g)];
   assert.ok(scripts.length > 0, "inline dashboard application script must exist");
   const appScript = scripts[scripts.length - 1][1];
   let rendered = "";
