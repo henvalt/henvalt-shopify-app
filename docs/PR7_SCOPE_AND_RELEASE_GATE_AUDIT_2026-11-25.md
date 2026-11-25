@@ -100,3 +100,55 @@ The following source-level checks were performed after the initial scope invento
 5. Treat dynamic function-body rewrites in the lock-order migration as a compatibility risk requiring exact pre/post function-definition diff review.
 
 No confirmed production defect was established by this read-only source inspection. The identified issue is evidentiary: the current preflight cannot independently prove the isolation claims it accepts. The NO-GO decision remains unchanged.
+
+
+## Third-pass verification addendum — 2026-11-25 08:15 PKT
+
+This addendum supersedes the older revision-specific status above where the values differ. Historical run IDs and prior-head counts are retained as history, not current status.
+
+### Current PR and exact candidate revision
+
+- Current reviewed head before this documentation update: `ec9ab6c9ad7740514e8d9899eb3915cb41642997`.
+- PR #7 remains **open, draft, unmerged**; GitHub reports `mergeable=true`, which is only a merge-conflict signal.
+- Current PR metadata: **1,632 commits**, **245 changed files**, **+45,805 / -287**.
+- Compare `main...work/48h-system-readiness-2026-11-21`: **1,632 ahead / 0 behind**; merge base remains `9bcba4e882543bece5f1b32ebec1befa46350191`.
+- The 245-file inventory includes 36 candidate Supabase migrations, 124 test files, 26 documentation files, 19 n8n candidate/fixture files, nine GitHub Actions workflows, three Cloudflare files, one dashboard file, one Shopify app configuration file and one script.
+- GitHub reports no submitted PR reviews and no inline review threads. That is not equivalent to approval.
+
+### Exact-head CI completion
+
+All **nine of nine** PR-triggered workflow runs for `ec9ab6c9ad7740514e8d9899eb3915cb41642997` completed successfully:
+
+| Workflow | Run ID | Result |
+|---|---:|---|
+| HENVALT integrated staging readiness contract | 45537862252 | success |
+| Offline Shopify privacy HMAC contract tests | 45537862251 | success |
+| HENVALT delivery lifecycle parent-first lock order | 45537862259 | success |
+| HENVALT billing lock safety | 45537862264 | success |
+| HENVALT production-shaped delivery generation migration | 45537862193 | success |
+| Shopify app configuration checks and deployment | 45537862221 | static validation and billing-lock job success; deployment skipped |
+| HENVALT delivery generation PostgreSQL model safety | 45537862412 | success |
+| HENVALT email usage reservation safety | 45537862138 | success |
+| HENVALT safety and pixel consent tests | 45537862233 | success; 88 steps, zero failed steps |
+
+These results validate candidate code and disposable test fixtures only. They do not prove the full integrated live Supabase+n8n+Shopify environment.
+
+### Additional migration review
+
+A further source pass read the Shopify replay, privacy, billing, quota and delivery-generation migrations, including the dynamic lock-order rewrite and MailerSend webhook generation-routing patches.
+
+- The lock-order migration has explicit existence, already-patched and anchor-mismatch guards around its four `pg_get_functiondef` rewrites. It remains sensitive to the exact deployed function bodies and must be verified with post-migration function-definition diffs in isolated staging.
+- The MailerSend webhook patch adds exact delivery-tag matching for sent/delivered events and invokes late-acceptance settlement before ordinary result recording. Its dynamic replacement anchors are guarded; this source inspection is not a substitute for executing it against the full live function definition.
+- The retry-generation worker wrappers preserve parent → request → background-job lock ordering and revalidate tenant, worker, lease age, generation and job mapping at authorization and final egress. The dedicated PostgreSQL model and race workflows passed on the reviewed head.
+- No new confirmed production defect was established by this pass. The remaining blockers are compatibility and integration evidence, not an assertion that the live production system has been proven safe by CI.
+
+### Current release decision
+
+**NO-GO remains. Do not merge, deploy, apply migrations, modify active n8n workflows, release Shopify app versions, send provider traffic or create billable staging resources on the basis of these CI results.**
+
+The two dominant unresolved gates remain:
+
+1. The 1,632-commit / 245-file PR is too broad for a routine release review. Its history and ownership need deliberate review; do not reset, rebase, rewrite or merge it as a shortcut.
+2. Staging isolation is not independently evidenced. The current preflight trusts operator-supplied metadata strings and does not inspect actual Supabase project identity, n8n workflow activation, Shopify development-store identity or network egress controls.
+
+No production SQL, migration, Edge Function, Cloudflare Worker, n8n workflow, Shopify release, email, billing charge or paid resource was changed or executed during this third-pass review.
