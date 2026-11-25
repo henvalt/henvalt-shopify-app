@@ -236,6 +236,15 @@ export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   const claimDue = workflow.nodes.find((node) => node.name === "Claim Due Job");
   claimDue.parameters.query = "SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention','execute_delivery_retry_generation']::text[])";
 
+  const tokenRefreshDue = workflow.nodes.find((node) => node.name === "Find Shopify Tokens Due");
+  if (!tokenRefreshDue?.parameters?.query || !tokenRefreshDue.parameters.query.includes("interval '5 minutes'")) {
+    throw new Error("Token refresh scheduler source drift; re-audit before changing its claim window");
+  }
+  tokenRefreshDue.parameters.query = tokenRefreshDue.parameters.query.replace("interval '5 minutes'", "interval '10 minutes'");
+  if (!tokenRefreshDue.parameters.query.includes("interval '10 minutes'")) {
+    throw new Error("Token refresh scheduler window alignment failed");
+  }
+
   const normalizer = workflow.nodes.find((node) => node.name === "Normalize & Guard");
   let normalizerCode = normalizer.parameters.jsCode;
   normalizerCode = replaceOne(
