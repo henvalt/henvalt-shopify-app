@@ -48,6 +48,8 @@ SET status='PENDING',attempt_count=1,idempotency_key='henvalt-egress-authorizati
 DO $egress_authorization$
 DECLARE
   v_result jsonb;
+  v_authorized_at timestamptz;
+  v_audit_count integer;
 BEGIN
   SELECT henvalt.control_plane_authorize_billing_usage_egress(
     'billing-egress.myshopify.com',
@@ -59,6 +61,38 @@ BEGIN
 
   IF v_result->>'authorized' IS DISTINCT FROM 'true' THEN
     RAISE EXCEPTION 'ACTIVE_TEST_SUBSCRIPTION_NOT_AUTHORIZED: %',v_result;
+  END IF;
+
+  v_authorized_at := (v_result->>'authorizedAt')::timestamptz;
+  SELECT count(*) INTO v_audit_count
+    FROM henvalt.audit_log
+   WHERE tenant_id='abababab-abab-4bab-8bab-abababababab'
+     AND event_name='BILLING_USAGE_EGRESS_AUTHORIZED'
+     AND entity_id='babababa-baba-4bab-8bab-babababababa';
+  IF v_audit_count <> 1 THEN
+    RAISE EXCEPTION 'EGRESS_AUTHORIZATION_NOT_AUDITED_EXACTLY_ONCE';
+  END IF;
+
+  -- A retry of the same authorization is idempotent and does not create a
+  -- second point-of-no-return audit record for the same attempt.
+  SELECT henvalt.control_plane_authorize_billing_usage_egress(
+    'billing-egress.myshopify.com',
+    'babababa-baba-4bab-8bab-babababababa',
+    'henvalt-egress-authorization-test',
+    'gid://shopify/AppSubscriptionLineItem/egress-1',
+    7.25,'USD',1
+  ) INTO v_result;
+  IF v_result->>'authorized' IS DISTINCT FROM 'true'
+     OR (v_result->>'authorizedAt')::timestamptz IS DISTINCT FROM v_authorized_at THEN
+    RAISE EXCEPTION 'REPEATED_AUTHORIZATION_WAS_NOT_IDEMPOTENT: %',v_result;
+  END IF;
+  SELECT count(*) INTO v_audit_count
+    FROM henvalt.audit_log
+   WHERE tenant_id='abababab-abab-4bab-8bab-abababababab'
+     AND event_name='BILLING_USAGE_EGRESS_AUTHORIZED'
+     AND entity_id='babababa-baba-4bab-8bab-babababababa';
+  IF v_audit_count <> 1 THEN
+    RAISE EXCEPTION 'REPEATED_AUTHORIZATION_CREATED_DUPLICATE_AUDIT_RECORD';
   END IF;
 
   -- Cancellation committed after the worker's initial claim must be observed
