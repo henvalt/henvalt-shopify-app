@@ -74,3 +74,29 @@ Remaining gates:
 ## Safety boundary observed during this audit
 
 This audit was read-only apart from writing this documentation file to the candidate branch. No production SQL, migration, Edge Function, Cloudflare Worker, n8n workflow, Shopify release, email, billing charge, or paid resource was changed or executed.
+
+
+## Second-pass implementation review
+
+The following source-level checks were performed after the initial scope inventory:
+
+- Read the provider-send interlock migration. It defaults closed, revokes direct table/function access from application roles, serializes the global gate with a row lock, guards delivery-request claim transitions, and wraps the MailerSend credential-release RPC. The manual test-only message path is explicitly denied.
+- Read the final provider-egress fence. It validates service role, tenant/request identity, parent intervention state, request state/channel/provider, generation freshness, and the global send gate before a one-way compare-and-set marker.
+- Read the parent-first lifecycle lock-order migration. It rewrites four existing lifecycle RPC definitions using guarded `pg_get_functiondef` / `regexp_replace` substitutions. This is a sensitive source-preserving patch strategy; exact production schema/function-body compatibility must be proven against a full isolated schema before application.
+- Read the quota reservation migration and its concurrency acceptance script. The billing-account row is locked before quota counts and reservation insertion; unresolved holds remain counted, ambiguous outcomes consume rather than release holds, and reservation transitions are audited.
+- Confirmed the quota settlement trigger is attached to `delivery_attempts` inserts. A trigger's real behavior still depends on the complete upstream attempt-writing path and transaction boundaries, which the disposable fixture cannot fully establish.
+- Read all three delivery-generation race scripts. They explicitly test retry-vs-late-acceptance, late-acceptance-before-egress, and egress-before-late-acceptance orderings using two PostgreSQL sessions and barriers.
+- Read the retry-generation migration's worker lease checks. It validates tenant, worker, lease age, request, generation and retry-job mapping; the retry ceiling is three total generations (two automatic retries).
+- Read the integrated-readiness test. It checks the exact three-workflow contract, immutable retry envelope, retry routing through the existing delivery workflow, and the three race fixtures.
+- Read the staging identity preflight and its tests. The script is deliberately metadata-only and makes no network calls. Its PASS result trusts supplied environment strings such as `NETWORK_EGRESS_DENIED=true`, `WORKFLOWS_INACTIVE=true`, and `SHOPIFY_DEV_STORE_CONFIRMED=true`; it does not inspect firewall rules, actual n8n activation state, or Shopify store type. Therefore it is an input-validation gate, not evidence that staging is isolated or safe.
+- Rechecked the exact-head workflow jobs on this audit commit: all nine workflow runs completed successfully; Shopify static validation and billing-lock checks passed, while `deploy-shopify-version` was skipped.
+
+### Additional release gates from source review
+
+1. Replace metadata self-attestation with independently collected evidence for network egress denial, actual n8n workflow state/IDs, Supabase project identity and Shopify development-store identity.
+2. Apply the complete migration sequence only to a disposable isolated database with the real schema, extensions, roles, grants, triggers and functions; inspect the resulting function definitions and privileges after migration.
+3. Exercise the real n8n worker graphs against the isolated database and stub provider, including webhook callbacks, retry job reclamation, quota settlement and late provider acceptance.
+4. Verify that the one-way egress marker and global provider gate are enforced on every credential-release and HTTP-send path, including any legacy/manual or alternate code path.
+5. Treat dynamic function-body rewrites in the lock-order migration as a compatibility risk requiring exact pre/post function-definition diff review.
+
+No confirmed production defect was established by this read-only source inspection. The identified issue is evidentiary: the current preflight cannot independently prove the isolation claims it accepts. The NO-GO decision remains unchanged.
