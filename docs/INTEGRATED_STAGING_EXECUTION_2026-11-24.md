@@ -8,6 +8,8 @@ This plan closes the gap between individually passing PostgreSQL/Node/Deno check
 
 **Latest repository verification (25 November 2026):** candidate head `ce2dbd06531538bb3aa52e5db834f22f5cc5046f`. The integrated staging readiness contract, delivery-generation production-shaped migration suite, delivery-generation model/race suite, lifecycle lock-order suite, quota reservation concurrency suite, billing-lock safety suite, privacy/pixel safety suite, offline Shopify privacy HMAC contract, and Shopify static configuration checks all completed successfully on this head. These are CI/disposable-fixture results only; they do not change the NO-GO staging decision.
 
+**Exact-head revalidation (25 November 2026):** after the documentation correction, GitHub Actions also completed successfully on exact PR head `46e4eb3e63e51c9b7de5b594ad6e5c9dc7a24d87`. The nine PR-triggered workflows were: lifecycle lock order (run `45532305676`), safety/pixel consent (run `45532305638`), production-shaped delivery-generation migration (run `45532305586`), email usage reservation (run `45532305606`), delivery-generation model (run `45532305632`), integrated staging readiness contract (run `45532305596`), Shopify app configuration (run `45532305584`), billing lock safety (run `45532305642`), and offline privacy HMAC (run `45532305630`). Every executed job concluded `success`; the Shopify deployment job was `skipped`, not deployed. This exact-head CI evidence still does not constitute integrated staging or authorize release.
+
 ## Hard safety boundary
 
 - Never point a candidate workflow, Edge Function, Shopify app, or test harness at production.
