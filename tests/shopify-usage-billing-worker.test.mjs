@@ -78,6 +78,11 @@ test("validates shop before obtaining credentials", async () => {
   assert.equal(calls, 0);
 });
 
+test("Edge Function passes the explicit billing egress flag into the handler", () => {
+  const entrypoint = readFileSync("supabase/functions/henvalt-shopify-usage-billing/index.ts", "utf8");
+  assert.match(entrypoint, /HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED: Deno\.env\.get\("HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED"\)/);
+});
+
 test("Shopify billing egress is default-denied before any database or provider request", async () => {
   let calls = 0;
   const disabledEnv = { ...env, HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED: undefined };
