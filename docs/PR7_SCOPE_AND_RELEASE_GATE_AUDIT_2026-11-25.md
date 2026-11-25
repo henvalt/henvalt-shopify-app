@@ -316,3 +316,18 @@ The candidate-only gap above now has an implementation and executable acceptance
 This is not a distributed transaction with Shopify. The durable authorization marker defines the point-of-no-return: cancellation committed **before** the final authorization is denied; cancellation committed **after** the authorization marker does not revoke an already-authorized in-flight request. The external HTTP request can still fail or be delayed after authorization, so the existing Shopify idempotency key and PENDING/reconciliation behavior remain mandatory. The marker is auditable evidence of authorization, not proof that Shopify accepted the charge.
 
 The candidate remains restricted to test-mode subscriptions. No migration was applied to production, no Edge Function was deployed, and no Shopify usage record was created. Exact-head CI and PostgreSQL acceptance are pending for this new commit; the PR remains draft/unmerged and the overall release decision remains **NO-GO** until those checks and isolated staging are complete.
+
+
+### Verification result — candidate code commit `2459b396d3afe55438173372b32269e5d7caa546`
+
+- Billing lock safety workflow `45543942550`: **success**. All 18 steps completed, including Node tests, bootstrap, migrations 011/014/015/016, the new final-egress migration, the new cancellation/stale-worker PostgreSQL acceptance, and concurrent refund-credit allocation.
+- Safety and Pixel-consent workflow `45543942607`: **success**.
+- Integrated staging readiness `45543942547`: **success**.
+- Production-shaped delivery migration `45543942542`: **success**.
+- Email usage reservation safety `45543942484`: **success**.
+- Delivery lifecycle parent-first lock order `45543942588`: **success**.
+- Delivery generation PostgreSQL model `45543942631`: **success**.
+- Offline Shopify privacy HMAC `45543942529`: **success**.
+- Shopify app configuration `45543942530`: static validation and billing-lock job **success**; deployment job **skipped**.
+
+All 9/9 PR-triggered workflows completed successfully on the exact code commit above. This proves the candidate's automated contracts only; it does not prove an isolated Supabase/n8n runtime or Shopify provider acceptance. The overall release decision remains **NO-GO**.
