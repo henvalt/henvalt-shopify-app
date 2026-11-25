@@ -12,3 +12,11 @@ export const SHOPIFY_WEBHOOK_SPECS = Object.freeze([
   { topic: "customers_email_marketing_consent/update", gql: "CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE" },
   { topic: "app/uninstalled", gql: "APP_UNINSTALLED" },
 ]);
+
+export function verifyWebhookDestination(nodes, topic, expectedUri) {
+  const matches = Array.isArray(nodes) ? nodes.filter((node) => node?.topic === topic) : [];
+  if (matches.length === 0) return { verified: false, reason: "WEBHOOK_SUBSCRIPTION_MISSING" };
+  if (matches.length > 1) return { verified: false, reason: "DUPLICATE_WEBHOOK_SUBSCRIPTIONS" };
+  if (matches[0]?.uri !== expectedUri) return { verified: false, reason: "WEBHOOK_DESTINATION_MISMATCH" };
+  return { verified: true, id: typeof matches[0]?.id === "string" ? matches[0].id : null };
+}
