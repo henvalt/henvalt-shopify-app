@@ -133,7 +133,7 @@ if (row.result_status === "duplicate" && state === "PROCESSED") {
 }
 if (["accepted","replay_accepted"].includes(row.result_status) &&
     isUuid(row.replay_job_id) && ["QUEUED","CLAIMED","RUNNING","RETRY_WAIT"].includes(String(row.replay_job_status || "").toUpperCase())) {
-  return { __proceed: false, __replay: false, __http: 200, __body: { status: row.result_status, webhook_id: row.webhook_id, replay_job_id: row.replay_job_id, correlation_id: row.correlation_id || corr } };
+  return { __proceed: false, __replay: false, __http: 200, __body: { status: row.result_status, webhook_id: row.webhook_id, replay_job_id: row.replay_job_id, replay_job_status: String(row.replay_job_status || "").toUpperCase(), correlation_id: row.correlation_id || corr } };
 }
 return { __proceed: false, __replay: false, __http: 503, __body: { status: "durable_replay_job_not_confirmed", correlation_id: corr } };`;
 }
