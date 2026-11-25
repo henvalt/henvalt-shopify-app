@@ -131,6 +131,12 @@ const state = String(row.processing_status || "").toUpperCase();
 if (row.result_status === "duplicate" && state === "PROCESSED") {
   return { __proceed: false, __replay: false, __http: 200, __body: { status: "duplicate", webhook_id: row.webhook_id, correlation_id: row.correlation_id || corr } };
 }
+if (row.result_status === "already_processing" &&
+    state === "PROCESSING" &&
+    isUuid(row.replay_job_id) &&
+    ["QUEUED","CLAIMED","RUNNING","RETRY_WAIT"].includes(String(row.replay_job_status || "").toUpperCase())) {
+  return { __proceed: false, __replay: false, __http: 200, __body: { status: "already_processing", webhook_id: row.webhook_id, replay_job_id: row.replay_job_id, replay_job_status: String(row.replay_job_status || "").toUpperCase(), correlation_id: row.correlation_id || corr } };
+}
 if (["accepted","replay_accepted"].includes(row.result_status) &&
     isUuid(row.replay_job_id) && ["QUEUED","CLAIMED","RUNNING","RETRY_WAIT"].includes(String(row.replay_job_status || "").toUpperCase())) {
   return { __proceed: false, __replay: false, __http: 200, __body: { status: row.result_status, webhook_id: row.webhook_id, replay_job_id: row.replay_job_id, replay_job_status: String(row.replay_job_status || "").toUpperCase(), correlation_id: row.correlation_id || corr } };
