@@ -3,20 +3,20 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const ingest = JSON.parse(readFileSync("n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json", "utf8"));
-const recovery = JSON.parse(readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json", "utf8"));
+const recovery = JSON.parse(readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY.json", "utf8"));
 const delivery = JSON.parse(readFileSync("n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json", "utf8"));
 const workflows = [ingest, recovery, delivery];
 const byName = (workflow) => new Map(workflow.nodes.map((node) => [node.name, node]));
 const ids = {
   ingest: "00000000-0000-4000-8000-999999999999",
-  recovery: "00000000-0000-4000-8000-999999999997",
+  recovery: "00000000-0000-4000-8000-999999999995",
   delivery: "00000000-0000-4000-8000-999999999996"
 };
 
 test("the isolated package contains exactly three distinct inactive candidate workflows", () => {
   assert.deepEqual(workflows.map((w) => w.name), [
     "HENVALT_INGEST_CANDIDATE_NO_SEND",
-    "HENVALT_RECOVERY_CANDIDATE_NO_SEND",
+    "HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY",
     "HENVALT_DELIVERY_CANDIDATE_NO_SEND"
   ]);
   assert.deepEqual(workflows.map((w) => w.id), [ids.ingest, ids.recovery, ids.delivery]);
@@ -35,6 +35,27 @@ test("recovery subworkflow calls resolve only to the two candidate workflow IDs"
   assert.equal(nodes.get("Call HENVALT_DELIVERY").parameters.workflowId.value, ids.delivery);
   assert.notEqual(nodes.get("Call HENVALT_INGEST Replay Entry").parameters.workflowId.value, "VTpfGKNtu1CSQ4Rv");
   assert.notEqual(nodes.get("Call HENVALT_DELIVERY").parameters.workflowId.value, "CvVyybGJZSnklxiZ");
+});
+
+test("recovery keeps the billing scheduler inside the same three-workflow architecture", () => {
+  const nodes = byName(recovery);
+  const trigger = nodes.get("Every Minute");
+  assert.ok(trigger);
+  assert.ok(trigger.parameters);
+  assert.ok((recovery.connections["Every Minute"]?.main?.[0] ?? [])
+    .some((edge) => edge.node === "Find Shopify Usage Billing Shops"));
+  const discover = nodes.get("Find Shopify Usage Billing Shops");
+  const worker = nodes.get("Call Shopify Usage Billing Worker");
+  assert.ok(discover && worker);
+  assert.ok((recovery.connections["Find Shopify Usage Billing Shops"]?.main?.[0] ?? [])
+    .some((edge) => edge.node === "Call Shopify Usage Billing Worker"));
+  assert.match(discover.parameters.query, /billing_measurements/);
+  assert.match(discover.parameters.query, /attribution_confidence = 'CONFIRMED'/);
+  assert.match(discover.parameters.query, /test_mode = true/);
+  assert.equal(worker.parameters.url, "https://supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing");
+  assert.ok(!worker.credentials);
+  assert.equal(recovery.name, "HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY");
+  assert.equal(recovery.nodes.length, 76);
 });
 
 test("INGEST exposes the exact lease-bound three-field replay trigger", () => {
