@@ -157,8 +157,14 @@ test("keeps ambiguous provider transport failures PENDING and does not mark them
   assert.equal(h.calls.some((call) => call.url.includes("/control_plane_mark_billing_reconciliation_required")), false);
 });
 
-test("keeps Shopify 5xx and malformed responses PENDING", async () => {
-  for (const shopify of [response({ error: "temporary" }, 503), new Response("not-json", { status: 200 })]) {
+test("keeps ambiguous Shopify timeout, early-data, rate-limit, 5xx and malformed responses PENDING", async () => {
+  for (const shopify of [
+    response({ error: "timeout" }, 408),
+    response({ error: "too early" }, 425),
+    response({ error: "rate limited" }, 429),
+    response({ error: "temporary" }, 503),
+    new Response("not-json", { status: 200 }),
+  ]) {
     const h = harness({ shopify });
     const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
     const result = await handler(request());
