@@ -12,7 +12,9 @@ const valid = {
   HENVALT_STAGE_SHOPIFY_STORE: "henvalt-stage.myshopify.com",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
-  HENVALT_STAGE_NO_SEND: "true",\n  HENVALT_STAGE_WORKFLOWS_INACTIVE: "true",\n  HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED: "true",
+  HENVALT_STAGE_NO_SEND: "true",
+  HENVALT_STAGE_WORKFLOWS_INACTIVE: "true",
+  HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED: "true",
 };
 const run = (env) => spawnSync(process.execPath, [script], {
   encoding: "utf8",
