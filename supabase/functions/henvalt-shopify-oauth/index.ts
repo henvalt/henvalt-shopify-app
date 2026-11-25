@@ -382,7 +382,7 @@ Deno.serve(async (req: Request) => {
       headers: { prefer: "return=minimal" },
       body: JSON.stringify({
         tenant_id: tenantId,
-        event_name: "SHOPIFY_WEBHOOK_REGISTRATION_VERIFIED",
+        event_name: "SHOPIFY_WEBHOOK_REGISTRATION_CHECKED",
         entity_type: "shopify_connection",
         entity_id: connectionId,
         actor_type: "SYSTEM",
