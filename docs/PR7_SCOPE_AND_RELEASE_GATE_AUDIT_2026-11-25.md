@@ -186,3 +186,13 @@ Direct inspection of all three JSON artifacts confirmed:
 The generated JSON artifacts now provide stronger evidence that the offline candidates are isolated from production endpoints and that the three workflow references line up. This does **not** establish that the imports are accepted by the target n8n runtime, that credentials are correctly rebound to a staging tenant, or that a synthetic Shopify event completes through the actual database and worker graph. No staging instance was imported or executed.
 
 The PR remains draft and unmerged. The independent staging-identity/network-egress proof, full-schema migration compatibility, workflow runtime acceptance, execution-data retention/redaction and owner approval gates remain open. Production remains untouched.
+
+
+## Fifth-pass write-map and provider-stub audit — 2026-11-25
+
+- Cross-checked all 19 entries in `n8n/shopify-ingest-replay-write-map.json` against SQL definitions. Eighteen fenced wrappers are defined in migrations 009/010; the remaining candidate-only `process_shopify_order_edit_adjustment_fenced` is defined in migration 013. The latter calls `assert_shopify_replay_lease_for_write(job_id, worker_id, lease_id)` before invoking the legacy adjustment function in the same transaction and grants execution to `service_role` only. No mapped fenced function was missing.
+- Inspected the generated DELIVERY candidate's actual graph, not just the builder source. The path is `Build Reply-To Address → No-Send Provider Stub → Classify Result → Should Record Provider Result?`; the no-send result has `should_record_result=false` and routes to `Build Delivery Response`, not `Record Delivery Result`. Thus the stub's synthetic 503 is not persisted as a provider attempt and cannot advance the recovery scheduler as if a real provider response occurred.
+- Confirmed all generated webhook paths use the candidate-only `henvalt/candidate-no-send/...` prefix. The optional reply-AI HTTP call points only to `reply-ai-staging.invalid`; it is non-routable until a real isolated endpoint is independently approved.
+- Exact-head CI on documentation head `270b6378f51e75b9f4be28b3a9ab786fa132ccc2`: all nine PR-triggered workflows completed successfully. Run IDs: 45540290776, 45540290771, 45540290999, 45540290828, 45540290744, 45540291031, 45540290740, 45540290739 and 45540290752. Shopify deployment was skipped.
+
+These checks strengthen offline graph and SQL-map consistency evidence only. They do not prove runtime n8n import/execution, real isolated database credentials, network-denied egress, or the complete synthetic event-to-ledger lifecycle. The PR remains NO-GO for merge/deployment; production remains untouched.
