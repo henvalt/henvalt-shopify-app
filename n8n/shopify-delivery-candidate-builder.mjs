@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 
 const CANDIDATE_ID = "00000000-0000-4000-8000-999999999996";
+const REQUIRED_ACTIVE_VERSION = "621ae6ce-a006-4fed-a70e-acf774c360fb";
 const REMOVED_ONE_OFF_NODES = [
   "One-Off Test Email Trigger",
   "Prepare One-Off Test Delivery",
@@ -17,9 +18,12 @@ function replaceOne(source, from, to, label) {
   return source.replace(from, to);
 }
 
-export function buildDeliveryCandidate(source) {
+export function buildDeliveryCandidate(source, sourceVersionId) {
   if (!source || source.id !== "CvVyybGJZSnklxiZ" || !Array.isArray(source.nodes) || source.nodes.length !== 62) {
     throw new Error("Delivery source does not match pinned 62-node active workflow");
+  }
+  if (sourceVersionId !== REQUIRED_ACTIVE_VERSION) {
+    throw new Error("Active delivery version drift; re-audit before building");
   }
   const workflow = JSON.parse(JSON.stringify(source));
   workflow.id = CANDIDATE_ID;
@@ -249,7 +253,8 @@ export function buildDeliveryCandidate(source) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const fixture = JSON.parse(readFileSync("n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json", "utf8"));
-  const result = buildDeliveryCandidate(fixture.workflow);
+  if (fixture.source?.active_version_id !== REQUIRED_ACTIVE_VERSION) throw new Error("Delivery fixture version drift; refresh the read-only snapshot");
+  const result = buildDeliveryCandidate(fixture.workflow, fixture.source.active_version_id);
   writeFileSync("n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json", JSON.stringify(result.workflow, null, 2) + "\n");
   process.stdout.write(JSON.stringify(result.audit) + "\n");
 }
