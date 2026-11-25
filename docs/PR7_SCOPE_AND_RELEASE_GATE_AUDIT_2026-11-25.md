@@ -269,3 +269,32 @@ Direct JSON inspection confirmed for all four exports:
 ### Release decision
 
 **NO-GO remains.** The missing isolated Supabase/n8n environment is a hard blocker; the quoted branch cost is nonzero and no paid resource was created. Full-schema compatibility, real workflow import/execution, independently enforced provider-egress denial, retention/redaction evidence, fresh Shopify event-to-ledger acceptance, legacy billing route disposition, and explicit owner approval remain open. Production database, Edge Functions, Cloudflare Workers, active n8n workflows, Shopify release, provider credentials, emails and billing charges remain untouched.
+
+
+## Seventh-pass candidate billing cancellation/egress audit — 2026-11-25
+
+### New candidate-only release blocker: no final billing authorization boundary
+
+Read the candidate Shopify usage-billing handler, its test suite, and migrations 014–016. The current candidate sequence is:
+
+1. `control_plane_claim_billing_usage` locks and checks the active billing account, then returns a claim envelope.
+2. The Edge Function separately calls `get_shopify_access_token_for_control_plane`.
+3. It then directly calls Shopify `appUsageRecordCreate`.
+4. It records the provider result locally.
+
+Migration `202611220015_billing_claim_subscription_lock.sql` explicitly says the billing-account row lock serializes the *claim decision* against cancellation, but does not make the later remote Shopify mutation atomic with cancellation. The token RPC only checks that the Shopify connection is active, not that the billing account is still active or the claimed charge remains authorized. There is no second billing-specific authorization/egress RPC between token retrieval and the Shopify mutation.
+
+The existing `tests/shopify-usage-billing-worker.test.mjs` verifies claim-before-token ordering, test-mode refusal, idempotency, ambiguous provider outcomes and reconciliation. It does not simulate subscription cancellation after claim but before Shopify egress. The controlled-release runbook's cancellation matrix requires cancellation to be tested between claim, authorization and final egress, so the current handler/test contract does not yet meet that acceptance requirement.
+
+**Disposition:** treat this as an unresolved candidate safety gap, not a confirmed production defect. Before even enabling the test-mode billing candidate in isolated staging, define the billing point-of-no-return and add a final server-side authorization step immediately before provider egress. It must revalidate tenant/shop binding, active subscription, test-mode state, charge identity/state, attempt and idempotency key; persist an auditable one-time authorization/lease; and define how cancellation interacts with already-authorized in-flight requests. Add race tests for cancellation before final authorization, cancellation after authorization, duplicate authorization and stale/replayed authorization. The acceptance contract must distinguish a denied pre-egress cancellation from an already-authorized in-flight request rather than claiming a distributed transaction across Postgres and Shopify.
+
+### Current production boundary rechecked
+
+A fresh read-only production inventory found:
+
+- `billing_accounts`: one `PENDING`, `test_mode=true` account; zero ACTIVE billing accounts.
+- Production Edge Function inventory does **not** contain `henvalt-shopify-usage-billing` or `henvalt-billing-reconciliation`.
+- Production still has the older legacy control-plane claim/result RPC definitions. The candidate claim response's required `testMode=true` assertion therefore fails closed against that old schema if the candidate handler were accidentally pointed at production.
+- No billing handler, migration, Edge Function, Shopify charge, or production state was changed during this inspection.
+
+This confirms the cancellation/egress issue is confined to the un-deployed candidate design at present. It is nevertheless a release blocker because the candidate must be correct before any isolated test-mode charge is attempted.
