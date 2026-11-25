@@ -203,7 +203,7 @@ function buildNodes(manifest, normalizerSource) {
 export function buildRecoveryCandidate(source, manifest, normalizerSource) {
   if (!source || !Array.isArray(source.nodes) || !source.connections) throw new Error("Invalid source workflow");
   if (source.id !== manifest.target.workflow_id || source.nodes.length !== manifest.target.baseline_node_count) throw new Error("Source workflow does not match pinned recovery baseline");
-  if (source.activeVersionId && source.activeVersionId !== manifest.target.inspected_active_version) throw new Error("Active recovery version mismatch");
+  if (source.activeVersionId !== manifest.target.inspected_active_version) throw new Error("Active recovery version mismatch; re-audit before building");
   if (typeof normalizerSource !== "string" || !normalizerSource.includes('normalizeShopifyReplayClaim')) throw new Error("Missing inline replay claim normalizer");
   const workflow = JSON.parse(JSON.stringify(source));
   workflow.id = CANDIDATE_ID;
