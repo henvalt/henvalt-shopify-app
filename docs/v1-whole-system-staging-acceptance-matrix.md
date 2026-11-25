@@ -94,7 +94,7 @@
 | BILL-03 | Uninstall/cancel | Sending and billing entitlements stop; retained records follow documented policy |
 | BILL-04 | Refund fee credit | Negative confirmed adjustment fees offset later positive Shopify usage charges exactly once; partial credits reduce charges, full credits void them, and retries preserve the original net amount |
 | BILL-05 | Adjustment fee measurement | A negative fee measurement is created only when the original confirmed recovery has a positive measured fee; unmeasured recoveries cannot generate future credits |
-| BILL-06 | No-send billing acceptance | Measure fees from confirmed ledger rows only; do not create a usage charge or invoke `appUsageRecordCreate`; verify the billing worker default-deny flag and outbound network deny |
+| BILL-06 | No-send billing acceptance | Measure fees from confirmed ledger rows only; do not create a `billing_usage_charges` row or invoke `appUsageRecordCreate`; verify the billing worker default-deny flag and outbound network deny for MailerSend and Shopify Admin GraphQL |
 
 ## Privacy, retention and operations
 | ID | Test | Expected evidence |
