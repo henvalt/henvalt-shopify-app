@@ -301,7 +301,7 @@ const deliveryFixture = JSON.parse(readFileSync(
 ));
 
 test("delivery candidate propagates the exact recorded attempt and trusted pre-provider marker into recovery retry classifier", () => {
-  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow, deliveryFixture.source.active_version_id);
   const { workflow: recovery } = buildRecoveryCandidate(
     recoveryFixture.workflow,
     replayManifest,
@@ -384,7 +384,7 @@ test("recovery retry payload carries exact job lease identity through delivery n
     replayManifest,
     replayNormalizer,
   );
-  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow, deliveryFixture.source.active_version_id);
   const nodeCode = (workflow, name) => workflow.nodes.find((node) => node.name === name).parameters.jsCode;
   const jobId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const tenantId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
@@ -442,7 +442,7 @@ test("recovery retry payload carries exact job lease identity through delivery n
 
 
 test("retry job claim loss stops before result persistence and leaves recovery intervention untouched", () => {
-  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow, deliveryFixture.source.active_version_id);
   const { workflow: recovery } = buildRecoveryCandidate(
     recoveryFixture.workflow,
     replayManifest,
@@ -495,7 +495,7 @@ test("retry job claim loss stops before result persistence and leaves recovery i
 
 
 test("authorization-time retry lease loss is propagated without claiming or recording a delivery", () => {
-  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow);
+  const { workflow: delivery } = buildDeliveryCandidate(deliveryFixture.workflow, deliveryFixture.source.active_version_id);
   const { workflow: recovery } = buildRecoveryCandidate(
     recoveryFixture.workflow,
     replayManifest,
