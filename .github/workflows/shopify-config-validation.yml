@@ -48,6 +48,8 @@ jobs:
           assert "fetch(" in source, "Missing collector delivery"
           print("HENVALT Shopify app configuration and Pixel source checks passed.")
           PY
+      - name: Run OAuth redirect and webhook contract tests
+        run: node --test tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-webhook-contract.test.mjs
 
   billing-lock-safety:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
