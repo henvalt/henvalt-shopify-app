@@ -28,6 +28,29 @@ test("processed duplicate is acknowledged without requiring a new replay job", (
   assert.equal(result.body.status, "duplicate");
 });
 
+test("already-processing duplicate is acknowledged only with its durable active replay job", () => {
+  const valid = classifyShopifyIngressAck(accepted({
+    result_status: "already_processing",
+    processing_status: "PROCESSING",
+    replay_job_status: "RUNNING",
+  }));
+  assert.equal(valid.ok, true);
+  assert.equal(valid.http_status, 200);
+  assert.equal(valid.body.status, "already_processing");
+  for (const overrides of [
+    { replay_job_id: null },
+    { replay_job_status: "DEAD_LETTER" },
+    { processing_status: "FAILED" },
+  ]) {
+    const invalid = classifyShopifyIngressAck(accepted({
+      result_status: "already_processing",
+      ...overrides,
+    }));
+    assert.equal(invalid.ok, false);
+    assert.equal(invalid.http_status, 503);
+  }
+});
+
 test("missing webhook ID, replay ID or active state never becomes HTTP 200", () => {
   for (const overrides of [
     { webhook_id: null },
