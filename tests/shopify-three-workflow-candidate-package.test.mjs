@@ -53,8 +53,10 @@ test("paid-order attribution is stopped, posted to the ledger and measured befor
   assert.equal(ingest.connections["Is Order Cancelled?"].main[1][0].node, "Evaluate Order Attribution");
   assert.equal(ingest.connections["Evaluate Order Attribution"].main[0][0].node, "Stop Recovery After Order");
   assert.equal(ingest.connections["Stop Recovery After Order"].main[0][0].node, "Post Recovery To Ledger");
-  assert.match(nodes.get("Post Recovery To Ledger").parameters.url,
-    /https:\/\/supabase-staging\.invalid\/rest\/v1\/rpc\/post_recovery_to_ledger_and_measure_billing/);
+  const billingUrl = nodes.get("Post Recovery To Ledger").parameters.url;
+  assert.match(billingUrl, /https:\/\/supabase-staging\.invalid\/rest\/v1\/rpc\//);
+  assert.match(billingUrl, /post_recovery_to_ledger_and_measure_billing_fenced/);
+  assert.match(billingUrl, /post_recovery_to_ledger_and_measure_billing/);
   assert.equal(ingest.connections["Post Recovery To Ledger"].main[0][0].node, "Process Shopify Order Edit Adjustment");
   assert.equal(ingest.connections["Process Shopify Order Edit Adjustment"].main[0][0].node, "Mark Webhook Processed");
 });
