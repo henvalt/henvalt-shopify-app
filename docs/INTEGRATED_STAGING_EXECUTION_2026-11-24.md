@@ -90,6 +90,8 @@ The tool requires explicit metadata for the staging Supabase ref, HTTPS n8n URL 
 
 Environment variables are intentionally not documented as values here; populate them from verified staging inventory only. Never paste production secrets.
 
+The staging Cloudflare Worker must expose `POST /shopify/webhooks` and set its `N8N_INGEST_URL` to the exact staging n8n webhook URL ending in `/webhook/henvalt/ingest-candidate-no-send`. The Worker must verify Shopify HMAC over the raw bytes, forward only the allowlisted Shopify headers, and return HTTP 200 only for the durable acknowledgement envelope containing a webhook UUID and active replay-job UUID/status. Generic 2xx, 204, malformed acknowledgement, or missing replay job must remain retryable 503 responses. The Supabase ingress RPC independently verifies the signed raw body and atomically persists the webhook plus replay job.
+
 
 ## Live staging-boundary recheck — 2026-11-25
 
