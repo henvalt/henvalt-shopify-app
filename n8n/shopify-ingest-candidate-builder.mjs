@@ -479,8 +479,8 @@ function buildCandidate(input, map, activeVersionId) {
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
-  const [inputPath, outputPath, activeVersionId = REQUIRED_ACTIVE_VERSION] = process.argv.slice(2);
-  if (!inputPath || !outputPath) throw new Error("Usage: node n8n/shopify-ingest-candidate-builder.mjs <workflow-export.json> <candidate.json> [activeVersionId]");
+  const [inputPath, outputPath, activeVersionId] = process.argv.slice(2);
+  if (!inputPath || !outputPath) throw new Error("Usage: node n8n/shopify-ingest-candidate-builder.mjs <workflow-export.json> <candidate.json> <activeVersionId>");
   const input = JSON.parse(readFileSync(inputPath,"utf8"));
   const map = JSON.parse(readFileSync(MAP_PATH,"utf8"));
   const result = buildCandidate(input,map,activeVersionId);
