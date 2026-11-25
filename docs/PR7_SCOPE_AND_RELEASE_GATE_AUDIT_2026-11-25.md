@@ -152,3 +152,37 @@ The two dominant unresolved gates remain:
 2. Staging isolation is not independently evidenced. The current preflight trusts operator-supplied metadata strings and does not inspect actual Supabase project identity, n8n workflow activation, Shopify development-store identity or network egress controls.
 
 No production SQL, migration, Edge Function, Cloudflare Worker, n8n workflow, Shopify release, email, billing charge or paid resource was changed or executed during this third-pass review.
+
+
+## Fourth-pass candidate artifact and ingress-result audit — 2026-11-25
+
+### Generated workflow artifacts inspected
+
+Inspected the actual JSON exports from successful HENVALT safety workflow run **45539824000**, produced on code head `344b572ded1fff499b342fc69ed0ba1ce5892099`:
+
+| Candidate | Artifact ID | SHA-256 digest | Nodes |
+|---|---:|---|---:|
+| `HENVALT_INGEST_CANDIDATE_NO_SEND` | 14988831874 | `aa2be6df8c101386d66c9760511c9e456365607731a689666413499d7ee08948` | 71 |
+| `HENVALT_RECOVERY_CANDIDATE_NO_SEND` | 14987868529 | `dd2b33c3d8a914536bcb3fa664a6e052f74da719264762cca2e46ef445cea7a9` | 74 |
+| `HENVALT_DELIVERY_CANDIDATE_NO_SEND` | 14987973271 | `038ada2b17c9969d2f412be858dad3db46ce8108fdcfb42fe1bb83462332f13e` | 54 |
+
+Direct inspection of all three JSON artifacts confirmed:
+- Every candidate is inactive and `availableInMCP=false`.
+- No node has a bound credential reference or live webhook ID.
+- No production Supabase hostname remains in any export.
+- Supabase endpoints use `supabase-staging.invalid`; the optional reply-AI endpoint uses `reply-ai-staging.invalid`. These are deliberate non-routable placeholders, not functioning staging services.
+- Recovery's Execute Workflow nodes target the exact generated INGEST candidate ID `00000000-0000-4000-8000-999999999999` and DELIVERY candidate ID `00000000-0000-4000-8000-999999999996`.
+- DELIVERY's outbound provider node is replaced by the deterministic `No-Send Provider Stub`, which returns HTTP 503 with `NO_SEND_CANDIDATE`. Its MailerSend webhook verification/inbound handlers remain present; no outbound MailerSend API host or provider-send node was found.
+- These exports are offline artifacts, not imported or executed workflows. Their staging URLs cannot be used until replaced with independently verified isolated endpoints and isolated credentials.
+
+### Additional regression tests added
+
+- Commit `344b572ded1fff499b342fc69ed0ba1ce5892099` adds an INGEST builder test asserting that internal replay results terminate as subworkflow outputs and do not invoke the public webhook responder.
+- Commit `b2d072a92940113658dc868f83304ba51bdf7873` adds a full-export test asserting every Supabase endpoint in the generated INGEST candidate uses the non-routable staging placeholder and that the candidate remains inactive, unavailable in MCP, credential-free and webhook-ID-free.
+- Exact-head CI on `b2d072a92940113658dc868f83304ba51bdf7873`: all nine PR-triggered workflows completed successfully. Run IDs: 45540063769, 45540063847, 45540063839, 45540063805, 45540063861, 45540063870, 45540063865, 45540063747 and 45540063748. Shopify deployment was skipped.
+
+### Interpretation and remaining boundary
+
+The generated JSON artifacts now provide stronger evidence that the offline candidates are isolated from production endpoints and that the three workflow references line up. This does **not** establish that the imports are accepted by the target n8n runtime, that credentials are correctly rebound to a staging tenant, or that a synthetic Shopify event completes through the actual database and worker graph. No staging instance was imported or executed.
+
+The PR remains draft and unmerged. The independent staging-identity/network-egress proof, full-schema migration compatibility, workflow runtime acceptance, execution-data retention/redaction and owner approval gates remain open. Production remains untouched.
