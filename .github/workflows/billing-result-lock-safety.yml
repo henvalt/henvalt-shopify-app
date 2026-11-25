@@ -4,8 +4,6 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
-      - "supabase/migrations/202611250001_billing_egress_final_authorization.sql"
-      - "tests/billing-egress-final-authorization-postgres-acceptance.sql"
       - "supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql"
       - "supabase/migrations/202611220015_billing_claim_subscription_lock.sql"
       - "supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql"
@@ -17,18 +15,24 @@ on:
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/shopify-usage-billing-worker.test.mjs"
       - "n8n/shopify-recovery-billing-candidate-builder.mjs"
+      - ".github/workflows/billing-result-lock-safety.yml"
   push:
     branches:
       - "work/48h-system-readiness-2026-11-21"
     paths:
       - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
       - "supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql"
+      - "supabase/migrations/202611220015_billing_claim_subscription_lock.sql"
+      - "supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql"
+      - "supabase/migrations/202611250001_billing_egress_final_authorization.sql"
+      - "tests/billing-egress-final-authorization-postgres-acceptance.sql"
       - "tests/billing-refund-credit-offsets.test.mjs"
       - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
       - "tests/billing-refund-credit-concurrency-postgres.sh"
       - "tests/provider-send-interlock-postgres-bootstrap.sql"
       - "tests/shopify-usage-billing-worker.test.mjs"
       - "n8n/shopify-recovery-billing-candidate-builder.mjs"
+      - ".github/workflows/billing-result-lock-safety.yml"
   workflow_dispatch:
 
 jobs:
