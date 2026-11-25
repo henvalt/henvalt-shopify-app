@@ -14,6 +14,8 @@ on:
     paths:
       - "tests/integrated-staging-readiness.test.mjs"
       - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - "scripts/staging-identity-preflight.mjs"
+      - "tests/staging-identity-preflight.test.mjs"
       - ".github/workflows/integrated-staging-readiness.yml"
 
 permissions:
