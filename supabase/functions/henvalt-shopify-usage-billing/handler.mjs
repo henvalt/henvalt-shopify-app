@@ -239,6 +239,8 @@ export function createShopifyUsageBillingHandler({
         p_charge_id: chargeId,
         p_idempotency_key: idempotencyKey,
         p_subscription_line_item_id: lineItem,
+        p_amount: String(amount),
+        p_currency: currency,
         p_attempt: attempt,
       });
     } catch (error) {
