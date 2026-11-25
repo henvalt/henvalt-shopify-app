@@ -39,6 +39,19 @@ test("preflight rejects duplicate workflow IDs", () => {
   assert.match(result.stderr, /three distinct identifiers/);
 });
 
+test("preflight rejects each live production workflow ID even when the three IDs are distinct", () => {
+  const productionIds = [
+    ["HENVALT_STAGE_INGEST_WORKFLOW_ID", "VTpfGKNtu1CSQ4Rv"],
+    ["HENVALT_STAGE_RECOVERY_WORKFLOW_ID", "3GEDoeCA4paXTaDF"],
+    ["HENVALT_STAGE_DELIVERY_WORKFLOW_ID", "CvVyybGJZSnklxiZ"],
+  ];
+  for (const [key, id] of productionIds) {
+    const result = run({ ...valid, [key]: id });
+    assert.notEqual(result.status, 0, key + " must not accept a production workflow ID");
+    assert.match(result.stderr, new RegExp(key + " matches a live production workflow ID"));
+  }
+});
+
 test("preflight rejects missing network-deny proof or no-send flag", () => {
   const result = run({ ...valid, HENVALT_STAGE_NETWORK_EGRESS_DENIED: "false", HENVALT_STAGE_NO_SEND: "false" });
   assert.notEqual(result.status, 0);
