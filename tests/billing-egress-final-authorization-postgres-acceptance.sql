@@ -43,7 +43,13 @@ INSERT INTO henvalt.billing_usage_charges(
   'SHOPIFY','henvalt-egress-authorization-test',7.25,'USD','PENDING',1,now()
 )
 ON CONFLICT (id) DO UPDATE
-SET status='PENDING',attempt_count=1,idempotency_key='henvalt-egress-authorization-test';
+SET status='PENDING',attempt_count=1,idempotency_key='henvalt-egress-authorization-test',
+    egress_authorized_at=NULL,egress_authorized_attempt=NULL;
+
+DELETE FROM henvalt.audit_log
+ WHERE tenant_id='abababab-abab-4bab-8bab-abababababab'
+   AND event_name='BILLING_USAGE_EGRESS_AUTHORIZED'
+   AND entity_id='babababa-baba-4bab-8bab-babababababa';
 
 DO $egress_authorization$
 DECLARE
