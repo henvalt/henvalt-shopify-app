@@ -1,4 +1,8 @@
 import test from "node:test";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildCandidate } from "../n8n/shopify-ingest-candidate-builder.mjs";
@@ -7,6 +11,26 @@ const source = JSON.parse(readFileSync("n8n/fixtures/henvalt-ingest-active-2026-
 const map = JSON.parse(readFileSync("n8n/shopify-ingest-replay-write-map.json","utf8"));
 const pinned = "6368d539-708f-494a-8be8-b9601d0e8607";
 const findNode = (w,name) => w.nodes.find(n=>n.name===name);
+
+test("INGEST CLI never substitutes the pinned version when the operator omits it", () => {
+  const dir = mkdtempSync(join(tmpdir(), "henvalt-ingest-cli-"));
+  try {
+    const sourcePath = join(dir, "source.json");
+    const outputPath = join(dir, "candidate.json");
+    writeFileSync(sourcePath, JSON.stringify(source));
+    const builderPath = resolve("n8n/shopify-ingest-candidate-builder.mjs");
+    const omitted = spawnSync(process.execPath, [builderPath, sourcePath, outputPath], { encoding: "utf8" });
+    assert.notEqual(omitted.status, 0, "missing active version must fail");
+    assert.match(omitted.stderr, /Active workflow version drift/);
+    assert.equal(existsSync(outputPath), false, "failed build must not leave a candidate artifact");
+    const stale = spawnSync(process.execPath, [builderPath, sourcePath, outputPath, "stale-version"], { encoding: "utf8" });
+    assert.notEqual(stale.status, 0, "stale active version must fail");
+    assert.match(stale.stderr, /Active workflow version drift/);
+    assert.equal(existsSync(outputPath), false, "stale build must not leave a candidate artifact");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("INGEST builder rejects missing or stale active-version evidence", () => {
   assert.throws(() => buildCandidate(source,map), /Active workflow version drift/);
