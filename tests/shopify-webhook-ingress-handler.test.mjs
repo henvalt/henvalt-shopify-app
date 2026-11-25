@@ -300,7 +300,7 @@ test("one signed Shopify delivery keeps the same identity from normalization thr
   assert.equal(replayNormalized.event.event_type, "orders/paid");
 });
 
-test("the cross-component replay handoff rejects missing delivery identity, tenant evidence and expired leases", () => {
+test("the cross-component replay handoff rejects missing delivery identity, HMAC attestation and expired leases", () => {
   const invalidPublic = normalizeShopify(
     {
       headers: {
