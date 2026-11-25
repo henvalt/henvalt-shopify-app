@@ -24,7 +24,7 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
   const webhookId = request.headers.get("x-shopify-webhook-id") || "";
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) || !topic || !hmac || !webhookId) return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
+  if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop) || !topic || !hmac || !webhookId) return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
 
   const contentLength = Number(request.headers.get("content-length") || "0");
   if (Number.isFinite(contentLength) && contentLength > 1_000_000) return Response.json({ error: "body_too_large" }, { status: 413 });
@@ -36,11 +36,28 @@ export async function handleRequest(request, env, fetchImpl = fetch) {
   const expected = btoa(String.fromCharCode(...sig));
   if (!constantTimeEqual(expected, hmac)) return Response.json({ error: "invalid_hmac" }, { status: 401 });
 
+  // Forward only Shopify's signed delivery envelope. Never relay caller-controlled
+  // Authorization, Cookie, Origin, Host, proxy, or arbitrary custom headers to n8n.
+  const forwardedHeaders = new Headers();
+  for (const name of [
+    "content-type",
+    "x-shopify-hmac-sha256",
+    "x-shopify-shop-domain",
+    "x-shopify-topic",
+    "x-shopify-webhook-id",
+    "x-shopify-event-id",
+    "x-shopify-api-version",
+    "x-shopify-triggered-at",
+  ]) {
+    const value = request.headers.get(name);
+    if (value !== null) forwardedHeaders.set(name, value);
+  }
+
   let upstream;
   try {
     upstream = await fetchImpl(upstreamUrl, {
       method: "POST",
-      headers: request.headers,
+      headers: forwardedHeaders,
       body: rawBytes,
       redirect: "manual",
       signal: AbortSignal.timeout(SHOPIFY_WEBHOOK_UPSTREAM_TIMEOUT_MS),
