@@ -86,7 +86,7 @@ Before any staging mutation, run:
 node scripts/staging-identity-preflight.mjs
 ```
 
-The tool requires explicit metadata for the staging Supabase ref, HTTPS n8n URL and three distinct workflow IDs, Shopify development-store confirmation, provider stub mode, network-denial proof, no-send flag, and inactive-workflow confirmation. It rejects the known production Supabase project ref and known production n8n hostname. It makes no network requests and does not access credentials. Passing it is identity/safety preflight only, not integrated acceptance.
+The tool requires explicit metadata for the staging Supabase ref, HTTPS n8n URL and three distinct workflow IDs, Shopify development-store confirmation, the exact staging Supabase OAuth callback URL, a staging HTTPS `/shopify/webhooks` ingress URL, provider stub mode, network-denial proof, no-send flag, and inactive-workflow confirmation. It rejects the live production Supabase project ref, all three inspected live production n8n workflow IDs, the known production n8n hostname, and the live production Cloudflare webhook Worker hostname. It verifies that the OAuth callback hostname is exactly `<staging-project-ref>.supabase.co` and that its callback path is exact. It makes no network requests and does not access credentials. Passing it is identity/safety preflight only, not integrated acceptance.
 
 Environment variables are intentionally not documented as values here; populate them from verified staging inventory only. Never paste production secrets.
 
