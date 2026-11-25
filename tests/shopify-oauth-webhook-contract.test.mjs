@@ -27,7 +27,7 @@ test("webhook verification requires exactly one subscription at the intended ing
     "https://staging-ingress.invalid/shopify/webhooks",
   ), { verified: true, id: "gid://shopify/WebhookSubscription/1" });
   assert.deepEqual(verifyWebhookDestination([], "ORDERS_CREATE", "https://staging-ingress.invalid/shopify/webhooks"),
-    { verified: false, reason: "WEBHOOK_SUBSCRIPTION_MISSING" });
+    { verified: false, reason: "WEBHOOK_SUBSCRIPTION_MISSING", id: null });
 });
 
 test("webhook verification rejects stale destinations and duplicate topic subscriptions", () => {
@@ -35,10 +35,10 @@ test("webhook verification rejects stale destinations and duplicate topic subscr
     [{ id: "old", topic: "ORDERS_CREATE", uri: "https://production-ingress.invalid/shopify/webhooks" }],
     "ORDERS_CREATE",
     "https://staging-ingress.invalid/shopify/webhooks",
-  ), { verified: false, reason: "WEBHOOK_DESTINATION_MISMATCH" });
+  ), { verified: false, reason: "WEBHOOK_DESTINATION_MISMATCH", id: null });
   assert.deepEqual(verifyWebhookDestination([
     { id: "old", topic: "ORDERS_CREATE", uri: "https://production-ingress.invalid/shopify/webhooks" },
     { id: "new", topic: "ORDERS_CREATE", uri: "https://staging-ingress.invalid/shopify/webhooks" },
   ], "ORDERS_CREATE", "https://staging-ingress.invalid/shopify/webhooks"),
-  { verified: false, reason: "DUPLICATE_WEBHOOK_SUBSCRIPTIONS" });
+  { verified: false, reason: "DUPLICATE_WEBHOOK_SUBSCRIPTIONS", id: null });
 });
