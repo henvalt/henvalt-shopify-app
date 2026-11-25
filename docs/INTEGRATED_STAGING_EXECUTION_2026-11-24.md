@@ -89,3 +89,16 @@ node scripts/staging-identity-preflight.mjs
 The tool requires explicit metadata for the staging Supabase ref, HTTPS n8n URL and three distinct workflow IDs, Shopify development-store confirmation, provider stub mode, network-denial proof, no-send flag, and inactive-workflow confirmation. It rejects the known production Supabase project ref and known production n8n hostname. It makes no network requests and does not access credentials. Passing it is identity/safety preflight only, not integrated acceptance.
 
 Environment variables are intentionally not documented as values here; populate them from verified staging inventory only. Never paste production secrets.
+
+
+## Live staging-boundary recheck — 2026-11-25
+
+A fresh read-only inspection of the connected Supabase and n8n accounts was performed after the candidate CI work:
+
+- Supabase currently exposes four HENVALT-related projects: one active healthy project and three inactive projects. The active project is the existing HENVALT production project; none of the inactive projects has been independently verified as an isolated staging target. No paused project was restored and no project was created.
+- n8n workflow search returned exactly the three existing HENVALT workflows: INGEST (51 nodes), RECOVERY (46 nodes), and DELIVERY (62 nodes). All three are active, and their active version IDs match their current published versions. A separate staging workflow search returned zero results.
+- The live INGEST workflow includes direct calls to the production Supabase host and has live webhook IDs/credentials. The active workflows were inspected read-only only; none was executed, changed, unpublished, or republished.
+
+**Result: staging still cannot safely proceed.** The existing inactive Supabase projects cannot be treated as staging based on their names or paused state; the current n8n account has no separate staging workflow set. Reusing the active project or active workflows would violate the isolation requirement. Restoring or creating infrastructure could incur charges, so no such action was taken.
+
+The release gate therefore remains **NO-GO** pending a verified, cost-approved isolated Supabase project and a separate n8n staging workspace/project with outbound provider egress blocked.
