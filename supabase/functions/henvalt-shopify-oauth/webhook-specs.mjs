@@ -18,5 +18,6 @@ export function verifyWebhookDestination(nodes, topic, expectedUri) {
   if (matches.length === 0) return { verified: false, reason: "WEBHOOK_SUBSCRIPTION_MISSING", id: null };
   if (matches.length > 1) return { verified: false, reason: "DUPLICATE_WEBHOOK_SUBSCRIPTIONS", id: null };
   if (matches[0]?.uri !== expectedUri) return { verified: false, reason: "WEBHOOK_DESTINATION_MISMATCH", id: null };
-  if (typeof matches[0]?.id !== "string" || !matches[0].id) return { verified: false, reason: "WEBHOOK_SUBSCRIPTION_ID_MISSING", id: null };\n  return { verified: true, id: matches[0].id };
+  if (typeof matches[0]?.id !== "string" || !matches[0].id) return { verified: false, reason: "WEBHOOK_SUBSCRIPTION_ID_MISSING", id: null };
+  return { verified: true, id: matches[0].id };
 }
