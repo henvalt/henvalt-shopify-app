@@ -179,6 +179,12 @@ export function createShopifyUsageBillingHandler({
     const shop = validShop(body?.shop) ? body.shop.trim().toLowerCase() : "";
     if (!shop) return json(400, { error: "valid_shop_required" });
 
+    // Shopify app-usage creation is a separate external egress boundary from email delivery.
+    // Default-deny it unless an operator explicitly enables billing submission.
+    if (env.HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED !== "true") {
+      return json(409, { error: "billing_egress_disabled", retryable: false });
+    }
+
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
       return json(503, { error: "billing_worker_not_configured" });
     }
