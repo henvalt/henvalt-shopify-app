@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { webcrypto } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { classifyShopifyIngressAck } from "../n8n/shopify-ingest-ack-classifier-candidate.mjs";
+import { buildShopifyReplayEnvelope } from "../n8n/shopify-ingest-replay-envelope-candidate.mjs";
 
 globalThis.crypto ??= webcrypto;
+const normalizerSource = readFileSync(new URL("../n8n/shopify-ingest-normalizer-candidate.js", import.meta.url), "utf8");
+const normalizeShopify = new Function("$json", "$input", "$execution", normalizerSource);
 const workerSource = readFileSync(new URL("../cloudflare/worker.js", import.meta.url), "utf8");
 const workerModuleUrl = "data:text/javascript;base64," + Buffer.from(workerSource).toString("base64");
 const { handleRequest, SHOPIFY_WEBHOOK_UPSTREAM_TIMEOUT_MS } = await import(workerModuleUrl);
@@ -210,4 +213,138 @@ test("a processed duplicate is acknowledged only with a durable webhook identity
     status: "duplicate",
     webhook_id: "11111111-1111-4111-8111-111111111111",
   });
+});
+
+
+test("one signed Shopify delivery keeps the same identity from normalization through durable acknowledgement and replay", () => {
+  const shop = "synthetic-shop.myshopify.com";
+  const deliveryId = "synthetic-delivery-2026-001";
+  const eventCorrelationId = "shared-event-correlation";
+  const payload = {
+    id: "order-123",
+    event_id: "body-controlled-event-id",
+    event_type: "orders/cancelled",
+    idempotency_key: "body-controlled-idempotency-key",
+    total_price: "42.00",
+  };
+  const headers = {
+    "x-shopify-shop-domain": shop,
+    "x-shopify-topic": "orders/paid",
+    "x-shopify-webhook-id": deliveryId,
+    "x-shopify-event-id": eventCorrelationId,
+  };
+  const normalized = normalizeShopify(
+    { headers, body: payload, query: {} },
+    { item: { binary: {} } },
+    { id: "synthetic-ingress-execution" },
+  );
+
+  assert.equal(normalized.__valid, true);
+  assert.equal(normalized.event.event_id, deliveryId);
+  assert.equal(normalized.event.event_type, "orders/paid");
+  assert.equal(normalized.ingest.source_event_id, deliveryId);
+  assert.equal(normalized.ingest.idempotency_key, "shopify:" + shop + ":" + deliveryId);
+  assert.equal(normalized.ingest.metadata.shopify_event_id, eventCorrelationId);
+
+  const webhookId = "11111111-1111-4111-8111-111111111111";
+  const replayJobId = "22222222-2222-4222-8222-222222222222";
+  const acknowledgement = classifyShopifyIngressAck({
+    http_status: 200,
+    result_status: "accepted",
+    webhook_id: webhookId,
+    replay_job_id: replayJobId,
+    replay_job_status: "QUEUED",
+    processing_status: "PROCESSING",
+  });
+  assert.equal(acknowledgement.ok, true);
+  assert.equal(acknowledgement.terminate_ingress, true);
+  assert.equal(acknowledgement.http_status, 200);
+  assert.equal(acknowledgement.body.replay_job_id, replayJobId);
+
+  const claim = {
+    job_id: replayJobId,
+    worker_id: "synthetic-recovery-worker",
+    lease_id: "33333333-3333-4333-8333-333333333333",
+  };
+  const loaded = {
+    job_id: replayJobId,
+    webhook_id: webhookId,
+    tenant_id: "44444444-4444-4444-8444-444444444444",
+    source_event_id: normalized.ingest.source_event_id,
+    topic: normalized.ingest.topic,
+    payload: normalized.ingest.payload,
+    metadata: {
+      ingress_hmac_verified: true,
+      shop_domain: shop,
+      shopify_webhook_id: deliveryId,
+    },
+    lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+    processing_status: "PROCESSING",
+    webhook_processed: false,
+    correlation_id: "55555555-5555-4555-8555-555555555555",
+  };
+  const replay = buildShopifyReplayEnvelope(claim, loaded);
+  assert.equal(replay.ok, true, replay.reason || "");
+  assert.equal(replay.envelope.headers["x-shopify-webhook-id"], deliveryId);
+  assert.equal(replay.envelope.body.event_id, deliveryId);
+
+  const replayNormalized = normalizeShopify(
+    replay.envelope,
+    { item: { binary: {} } },
+    { id: "synthetic-replay-execution" },
+  );
+  assert.equal(replayNormalized.__valid, true);
+  assert.equal(replayNormalized.event.event_id, deliveryId);
+  assert.equal(replayNormalized.ingest.source_event_id, deliveryId);
+  assert.equal(replayNormalized.ingest.idempotency_key, normalized.ingest.idempotency_key);
+  assert.equal(replayNormalized.event.event_type, "orders/paid");
+});
+
+test("the cross-component replay handoff rejects missing delivery identity, tenant evidence and expired leases", () => {
+  const invalidPublic = normalizeShopify(
+    {
+      headers: {
+        "x-shopify-shop-domain": "synthetic-shop.myshopify.com",
+        "x-shopify-topic": "orders/paid",
+        "x-shopify-event-id": "correlation-only",
+      },
+      body: { id: "order-123" },
+      query: {},
+    },
+    { item: { binary: {} } },
+    { id: "synthetic-invalid-ingress" },
+  );
+  assert.equal(invalidPublic.__valid, false);
+  assert.ok(invalidPublic.__missing.includes("x-shopify-webhook-id"));
+
+  const claim = {
+    job_id: "22222222-2222-4222-8222-222222222222",
+    worker_id: "synthetic-worker",
+    lease_id: "33333333-3333-4333-8333-333333333333",
+  };
+  const loaded = {
+    job_id: claim.job_id,
+    webhook_id: "11111111-1111-4111-8111-111111111111",
+    tenant_id: "44444444-4444-4444-8444-444444444444",
+    source_event_id: "synthetic-delivery-001",
+    topic: "orders/paid",
+    payload: { id: "order-123" },
+    metadata: {
+      ingress_hmac_verified: false,
+      shop_domain: "synthetic-shop.myshopify.com",
+      shopify_webhook_id: "synthetic-delivery-001",
+    },
+    lease_expires_at: new Date(Date.now() + 60_000).toISOString(),
+    processing_status: "PROCESSING",
+    webhook_processed: false,
+  };
+  const noHmacAttestation = buildShopifyReplayEnvelope(claim, loaded);
+  assert.equal(noHmacAttestation.ok, false);
+  assert.match(noHmacAttestation.reason, /INGRESS_HMAC_NOT_ATTESTED/);
+
+  loaded.metadata.ingress_hmac_verified = true;
+  loaded.lease_expires_at = new Date(Date.now() - 1_000).toISOString();
+  const expired = buildShopifyReplayEnvelope(claim, loaded);
+  assert.equal(expired.ok, false);
+  assert.match(expired.reason, /LEASE_EXPIRED_OR_INVALID/);
 });
