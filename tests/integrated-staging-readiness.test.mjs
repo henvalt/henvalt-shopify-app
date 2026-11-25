@@ -6,7 +6,7 @@ const read = (path) => readFileSync(path, "utf8");
 const migration = read("supabase/migrations/202611240001_delivery_retry_generation_jobs.sql");
 const contract = JSON.parse(read("n8n/shopify-recovery-delivery-retry-branch-contract.json"));
 const recoveryBuilder = read("n8n/shopify-recovery-candidate-builder.mjs");
-const deliveryBuilder = read("n8n/shopify-delivery-candidate-builder.mjs");
+const deliveryBuilder = read("n8n/shopify-delivery-candidate-builder.mjs");\nconst billingWorker = read("supabase/functions/henvalt-shopify-usage-billing/handler.mjs");
 const recoveryFixture = JSON.parse(read("n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json"));
 const retryAcceptance = read("tests/delivery-generation-retry-job-acceptance.sql");
 const raceRetryWins = read("tests/delivery-generation-retry-wins-late-acceptance-race-postgres.sh");
@@ -108,5 +108,5 @@ test("staging is not inferred from CI and network denial remains mandatory", () 
   assert.match(matrix, /No isolated Supabase staging project/i);
   assert.match(matrix, /NO-GO/i);
   assert.match(matrix, /network-denied|network deny|provider stub/i);
-  assert.match(matrix, /workflow version|workflow IDs/i);
+  assert.match(matrix, /workflow version|workflow IDs/i);\n  assert.match(matrix, /HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED/);\n  assert.match(matrix, /appUsageRecordCreate/);\n  assert.match(billingWorker, /HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED !== "true"/);\n  assert.match(billingWorker, /billing_egress_disabled/);
 });
