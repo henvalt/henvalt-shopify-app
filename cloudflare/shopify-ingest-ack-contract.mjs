@@ -52,10 +52,12 @@ const response = (http, body, asyncProcessingGuaranteed = false, webhookId = nul
 const failure = (http, status, message, correlationId) =>
   response(http, { status, message, correlation_id: correlationId });
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const activeReplayJob = (row) => {
   const jobId = row?.replay_job_id;
   const status = String(row?.replay_job_status || "").toUpperCase();
-  return Boolean(jobId) && ["QUEUED", "CLAIMED", "RUNNING", "RETRY_WAIT"].includes(status);
+  return UUID_RE.test(String(jobId || "")) && UUID_RE.test(String(row?.webhook_id || "")) && ["QUEUED", "CLAIMED", "RUNNING", "RETRY_WAIT"].includes(status);
 };
 
 export function classifyIngestResponse(input, context = {}) {
@@ -71,7 +73,7 @@ export function classifyIngestResponse(input, context = {}) {
   if (code >= 200 && code < 300) {
     const raw = resp.body;
     const row = Array.isArray(raw) ? raw[0] : raw;
-    if (!row || typeof row !== "object" || !row.webhook_id) {
+    if (!row || typeof row !== "object" || !UUID_RE.test(String(row.webhook_id || ""))) {
       return failure(503, "temporarily_unavailable", "Ingest returned no durable webhook ID.", correlationId);
     }
     if (typeof row.should_process !== "boolean") {
