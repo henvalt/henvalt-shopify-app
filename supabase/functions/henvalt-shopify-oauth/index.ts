@@ -369,7 +369,7 @@ Deno.serve(async (req: Request) => {
       const webhookSpec = specs.find((item) => item.topic === result.topic);
       const verification = webhookSpec
         ? verifyWebhookDestination(finalNodes, webhookSpec.gql, webhookUri)
-        : { verified: false, reason: "WEBHOOK_SPEC_MISSING" };
+        : { verified: false, reason: "WEBHOOK_SPEC_MISSING", id: null };
       result.verified = verification.verified;
       result.ok = result.ok === true && verification.verified;
       if (verification.id) result.id = verification.id;
