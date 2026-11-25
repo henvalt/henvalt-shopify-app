@@ -33,6 +33,14 @@ test("recovery billing candidate composes from the same pinned active-version sn
   assert.equal(serialized.includes("ocyplckdojdubyrsxcxa.supabase.co"), false);
 });
 
+test("recovery token scheduler selection matches the ten-minute database claim window", () => {
+  const w = buildRecoveryCandidate(fixture.workflow, manifest, normalizer).workflow;
+  const due = w.nodes.find((n) => n.name === "Find Shopify Tokens Due");
+  assert.ok(due, "token refresh scheduler node must exist");
+  assert.match(due.parameters.query, /access_token_expires_at <= now\(\) \+ interval '10 minutes'/);
+  assert.doesNotMatch(due.parameters.query, /interval '5 minutes'/);
+});
+
 test("full recovery graph builds as a distinct inactive no-send export", () => {
   const result = buildRecoveryCandidate(fixture.workflow, manifest, normalizer);
   const w = result.workflow;
