@@ -349,3 +349,12 @@ The final billing egress PostgreSQL acceptance now also attempts authorization w
 
 ### Exact candidate head
 Code/test changes are on `3a42873820c6b5e51f025fa8689b4bd989a9dd5a`; the staging-boundary documentation update follows at `48ebb97a5f3d126da7bcbe588306f67b2d325ea5`. Exact-head CI for the latest code/test commit is running; do not infer success until all required workflows complete. PR #7 remains draft and unmerged. The overall release gate remains **NO-GO**.
+
+
+### Delivery snapshot-pin regression and correction
+
+The first run after introducing the DELIVERY source-version pin correctly rejected stale/missing version arguments, but exposed four existing retry-graph test call sites and two mutation-test call sites that had not passed the newly required version metadata. Those tests failed at the new guard before reaching their intended assertions. All six call sites now pass the fixture's inspected `source.active_version_id`; the dedicated stale/missing-version rejection test remains. The latest rerun is on `924bf379a76ac291dff8341d6bc8f522459d2d7e`; safety and billing workflows are still running, so no pass is claimed here.
+
+### PR history/review-surface recheck
+
+GitHub compare reports the current PR branch as 1,660 commits ahead and zero behind its merge base, with 247 changed files. The PR remains draft and unmerged. This is an unusually large review surface; do not merge based solely on GitHub's mergeability flag. A deliberate commit-lineage and scope review remains necessary before release approval.
