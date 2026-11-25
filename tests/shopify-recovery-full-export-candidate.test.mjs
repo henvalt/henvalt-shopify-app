@@ -9,6 +9,18 @@ const normalizer = readFileSync("n8n/shopify-replay-claim-normalizer-node-candid
 const candidateId = "00000000-0000-4000-8000-999999999997";
 const ingestCandidateId = "00000000-0000-4000-8000-999999999999";
 
+test("recovery builder rejects missing or stale active-version evidence", () => {
+  for (const activeVersionId of [undefined, null, "", "stale-version"]) {
+    const unpinned = structuredClone(fixture.workflow);
+    if (activeVersionId === undefined) delete unpinned.activeVersionId;
+    else unpinned.activeVersionId = activeVersionId;
+    assert.throws(
+      () => buildRecoveryCandidate(unpinned, manifest, normalizer),
+      /Active recovery version mismatch/
+    );
+  }
+});
+
 test("full recovery graph builds as a distinct inactive no-send export", () => {
   const result = buildRecoveryCandidate(fixture.workflow, manifest, normalizer);
   const w = result.workflow;
