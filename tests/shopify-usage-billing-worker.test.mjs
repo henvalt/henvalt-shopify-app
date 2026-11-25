@@ -169,7 +169,9 @@ test("keeps ambiguous Shopify timeout, early-data, rate-limit, 5xx and malformed
     const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
     const result = await handler(request());
     assert.equal(result.status, 202);
-    assert.equal((await result.json()).state, "PENDING");
+    const body = await result.json();
+    assert.equal(body.state, "PENDING");
+    assert.equal(body.reason, "SHOPIFY_TRANSIENT_HTTP");
     assert.equal(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")), false);
   }
 });
