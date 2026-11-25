@@ -298,3 +298,21 @@ A fresh read-only production inventory found:
 - No billing handler, migration, Edge Function, Shopify charge, or production state was changed during this inspection.
 
 This confirms the cancellation/egress issue is confined to the un-deployed candidate design at present. It is nevertheless a release blocker because the candidate must be correct before any isolated test-mode charge is attempted.
+
+
+## Eighth-pass billing egress authorization implementation — 2026-11-25
+
+The candidate-only gap above now has an implementation and executable acceptance contract on this branch:
+
+- Added `supabase/migrations/202611250001_billing_egress_final_authorization.sql`.
+- Added service-role-only RPC `control_plane_authorize_billing_usage_egress`. It follows the claim lock order (shop connection → tenant → billing account → usage charge) and rechecks active shop/tenant/subscription, test mode, exact subscription line item, charge ID, immutable idempotency key, amount, currency and attempt count.
+- The worker calls this RPC after obtaining the Shopify access token and immediately before the Shopify GraphQL mutation. Authorization errors fail closed; a denied authorization returns without a provider request or result mutation.
+- The RPC persists `egress_authorized_at` and `egress_authorized_attempt` on the charge and writes one `BILLING_USAGE_EGRESS_AUTHORIZED` audit row per attempt. Repeating the same authorization for the same attempt is idempotent.
+- Added handler tests for cancellation after claim, authorization-RPC outage, request ordering and exact charge-envelope binding.
+- Added PostgreSQL acceptance for active test subscription, cancellation before final authorization, stale attempt rejection, changed line-item rejection, and idempotent audit-marker persistence. The billing CI workflow now applies the migration and runs this acceptance file.
+
+### Explicit point-of-no-return limitation
+
+This is not a distributed transaction with Shopify. The durable authorization marker defines the point-of-no-return: cancellation committed **before** the final authorization is denied; cancellation committed **after** the authorization marker does not revoke an already-authorized in-flight request. The external HTTP request can still fail or be delayed after authorization, so the existing Shopify idempotency key and PENDING/reconciliation behavior remain mandatory. The marker is auditable evidence of authorization, not proof that Shopify accepted the charge.
+
+The candidate remains restricted to test-mode subscriptions. No migration was applied to production, no Edge Function was deployed, and no Shopify usage record was created. Exact-head CI and PostgreSQL acceptance are pending for this new commit; the PR remains draft/unmerged and the overall release decision remains **NO-GO** until those checks and isolated staging are complete.
