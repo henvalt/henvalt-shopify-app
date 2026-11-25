@@ -2,7 +2,7 @@ name: Shopify app configuration checks and deployment
 
 on:
   push:
-    branches: [main]
+    branches: [main, work/48h-system-readiness-2026-11-21]
   pull_request:
   workflow_dispatch:
 
