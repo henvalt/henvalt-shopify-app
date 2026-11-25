@@ -52,32 +52,32 @@ test("both provider-send entry points are blocked and one-off test branch is rem
 test("delivery candidate rejects alternate provider egress hidden in an ordinary HTTP node", () => {
   const directProvider = structuredClone(fixture.workflow);
   directProvider.nodes.find((n) => n.name === "Authorize & Context").parameters.url = "https://api.mailersend.com/v1/email";
-  assert.throws(() => buildDeliveryCandidate(directProvider), /Provider API endpoint remains in candidate/);
+  assert.throws(() => buildDeliveryCandidate(directProvider, fixture.source.active_version_id), /Provider API endpoint remains in candidate/);
 
   const unknownExternal = structuredClone(fixture.workflow);
   unknownExternal.nodes.find((n) => n.name === "Authorize & Context").parameters.url = "https://example.invalid/send";
-  assert.throws(() => buildDeliveryCandidate(unknownExternal), /Non-candidate HTTP egress/);
+  assert.throws(() => buildDeliveryCandidate(unknownExternal, fixture.source.active_version_id), /Non-candidate HTTP egress/);
 
   const smtpNode = structuredClone(fixture.workflow);
   smtpNode.nodes.find((n) => n.name === "Authorize & Context").type = "n8n-nodes-base.emailSend";
-  assert.throws(() => buildDeliveryCandidate(smtpNode), /Provider egress node type/);
+  assert.throws(() => buildDeliveryCandidate(smtpNode, fixture.source.active_version_id), /Provider egress node type/);
 });
 
 test("delivery candidate rejects provider calls hidden inside code nodes", () => {
   const hiddenFetch = structuredClone(fixture.workflow);
   hiddenFetch.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
     'return await fetch("https://api.mailersend.com/v1/email");';
-  assert.throws(() => buildDeliveryCandidate(hiddenFetch), /Inline network-capable code/);
+  assert.throws(() => buildDeliveryCandidate(hiddenFetch, fixture.source.active_version_id), /Inline network-capable code/);
 
   const hiddenHelperRequest = structuredClone(fixture.workflow);
   hiddenHelperRequest.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
     'return await this.helpers.httpRequest({ method: "POST", url: "https://api.mailersend.com/v1/email" });';
-  assert.throws(() => buildDeliveryCandidate(hiddenHelperRequest), /Inline network-capable code/);
+  assert.throws(() => buildDeliveryCandidate(hiddenHelperRequest, fixture.source.active_version_id), /Inline network-capable code/);
 
   const hiddenProviderHost = structuredClone(fixture.workflow);
   hiddenProviderHost.nodes.find((n) => n.name === "Build Delivery Response").parameters.jsCode =
     'const provider = "https://api.sendgrid.com/v3/mail/send"; return { provider };';
-  assert.throws(() => buildDeliveryCandidate(hiddenProviderHost), /Provider API endpoint/);
+  assert.throws(() => buildDeliveryCandidate(hiddenProviderHost, fixture.source.active_version_id), /Provider API endpoint/);
 });
 
 test("no-send response is rejected and is never persisted as a provider result", () => {
