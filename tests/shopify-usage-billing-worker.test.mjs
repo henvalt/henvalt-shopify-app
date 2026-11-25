@@ -34,12 +34,16 @@ function request(body = { shop }, token = env.HENVALT_BILLING_WORKER_TOKEN) {
   });
 }
 
-function harness({ claim = charge, shopify = response({ data: { appUsageRecordCreate: { appUsageRecord: { id: "gid://shopify/AppUsageRecord/999" }, userErrors: [] } } }), failShopify = false, failResult = false, failReconciliation = false } = {}) {
+function harness({ claim = charge, authorization = { authorized: true }, failAuthorization = false, shopify = response({ data: { appUsageRecordCreate: { appUsageRecord: { id: "gid://shopify/AppUsageRecord/999" }, userErrors: [] } } }), failShopify = false, failResult = false, failReconciliation = false } = {}) {
   const calls = [];
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url: String(url), init });
     if (String(url).includes("/get_shopify_access_token_for_control_plane")) return response("shpat_test_access_token_1234567890");
     if (String(url).includes("/control_plane_claim_billing_usage")) return response(claim);
+    if (String(url).includes("/control_plane_authorize_billing_usage_egress")) {
+      if (failAuthorization) return response({ message: "database unavailable" }, 503);
+      return response(authorization);
+    }
     if (String(url).includes("/admin/api/")) {
       if (failShopify) throw new Error("socket closed after write");
       return shopify;
@@ -87,7 +91,36 @@ test("claims one usage measurement and sends exact amount with persisted Shopify
   assert.equal(body.variables.idempotencyKey, charge.idempotencyKey);
   assert.equal(provider.init.redirect, "error");
   assert.ok(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")));
-  assert.ok(h.calls.findIndex((call) => call.url.includes("/control_plane_claim_billing_usage")) < h.calls.findIndex((call) => call.url.includes("/get_shopify_access_token_for_control_plane")));
+  const claimIndex = h.calls.findIndex((call) => call.url.includes("/control_plane_claim_billing_usage"));
+  const tokenIndex = h.calls.findIndex((call) => call.url.includes("/get_shopify_access_token_for_control_plane"));
+  const authorizationIndex = h.calls.findIndex((call) => call.url.includes("/control_plane_authorize_billing_usage_egress"));
+  const providerIndex = h.calls.findIndex((call) => call.url.includes("/admin/api/"));
+  assert.ok(claimIndex < tokenIndex && tokenIndex < authorizationIndex && authorizationIndex < providerIndex);
+  const authorization = JSON.parse(h.calls[authorizationIndex].init.body);
+  assert.equal(authorization.p_charge_id, charge.chargeId);
+  assert.equal(authorization.p_idempotency_key, charge.idempotencyKey);
+  assert.equal(authorization.p_subscription_line_item_id, charge.subscriptionLineItemId);
+  assert.equal(authorization.p_attempt, charge.attempt);
+});
+
+test("does not call Shopify when the subscription was cancelled after claim but before egress", async () => {
+  const h = harness({ authorization: { authorized: false, reason: "BILLING_SUBSCRIPTION_NOT_ACTIVE" } });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  const body = await result.json();
+  assert.equal(result.status, 409);
+  assert.equal(body.reason, "BILLING_SUBSCRIPTION_NOT_ACTIVE");
+  assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
+  assert.equal(h.calls.some((call) => call.url.includes("/control_plane_record_billing_usage_result")), false);
+});
+
+test("does not call Shopify when final egress authorization cannot be verified", async () => {
+  const h = harness({ failAuthorization: true });
+  const handler = createShopifyUsageBillingHandler({ env, fetchImpl: h.fetchImpl, logger: quiet });
+  const result = await handler(request());
+  assert.equal(result.status, 503);
+  assert.equal((await result.json()).error, "billing_egress_authorization_unavailable");
+  assert.equal(h.calls.some((call) => call.url.includes("/admin/api/")), false);
 });
 
 test("does not charge when the database has no eligible measurement", async () => {
