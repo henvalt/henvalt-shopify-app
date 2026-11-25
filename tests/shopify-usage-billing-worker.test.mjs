@@ -19,6 +19,7 @@ const env = {
   SUPABASE_URL: "https://supabase.invalid",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-test-secret",
   HENVALT_BILLING_WORKER_TOKEN: "billing-worker-test-secret",
+  HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED: "true",
 };
 const quiet = { error() {} };
 
@@ -74,6 +75,20 @@ test("validates shop before obtaining credentials", async () => {
   const handler = createShopifyUsageBillingHandler({ env, fetchImpl: async () => { calls++; }, logger: quiet });
   const result = await handler(request({ shop: "evil.example" }));
   assert.equal(result.status, 400);
+  assert.equal(calls, 0);
+});
+
+test("Shopify billing egress is default-denied before any database or provider request", async () => {
+  let calls = 0;
+  const disabledEnv = { ...env, HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED: undefined };
+  const handler = createShopifyUsageBillingHandler({
+    env: disabledEnv,
+    fetchImpl: async () => { calls++; throw new Error("must not call"); },
+    logger: quiet,
+  });
+  const result = await handler(request());
+  assert.equal(result.status, 409);
+  assert.equal((await result.json()).error, "billing_egress_disabled");
   assert.equal(calls, 0);
 });
 
