@@ -43,7 +43,8 @@ jobs:
           PY
 
   deploy-shopify-version:
-    if: github.event_name != 'pull_request'
+    # Version creation is an explicit operator action, never an automatic push side effect.
+    if: github.event_name == 'workflow_dispatch' && vars.HENVALT_ALLOW_SHOPIFY_VERSION_CREATION == 'true'
     runs-on: ubuntu-latest
     env:
       SHOPIFY_SERVICE_ACCOUNT_TOKEN: ${{ secrets.SHOPIFY_SERVICE_ACCOUNT_TOKEN }}
