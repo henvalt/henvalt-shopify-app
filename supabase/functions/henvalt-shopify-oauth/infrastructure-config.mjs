@@ -14,3 +14,19 @@ export function resolveOAuthInfrastructure({ ingressBaseUrl, pixelCollectorUrl }
     return { valid: false };
   }
 }
+
+export function isOAuthCallbackBoundToSupabase(supabaseUrl, redirectUri) {
+  try {
+    const project = new URL(supabaseUrl);
+    const callback = new URL(redirectUri);
+    return project.protocol === "https:" &&
+      project.pathname === "/" &&
+      !project.username && !project.password && !project.search && !project.hash &&
+      callback.protocol === "https:" &&
+      callback.origin === project.origin &&
+      callback.pathname === "/functions/v1/henvalt-shopify-oauth/callback" &&
+      !callback.username && !callback.password && !callback.search && !callback.hash;
+  } catch {
+    return false;
+  }
+}
