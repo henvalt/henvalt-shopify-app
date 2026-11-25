@@ -54,7 +54,7 @@ BEGIN
     'babababa-baba-4bab-8bab-babababababa',
     'henvalt-egress-authorization-test',
     'gid://shopify/AppSubscriptionLineItem/egress-1',
-    1
+    7.25,'USD',1
   ) INTO v_result;
 
   IF v_result->>'authorized' IS DISTINCT FROM 'true' THEN
@@ -72,7 +72,7 @@ BEGIN
     'babababa-baba-4bab-8bab-babababababa',
     'henvalt-egress-authorization-test',
     'gid://shopify/AppSubscriptionLineItem/egress-1',
-    1
+    7.25,'USD',1
   ) INTO v_result;
 
   IF v_result->>'authorized' IS DISTINCT FROM 'false'
@@ -93,7 +93,7 @@ BEGIN
     'babababa-baba-4bab-8bab-babababababa',
     'henvalt-egress-authorization-test',
     'gid://shopify/AppSubscriptionLineItem/egress-1',
-    1
+    7.25,'USD',1
   ) INTO v_result;
 
   IF v_result->>'authorized' IS DISTINCT FROM 'false'
@@ -106,7 +106,7 @@ BEGIN
     'babababa-baba-4bab-8bab-babababababa',
     'henvalt-egress-authorization-test',
     'gid://shopify/AppSubscriptionLineItem/changed-line-item',
-    2
+    7.25,'USD',2
   ) INTO v_result;
 
   IF v_result->>'authorized' IS DISTINCT FROM 'false'
