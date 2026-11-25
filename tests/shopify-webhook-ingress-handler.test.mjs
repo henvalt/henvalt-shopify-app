@@ -59,7 +59,12 @@ test("Shopify event correlation ID cannot substitute for the unique delivery ID"
   let calls = 0;
   const response = await handleRequest(request(signature, rawBody, { webhookId: "", eventId: "event-001" }), env, async () => {
     calls++;
-    return Response.json({ accepted: true });
+    return Response.json({
+      status: "accepted",
+      webhook_id: "11111111-1111-4111-8111-111111111111",
+      replay_job_id: "22222222-2222-4222-8222-222222222222",
+      replay_job_status: "QUEUED",
+    });
   });
   assert.equal(response.status, 400);
   assert.equal((await response.json()).error, "invalid_webhook_headers");
@@ -82,10 +87,20 @@ test("valid Shopify HMAC forwards the exact raw body and signed delivery headers
   const forwarded = [];
   const response = await handleRequest(request(signature), env, async (url, init) => {
     forwarded.push({ url, init });
-    return Response.json({ accepted: true, duplicate: false });
+    return Response.json({
+      status: "accepted",
+      webhook_id: "11111111-1111-4111-8111-111111111111",
+      replay_job_id: "22222222-2222-4222-8222-222222222222",
+      replay_job_status: "QUEUED",
+    });
   });
   assert.equal(response.status, 200);
-  assert.deepEqual(await response.json(), { accepted: true, duplicate: false });
+  assert.deepEqual(await response.json(), {
+    status: "accepted",
+    webhook_id: "11111111-1111-4111-8111-111111111111",
+    replay_job_id: "22222222-2222-4222-8222-222222222222",
+    replay_job_status: "QUEUED",
+  });
   assert.equal(forwarded.length, 1);
   assert.equal(forwarded[0].url, env.N8N_INGEST_URL);
   assert.equal(forwarded[0].init.method, "POST");
@@ -146,4 +161,34 @@ test("upstream network exceptions return retryable 503", async () => {
   });
   assert.equal(response.status, 503);
   assert.equal((await response.json()).error, "ingest_unavailable");
+});
+
+test("generic, empty, malformed, or non-durable 2xx upstream responses never acknowledge Shopify", async () => {
+  const invalid = [
+    new Response(null, { status: 204 }),
+    new Response("", { status: 200 }),
+    new Response("not-json", { status: 200 }),
+    Response.json({ accepted: true }),
+    Response.json({ status: "accepted", webhook_id: "not-a-uuid", replay_job_id: "22222222-2222-4222-8222-222222222222", replay_job_status: "QUEUED" }),
+    Response.json({ status: "accepted", webhook_id: "11111111-1111-4111-8111-111111111111" }),
+    Response.json({ status: "accepted", webhook_id: "11111111-1111-4111-8111-111111111111", replay_job_id: "22222222-2222-4222-8222-222222222222", replay_job_status: "DEAD_LETTER" }),
+    Response.json({ status: "unknown", webhook_id: "11111111-1111-4111-8111-111111111111" }),
+    Response.json({ status: "accepted", webhook_id: "11111111-1111-4111-8111-111111111111", replay_job_id: "22222222-2222-4222-8222-222222222222", replay_job_status: "QUEUED" }, { status: 202 }),
+  ];
+  for (const upstream of invalid) {
+    const response = await handleRequest(request(await sign(rawBody)), env, async () => upstream);
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).error, "ingest_unavailable");
+  }
+});
+
+test("a processed duplicate is acknowledged only with a durable webhook identity", async () => {
+  const response = await handleRequest(request(await sign(rawBody)), env, async () =>
+    Response.json({ status: "duplicate", webhook_id: "11111111-1111-4111-8111-111111111111" })
+  );
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    status: "duplicate",
+    webhook_id: "11111111-1111-4111-8111-111111111111",
+  });
 });
