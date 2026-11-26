@@ -3,6 +3,7 @@ const ALLOWED_EVENTS = new Set([
   "page_viewed",
   "product_viewed",
   "product_added_to_cart",
+  "product_removed_from_cart",
   "checkout_started",
 ]);
 
