@@ -109,8 +109,7 @@ end $$;
 
 insert into henvalt.orders(id,tenant_id) values
  ('77777777-7777-4777-8777-777777777777','11111111-1111-4111-8111-111111111111');
-do $
-begin
+do $$
   begin
     update henvalt.orders set shopify_connection_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
      where id='77777777-7777-4777-8777-777777777777';
@@ -118,7 +117,7 @@ begin
   exception when check_violation then
     if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_TENANT_MISMATCH%' then raise; end if;
   end;
-end $;
+end $$;
 
 insert into henvalt.orders(id,tenant_id,shopify_connection_id)
 values ('88888888-8888-4888-8888-888888888888','11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
