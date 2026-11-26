@@ -18,6 +18,9 @@ const required = [
   "HENVALT_STAGE_SHOPIFY_STORE",
   "HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL",
   "HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL",
+  "HENVALT_STAGE_INGRESS_HOST",
+  "HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL",
+  "HENVALT_STAGE_PIXEL_COLLECTOR_HOST",
   "HENVALT_STAGE_PROVIDER_MODE",
   "HENVALT_STAGE_NETWORK_EGRESS_DENIED",
   "HENVALT_STAGE_NO_SEND",
@@ -97,8 +100,24 @@ try {
   if (ingress.hostname !== "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev") {
     errors.push("Shopify webhook ingress must use the dedicated no-send staging Worker hostname");
   }
+  if (ingress.hostname !== process.env.HENVALT_STAGE_INGRESS_HOST?.trim().toLowerCase()) {
+    errors.push("OAuth ingress host binding must exactly match the dedicated staging Worker hostname");
+  }
 } catch {
   if (process.env.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL) errors.push("Shopify webhook ingress URL is malformed");
+}
+try {
+  const pixel = new URL(process.env.HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL);
+  if (pixel.protocol !== "https:" || pixel.username || pixel.password || pixel.search || pixel.hash ||
+      pixel.pathname !== "/v1/events" ||
+      pixel.hostname !== process.env.HENVALT_STAGE_PIXEL_COLLECTOR_HOST?.trim().toLowerCase()) {
+    errors.push("Shopify pixel collector must be HTTPS /v1/events on its exact explicit staging host");
+  }
+  if (pixel.hostname === "henvalt-pixel-collector.chmuhammadrehan18.workers.dev") {
+    errors.push("Shopify pixel collector matches the production Worker");
+  }
+} catch {
+  if (process.env.HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL) errors.push("Shopify pixel collector URL is malformed");
 }
 try { renderShopifyStagingConfig(process.env); } catch (error) { errors.push(error.message); }
 if (errors.length) {
