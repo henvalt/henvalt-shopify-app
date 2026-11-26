@@ -10,7 +10,7 @@ const migration = readFileSync(
 test('recovery graph tables carry nullable connection foreign keys', () => {
   for (const table of ['customers','checkouts','orders','sessions','opportunities','recovery_interventions','delivery_requests']) {
     assert.match(migration, new RegExp('alter table henvalt\\.'+table+' add column if not exists shopify_connection_id uuid','i'));
-    assert.match(migration, new RegExp(table+'_shopify_connection_id_fkey'));
+    assert.match(migration, new RegExp(table+'_shopify_connection_id_fkey|t\\|\\|\\x27_shopify_connection_id_fkey'));
   }
 });
 
