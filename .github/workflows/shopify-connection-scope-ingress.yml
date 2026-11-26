@@ -3,7 +3,10 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611260005_capture_shopify_connection_at_ingress.sql"
+      - "supabase/migrations/202611260006_propagate_connection_scope_metadata.sql"
+      - "supabase/migrations/202611260007_propagate_shopify_connection_to_recovery_graph.sql"
       - "tests/shopify-connection-scope-ingress.test.mjs"
+      - "tests/shopify-connection-scope-recovery-graph.test.mjs"
       - ".github/workflows/shopify-connection-scope-ingress.yml"
   workflow_dispatch:
 permissions:
@@ -16,4 +19,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test tests/shopify-connection-scope-ingress.test.mjs
+      - run: node --test tests/shopify-connection-scope-ingress.test.mjs tests/shopify-connection-scope-recovery-graph.test.mjs
