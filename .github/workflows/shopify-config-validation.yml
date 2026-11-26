@@ -57,7 +57,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Validate OAuth Edge Function and local modules
-        run: deno check supabase/functions/henvalt-shopify-oauth/index.ts
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
 
   billing-lock-safety:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
