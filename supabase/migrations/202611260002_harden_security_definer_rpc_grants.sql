@@ -1,10 +1,5 @@
--- Match the production RPC privilege model and prevent future SECURITY DEFINER
--- functions created by postgres in henvalt from inheriting PUBLIC EXECUTE.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA henvalt
-  REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC, anon, authenticated;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA henvalt
-  GRANT EXECUTE ON FUNCTIONS TO service_role;
-
+-- Run this hardening migration after all schema/function migrations in the release.
+-- CI verifies that no later SECURITY DEFINER function is left with client EXECUTE.
 DO $$
 DECLARE
   fn record;
