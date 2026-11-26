@@ -86,16 +86,18 @@ begin
   end;
 end $$;
 
--- Established identity cannot be cleared or moved to another tenant.
-do $$
+-- The real propagation trigger restores a column-only clear from the
+-- authoritative metadata before the immutable guard runs. Verify identity
+-- remains unchanged; test direct clearing separately on the ingress row below.
+update henvalt.customers set shopify_connection_id=null
+ where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+do $
 begin
-  begin
-    update henvalt.customers set shopify_connection_id=null
-     where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
-    raise exception 'FAIL: established connection was cleared';
-  exception when check_violation then
-    if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
-  end;
+  if (select shopify_connection_id from henvalt.customers
+       where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
+     is distinct from 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid then
+    raise exception 'FAIL: propagation did not preserve established connection identity';
+  end if;
   begin
     update henvalt.customers set tenant_id='22222222-2222-4222-8222-222222222222'
      where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -103,7 +105,7 @@ begin
   exception when check_violation then
     if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
   end;
-end $$;
+end $;
 
 -- Webhook/canonical source identity is immutable after insert.
 insert into henvalt.webhook_events(id,tenant_id,source)
@@ -136,6 +138,16 @@ insert into henvalt.webhook_events(id,tenant_id,source)
 values ('88888888-8888-4888-8888-888888888888','11111111-1111-4111-8111-111111111111','fixture');
 update henvalt.webhook_events set shopify_connection_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
  where id='88888888-8888-4888-8888-888888888888';
+do $
+begin
+  begin
+    update henvalt.webhook_events set shopify_connection_id=null
+     where id='88888888-8888-4888-8888-888888888888';
+    raise exception 'FAIL: established ingress connection was cleared';
+  exception when check_violation then
+    if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
+  end;
+end $;
 
 insert into henvalt.webhook_events(id,tenant_id,source)
 values ('77777777-7777-4777-8777-777777777777','11111111-1111-4111-8111-111111111111','fixture');
