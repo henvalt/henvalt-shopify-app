@@ -31,7 +31,7 @@ export function renderShopifyStagingConfig(env = process.env) {
   if (!/^[a-z0-9]{20}$/.test(projectRef) || projectRef === productionProjectRef) {
     throw new Error("staging Supabase project ref is invalid or matches production");
   }
-  if (applicationUrl.hostname === "henvalt-dashboard.pages.dev") {
+  if (["henvalt-dashboard.pages.dev", "henvalt.com", "app.henvalt.com", "n8n.henvalt.com"].includes(applicationUrl.hostname)) {
     throw new Error("staging application URL matches production dashboard");
   }
   if (privacyUrl.hostname !== `${projectRef}.supabase.co` ||
