@@ -25,6 +25,10 @@ test('recovery interventions and delivery requests inherit identity from parent 
   assert.match(migration, /from henvalt\.opportunities o where o\.id=v_opportunity_id/);
   assert.match(migration, /from henvalt\.recovery_interventions ri where ri\.id=v_intervention_id/);
   assert.match(migration, /SHOPIFY_CONNECTION_SCOPE_PARENT_MISMATCH/);
+  assert.match(migration, /SHOPIFY_CONNECTION_SCOPE_CUSTOMER_STORE_MISMATCH/);
+  assert.match(migration, /SHOPIFY_CONNECTION_SCOPE_CHECKOUT_STORE_MISMATCH/);
+  assert.match(migration, /update of shopify_connection_id,metadata,source_event_id,customer_id,checkout_id/);
+  assert.match(migration, /update of shopify_connection_id,intervention_id,opportunity_id/);
 });
 
 test('connection identity must be active and belong to the same tenant', () => {
