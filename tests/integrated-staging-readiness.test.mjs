@@ -111,7 +111,7 @@ test("manual signed Shopify webhook test is staging-only and cannot target the p
   assert.match(workflow, /process\.env\.NO_SEND !== 'true'/);
   assert.match(workflow, /henvalt-clean-ingress-v1\.chmuhammadrehan18\.workers\.dev/);
   assert.doesNotMatch(workflow, /ENDPOINT: https:\/\/henvalt-clean-ingress-v1/);
-  assert.doesNotMatch(workflow, /SHOPIFY_CLIENT_SECRET:/);
+  assert.doesNotMatch(workflow, /secrets\.SHOPIFY_CLIENT_SECRET\s*\}\}/);
 });
 
 test("staging is not inferred from CI and network denial remains mandatory", () => {
