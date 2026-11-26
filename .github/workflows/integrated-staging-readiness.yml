@@ -9,6 +9,7 @@ on:
       - "tests/shopify-staging-ingress-worker.test.mjs"
       - "tests/dashboard-environment-config.test.mjs"
       - "tests/dashboard-preview-isolation.test.mjs"
+      - "tests/billing-reconciliation-dashboard.test.mjs"
       - "scripts/staging-identity-preflight.mjs"
       - "scripts/render-shopify-staging-config.mjs"
       - "cloudflare/staging-worker.js"
@@ -28,6 +29,7 @@ on:
       - "tests/shopify-staging-ingress-worker.test.mjs"
       - "tests/dashboard-environment-config.test.mjs"
       - "tests/dashboard-preview-isolation.test.mjs"
+      - "tests/billing-reconciliation-dashboard.test.mjs"
       - "scripts/staging-identity-preflight.mjs"
       - "scripts/render-shopify-staging-config.mjs"
       - "cloudflare/staging-worker.js"
@@ -67,4 +69,4 @@ jobs:
           print("ISOLATED_STAGING_WRANGLER_CONFIG_PASSED")
           PY
       - name: Run integrated staging readiness contract
-        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs
+        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs tests/billing-reconciliation-dashboard.test.mjs
