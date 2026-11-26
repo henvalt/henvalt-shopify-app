@@ -252,3 +252,18 @@ The latest preview deployment for commit `b5660c1969b51e06c495688e6cadd855a0d1d7
 The preview runtime now exposes only the deployed staging merchant-dashboard API. Staging billing reconciliation, privacy export, Shopify OAuth and MailerSend setup endpoints are explicitly null/unavailable until their corresponding isolated Edge Functions and Shopify app identity exist. The no-send dashboard hides billing/privacy navigation and Shopify reauthorization, and guards those actions in code. This prevents the preview UI from calling production or nonexistent staging endpoints. The production dashboard hostname/configuration was not changed.
 
 The Pages API confirms the environment configuration and successful deployment stages. A direct HTTP fetch of the preview `/config` endpoint was not available through the web inspection channel, so endpoint response content is not claimed as independently fetched.
+
+
+### OAuth endpoint identity hardening — 2026-11-26
+
+A source review found that the OAuth function validated ingress and pixel collector URLs as HTTPS, but did not bind either endpoint to the isolated staging host inventory. That left a misconfiguration path where a staging OAuth install could register Shopify webhooks against an unintended HTTPS destination or initialize the web pixel against a production collector.
+
+The candidate now treats every Supabase project other than the explicitly identified production project as non-production and requires exact host bindings for both endpoints:
+- `HENVALT_STAGE_INGRESS_HOST` must equal the dedicated staging ingress Worker hostname.
+- `HENVALT_STAGE_PIXEL_COLLECTOR_HOST` must equal the dedicated staging pixel collector hostname.
+- `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` must use the exact ingress host.
+- `SHOPIFY_PIXEL_COLLECTOR_URL` must use the exact collector host and `/v1/events` path.
+- Staging preflight now requires the corresponding explicit host and URL metadata, rejects the known production pixel collector hostname, and checks the ingress host against the dedicated no-send Worker.
+- The production Supabase project retains its existing non-strict endpoint configuration path; no production function was changed.
+
+The staging OAuth deployment environment must map the two `HENVALT_STAGE_*_HOST` values alongside the corresponding `SHOPIFY_*_URL` values. Do not deploy OAuth until a dedicated staging pixel collector exists and its actual hostname has been verified. The current Cloudflare inventory has no dedicated staging pixel collector, so this gate is intentionally still blocked. The change is candidate-only and does not imply a successful OAuth runtime test.
