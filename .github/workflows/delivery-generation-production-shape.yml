@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
-      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
@@ -31,6 +30,7 @@ on:
     branches:
       - "work/48h-system-readiness-2026-11-21"
     paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
