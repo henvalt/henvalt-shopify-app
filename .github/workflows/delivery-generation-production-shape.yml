@@ -3,6 +3,8 @@ name: HENVALT production-shaped delivery generation migration
 on:
   pull_request:
     paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
       - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
       - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
       - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
@@ -19,6 +21,8 @@ on:
       - "tests/delivery-generation-production-shaped-webhook-routing.sql"
       - "tests/delivery-generation-production-shaped-late-acceptance.sql"
       - "tests/delivery-generation-production-shaped-bootstrap.sql"
+      - "tests/delivery-generation-parent-first-lock-order-acceptance.sql"
+      - "tests/delivery-generation-legacy-one-off-disable-acceptance.sql"
       - "tests/delivery-generation-production-shaped-*.sql"
       - "tests/integrated-staging-readiness.test.mjs"
       - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
@@ -77,6 +81,8 @@ jobs:
         run: createdb -h 127.0.0.1 -U postgres delivery_generation_prodshape
       - name: Bootstrap live-shape schema and Supabase roles
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-bootstrap.sql
+      - name: Apply provider-send interlock prerequisite
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
       - name: Apply generation schema and retry RPC candidate
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql
       - name: Apply durable provider egress fence candidate
