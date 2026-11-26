@@ -55,3 +55,12 @@ test("Shopify static configuration validation runs on the active candidate branc
   assert.match(workflow, /push:\s*\n\s*branches: \[main, work\/48h-system-readiness-2026-11-21\]/);
   assert.match(workflow, /static-validation:/);
 });
+
+test("OAuth refuses to start without an explicit completion dashboard URL", () => {
+  const source = readFileSync("supabase/functions/henvalt-shopify-oauth/index.ts", "utf8");
+  assert.match(source, /Deno\.env\.get\("HENVALT_DASHBOARD_URL"\)\s*\?\?\s*""/);
+  assert.match(source, /isSafeCompletionDashboardUrl\(HENVALT_DASHBOARD_URL\)/);
+  assert.doesNotMatch(source, /HENVALT_DASHBOARD_URL[^\n]*henvalt-dashboard\.pages\.dev/);
+  const helper = readFileSync("supabase/functions/henvalt-shopify-oauth/completion-url.mjs", "utf8");
+  assert.match(helper, /if \(!isSafeCompletionDashboardUrl\(configuredBaseUrl\)\) return null/);
+});
