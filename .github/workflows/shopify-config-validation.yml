@@ -239,3 +239,36 @@ jobs:
       - name: Create an unreleased Shopify app version
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
         run: shopify app deploy --no-release --config=shopify.app.toml
+
+  oauth-owner-claim-concurrency:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGDATABASE: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated OAuth owner-claim fixture and apply candidate migration
+        run: psql -v ON_ERROR_STOP=1 -f tests/shopify-oauth-owner-claim-postgres-bootstrap.sql
+      - name: Prove concurrent OAuth owner claim cannot replace first owner's token
+        run: bash tests/shopify-oauth-owner-claim-concurrency-postgres.sh
