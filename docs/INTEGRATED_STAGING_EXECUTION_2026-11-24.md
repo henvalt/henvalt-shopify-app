@@ -237,3 +237,18 @@ This staging mismatch is now corrected:
 - A dedicated PostgreSQL 17 CI workflow tests both the exact dashboard RPC grant boundary and the complete SECURITY DEFINER/default-privilege policy. Its first run exposed a shell-heredoc quoting defect in the test fixture; that fixture was corrected and the new workflow has been queued again.
 
 The ACL parity issue was discovered in isolated staging and fixed there only. Production ACLs, SQL, Edge Functions and service settings remain unchanged.
+
+
+### Dashboard preview runtime isolation — 2026-11-26
+
+Cloudflare Pages project `henvalt-dashboard-preview` now has preview-only environment variables pointing to the dedicated staging Supabase project:
+- `HENVALT_STAGE_NO_SEND=true`
+- staging project reference and matching Supabase URL
+- staging `sb_publishable_` key only
+
+The latest preview deployment for commit `b5660c1969b51e06c495688e6cadd855a0d1d75c` completed successfully with Pages Functions enabled:
+`https://61270f23.henvalt-dashboard-preview.pages.dev`
+
+The preview runtime now exposes only the deployed staging merchant-dashboard API. Staging billing reconciliation, privacy export, Shopify OAuth and MailerSend setup endpoints are explicitly null/unavailable until their corresponding isolated Edge Functions and Shopify app identity exist. The no-send dashboard hides billing/privacy navigation and Shopify reauthorization, and guards those actions in code. This prevents the preview UI from calling production or nonexistent staging endpoints. The production dashboard hostname/configuration was not changed.
+
+The Pages API confirms the environment configuration and successful deployment stages. A direct HTTP fetch of the preview `/config` endpoint was not available through the web inspection channel, so endpoint response content is not claimed as independently fetched.
