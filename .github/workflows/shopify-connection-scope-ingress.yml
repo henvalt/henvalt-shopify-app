@@ -13,6 +13,7 @@ on:
       - "tests/shopify-connection-scope-recovery-graph.test.mjs"
       - "tests/shopify-connection-scope-delivery-descendants.test.mjs"
       - "tests/shopify-connection-scope-parent-links.test.mjs"
+      - "tests/shopify-connection-identity-guard.pg.sql"
       - ".github/workflows/shopify-connection-scope-ingress.yml"
   workflow_dispatch:
 permissions:
