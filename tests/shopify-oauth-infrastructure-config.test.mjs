@@ -112,7 +112,8 @@ test("Shopify OAuth owner claim is serialized before checking tenant ownership",
   const lock = migration.indexOf("pg_advisory_xact_lock(hashtextextended(lower(btrim(p_shop_domain)), 0))");
   const ownershipCheck = migration.indexOf("select tenant_id into v_tenant_id");
   assert.ok(lock >= 0 && ownershipCheck > lock, "shop advisory lock must precede tenant ownership check");
-  assert.match(migration, /tenant_already_claimed/);
+  assert.match(migration, /tenant_owner_required/);
+  assert.match(migration, /role = 'OWNER'::henvalt\\.member_role/);
   assert.match(migration, /revoke all on function[\s\S]*from public, anon, authenticated/);
   assert.match(migration, /grant execute on function[\s\S]*to service_role/);
 });
