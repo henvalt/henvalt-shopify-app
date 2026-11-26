@@ -11,6 +11,7 @@ const required = [
   "HENVALT_STAGE_DASHBOARD_URL",
   "HENVALT_STAGE_PRIVACY_WEBHOOK_URL",
   "HENVALT_STAGE_N8N_BASE_URL",
+  "HENVALT_STAGE_N8N_HOST",
   "HENVALT_STAGE_INGEST_WORKFLOW_ID",
   "HENVALT_STAGE_RECOVERY_WORKFLOW_ID",
   "HENVALT_STAGE_DELIVERY_WORKFLOW_ID",
@@ -69,9 +70,11 @@ if (process.env.HENVALT_STAGE_WORKFLOWS_INACTIVE !== "true") errors.push("all im
 if (process.env.HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED !== "true") errors.push("Shopify development store must be explicitly confirmed");
 try {
   const n8nUrl = new URL(process.env.HENVALT_STAGE_N8N_BASE_URL);
+  const expectedN8nHost = process.env.HENVALT_STAGE_N8N_HOST?.trim().toLowerCase();
   if (n8nUrl.protocol !== "https:" || n8nUrl.username || n8nUrl.password) errors.push("staging n8n URL must be HTTPS without embedded credentials");
+  if (!expectedN8nHost || n8nUrl.hostname.toLowerCase() !== expectedN8nHost) errors.push("staging n8n URL host must exactly match the explicit staging n8n host allowlist");
+  if (["n8n.henvalt.com", "henvalt26.app.n8n.cloud"].includes(n8nUrl.hostname.toLowerCase())) errors.push("n8n URL matches a production host");
 } catch { if (process.env.HENVALT_STAGE_N8N_BASE_URL) errors.push("staging n8n URL is malformed"); }
-if (process.env.HENVALT_STAGE_N8N_BASE_URL && /henvalt26\.app\.n8n\.cloud|prod/i.test(process.env.HENVALT_STAGE_N8N_BASE_URL)) errors.push("n8n URL appears to identify production");
 if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\.myshopify\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
 try {
   const callback = new URL(process.env.HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL);
