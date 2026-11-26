@@ -18,8 +18,8 @@ const valid = {
   HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
   HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev/shopify/webhooks",
   HENVALT_STAGE_INGRESS_HOST: "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
-  HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-staging.example.invalid/v1/events",
-  HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "henvalt-pixel-staging.example.invalid",
+  HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events",
+  HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
   HENVALT_STAGE_NO_SEND: "true",
@@ -156,7 +156,7 @@ test("preflight binds OAuth ingress and pixel collector to explicit isolated hos
   const pixelMismatch = run({ ...valid, HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "other-stage.example.invalid" });
   assert.notEqual(pixelMismatch.status, 0);
   assert.match(pixelMismatch.stderr, /exact explicit staging host/);
-  const pixelPath = run({ ...valid, HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-staging.example.invalid/other" });
+  const pixelPath = run({ ...valid, HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/other" });
   assert.notEqual(pixelPath.status, 0);
   assert.match(pixelPath.stderr, /exact explicit staging host/);
 });
@@ -169,4 +169,14 @@ test("preflight rejects the live production Shopify pixel collector", () => {
   });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /matches the live production Worker/);
+});
+
+test("preflight requires the dedicated no-send staging pixel Worker identity", () => {
+  const result = run({
+    ...valid,
+    HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /dedicated no-send staging Worker hostname/);
 });
