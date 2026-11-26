@@ -269,3 +269,16 @@ The candidate now treats every Supabase project other than the explicitly identi
 The staging OAuth deployment environment must map the two `HENVALT_STAGE_*_HOST` values alongside the corresponding `SHOPIFY_*_URL` values. Do not deploy OAuth until a dedicated staging pixel collector exists and its actual hostname has been verified. The current Cloudflare inventory has no dedicated staging pixel collector, so this gate is intentionally still blocked. The change is candidate-only and does not imply a successful OAuth runtime test.
 
 The required staging pixel collector identity is pinned to `henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev`; the existing `henvalt-pixel-collector` Worker is production and must never be supplied as the staging host. Its dedicated Worker, staging Supabase publishable key, collector shared secret, and isolated rate-limit binding must be provisioned before OAuth deployment. The current Cloudflare inventory confirms that this staging Worker does not yet exist.
+
+
+### Dedicated staging pixel collector candidate — 2026-11-26
+
+A separate Cloudflare Worker entry point now wraps the existing pixel collector for isolated staging:
+- Worker identity: `henvalt-pixel-collector-staging-no-send`.
+- Config: `wrangler.pixel-staging.toml`; entry point: `cloudflare/staging-pixel-collector.js`.
+- It requires `HENVALT_STAGE_NO_SEND=true`, the exact staging Supabase hostname `xidhtmrfvsgfmyltjuja.supabase.co`, an `sb_publishable_` key, a collector shared secret of at least 32 characters, and a rate-limit binding.
+- Invalid or missing configuration blocks event POSTs before any Supabase request. Health reports whether the configuration is complete without exposing secrets.
+- The worker requires two secrets to be configured at deployment time: `SUPABASE_PUBLISHABLE_KEY` and `COLLECTOR_SHARED_SECRET`. The rate-limit binding uses its own namespace and must remain separate from production.
+- Unit tests cover exact project binding, production/arbitrary host rejection, required safety configuration, and fail-closed health behavior. CI now executes these tests and validates the dedicated Wrangler config.
+
+This is candidate code only. The Worker has not been deployed, secrets have not been configured, and no pixel event has been sent. The staging Shopify OAuth function must remain undeployed until the dedicated ingress and pixel collector Workers and isolated n8n endpoint are all provisioned and verified.
