@@ -410,3 +410,29 @@ The deployment job remained skipped. There are no submitted PR reviews or inline
 **Runtime integration blockers:** the n8n workflow search again failed with a connector-internal error; current workflow versions, activation, credentials and execution state are therefore unverified. Both dedicated Cloudflare staging Worker scripts remain deployed but non-public, with subdomains/previews disabled and zero secrets. The ingress destination remains the deliberate `.invalid` placeholder; the pixel collector still lacks its publishable key, shared secret and real rate-limit binding. The staging OAuth Edge Function is not deployed. No verified dedicated Shopify development app/store or authenticated install is present.
 
 **Decision: NO-GO for integrated acceptance.** Continue to keep PR #15 draft/unmerged. Do not deploy OAuth, enable Worker hostnames, activate staging workflows, allow MailerSend egress, send email, mutate billing, or touch production. The next executable gate is provisioning/verification of a genuinely isolated n8n runtime and dedicated Shopify development app/store identity, followed by staging-only secrets/bindings and a complete synthetic checkout acceptance. No paid resource should be created without explicit cost approval.
+
+
+### Connection identity immutability hardening — 2026-11-26
+
+A further source review found that the connection-lineage triggers did not fire for tenant-only updates on every scoped table, and event source identity could be changed without invoking the ingress lineage trigger. That could allow a previously scoped record to be re-parented to another tenant or have its Shopify source classification rewritten through an update path not covered by the original trigger column lists.
+
+Candidate migration `20261126150000_guard_shopify_connection_identity_immutable.sql` adds a shared SECURITY DEFINER guard to all 11 connection-scoped tables:
+- Once a row has a non-null Shopify connection ID, that connection ID and tenant ID cannot be changed or cleared.
+- Any newly assigned connection must exist, remain active, and belong to the row's tenant.
+- The source field on webhook and canonical event rows is immutable after insert.
+- Function execution is revoked from public/anon/authenticated and granted to service_role; trigger execution remains database-enforced.
+- Historical unscoped rows remain nullable and are not assigned guessed ownership.
+
+The regression contract was extended in `tests/shopify-connection-scope-parent-links.test.mjs`, and the connection-scope workflow now watches the new migration. This is candidate code only; the migration has NOT been applied to Supabase staging or production.
+
+**Exact candidate commit:** `4bb44a47490baee72d0d1079e75a139265fd690a`. All six PR-triggered workflows completed successfully on this code-bearing head:
+- Connection scope ingress contract — run `45855185570`.
+- Integrated staging readiness contract — run `45855185401`.
+- Safety and pixel consent — run `45855185403`.
+- FK index coverage — run `45855185492`.
+- Shopify app configuration/billing lock — run `45855185505` (Shopify deployment job skipped).
+- Production-shaped delivery generation migration — run `45855185565`.
+
+The connection-scope regression job passed with the new immutable-identity assertions. The production-shaped delivery generation migration and disposable PostgreSQL tests also passed. These CI results do not prove the new connection identity migration has been applied to a full Supabase schema; a dedicated PostgreSQL migration acceptance including the new migration is still required before any staging application.
+
+The staging runtime blockers are unchanged: n8n inventory could not be refreshed because its connector returned an internal error; OAuth Edge Function is absent; Cloudflare staging Workers remain disabled/unconfigured; there is no authenticated Shopify development-store connection or persisted lifecycle. Provider sending remains disabled. No production or staging resources were mutated by this code review.
