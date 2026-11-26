@@ -1,3 +1,4 @@
+import { renderShopifyStagingConfig } from "./render-shopify-staging-config.mjs";
 #!/usr/bin/env node
 /**
  * HENVALT staging environment identity gate.
@@ -5,6 +6,9 @@
  */
 const required = [
   "HENVALT_STAGE_SUPABASE_PROJECT_REF",
+  "HENVALT_STAGE_SHOPIFY_CLIENT_ID",
+  "HENVALT_STAGE_APPLICATION_URL",
+  "HENVALT_STAGE_PRIVACY_WEBHOOK_URL",
   "HENVALT_STAGE_N8N_BASE_URL",
   "HENVALT_STAGE_INGEST_WORKFLOW_ID",
   "HENVALT_STAGE_RECOVERY_WORKFLOW_ID",
@@ -78,6 +82,7 @@ try {
 } catch {
   if (process.env.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL) errors.push("Shopify webhook ingress URL is malformed");
 }
+try { renderShopifyStagingConfig(process.env); } catch (error) { errors.push(error.message); }
 if (errors.length) {
   console.error("STAGING PREFLIGHT: FAIL");
   for (const error of errors) console.error(` - ${error}`);
