@@ -116,10 +116,17 @@ declare t text;
 begin
   foreach t in array array['customers','checkouts','orders','sessions','opportunities','recovery_interventions','delivery_requests'] loop
     execute format('drop trigger if exists trg_propagate_shopify_connection_scope on henvalt.%I',t);
-    execute format(
-      'create trigger trg_propagate_shopify_connection_scope before insert or update of shopify_connection_id,metadata on henvalt.%I for each row execute function henvalt.propagate_shopify_connection_scope()',
-      t
-    );
+    if t in ('recovery_interventions','delivery_requests') then
+      execute format(
+        'create trigger trg_propagate_shopify_connection_scope before insert or update of shopify_connection_id on henvalt.%I for each row execute function henvalt.propagate_shopify_connection_scope()',
+        t
+      );
+    else
+      execute format(
+        'create trigger trg_propagate_shopify_connection_scope before insert or update of shopify_connection_id,metadata on henvalt.%I for each row execute function henvalt.propagate_shopify_connection_scope()',
+        t
+      );
+    end if;
   end loop;
 end
 $triggers$;
