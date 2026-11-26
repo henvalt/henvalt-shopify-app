@@ -7,7 +7,7 @@ DECLARE
   v_service integer;
 BEGIN
   SELECT count(*),
-         count(*) FILTER (WHERE has_function_privilege('PUBLIC', p.oid, 'EXECUTE')),
+         count(*) FILTER (WHERE EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a WHERE a.grantee = 0 AND a.privilege_type = 'EXECUTE')),
          count(*) FILTER (WHERE has_function_privilege('anon', p.oid, 'EXECUTE')),
          count(*) FILTER (WHERE has_function_privilege('authenticated', p.oid, 'EXECUTE')),
          count(*) FILTER (WHERE has_function_privilege('service_role', p.oid, 'EXECUTE'))
