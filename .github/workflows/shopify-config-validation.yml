@@ -52,6 +52,19 @@ jobs:
         run: node --test tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-webhook-contract.test.mjs
       - name: Verify isolated Shopify staging config renderer
         run: node --test tests/shopify-staging-config.test.mjs
+      - name: Verify isolated no-send pixel collector boundary
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          config = tomllib.loads(pathlib.Path("wrangler.pixel-staging.toml").read_text())
+          assert config["name"] == "henvalt-pixel-collector-staging-no-send"
+          assert config["main"] == "cloudflare/staging-pixel-collector.js"
+          assert config["vars"]["HENVALT_STAGE_NO_SEND"] == "true"
+          assert config["vars"]["SUPABASE_URL"] == "https://xidhtmrfvsgfmyltjuja.supabase.co"
+          assert "SUPABASE_PUBLISHABLE_KEY" in config["secrets"]["required"]
+          assert "COLLECTOR_SHARED_SECRET" in config["secrets"]["required"]
+          PY
+          node --test tests/staging-pixel-collector.test.mjs
       - name: Type-check the Shopify OAuth Edge Function
         uses: denoland/setup-deno@v2
         with:
