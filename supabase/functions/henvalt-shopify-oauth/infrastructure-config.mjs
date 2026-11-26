@@ -1,10 +1,34 @@
-export function resolveOAuthInfrastructure({ ingressBaseUrl, pixelCollectorUrl }) {
+const PRODUCTION_INGRESS_HOSTS = new Set([
+  "henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev",
+  "ingress.henvalt.com",
+]);
+const PRODUCTION_PIXEL_HOSTS = new Set([
+  "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
+  "pixel.henvalt.com",
+]);
+
+export function resolveOAuthInfrastructure({
+  ingressBaseUrl,
+  pixelCollectorUrl,
+  requireExplicitHostBinding = false,
+  expectedIngressHost = "",
+  expectedPixelCollectorHost = "",
+}) {
   try {
     const ingress = new URL(ingressBaseUrl);
     const collector = new URL(pixelCollectorUrl);
     const safe = (url) => url.protocol === "https:" && !url.username && !url.password && !url.search && !url.hash;
     if (!safe(ingress) || !["", "/"].includes(ingress.pathname)) return { valid: false };
     if (!safe(collector) || collector.pathname !== "/v1/events") return { valid: false };
+    if (requireExplicitHostBinding) {
+      const ingressHost = String(expectedIngressHost).trim().toLowerCase();
+      const pixelHost = String(expectedPixelCollectorHost).trim().toLowerCase();
+      if (!ingressHost || !pixelHost ||
+          ingress.hostname.toLowerCase() !== ingressHost ||
+          collector.hostname.toLowerCase() !== pixelHost ||
+          PRODUCTION_INGRESS_HOSTS.has(ingressHost) ||
+          PRODUCTION_PIXEL_HOSTS.has(pixelHost)) return { valid: false };
+    }
     return {
       valid: true,
       webhookUri: ingress.origin + "/shopify/webhooks",
