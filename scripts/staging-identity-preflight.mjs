@@ -113,6 +113,9 @@ try {
       pixel.hostname !== process.env.HENVALT_STAGE_PIXEL_COLLECTOR_HOST?.trim().toLowerCase()) {
     errors.push("Shopify pixel collector must be HTTPS /v1/events on its exact explicit staging host");
   }
+  if (pixel.hostname === "henvalt-pixel-collector.chmuhammadrehan18.workers.dev") {
+    errors.push("Shopify pixel collector matches the live production Worker");
+  }
 } catch {
   if (process.env.HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL) errors.push("Shopify pixel collector URL is malformed");
 }
