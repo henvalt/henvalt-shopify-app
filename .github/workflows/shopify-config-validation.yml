@@ -50,6 +50,8 @@ jobs:
           PY
       - name: Run OAuth redirect and webhook contract tests
         run: node --test tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-webhook-contract.test.mjs
+      - name: Verify isolated Shopify staging config renderer
+        run: node --test tests/shopify-staging-config.test.mjs
 
   billing-lock-safety:
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
