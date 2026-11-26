@@ -1,0 +1,16 @@
+name = "henvalt-pixel-collector-staging-no-send"
+main = "cloudflare/staging-pixel-collector.js"
+compatibility_date = "2026-10-27"
+workers_dev = true
+
+[vars]
+HENVALT_STAGE_NO_SEND = "true"
+SUPABASE_URL = "https://xidhtmrfvsgfmyltjuja.supabase.co"
+
+[[ratelimits]]
+name = "RATE_LIMITER"
+namespace_id = "1001"
+simple = { limit = 60, period = 60 }
+
+[secrets]
+required = ["SUPABASE_PUBLISHABLE_KEY", "COLLECTOR_SHARED_SECRET"]
