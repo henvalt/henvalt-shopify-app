@@ -127,6 +127,12 @@ This section supersedes earlier assumptions about the available staging boundary
 - Cloudflare account's workers.dev subdomain is enabled. The domain henvalt.com is registered with Hostinger and uses Hostinger nameservers, not a Cloudflare zone.
 - Hostinger DNS currently points app.henvalt.com and n8n.henvalt.com to 43.161.214.33; the apex points to Vercel and www uses a Vercel DNS target. Hostinger account inventory shows one Premium plan and one Horizons website, but no VPS instances. Do not assume the server at 43.161.214.33 is controlled by this Hostinger account.
 
+### Dashboard preview
+
+- An existing Cloudflare Pages project henvalt-dashboard-preview is connected to this repository and has successfully deployed the current candidate branch. Its branch alias is https://work-48h-system-readiness-20.henvalt-dashboard-preview.pages.dev.
+- The preview project currently has no environment variables. dashboard/index.html explicitly disables its live API outside henvalt-dashboard.pages.dev and contains production Supabase project constants. The preview URL is therefore a safe visual preview only, not a connected staging dashboard.
+- Before using this Pages preview as the Shopify staging application URL, the dashboard must be changed to accept an explicit staging runtime config and the Pages preview environment must receive only staging Supabase URL/publishable key and staging function URLs. Do not enable the preview against production endpoints.
+
 ### Shopify app configuration
 
 - The repository's default shopify.app.toml is explicitly production-bound: it uses the existing production client ID and the production Supabase OAuth callback and privacy webhook URL.
