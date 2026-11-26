@@ -67,5 +67,5 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/202611260002_harden_security_definer_rpc_grants.sql
       - name: Verify dashboard RPCs are backend-only
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/dashboard-reporting-rpc-grants-acceptance.sql
-      - name: Verify complete SECURITY DEFINER ACL and future defaults
+      - name: Verify complete SECURITY DEFINER ACL policy
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/security-definer-rpc-grants-acceptance.sql
