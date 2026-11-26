@@ -1,4 +1,6 @@
 \set ON_ERROR_STOP on
+SELECT henvalt.set_provider_sending_enabled(true, 'lock-order acceptance test');
+
 DO $assert$
 DECLARE
   v_tenant uuid := 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -17,7 +19,7 @@ BEGIN
   v_child := position('SELECT * INTO v_request FROM henvalt.delivery_requests' in v_def);
   IF v_parent=0 OR v_child=0 OR v_parent>=v_child THEN RAISE EXCEPTION 'authorization parent-first lock order missing'; END IF;
 
-  v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery(uuid,uuid)'::regprocedure);
+  v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid,uuid)'::regprocedure);
   v_parent := position('PERFORM 1 FROM henvalt.recovery_interventions ri' in v_def);
   v_child := position('UPDATE henvalt.delivery_requests dr' in v_def);
   IF v_parent=0 OR v_child=0 OR v_parent>=v_child THEN RAISE EXCEPTION 'token parent-first lock order missing'; END IF;
@@ -42,3 +44,5 @@ BEGIN
   END IF;
 END;
 $assert$;
+
+SELECT henvalt.set_provider_sending_enabled(false, 'close after lock-order acceptance test');
