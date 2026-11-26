@@ -303,7 +303,10 @@ FOR EACH ROW EXECUTE FUNCTION henvalt.enforce_billing_entitlement_before_deliver
 -- Minimal production interlock fixture required by the egress-fence migration.
 CREATE TABLE henvalt.provider_send_control (
   control_key text PRIMARY KEY CHECK(control_key='global'),
-  provider_sending_enabled boolean NOT NULL DEFAULT false
+  provider_sending_enabled boolean NOT NULL DEFAULT false,
+  changed_at timestamptz NOT NULL DEFAULT now(),
+  changed_by text,
+  change_reason text NOT NULL DEFAULT 'default_deny'
 );
 INSERT INTO henvalt.provider_send_control(control_key,provider_sending_enabled)
 VALUES('global',true);
