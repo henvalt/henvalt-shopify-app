@@ -65,6 +65,7 @@ insert into henvalt.shopify_connections(id,tenant_id,active) values
 \i supabase/migrations/202611260009_enforce_shopify_connection_parent_lineage.sql
 \i supabase/migrations/20261126150000_guard_shopify_connection_identity_immutable.sql
 \i supabase/migrations/20261126180000_order_shopify_connection_identity_guard_before_propagation.sql
+\i supabase/migrations/20261126190000_guard_shopify_connection_identity_metadata_immutable.sql
 
 -- Parent propagation trigger runs before the identity guard by PostgreSQL's
 -- alphabetical trigger ordering. Both connections belong to the same tenant,
@@ -82,6 +83,29 @@ begin
          '"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"')
      where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
     raise exception 'FAIL: trigger-derived same-tenant store switch was accepted';
+  exception when check_violation then
+    if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
+  end;
+end $$;
+
+-- Metadata is also an identity source. Rewriting or clearing the metadata
+-- connection id must be rejected before propagation can derive the column.
+do $$
+begin
+  begin
+    update henvalt.customers
+       set metadata=jsonb_set(metadata,'{shopify_connection_id}',
+         '"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"')
+     where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    raise exception 'FAIL: metadata-derived same-tenant store switch was accepted';
+  exception when check_violation then
+    if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
+  end;
+  begin
+    update henvalt.customers
+       set metadata=metadata-'shopify_connection_id'
+     where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    raise exception 'FAIL: metadata identity clear was accepted';
   exception when check_violation then
     if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
   end;
