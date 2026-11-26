@@ -103,6 +103,17 @@ test("candidate workflow builders retain inactive no-send isolation", () => {
   assert.match(recoveryBuilder, /availableInMCP: false/);
 });
 
+test("manual signed Shopify webhook test is staging-only and cannot target the production ingress", () => {
+  const workflow = read(".github/workflows/henvalt-signed-webhook-test.yml");
+  assert.match(workflow, /HENVALT_STAGE_SHOPIFY_CLIENT_SECRET/);
+  assert.match(workflow, /HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL/);
+  assert.match(workflow, /HENVALT_STAGE_NO_SEND/);
+  assert.match(workflow, /process\.env\.NO_SEND !== 'true'/);
+  assert.match(workflow, /henvalt-clean-ingress-v1\.chmuhammadrehan18\.workers\.dev/);
+  assert.doesNotMatch(workflow, /ENDPOINT: https:\/\/henvalt-clean-ingress-v1/);
+  assert.doesNotMatch(workflow, /SHOPIFY_CLIENT_SECRET:/);
+});
+
 test("staging is not inferred from CI and network denial remains mandatory", () => {
   const matrix = read("docs/v1-whole-system-staging-acceptance-matrix.md");
   assert.match(matrix, /isolated staging/i);
