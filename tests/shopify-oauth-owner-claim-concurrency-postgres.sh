@@ -24,3 +24,22 @@ if [ "$result" != "$expected" ]; then
   exit 1
 fi
 echo "PASS: concurrent OAuth callbacks serialize; first owner retains membership and Shopify token"
+
+# A tenant member without OWNER role must not replace the Shopify connection token.
+tenant_id="$(psql -At -v ON_ERROR_STOP=1 -c "select tenant_id from henvalt.shopify_connections where shop_domain='race-shop.myshopify.com'")"
+psql -v ON_ERROR_STOP=1 -c "insert into henvalt.tenant_memberships(tenant_id,user_id,role) values ('$tenant_id','cccccccc-0000-4000-8000-000000000003','MEMBER')"
+set +e
+psql -v ON_ERROR_STOP=1 -c "select henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner('state-user-c','race-shop.myshopify.com','access-token-user-c-1234567890','refresh-token-user-c-1234567890',3600,86400,'shop-100',array['read_orders'],'cccccccc-0000-4000-8000-000000000003')" > /tmp/henvalt-oauth-owner-c.log 2>&1
+owner_c_status=$?
+set -e
+if [ "$owner_c_status" -eq 0 ]; then
+  echo "FAIL: non-owner tenant member unexpectedly reauthorized Shopify"
+  exit 1
+fi
+grep -q "tenant_owner_required" /tmp/henvalt-oauth-owner-c.log
+result="$(psql -At -v ON_ERROR_STOP=1 -c "select s.secret from henvalt.shopify_connections sc join vault.secrets s on s.id=sc.access_token_secret_ref::uuid where sc.shop_domain='race-shop.myshopify.com' and s.name='henvalt_shop_race-shop_myshopify_com_access'")"
+if [ "$result" != "access-token-user-a-1234567890" ]; then
+  echo "FAIL: non-owner reauthorization changed the Shopify access token"
+  exit 1
+fi
+echo "PASS: non-owner member cannot reauthorize or replace the Shopify token"
