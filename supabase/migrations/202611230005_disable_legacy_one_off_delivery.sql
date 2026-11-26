@@ -12,7 +12,7 @@ DECLARE
   v_definition text;
   v_patched text;
 BEGIN
-  v_oid := to_regprocedure('henvalt.get_mailersend_token_for_delivery(uuid,uuid)');
+  v_oid := to_regprocedure('henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid,uuid)');
   IF v_oid IS NULL THEN RAISE EXCEPTION 'LEGACY_ONE_OFF_TOKEN_RPC_MISSING'; END IF;
   v_definition := pg_get_functiondef(v_oid);
   IF position('6d769024-cd44-4da4-be1d-a25a3dca0660' IN v_definition) = 0
