@@ -41,14 +41,3 @@ BEGIN
   END IF;
 END $$;
 
-CREATE OR REPLACE FUNCTION henvalt.default_acl_probe()
-RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
-DO $$
-BEGIN
-  IF has_function_privilege('anon', 'henvalt.default_acl_probe()', 'EXECUTE')
-     OR has_function_privilege('authenticated', 'henvalt.default_acl_probe()', 'EXECUTE')
-     OR NOT has_function_privilege('service_role', 'henvalt.default_acl_probe()', 'EXECUTE') THEN
-    RAISE EXCEPTION 'future SECURITY DEFINER function default ACL is unsafe';
-  END IF;
-END $$;
-DROP FUNCTION henvalt.default_acl_probe();
