@@ -35,7 +35,10 @@ begin
       using errcode='23514';
   end if;
 
-  if v_new_connection_id is not null then
+  -- Validate activity only when identity is first assigned. Existing rows must
+  -- remain mutable for non-identity fields even if their connection is later
+  -- deactivated; changing or clearing an established identity is rejected above.
+  if v_new_connection_id is not null and v_old_connection_id is null then
     select sc.tenant_id into v_connection_tenant_id
       from henvalt.shopify_connections sc
      where sc.id=v_new_connection_id and sc.active=true;
@@ -56,66 +59,66 @@ grant execute on function henvalt.guard_shopify_connection_identity_immutable()
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.webhook_events;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id, source
+before update
 on henvalt.webhook_events
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.canonical_events;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id, source
+before update
 on henvalt.canonical_events
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.customers;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.customers
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.checkouts;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.checkouts
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.orders;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.orders
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.sessions;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.sessions
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.opportunities;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.opportunities
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.recovery_sequences;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.recovery_sequences
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.recovery_interventions;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.recovery_interventions
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.delivery_requests;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.delivery_requests
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
 
 drop trigger if exists trg_shopify_connection_identity_immutable on henvalt.delivery_attempts;
 create trigger trg_shopify_connection_identity_immutable
-before update of tenant_id, shopify_connection_id
+before update
 on henvalt.delivery_attempts
 for each row execute function henvalt.guard_shopify_connection_identity_immutable();
