@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { buildShopifyCompletionUrl } from "./completion-url.mjs";
+import { buildShopifyCompletionUrl, isSafeCompletionDashboardUrl } from "./completion-url.mjs";
 import { isOAuthCallbackBoundToSupabase, resolveOAuthInfrastructure } from "./infrastructure-config.mjs";
 import { SHOPIFY_WEBHOOK_SPECS, verifyWebhookDestination } from "./webhook-specs.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -7,7 +7,7 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
-const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "https://henvalt-dashboard.pages.dev";
+const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
 const OAUTH_INFRASTRUCTURE = resolveOAuthInfrastructure({
   ingressBaseUrl: Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "",
   pixelCollectorUrl: Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "",
@@ -53,7 +53,7 @@ async function db(path: string, init: RequestInit = {}, schema = "henvalt"): Pro
   });
 }
 function configOk(): boolean {
-  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && isOAuthCallbackBoundToSupabase(SUPABASE_URL, SHOPIFY_REDIRECT_URI) && OAUTH_INFRASTRUCTURE.valid);
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && isOAuthCallbackBoundToSupabase(SUPABASE_URL, SHOPIFY_REDIRECT_URI) && isSafeCompletionDashboardUrl(HENVALT_DASHBOARD_URL) && OAUTH_INFRASTRUCTURE.valid);
 }
 async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
   const supplied = params.get("hmac");
@@ -412,6 +412,7 @@ Deno.serve(async (req: Request) => {
       webhooksStatus: allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention",
       pixelIssue: !pixelActivated && typeof pixelActivation.error === "string" ? pixelActivation.error : undefined,
     });
+    if (!completionUrl) return json(503, { error: "oauth_completion_redirect_not_configured" });
     return redirect(completionUrl);
   }
   return json(404, { error: "not_found" });
