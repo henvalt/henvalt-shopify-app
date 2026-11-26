@@ -55,9 +55,11 @@ begin
     where tenant_id = v_tenant_id
   ) and not exists (
     select 1 from henvalt.tenant_memberships
-    where tenant_id = v_tenant_id and user_id = p_user_id
+    where tenant_id = v_tenant_id
+      and user_id = p_user_id
+      and role = 'OWNER'::henvalt.member_role
   ) then
-    raise exception 'tenant_already_claimed' using errcode = '42501';
+    raise exception 'tenant_owner_required' using errcode = '42501';
   end if;
 
   v_connection := henvalt.control_plane_connect_shop(p_shop_domain);
