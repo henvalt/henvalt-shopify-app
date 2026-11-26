@@ -32,3 +32,33 @@ test('validator is not directly executable by public client roles', () => {
   assert.match(migration, /revoke all on function henvalt\.validate_shopify_recovery_parent_links\(\) from public, anon, authenticated/);
   assert.match(migration, /grant execute on function henvalt\.validate_shopify_recovery_parent_links\(\) to service_role/);
 });
+
+const identityGuard = readFileSync(
+  new URL('../supabase/migrations/20261126150000_guard_shopify_connection_identity_immutable.sql', import.meta.url),
+  'utf8'
+);
+
+test('captured Shopify connection and tenant identity cannot be re-parented or cleared', () => {
+  assert.match(identityGuard, /SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE/);
+  assert.match(identityGuard, /v_new_connection_id is distinct from v_old_connection_id/);
+  assert.match(identityGuard, /v_new_tenant_id is distinct from v_old_tenant_id/);
+  assert.match(identityGuard, /SHOPIFY_CONNECTION_IDENTITY_TENANT_MISMATCH/);
+  assert.match(identityGuard, /sc\.active=true/);
+});
+
+test('Shopify webhook and canonical event source identity cannot be rewritten', () => {
+  assert.match(identityGuard, /SHOPIFY_EVENT_SOURCE_IDENTITY_IMMUTABLE/);
+  assert.match(identityGuard, /before update of tenant_id, shopify_connection_id, source[\s\S]*?on henvalt\.webhook_events/);
+  assert.match(identityGuard, /before update of tenant_id, shopify_connection_id, source[\s\S]*?on henvalt\.canonical_events/);
+});
+
+test('identity guard covers every connection-scoped descendant and is service-role only', () => {
+  for (const table of [
+    'webhook_events','canonical_events','customers','checkouts','orders','sessions',
+    'opportunities','recovery_sequences','recovery_interventions','delivery_requests','delivery_attempts'
+  ]) {
+    assert.match(identityGuard, new RegExp('on henvalt\\.' + table + '\\b'));
+  }
+  assert.match(identityGuard, /revoke all on function henvalt\.guard_shopify_connection_identity_immutable\(\)[\s\S]*?from public, anon, authenticated/);
+  assert.match(identityGuard, /grant execute on function henvalt\.guard_shopify_connection_identity_immutable\(\)[\s\S]*?to service_role/);
+});
