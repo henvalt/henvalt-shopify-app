@@ -131,7 +131,7 @@ This section supersedes earlier assumptions about the available staging boundary
 
 - An existing Cloudflare Pages project henvalt-dashboard-preview is connected to this repository and has successfully deployed the current candidate branch. Its branch alias is https://work-48h-system-readiness-20.henvalt-dashboard-preview.pages.dev.
 - The preview project currently has no environment variables. dashboard/index.html explicitly disables its live API outside henvalt-dashboard.pages.dev and contains production Supabase project constants. The preview URL is therefore a safe visual preview only, not a connected staging dashboard.
-- Before using this Pages preview as the Shopify staging application URL, the dashboard must be changed to accept an explicit staging runtime config and the Pages preview environment must receive only staging Supabase URL/publishable key and staging function URLs. Do not enable the preview against production endpoints.
+- The branch now adds dashboard/functions/config.js, which returns production config only on the exact production host and staging config only when HENVALT_STAGE_NO_SEND=true plus a non-production project ref, exact Supabase URL and publishable key are present. The dashboard UI blocks MailerSend setup and billing-resolution POSTs in no-send mode. The preview remains disabled until its preview environment receives HENVALT_STAGE_SUPABASE_PROJECT_REF, HENVALT_STAGE_SUPABASE_URL, HENVALT_STAGE_SUPABASE_PUBLISHABLE_KEY and HENVALT_STAGE_NO_SEND=true. None of these variables has been set yet; do not point the preview at production endpoints.
 
 ### Shopify app configuration
 
