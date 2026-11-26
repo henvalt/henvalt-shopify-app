@@ -210,3 +210,16 @@ The billing final-egress authorization acceptance script also completed without 
 - PR #7 remains draft and unmerged; the full review surface is still too large for a safe merge.
 
 The system remains **NO-GO for merchant launch** until a synthetic Shopify checkout traverses the isolated ingress, durable replay, recovery, generation-bound delivery authorization, blocked provider-egress boundary, order attribution, and billing measurement end to end. No production cutover is authorized by this staging work.
+
+
+### Dashboard RPC privilege audit — 2026-11-26
+
+A staging-only security review of the dashboard Edge Function and its two SECURITY DEFINER reporting RPCs found that both RPCs were executable by `anon` and `authenticated`. Because they accept a shop domain and do not independently verify the caller's tenant membership, direct PostgREST RPC invocation could bypass the Edge Function's membership resolution and disclose merchant reporting data.
+
+Remediation applied to the isolated staging project and committed as candidate migration `202611260001_dashboard_reporting_rpc_service_role_only.sql`:
+- Revoke all direct execution from PUBLIC, anon, and authenticated.
+- Grant execution only to service_role, which is used by the dashboard Edge Function after it validates the user's access token and resolves exactly one tenant membership and active Shopify connection.
+- Staging verification passed: anon=false, authenticated=false, service_role=true for both RPCs.
+- Added a disposable PostgreSQL 17 CI workflow and SQL acceptance test to prevent regression.
+
+No production grants or functions were changed. The staging dashboard Edge Function is present, but the other production Edge Functions (OAuth, ingress/control plane, delivery, billing, etc.) have not yet been deployed to staging. The dashboard preview remains unconfigured and backend-disabled. End-to-end Shopify testing remains blocked on a dedicated staging Shopify app identity and a usable isolated n8n runtime.
