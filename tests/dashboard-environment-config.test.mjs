@@ -32,7 +32,9 @@ test("Pages preview receives only the isolated staging Supabase project and endp
   assert.equal(config.supabaseUrl, stageEnv.HENVALT_STAGE_SUPABASE_URL);
   assert.equal(config.setup, null);
   assert.match(config.api, /^https:\/\/abcdefghijklmnopqrst\.supabase\.co\/functions\/v1\//);
-  assert.match(config.shopifyOAuth, /henvalt-shopify-oauth\/auth$/);
+  assert.equal(config.shopifyOAuth, null);
+  assert.equal(config.billingReconciliation, null);
+  assert.equal(config.privacyExport, null);
   assert.doesNotMatch(JSON.stringify(config), /ocyplckdojdubyrsxcxa/);
 });
 
