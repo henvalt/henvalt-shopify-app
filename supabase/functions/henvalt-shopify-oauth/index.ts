@@ -8,9 +8,19 @@ const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
 const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
+const IS_NON_PRODUCTION_SUPABASE = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname !== "ocyplckdojdubyrsxcxa.supabase.co";
+  } catch {
+    return true;
+  }
+})();
 const OAUTH_INFRASTRUCTURE = resolveOAuthInfrastructure({
   ingressBaseUrl: Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "",
   pixelCollectorUrl: Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "",
+  requireExplicitHostBinding: IS_NON_PRODUCTION_SUPABASE,
+  expectedIngressHost: Deno.env.get("HENVALT_STAGE_INGRESS_HOST") ?? "",
+  expectedPixelCollectorHost: Deno.env.get("HENVALT_STAGE_PIXEL_COLLECTOR_HOST") ?? "",
 });
 const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
