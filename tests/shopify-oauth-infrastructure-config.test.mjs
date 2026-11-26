@@ -68,10 +68,10 @@ test("OAuth refuses to start without an explicit completion dashboard URL", () =
 test("non-production OAuth requires exact explicit ingress and pixel collector host bindings", () => {
   const base = {
     ingressBaseUrl: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
-    pixelCollectorUrl: "https://henvalt-pixel-staging.example.workers.dev/v1/events",
+    pixelCollectorUrl: "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events",
     requireExplicitHostBinding: true,
     expectedIngressHost: "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
-    expectedPixelCollectorHost: "henvalt-pixel-staging.example.workers.dev",
+    expectedPixelCollectorHost: "henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev",
   };
   assert.equal(resolveOAuthInfrastructure(base).valid, true);
   assert.equal(resolveOAuthInfrastructure({ ...base, expectedIngressHost: "other.example.workers.dev" }).valid, false);
@@ -80,8 +80,18 @@ test("non-production OAuth requires exact explicit ingress and pixel collector h
   assert.equal(resolveOAuthInfrastructure({
     ...base,
     ingressBaseUrl: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
-    pixelCollectorUrl: "https://henvalt-pixel-staging.example.workers.dev/v1/events",
+    pixelCollectorUrl: "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events",
     expectedIngressHost: "",
+  }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({
+    ...base,
+    ingressBaseUrl: "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev",
+    expectedIngressHost: "henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev",
+  }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({
+    ...base,
+    pixelCollectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    expectedPixelCollectorHost: "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
   }).valid, false);
 });
 
