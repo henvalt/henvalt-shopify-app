@@ -116,7 +116,7 @@ This section supersedes earlier assumptions about the available staging boundary
 - Existing paused projects: henvalt_v23, henvalt-sales-factory, henvalt-core-vault.
 - Existing development branches: zero.
 - A new branch quote is USD 0.01344/hour, so it is excluded from the no-paid-resource plan.
-- Restore of the existing henvalt_v23 project was requested on 2026-11-26 and accepted; latest observed status is COMING_UP. It must not be used until its project identity, migration history, data, Edge Functions, secrets and outbound integrations have been audited. A restore is not proof of staging isolation.
+- Three existing paused projects were restored one at a time for read-only inspection, then returned to pause because they were legacy schemas with RLS-disabled public tables: henvalt_v23 (10 public tables, all zero rows, 0 migrations, 0 Edge Functions), henvalt-sales-factory (2 public tables, all zero rows, 0 migrations, 0 Edge Functions), and henvalt-core-vault (11 public tables plus vault.secrets, all inspected row counts zero, 0 migrations, 0 Edge Functions). The first two are confirmed INACTIVE; the last pause request was accepted and last observed as PAUSING. None is approved as staging.
 - The active production project currently has deployed OAuth, MailerSend delivery, control-plane and dashboard Edge Functions. Candidate Shopify usage billing is not among the deployed function names. Do not test the active project's delivery endpoints.
 
 ### Cloudflare and domain routing
@@ -141,4 +141,4 @@ This section supersedes earlier assumptions about the available staging boundary
 
 ### Current conclusion
 
-The production boundary is now better understood, and a zero-new-project-cost Supabase restore is being investigated. However, there is still no verified isolated end-to-end staging environment. The restored legacy projects inspected so far are not ready, n8n staging access is unverified, and the dedicated staging Worker and Shopify app configs are prepared but not deployed or registered. NO-GO remains in force.
+The production boundary is now better understood, and all three existing paused projects have been inspected; none is a safe staging baseline. The organization currently has one active production project and room for a second free project, but a new project cost quote and organization selection are required before creation. There is still no verified isolated end-to-end staging environment. The restored legacy projects inspected so far are not ready, n8n staging access is unverified, and the dedicated staging Worker and Shopify app configs are prepared but not deployed or registered. NO-GO remains in force.
