@@ -1,0 +1,12 @@
+name = "henvalt-shopify-ingress-staging-no-send"
+main = "cloudflare/staging-worker.js"
+compatibility_date = "2026-10-27"
+workers_dev = true
+
+[vars]
+N8N_INGEST_URL = "https://staging-n8n.invalid/webhook/henvalt/ingest-candidate-no-send"
+HENVALT_STAGE_NO_SEND = "true"
+HENVALT_STAGE_PROVIDER_MODE = "stub"
+
+[secrets]
+required = ["SHOPIFY_API_SECRET"]
