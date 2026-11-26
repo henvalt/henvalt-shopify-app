@@ -1,12 +1,12 @@
-name: HENVALT signed Shopify webhook test
+name: HENVALT signed Shopify staging webhook test
 
 on:
   workflow_dispatch:
     inputs:
       shop:
-        description: Installed HENVALT test shop domain
+        description: Explicit Shopify development store domain
         required: true
-        default: ur4jvw-nz.myshopify.com
+        type: string
       topic:
         description: Shopify webhook topic
         required: true
@@ -25,12 +25,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Send a synthetic Shopify-HMAC-signed test event
+      - name: Send a synthetic Shopify-HMAC-signed test event to isolated staging only
         env:
-          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.HENVALT_STAGE_SHOPIFY_CLIENT_SECRET }}
           SHOP: ${{ inputs.shop }}
           TOPIC: ${{ inputs.topic }}
-          ENDPOINT: https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks
+          ENDPOINT: ${{ vars.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL }}
+          NO_SEND: ${{ vars.HENVALT_STAGE_NO_SEND }}
         run: |
           node <<'NODE'
           const crypto = require('node:crypto');
@@ -39,11 +40,17 @@ jobs:
           const shop = (process.env.SHOP || '').trim().toLowerCase();
           const topic = (process.env.TOPIC || '').trim().toLowerCase();
           const endpoint = process.env.ENDPOINT;
-
-          if (!secret) throw new Error('Missing GitHub secret: SHOPIFY_CLIENT_SECRET');
-          if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) throw new Error('Invalid .myshopify.com shop domain');
+          if (!secret) throw new Error('Missing staging-only GitHub secret: HENVALT_STAGE_SHOPIFY_CLIENT_SECRET');
+          if (process.env.NO_SEND !== 'true') throw new Error('Refusing webhook test: HENVALT_STAGE_NO_SEND must be true');
+          if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) throw new Error('Invalid .myshopify.com development store domain');
           if (!['checkouts/update', 'carts/update', 'orders/create'].includes(topic)) throw new Error('Unsupported test topic');
-
+          let target;
+          try { target = new URL(endpoint); } catch { throw new Error('Missing or invalid HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL repository variable'); }
+          if (target.protocol !== 'https:' || target.pathname !== '/shopify/webhooks' ||
+              target.hostname === 'henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev' ||
+              target.hostname === 'n8n.henvalt.com') {
+            throw new Error('Refusing to send to a non-staging webhook endpoint');
+          }
           const now = new Date().toISOString();
           const id = Date.now();
           const payload = topic === 'checkouts/update'
@@ -56,7 +63,7 @@ jobs:
           const hmac = crypto.createHmac('sha256', secret).update(raw, 'utf8').digest('base64');
           const webhookId = crypto.randomUUID();
 
-          fetch(endpoint, {
+          fetch(target, {
             method: 'POST',
             headers: {
               'content-type': 'application/json',
