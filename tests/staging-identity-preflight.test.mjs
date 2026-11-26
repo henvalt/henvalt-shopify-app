@@ -102,8 +102,8 @@ test("preflight rejects the live production Cloudflare webhook ingress", () => {
   assert.match(result.stderr, /dedicated no-send staging Worker hostname/);
 });
 
-test("preflight rejects every webhook ingress hostname except the dedicated staging Worker", () => {
-  const result = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks" });
+test("preflight rejects custom domains that have not been isolated for staging", () => {
+  const result = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://staging.henvalt.com/shopify/webhooks" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /dedicated no-send staging Worker hostname/);
 });
