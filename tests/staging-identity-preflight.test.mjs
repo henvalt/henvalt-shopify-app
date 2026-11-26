@@ -160,3 +160,13 @@ test("preflight binds OAuth ingress and pixel collector to explicit isolated hos
   assert.notEqual(pixelPath.status, 0);
   assert.match(pixelPath.stderr, /exact explicit staging host/);
 });
+
+test("preflight rejects the live production Shopify pixel collector", () => {
+  const result = run({
+    ...valid,
+    HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /matches the live production Worker/);
+});
