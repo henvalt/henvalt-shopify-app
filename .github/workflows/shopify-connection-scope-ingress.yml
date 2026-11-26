@@ -7,9 +7,11 @@ on:
       - "supabase/migrations/202611260007_propagate_shopify_connection_to_recovery_graph.sql"
       - "supabase/migrations/202611260008_propagate_shopify_connection_to_delivery_descendants.sql"
       - "supabase/migrations/202611260009_enforce_shopify_connection_parent_lineage.sql"
+      - "supabase/migrations/202611260010_validate_shopify_recovery_parent_links.sql"
       - "tests/shopify-connection-scope-ingress.test.mjs"
       - "tests/shopify-connection-scope-recovery-graph.test.mjs"
       - "tests/shopify-connection-scope-delivery-descendants.test.mjs"
+      - "tests/shopify-connection-scope-parent-links.test.mjs"
       - ".github/workflows/shopify-connection-scope-ingress.yml"
   workflow_dispatch:
 permissions:
@@ -22,4 +24,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test tests/shopify-connection-scope-ingress.test.mjs tests/shopify-connection-scope-recovery-graph.test.mjs tests/shopify-connection-scope-delivery-descendants.test.mjs
+      - run: node --test tests/shopify-connection-scope-ingress.test.mjs tests/shopify-connection-scope-recovery-graph.test.mjs tests/shopify-connection-scope-delivery-descendants.test.mjs tests/shopify-connection-scope-parent-links.test.mjs
