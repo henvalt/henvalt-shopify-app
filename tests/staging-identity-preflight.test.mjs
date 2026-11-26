@@ -17,6 +17,9 @@ const valid = {
   HENVALT_STAGE_SHOPIFY_STORE: "henvalt-stage.myshopify.com",
   HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
   HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev/shopify/webhooks",
+  HENVALT_STAGE_INGRESS_HOST: "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
+  HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-staging.example.invalid/v1/events",
+  HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "henvalt-pixel-staging.example.invalid",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
   HENVALT_STAGE_NO_SEND: "true",
@@ -144,4 +147,16 @@ test("preflight requires an exact staging n8n host allowlist", () => {
   const labelledProduction = run({ ...valid, HENVALT_STAGE_N8N_BASE_URL: "https://prod-stage.example.invalid", HENVALT_STAGE_N8N_HOST: "prod-stage.example.invalid" });
   assert.notEqual(labelledProduction.status, 0);
   assert.match(labelledProduction.stderr, /host appears to identify production/);
+});
+
+test("preflight binds OAuth ingress and pixel collector to explicit isolated hosts", () => {
+  const ingressMismatch = run({ ...valid, HENVALT_STAGE_INGRESS_HOST: "other-stage.example.invalid" });
+  assert.notEqual(ingressMismatch.status, 0);
+  assert.match(ingressMismatch.stderr, /OAuth ingress host binding must exactly match/);
+  const pixelMismatch = run({ ...valid, HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "other-stage.example.invalid" });
+  assert.notEqual(pixelMismatch.status, 0);
+  assert.match(pixelMismatch.stderr, /exact explicit staging host/);
+  const pixelPath = run({ ...valid, HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL: "https://henvalt-pixel-staging.example.invalid/other" });
+  assert.notEqual(pixelPath.status, 0);
+  assert.match(pixelPath.stderr, /exact explicit staging host/);
 });
