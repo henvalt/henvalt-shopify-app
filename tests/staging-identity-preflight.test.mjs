@@ -141,4 +141,7 @@ test("preflight requires an exact staging n8n host allowlist", () => {
   const production = run({ ...valid, HENVALT_STAGE_N8N_BASE_URL: "https://n8n.henvalt.com", HENVALT_STAGE_N8N_HOST: "n8n.henvalt.com" });
   assert.notEqual(production.status, 0);
   assert.match(production.stderr, /matches a production host/);
+  const labelledProduction = run({ ...valid, HENVALT_STAGE_N8N_BASE_URL: "https://prod-stage.example.invalid", HENVALT_STAGE_N8N_HOST: "prod-stage.example.invalid" });
+  assert.notEqual(labelledProduction.status, 0);
+  assert.match(labelledProduction.stderr, /host appears to identify production/);
 });
