@@ -35,9 +35,9 @@ export function resolveDashboardConfig(hostname, env = {}) {
     supabaseKey,
     api: `${functions}/henvalt-merchant-dashboard`,
     setup: null,
-    billingReconciliation: `${functions}/henvalt-billing-reconciliation`,
-    privacyExport: `${functions}/henvalt-privacy-export`,
-    shopifyOAuth: `${functions}/henvalt-shopify-oauth/auth`,
+    billingReconciliation: null,
+    privacyExport: null,
+    shopifyOAuth: null,
   };
 }
 
