@@ -4,26 +4,38 @@ on:
   pull_request:
     paths:
       - "tests/integrated-staging-readiness.test.mjs"
-      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - "tests/staging-identity-preflight.test.mjs"
+      - "tests/shopify-staging-config.test.mjs"
+      - "tests/shopify-staging-ingress-worker.test.mjs"
+      - "tests/dashboard-environment-config.test.mjs"
+      - "tests/dashboard-preview-isolation.test.mjs"
       - "scripts/staging-identity-preflight.mjs"
+      - "scripts/render-shopify-staging-config.mjs"
       - "cloudflare/staging-worker.js"
+      - "wrangler.staging.toml"
       - "dashboard/index.html"
       - "dashboard/functions/config.js"
-      - "tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs"
-      - "tests/dashboard-preview-isolation.test.mjs"
-      - "wrangler.staging.toml"
-      - "tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
       - ".github/workflows/henvalt-signed-webhook-test.yml"
-      - "tests/staging-identity-preflight.test.mjs"
       - ".github/workflows/integrated-staging-readiness.yml"
   push:
     branches:
       - "work/48h-system-readiness-2026-11-21"
     paths:
       - "tests/integrated-staging-readiness.test.mjs"
-      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
-      - "scripts/staging-identity-preflight.mjs"
       - "tests/staging-identity-preflight.test.mjs"
+      - "tests/shopify-staging-config.test.mjs"
+      - "tests/shopify-staging-ingress-worker.test.mjs"
+      - "tests/dashboard-environment-config.test.mjs"
+      - "tests/dashboard-preview-isolation.test.mjs"
+      - "scripts/staging-identity-preflight.mjs"
+      - "scripts/render-shopify-staging-config.mjs"
+      - "cloudflare/staging-worker.js"
+      - "wrangler.staging.toml"
+      - "dashboard/index.html"
+      - "dashboard/functions/config.js"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - ".github/workflows/henvalt-signed-webhook-test.yml"
       - ".github/workflows/integrated-staging-readiness.yml"
 
 permissions:
@@ -55,4 +67,4 @@ jobs:
           print("ISOLATED_STAGING_WRANGLER_CONFIG_PASSED")
           PY
       - name: Run integrated staging readiness contract
-        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs
+        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs
