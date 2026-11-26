@@ -12,6 +12,8 @@ on:
     branches:
       - "work/48h-system-readiness-2026-11-21"
     paths:
+      - "supabase/migrations/202611260002_harden_security_definer_rpc_grants.sql"
+      - "tests/security-definer-rpc-grants-acceptance.sql"
       - "supabase/migrations/202611260001_dashboard_reporting_rpc_service_role_only.sql"
       - "tests/dashboard-reporting-rpc-grants-acceptance.sql"
       - ".github/workflows/dashboard-reporting-rpc-grants.yml"
@@ -52,11 +54,11 @@ jobs:
           CREATE FUNCTION henvalt.control_plane_dashboard_summary(text,timestamptz,timestamptz)
             RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS 'SELECT ''{}''::jsonb';
           CREATE FUNCTION henvalt.control_plane_revenue_series(text,timestamptz,timestamptz,text)
-            RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
-          CREATE FUNCTION henvalt.is_tenant_member(uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $ SELECT false $;
-          CREATE FUNCTION henvalt.classify_customer_reply_intent(text) RETURNS text LANGUAGE sql SECURITY DEFINER AS $ SELECT 'unknown' $;
-          CREATE FUNCTION henvalt.score_recovery_intent(uuid,uuid) RETURNS numeric LANGUAGE sql SECURITY DEFINER AS $ SELECT 0 $;
-          CREATE FUNCTION henvalt.set_initial_customer_reply_intent() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN RETURN NEW; END $;
+            RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS 'SELECT ''{}''::jsonb';
+          CREATE FUNCTION henvalt.is_tenant_member(uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS 'SELECT false';
+          CREATE FUNCTION henvalt.classify_customer_reply_intent(text) RETURNS text LANGUAGE sql SECURITY DEFINER AS 'SELECT ''unknown''';
+          CREATE FUNCTION henvalt.score_recovery_intent(uuid,uuid) RETURNS numeric LANGUAGE sql SECURITY DEFINER AS 'SELECT 0';
+          CREATE FUNCTION henvalt.set_initial_customer_reply_intent() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RETURN NEW; END';
           GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA henvalt TO PUBLIC;
           SQL
       - name: Apply dashboard reporting RPC grant migration
