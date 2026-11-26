@@ -109,7 +109,8 @@ end $$;
 
 insert into henvalt.orders(id,tenant_id) values
  ('77777777-7777-4777-8777-777777777777','11111111-1111-4111-8111-111111111111');
-do $$
+do $
+begin
   begin
     update henvalt.orders set shopify_connection_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc'
      where id='77777777-7777-4777-8777-777777777777';
