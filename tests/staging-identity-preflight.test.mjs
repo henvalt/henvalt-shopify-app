@@ -10,6 +10,7 @@ const valid = {
   HENVALT_STAGE_DASHBOARD_URL: "https://staging-dashboard.example.invalid",
   HENVALT_STAGE_PRIVACY_WEBHOOK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-privacy",
   HENVALT_STAGE_N8N_BASE_URL: "https://staging-n8n.example.invalid",
+  HENVALT_STAGE_N8N_HOST: "staging-n8n.example.invalid",
   HENVALT_STAGE_INGEST_WORKFLOW_ID: "staging-ingest-1",
   HENVALT_STAGE_RECOVERY_WORKFLOW_ID: "staging-recovery-2",
   HENVALT_STAGE_DELIVERY_WORKFLOW_ID: "staging-delivery-3",
@@ -128,4 +129,16 @@ test("preflight requires an isolated OAuth completion dashboard matching the sta
   const mismatched = run({ ...valid, HENVALT_STAGE_DASHBOARD_URL: "https://other-stage.example.invalid" });
   assert.notEqual(mismatched.status, 0);
   assert.match(mismatched.stderr, /match the isolated staging application origin/);
+});
+
+test("preflight requires an exact staging n8n host allowlist", () => {
+  const missing = run({ ...valid, HENVALT_STAGE_N8N_HOST: "" });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /missing required staging metadata: HENVALT_STAGE_N8N_HOST/);
+  const mismatch = run({ ...valid, HENVALT_STAGE_N8N_HOST: "other-staging-n8n.example.invalid" });
+  assert.notEqual(mismatch.status, 0);
+  assert.match(mismatch.stderr, /exactly match the explicit staging n8n host allowlist/);
+  const production = run({ ...valid, HENVALT_STAGE_N8N_BASE_URL: "https://n8n.henvalt.com", HENVALT_STAGE_N8N_HOST: "n8n.henvalt.com" });
+  assert.notEqual(production.status, 0);
+  assert.match(production.stderr, /matches a production host/);
 });
