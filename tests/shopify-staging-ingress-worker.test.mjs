@@ -7,6 +7,7 @@ const secret = "synthetic-stage-shopify-secret";
 const baseEnv = {
   SHOPIFY_API_SECRET: secret,
   N8N_INGEST_URL: "https://stage-n8n.example.test/webhook/henvalt/ingest-candidate-no-send",
+  HENVALT_STAGE_N8N_HOST: "stage-n8n.example.test",
   HENVALT_STAGE_NO_SEND: "true",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
 };
@@ -46,6 +47,7 @@ test("staging ingress refuses production n8n host and wrong replay path", async 
     "https://henvalt26.app.n8n.cloud/webhook/henvalt/ingest-candidate-no-send",
     "https://stage-n8n.example.test/webhook/henvalt/ingest",
     "https://staging-n8n.invalid/webhook/henvalt/ingest-candidate-no-send",
+    "https://unapproved-host.example.test/webhook/henvalt/ingest-candidate-no-send",
   ]) {
     let calls = 0;
     const response = await handleStagingRequest(request(), { ...baseEnv, N8N_INGEST_URL }, async () => { calls++; });
@@ -91,4 +93,16 @@ test("valid staging configuration accepts only a durable webhook and replay-job 
 test("valid staging configuration rejects generic upstream 2xx responses", async () => {
   const response = await handleStagingRequest(request(), baseEnv, async () => new Response(null, { status: 204 }));
   assert.equal(response.status, 503);
+});
+
+test("staging ingress refuses a missing or mismatched exact n8n host allowlist", async () => {
+  for (const env of [
+    { ...baseEnv, HENVALT_STAGE_N8N_HOST: "" },
+    { ...baseEnv, HENVALT_STAGE_N8N_HOST: "different-stage.example.test" },
+  ]) {
+    let calls = 0;
+    const response = await handleStagingRequest(request(), env, async () => { calls++; });
+    assert.equal(response.status, 503);
+    assert.equal(calls, 0);
+  }
 });
