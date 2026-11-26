@@ -29,7 +29,7 @@ BEGIN
     RAISE EXCEPTION 'authorization parent-first lock order missing';
   END IF;
 
-  v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery(uuid,uuid)'::regprocedure);
+  v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid,uuid)'::regprocedure);
   v_parent := position('PERFORM 1 FROM henvalt.recovery_interventions ri' in v_def);
   v_child := position('UPDATE henvalt.delivery_requests dr' in v_def);
   IF v_parent=0 OR v_child=0 OR v_parent>=v_child THEN
