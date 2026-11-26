@@ -513,3 +513,51 @@ Fresh read-only staging checks confirm:
 - The n8n workflow inventory connector again failed internally, so live workflow versions, activation, credentials and execution remain unverified. Cloudflare inventory also returned an authentication error; no Worker settings were changed.
 
 No staging or production migrations, Edge Function deployments, Cloudflare changes, n8n workflow changes, Shopify releases, provider requests, emails, or billing mutations were performed. The candidate branch remains draft/unmerged. The isolated runtime still lacks a verified staging Shopify app/store, OAuth secrets, operational no-send ingress/pixel endpoints and a separate n8n runtime. Integrated install-to-event-to-recovery acceptance is therefore still **NO-GO**.
+
+
+## Integrated execution update — 26 November 2026 (latest staging run)
+
+This section supersedes the earlier staging-state paragraph above. It records the actual isolated staging changes and the follow-up trigger-order correction.
+
+### Staging migrations applied and verified
+
+The following additive migrations are now applied only to `henvalt-integrated-staging`:
+
+- `20261126170401_guard_shopify_connection_identity_immutable`
+- `20261126170438_serialize_shopify_oauth_owner_claim`
+- `20261126171033_order_shopify_connection_identity_guard_before_propagation`
+- `20261126171253_guard_shopify_connection_identity_metadata_immutable`
+
+The identity guard covers all 11 connection-scoped tables. Its trigger name is deliberately ordered before propagation triggers. The guard also checks the metadata-derived Shopify connection identity before later triggers can derive or normalize the connection column. Execution is granted to `service_role` only; `anon` and `authenticated` cannot execute the function.
+
+Rollback-only tests against staging verified that:
+- Rewriting or clearing a webhook's metadata connection identity is rejected.
+- Clearing an established `shopify_connection_id` is rejected.
+- Reassigning an established row to a different tenant is rejected.
+- A normal non-identity payload update succeeds.
+- No synthetic rows remain after rollback.
+- All 11 ordered guard triggers exist and provider sending remains disabled.
+
+The first CI run exposed a real ordering gap: a propagation trigger could restore a cleared connection before the later-named identity guard inspected it. The guard was renamed to execute first, then extended to inspect metadata identity. The disposable PostgreSQL 17 acceptance fixture was updated to apply all four candidate migrations and test metadata rewrite/clear, direct column clear, tenant reassignment and safe updates.
+
+### Latest PR verification
+
+PR #15 remains draft and unmerged. On code-bearing head `6a69ad977374bffa61822c5c07391641b178fad9`:
+- Shopify connection scope ingress passed, including the PostgreSQL 17 identity-guard acceptance (run `45865986244`).
+- Shopify app configuration/static validation passed, including OAuth Edge Function Deno type-check and OAuth owner-claim concurrency (run `45865986041`); Shopify version deployment was skipped.
+- Integrated staging readiness passed (run `45865985905`).
+- Production-shaped delivery generation migration passed (run `45865985880`).
+- Foreign-key index coverage passed (run `45865985914`).
+- Safety and pixel consent was still in progress at the time this section was written (run `45865985984`); do not count it as passed until a completed success is observed.
+
+These CI results do not establish a live runtime integration.
+
+### Remaining runtime blockers
+
+- Supabase staging has zero Auth users and zero credentialed Shopify connections. OAuth finalization was not exercised with a real staging user or Shopify token.
+- The `henvalt-shopify-oauth` Edge Function is not deployed. Its required secrets cannot be verified through the available connector.
+- The dedicated Cloudflare staging ingress and pixel Workers are uploaded but their public subdomains are disabled and required secrets are absent. The pixel Worker's rate-limit namespace value `1001` remains a placeholder, not a provisioned namespace.
+- n8n search, project lookup and direct reads of the three required workflow IDs repeatedly fail internally. No live workflow versions, credentials, activation state or executions are claimed verified.
+- The ingress Worker still has an intentionally invalid n8n destination. No public staging ingress was enabled.
+
+No production resources were changed, no live n8n workflow was edited or executed, no Shopify version was released, no provider request/email was sent and no billing mutation occurred. Provider sending remains disabled in staging. End-to-end Shopify install → webhook → ingress → the three existing workflows → recovery → delivery → attribution remains **NO-GO**.
