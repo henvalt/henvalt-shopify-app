@@ -1,0 +1,19 @@
+name: Shopify connection scope ingress
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611260005_capture_shopify_connection_at_ingress.sql"
+      - "tests/shopify-connection-scope-ingress.test.mjs"
+      - ".github/workflows/shopify-connection-scope-ingress.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  connection-scope-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test tests/shopify-connection-scope-ingress.test.mjs
