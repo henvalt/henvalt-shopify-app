@@ -109,7 +109,7 @@ test("manual signed Shopify webhook test is staging-only and cannot target the p
   assert.match(workflow, /HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL/);
   assert.match(workflow, /HENVALT_STAGE_NO_SEND/);
   assert.match(workflow, /process\.env\.NO_SEND !== 'true'/);
-  assert.match(workflow, /henvalt-clean-ingress-v1\.chmuhammadrehan18\.workers\.dev/);
+  assert.match(workflow, /henvalt-shopify-ingress-staging-no-send\.chmuhammadrehan18\.workers\.dev/);
   assert.doesNotMatch(workflow, /ENDPOINT: https:\/\/henvalt-clean-ingress-v1/);
   assert.doesNotMatch(workflow, /secrets\.SHOPIFY_CLIENT_SECRET\s*\}\}/);
 });
