@@ -111,6 +111,10 @@ begin
   end;
 end $$;
 
+-- Materialize the metadata-derived identity into the connection column first.
+update henvalt.customers set metadata=metadata
+ where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+
 -- The identity guard runs before propagation, so direct attempts to clear an
 -- established connection are rejected instead of silently normalized.
 do $$
