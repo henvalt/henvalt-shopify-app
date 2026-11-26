@@ -73,6 +73,6 @@ test("dashboard HTML consumes environment-scoped config and blocks no-send provi
   assert.match(html, /CONFIG\.noSend\|\|!SETUP/);
   assert.match(html, /Billing reconciliation decisions are disabled in no-send staging/);
   assert.match(html, /fetch\(SHOPIFY_OAUTH/);
-  assert.match(html, /STAGING ENVIRONMENT · NO SEND/);
+  assert.match(html, /STAGING · NO SEND · SHOPIFY OAUTH, PROVIDER SETUP, PRIVACY EXPORT AND BILLING ACTIONS DISABLED/);
   assert.doesNotMatch(html, /const PRIVACY_EXPORT="https:\/\/ocyplckdojdubyrsxcxa/);
 });
