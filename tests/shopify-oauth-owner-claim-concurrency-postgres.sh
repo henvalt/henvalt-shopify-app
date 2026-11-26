@@ -28,7 +28,7 @@ if ! grep -q "tenant_owner_required" /tmp/henvalt-oauth-owner-b.log; then
 fi
 
 owner="$(psql -At -v ON_ERROR_STOP=1 -c "select tm.user_id::text from henvalt.tenant_memberships tm join henvalt.shopify_connections sc on sc.tenant_id=tm.tenant_id where sc.shop_domain='race-shop.myshopify.com' and tm.role='OWNER'")"
-secret="$(psql -At -v ON_ERROR_STOP=1 -c "select secret from vault.secrets where name='henvalt_shop_race-shop_myshopify_com_access'")"
+secret="$(psql -At -v ON_ERROR_STOP=1 -c "select secret from vault.secrets where name='henvalt_shopify_race-shop_myshopify_com_access'")"
 if [ "$owner" != "aaaaaaaa-0000-4000-8000-000000000001" ] || [ "$secret" != "access-token-user-a-1234567890" ]; then
   echo "FAIL: owner/token state after concurrent claims was unexpected: owner=$owner secret=$secret"
   psql -x -c "select shop_domain,access_token_secret_ref,refresh_token_secret_ref from henvalt.shopify_connections"
@@ -53,7 +53,7 @@ if ! grep -q "tenant_owner_required" /tmp/henvalt-oauth-owner-c.log; then
   cat /tmp/henvalt-oauth-owner-c.log
   exit 1
 fi
-result="$(psql -At -v ON_ERROR_STOP=1 -c "select s.secret from henvalt.shopify_connections sc join vault.secrets s on s.id=sc.access_token_secret_ref::uuid where sc.shop_domain='race-shop.myshopify.com' and s.name='henvalt_shop_race-shop_myshopify_com_access'")"
+result="$(psql -At -v ON_ERROR_STOP=1 -c "select s.secret from henvalt.shopify_connections sc join vault.secrets s on s.id=sc.access_token_secret_ref::uuid where sc.shop_domain='race-shop.myshopify.com' and s.name='henvalt_shopify_race-shop_myshopify_com_access'")"
 if [ "$result" != "access-token-user-a-1234567890" ]; then
   echo "FAIL: non-owner reauthorization changed the Shopify access token"
   exit 1
