@@ -322,3 +322,9 @@ The OAuth source was inspected directly to enumerate its runtime configuration c
 The earlier candidate-only statements in the preceding pixel-collector section are historical and are superseded by the subsequent dedicated Worker deployment section: both Worker scripts now exist in Cloudflare, but remain non-public, unconfigured, and fail-closed. This clarification does not change their operational status.
 
 A read-only source inspection identified these exact prerequisites; it did not access or reveal secret values. No Edge Function deployment, Worker secret write, public-subdomain enablement, Shopify OAuth request, or external provider request was performed.
+
+### OAuth outbound-call boundary clarification — 2026-11-26
+
+A source-level call-graph review found that the OAuth callback performs Shopify Admin API operations after token exchange: it reads `/admin/api/2026-10/shop.json`, creates or updates the Web Pixel through Admin GraphQL, and lists/creates/verifies webhook subscriptions through Admin GraphQL. Therefore a staging network policy that denies all Shopify Admin API egress cannot produce a fully verified OAuth + pixel + webhook installation; it will cause those steps to fail or remain in an attention state.
+
+For an eventual controlled staging acceptance, keep MailerSend and all email-delivery egress denied, keep provider sending disabled in Supabase, and permit Shopify Admin API egress only for the explicitly verified Shopify development store and only for the dedicated staging app token. Never allow production stores or production app credentials. This is a staging-only integration prerequisite, not authorization to make a live request now. Until the dev store, app credentials, and scoped egress rule are verified, do not deploy OAuth or enable either Worker hostname.
