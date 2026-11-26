@@ -328,3 +328,30 @@ A read-only source inspection identified these exact prerequisites; it did not a
 A source-level call-graph review found that the OAuth callback performs Shopify Admin API operations after token exchange: it reads `/admin/api/2026-10/shop.json`, creates or updates the Web Pixel through Admin GraphQL, and lists/creates/verifies webhook subscriptions through Admin GraphQL. Therefore a staging network policy that denies all Shopify Admin API egress cannot produce a fully verified OAuth + pixel + webhook installation; it will cause those steps to fail or remain in an attention state.
 
 For an eventual controlled staging acceptance, keep MailerSend and all email-delivery egress denied, keep provider sending disabled in Supabase, and permit Shopify Admin API egress only for the explicitly verified Shopify development store and only for the dedicated staging app token. Never allow production stores or production app credentials. This is a staging-only integration prerequisite, not authorization to make a live request now. Until the dev store, app credentials, and scoped egress rule are verified, do not deploy OAuth or enable either Worker hostname.
+
+
+### Exact-head CI and integrated staging re-audit — 2026-11-26 (latest)
+
+**Candidate PR:** [#15](https://github.com/henvalt/henvalt-shopify-app/pull/15) remains open, draft, and unmerged. Latest verified head: `fd5beb4c6100c3eee4a9fd572ebab0cd0ea6bae1`. The six PR-triggered GitHub Actions workflows completed successfully on this exact head:
+
+- Shopify connection scope ingress — run `45847537922`.
+- Integrated staging readiness contract — run `45847537724`.
+- Foreign-key index coverage — run `45847537846`.
+- Shopify app configuration checks and deployment — run `45847538136` (release/deployment remains opt-in and was not performed).
+- Production-shaped delivery generation migration — run `45847538064`.
+- Safety and pixel consent tests — run `45847537826`.
+
+These are CI results, not a live integrated acceptance. The PR must remain draft/unmerged until the staging gates below are met.
+
+**Read-only staging re-audit:**
+
+- Supabase project `xidhtmrfvsgfmyltjuja` reports only the `henvalt-merchant-dashboard` Edge Function as deployed. `henvalt-shopify-oauth` is not deployed.
+- Migration history includes the connection-scope lineage migrations through `20261126093221_validate_shopify_recovery_parent_links` and FK index coverage migration `20261126120439_add_missing_fk_coverage_indexes`.
+- `henvalt.provider_sending_is_enabled()` returned `false`.
+- The staging n8n connector search returned an internal tool error. Workflow activation, current versions, credentials and execution state therefore remain **unverified**; do not infer them from sanitized repository fixtures.
+- The two dedicated Cloudflare staging Worker scripts remain deployed but their workers.dev subdomains/previews are disabled and each has zero configured secrets. Ingress still points to the deliberate `.invalid` placeholder; pixel collector still lacks its publishable key, shared secret and rate-limit binding. They are fail-closed artifacts, not usable endpoints.
+- The prior staging inventory remains applicable: no authenticated Shopify development-store connection or synthetic lifecycle evidence exists. The pre-existing `billing-egress.myshopify.com` row is a non-authenticated fixture and is not installation evidence.
+
+**Current gate decision: NO-GO for integrated OAuth/webhook/recovery acceptance.** The remaining prerequisites are a verified dedicated Shopify development app/store, staging-only Shopify credentials, a real isolated n8n destination with the three existing workflow copies and isolated credentials, ingress HMAC secret, pixel collector secrets and real isolated rate-limit binding, and the staging OAuth Edge Function configuration. Shopify Admin API egress may be narrowly allowed only for the verified development store and staging app; MailerSend/email egress and provider sending remain denied. No secret values were read or written during this audit.
+
+No production migrations, production deployments, production workflow changes, Shopify release, provider requests, emails, billing mutations or paid-resource creation were performed. No staging workflow was activated and no external OAuth/webhook/pixel event was sent.
