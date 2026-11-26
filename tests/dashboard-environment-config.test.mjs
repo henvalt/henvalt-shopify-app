@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolveDashboardConfig, onRequest } from "../dashboard/functions/config.js";
+import { readFileSync } from "node:fs";
+const source = readFileSync(new URL("../dashboard/functions/config.js", import.meta.url), "utf8");
+const moduleUrl = "data:text/javascript;base64," + Buffer.from(source).toString("base64");
+const { resolveDashboardConfig, onRequest } = await import(moduleUrl);
 
 const stageHost = "work-48h-system-readiness-20.henvalt-dashboard-preview.pages.dev";
 const stageEnv = {
@@ -61,4 +64,15 @@ test("Pages config endpoint returns no-store JS and fails closed when staging en
   assert.equal(response.status, 503);
   assert.match(response.headers.get("content-type"), /application\/javascript/);
   assert.match(await response.text(), /window\.HENVALT_CONFIG = null/);
+});
+
+test("dashboard HTML consumes environment-scoped config and blocks no-send provider actions", () => {
+  const html = readFileSync(new URL("../dashboard/index.html", import.meta.url), "utf8");
+  assert.match(html, /<script src="\/config"><\/script>/);
+  assert.match(html, /window\.HENVALT_CONFIG/);
+  assert.match(html, /CONFIG\.noSend\|\|!SETUP/);
+  assert.match(html, /Billing reconciliation decisions are disabled in no-send staging/);
+  assert.match(html, /fetch\(SHOPIFY_OAUTH/);
+  assert.match(html, /STAGING ENVIRONMENT · NO SEND/);
+  assert.doesNotMatch(html, /const PRIVACY_EXPORT="https:\/\/ocyplckdojdubyrsxcxa/);
 });
