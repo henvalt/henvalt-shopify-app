@@ -6,7 +6,7 @@ const STAGING_SUPABASE_HOST = `${STAGING_PROJECT_REF}.supabase.co`;
 export function stagingPixelCollectorConfigured(env) {
   try {
     const url = new URL(env.SUPABASE_URL);
-    return env.HENVALT_STAGE_NO_SEND === "true" &&
+    return Boolean(env.HENVALT_STAGE_NO_SEND === "true" &&
       url.protocol === "https:" &&
       url.hostname === STAGING_SUPABASE_HOST &&
       url.pathname === "/" &&
@@ -15,7 +15,7 @@ export function stagingPixelCollectorConfigured(env) {
       env.SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_") &&
       typeof env.COLLECTOR_SHARED_SECRET === "string" &&
       env.COLLECTOR_SHARED_SECRET.length >= 32 &&
-      env.RATE_LIMITER && typeof env.RATE_LIMITER.limit === "function";
+      env.RATE_LIMITER && typeof env.RATE_LIMITER.limit === "function");
   } catch {
     return false;
   }
