@@ -8,6 +8,7 @@ const required = [
   "HENVALT_STAGE_SUPABASE_PROJECT_REF",
   "HENVALT_STAGE_SHOPIFY_CLIENT_ID",
   "HENVALT_STAGE_APPLICATION_URL",
+  "HENVALT_STAGE_DASHBOARD_URL",
   "HENVALT_STAGE_PRIVACY_WEBHOOK_URL",
   "HENVALT_STAGE_N8N_BASE_URL",
   "HENVALT_STAGE_INGEST_WORKFLOW_ID",
@@ -48,6 +49,19 @@ for (const [key, value] of Object.entries({
   }
 }
 if (process.env.HENVALT_STAGE_SUPABASE_PROJECT_REF === productionProjectRef) errors.push("staging project ref matches production");
+try {
+  const dashboard = new URL(process.env.HENVALT_STAGE_DASHBOARD_URL);
+  const application = new URL(process.env.HENVALT_STAGE_APPLICATION_URL);
+  if (dashboard.protocol !== "https:" || dashboard.username || dashboard.password ||
+      dashboard.search || dashboard.hash || dashboard.origin !== application.origin) {
+    errors.push("OAuth completion dashboard URL must be explicit HTTPS and match the isolated staging application origin");
+  }
+  if (["henvalt-dashboard.pages.dev", "henvalt.com", "app.henvalt.com"].includes(dashboard.hostname.toLowerCase())) {
+    errors.push("OAuth completion dashboard URL matches a production host");
+  }
+} catch {
+  if (process.env.HENVALT_STAGE_DASHBOARD_URL) errors.push("OAuth completion dashboard URL is malformed");
+}
 if (process.env.HENVALT_STAGE_PROVIDER_MODE && process.env.HENVALT_STAGE_PROVIDER_MODE !== "stub") errors.push("provider mode must be stub");
 if (process.env.HENVALT_STAGE_NETWORK_EGRESS_DENIED !== "true") errors.push("outbound network egress denial must be explicitly confirmed");
 if (process.env.HENVALT_STAGE_NO_SEND !== "true") errors.push("no-send safety flag must be explicitly true");
