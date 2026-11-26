@@ -7,6 +7,7 @@ const valid = {
   HENVALT_STAGE_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
   HENVALT_STAGE_SHOPIFY_CLIENT_ID: "staging-shopify-client-id",
   HENVALT_STAGE_APPLICATION_URL: "https://staging-dashboard.example.invalid",
+  HENVALT_STAGE_DASHBOARD_URL: "https://staging-dashboard.example.invalid",
   HENVALT_STAGE_PRIVACY_WEBHOOK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-privacy",
   HENVALT_STAGE_N8N_BASE_URL: "https://staging-n8n.example.invalid",
   HENVALT_STAGE_INGEST_WORKFLOW_ID: "staging-ingest-1",
@@ -115,4 +116,16 @@ test("preflight rejects malformed or insecure Shopify staging endpoints", () => 
   const ingress = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "http://staging-ingress.example.invalid/shopify/webhooks" });
   assert.notEqual(ingress.status, 0);
   assert.match(ingress.stderr, /HTTPS \/shopify\/webhooks URL/);
+});
+
+test("preflight requires an isolated OAuth completion dashboard matching the staging application", () => {
+  const missing = run({ ...valid, HENVALT_STAGE_DASHBOARD_URL: "" });
+  assert.notEqual(missing.status, 0);
+  assert.match(missing.stderr, /missing required staging metadata: HENVALT_STAGE_DASHBOARD_URL/);
+  const production = run({ ...valid, HENVALT_STAGE_DASHBOARD_URL: "https://henvalt-dashboard.pages.dev" });
+  assert.notEqual(production.status, 0);
+  assert.match(production.stderr, /matches a production host/);
+  const mismatched = run({ ...valid, HENVALT_STAGE_DASHBOARD_URL: "https://other-stage.example.invalid" });
+  assert.notEqual(mismatched.status, 0);
+  assert.match(mismatched.stderr, /match the isolated staging application origin/);
 });
