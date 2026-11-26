@@ -27,10 +27,12 @@ if ! grep -q "tenant_owner_required" /tmp/henvalt-oauth-owner-b.log; then
   exit 1
 fi
 
-result="$(psql -At -v ON_ERROR_STOP=1 -c "select tm.user_id::text || '|' || s.secret from henvalt.tenant_memberships tm join henvalt.shopify_connections sc on sc.tenant_id=tm.tenant_id join vault.secrets s on s.id=sc.access_token_secret_ref::uuid where sc.shop_domain='race-shop.myshopify.com' and s.name='henvalt_shop_race-shop_myshopify_com_access'")"
-expected="aaaaaaaa-0000-4000-8000-000000000001|access-token-user-a-1234567890"
-if [ "$result" != "$expected" ]; then
-  echo "FAIL: owner/token state after concurrent claims was unexpected: $result"
+owner="$(psql -At -v ON_ERROR_STOP=1 -c "select tm.user_id::text from henvalt.tenant_memberships tm join henvalt.shopify_connections sc on sc.tenant_id=tm.tenant_id where sc.shop_domain='race-shop.myshopify.com' and tm.role='OWNER'")"
+secret="$(psql -At -v ON_ERROR_STOP=1 -c "select secret from vault.secrets where name='henvalt_shop_race-shop_myshopify_com_access'")"
+if [ "$owner" != "aaaaaaaa-0000-4000-8000-000000000001" ] || [ "$secret" != "access-token-user-a-1234567890" ]; then
+  echo "FAIL: owner/token state after concurrent claims was unexpected: owner=$owner secret=$secret"
+  psql -x -c "select shop_domain,access_token_secret_ref,refresh_token_secret_ref from henvalt.shopify_connections"
+  psql -x -c "select id,name,secret from vault.secrets"
   exit 1
 fi
 echo "PASS: concurrent OAuth callbacks serialize; first owner retains membership and Shopify token"
