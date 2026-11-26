@@ -35,10 +35,10 @@ BEGIN
   END IF;
   EXECUTE v_patched;
 
-  -- 2) Token claim: derive the parent id without locking the child, then lock
+  -- 2) Token claim: patch the private legacy implementation behind the provider interlock; derive the parent id without locking the child, then lock
   -- parent before the UPDATE acquires the delivery_requests row lock.
   v_oid := to_regprocedure(
-    'henvalt.get_mailersend_token_for_delivery(uuid,uuid)'
+    'henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid,uuid)'
   );
   IF v_oid IS NULL THEN
     RAISE EXCEPTION 'DELIVERY_LOCK_ORDER_TOKEN_RPC_MISSING';
