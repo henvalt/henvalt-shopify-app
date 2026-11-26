@@ -168,7 +168,7 @@ test("preflight rejects the live production Shopify pixel collector", () => {
     HENVALT_STAGE_PIXEL_COLLECTOR_HOST: "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
   });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /matches the live production Worker/);
+  assert.match(result.stderr, /dedicated no-send staging Worker hostname/);
 });
 
 test("preflight requires the dedicated no-send staging pixel Worker identity", () => {
