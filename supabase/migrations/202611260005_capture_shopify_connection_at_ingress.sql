@@ -54,6 +54,7 @@ declare
   v_domain text;
   v_match_count integer;
   v_connection_id uuid;
+  v_match_tenant_id uuid;
 begin
   if new.source is distinct from 'shopify' then
     return new;
@@ -61,13 +62,16 @@ begin
 
   -- Explicit scope is accepted only when it matches this tenant and shop.
   if new.shopify_connection_id is not null then
-    select count(*), (array_agg(sc.id))[1]
-      into v_match_count, v_connection_id
+    select count(*), (array_agg(sc.id))[1], (array_agg(sc.tenant_id))[1]
+      into v_match_count, v_connection_id, v_match_tenant_id
       from henvalt.shopify_connections sc
-     where sc.id = new.shopify_connection_id
-       and sc.tenant_id = new.tenant_id
-       and lower(sc.shop_domain) = lower(coalesce(new.metadata->>'shop_domain', ''));
-    if v_match_count <> 1 then
+      join henvalt.tenants t on t.id = sc.tenant_id
+     where lower(sc.shop_domain) = lower(coalesce(new.metadata->>'shop_domain', ''))
+       and sc.active = true
+       and t.status = 'ACTIVE';
+    if v_match_count <> 1
+       or v_connection_id is distinct from new.shopify_connection_id
+       or v_match_tenant_id is distinct from new.tenant_id then
       raise exception 'SHOPIFY_WEBHOOK_CONNECTION_SCOPE_MISMATCH'
         using errcode = '23514';
     end if;
@@ -90,16 +94,15 @@ begin
       using errcode = '22023';
   end if;
 
-  select count(*), (array_agg(sc.id))[1]
-    into v_match_count, v_connection_id
+  select count(*), (array_agg(sc.id))[1], (array_agg(sc.tenant_id))[1]
+    into v_match_count, v_connection_id, v_match_tenant_id
     from henvalt.shopify_connections sc
     join henvalt.tenants t on t.id = sc.tenant_id
-   where sc.tenant_id = new.tenant_id
-     and lower(sc.shop_domain) = v_domain
+   where lower(sc.shop_domain) = v_domain
      and sc.active = true
      and t.status = 'ACTIVE';
 
-  if v_match_count <> 1 then
+  if v_match_count <> 1 or v_match_tenant_id is distinct from new.tenant_id then
     raise exception 'SHOPIFY_WEBHOOK_CONNECTION_NOT_UNIQUE_OR_INACTIVE'
       using errcode = '23514';
   end if;
