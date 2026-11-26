@@ -142,3 +142,6 @@ begin
 end;
 $function$
 
+
+revoke all on function henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(text,text,text,text,integer,integer,text,text[],uuid) from public, anon, authenticated;
+grant execute on function henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner(text,text,text,text,integer,integer,text,text[],uuid) to service_role;
