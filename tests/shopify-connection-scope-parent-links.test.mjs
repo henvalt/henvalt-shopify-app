@@ -57,7 +57,7 @@ test('identity guard covers every connection-scoped descendant and is service-ro
     'webhook_events','canonical_events','customers','checkouts','orders','sessions',
     'opportunities','recovery_sequences','recovery_interventions','delivery_requests','delivery_attempts'
   ]) {
-    assert.match(identityGuard, new RegExp('on henvalt\\.' + table + '\\b'));
+    assert.match(identityGuard, new RegExp('on henvalt\.' + table + '\\b'));
   }
   assert.match(identityGuard, /revoke all on function henvalt\.guard_shopify_connection_identity_immutable\(\)[\s\S]*?from public, anon, authenticated/);
   assert.match(identityGuard, /grant execute on function henvalt\.guard_shopify_connection_identity_immutable\(\)[\s\S]*?to service_role/);
@@ -65,7 +65,7 @@ test('identity guard covers every connection-scoped descendant and is service-ro
 
 
 test('identity guard runs after trigger-derived identity changes on every update', () => {
-  assert.equal((identityGuard.match(/before update\s+on henvalt\\./g) || []).length, 11);
+  assert.equal((identityGuard.match(/before update\s+on henvalt\./g) || []).length, 11);
   assert.doesNotMatch(identityGuard, /before update of tenant_id, shopify_connection_id/);
   assert.match(identityGuard, /if v_new_connection_id is not null and v_old_connection_id is null then/);
   assert.match(identityGuard, /Existing rows must[\s\S]*?remain mutable for non-identity fields even if their connection is later/);
