@@ -50,7 +50,7 @@ jobs:
           CREATE ROLE service_role NOLOGIN;
           CREATE SCHEMA henvalt;
           CREATE FUNCTION henvalt.control_plane_dashboard_summary(text,timestamptz,timestamptz)
-            RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+            RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS 'SELECT ''{}''::jsonb';
           CREATE FUNCTION henvalt.control_plane_revenue_series(text,timestamptz,timestamptz,text)
             RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
           CREATE FUNCTION henvalt.is_tenant_member(uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $ SELECT false $;
