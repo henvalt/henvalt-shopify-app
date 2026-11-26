@@ -1,0 +1,59 @@
+name: HENVALT dashboard reporting RPC grant boundary
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611260001_dashboard_reporting_rpc_service_role_only.sql"
+      - "tests/dashboard-reporting-rpc-grants-acceptance.sql"
+      - ".github/workflows/dashboard-reporting-rpc-grants.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "supabase/migrations/202611260001_dashboard_reporting_rpc_service_role_only.sql"
+      - "tests/dashboard-reporting-rpc-grants-acceptance.sql"
+      - ".github/workflows/dashboard-reporting-rpc-grants.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  grants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create disposable roles and SECURITY DEFINER reporting RPCs
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE service_role NOLOGIN;
+          CREATE SCHEMA henvalt;
+          CREATE FUNCTION henvalt.control_plane_dashboard_summary(text,timestamptz,timestamptz)
+            RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+          CREATE FUNCTION henvalt.control_plane_revenue_series(text,timestamptz,timestamptz,text)
+            RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+          GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA henvalt TO PUBLIC;
+          SQL
+      - name: Apply dashboard reporting RPC grant migration
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/202611260001_dashboard_reporting_rpc_service_role_only.sql
+      - name: Verify no client execution and service-role access
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/dashboard-reporting-rpc-grants-acceptance.sql
