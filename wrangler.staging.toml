@@ -5,6 +5,7 @@ workers_dev = true
 
 [vars]
 N8N_INGEST_URL = "https://staging-n8n.invalid/webhook/henvalt/ingest-candidate-no-send"
+HENVALT_STAGE_N8N_HOST = "staging-n8n.invalid"
 HENVALT_STAGE_NO_SEND = "true"
 HENVALT_STAGE_PROVIDER_MODE = "stub"
 
