@@ -47,8 +47,7 @@ jobs:
           let target;
           try { target = new URL(endpoint); } catch { throw new Error('Missing or invalid HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL repository variable'); }
           if (target.protocol !== 'https:' || target.pathname !== '/shopify/webhooks' ||
-              target.hostname === 'henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev' ||
-              target.hostname === 'n8n.henvalt.com') {
+              target.hostname !== 'henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev') {
             throw new Error('Refusing to send to a non-staging webhook endpoint');
           }
           const now = new Date().toISOString();
