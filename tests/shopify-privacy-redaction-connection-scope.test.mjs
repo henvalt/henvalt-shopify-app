@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL('../supabase/migrations/202611260003_privacy_redaction_fail_closed_until_connection_scope.sql', import.meta.url),
   'utf8'
 );
+const queueMigration = readFileSync(
+  new URL('../supabase/migrations/202611260004_shop_redaction_review_disposition.sql', import.meta.url),
+  'utf8'
+);
 
 test('customer redaction lease wrapper fails closed without tenant-wide deletion', () => {
   const body = migration.split('create or replace function henvalt.redact_shopify_customer_data_checked_with_lease')[1]
@@ -32,4 +36,12 @@ test('redaction wrappers remain service-role-only', () => {
   assert.match(migration, /revoke all on function henvalt\.redact_shopify_shop_data_with_lease\(uuid, uuid\)\s+from public, anon, authenticated/i);
   assert.match(migration, /grant execute on function henvalt\.redact_shopify_customer_data_checked_with_lease\(uuid, uuid\)\s+to service_role/i);
   assert.match(migration, /grant execute on function henvalt\.redact_shopify_shop_data_with_lease\(uuid, uuid\)\s+to service_role/i);
+});
+
+test('shop redaction queue honors explicit review disposition without retrying as failure', () => {
+  assert.match(queueMigration, /v_result->>'review_required'/);
+  assert.match(queueMigration, /'REVIEW_REQUIRED'/);
+  assert.match(queueMigration, /v_result->>'reason'/);
+  assert.match(queueMigration, /v_review_required := v_review_required \+ 1/);
+  assert.doesNotMatch(queueMigration, /shop redaction did not complete/);
 });
