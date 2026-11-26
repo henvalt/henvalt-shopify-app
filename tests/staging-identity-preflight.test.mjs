@@ -70,7 +70,7 @@ test("preflight rejects live provider mode and production n8n identity", () => {
   const result = run({ ...valid, HENVALT_STAGE_PROVIDER_MODE: "live", HENVALT_STAGE_N8N_BASE_URL: "https://henvalt26.app.n8n.cloud" });
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /provider mode must be stub/);
-  assert.match(result.stderr, /n8n URL appears to identify production/);
+  assert.match(result.stderr, /n8n URL matches a production host/);
 });
 
 test("preflight rejects incomplete staging inventory", () => {
