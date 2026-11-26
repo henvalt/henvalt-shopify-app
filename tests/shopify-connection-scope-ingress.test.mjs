@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL('../supabase/migrations/202611260005_capture_shopify_connection_at_ingress.sql', import.meta.url),
   'utf8'
 );
+const propagation = readFileSync(
+  new URL('../supabase/migrations/202611260006_propagate_connection_scope_metadata.sql', import.meta.url),
+  'utf8'
+);
 
 test('webhook and canonical event rows have explicit connection foreign keys', () => {
   assert.match(migration, /alter table henvalt\.webhook_events[\s\S]*?add column if not exists shopify_connection_id uuid/i);
@@ -32,4 +36,9 @@ test('canonical Shopify events inherit scope from their verified webhook', () =>
   assert.match(body, /w\.tenant_id/);
   assert.match(body, /SHOPIFY_CANONICAL_EVENT_CONNECTION_SCOPE_MISSING/);
   assert.match(body, /SHOPIFY_CANONICAL_EVENT_CONNECTION_SCOPE_MISMATCH/);
+});
+
+test('verified connection ID is carried in webhook and canonical event metadata', () => {
+  assert.match(propagation, /jsonb_build_object\('shopify_connection_id',v_connection_id\)/);
+  assert.match(propagation, /new\.shopify_connection_id:=v_connection_id/);
 });
