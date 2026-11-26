@@ -11,7 +11,7 @@ test("dashboard exposes a dedicated billing review page without a service-role c
   assert.match(html, /id="page-billing"/);
   assert.match(html, /BILLING_RECONCILIATION=CONFIG\.billingReconciliation/);
   assert.match(config, /billingReconciliation: "https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co\/functions\/v1\/henvalt-billing-reconciliation"/);
-  assert.ok(config.includes("billingReconciliation: `${functions}/henvalt-billing-reconciliation`"));
+  assert.ok(config.includes("billingReconciliation: null"));
   assert.doesNotMatch(html, /SUPABASE_SERVICE_ROLE_KEY/);
 });
 
