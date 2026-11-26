@@ -1,5 +1,5 @@
-import { renderShopifyStagingConfig } from "./render-shopify-staging-config.mjs";
 #!/usr/bin/env node
+import { renderShopifyStagingConfig } from "./render-shopify-staging-config.mjs";
 /**
  * HENVALT staging environment identity gate.
  * This only validates explicitly supplied staging metadata. It performs no network calls.
