@@ -295,3 +295,9 @@ Both scripts were verified through the Cloudflare API after upload. Their `worke
 The ingress script is bound only to no-send/stub flags and the deliberately invalid `staging-n8n.invalid` destination. The Shopify HMAC secret is absent, and the staging host/path guard rejects the placeholder. The pixel collector is bound only to the isolated staging Supabase URL and no-send flag; its publishable key, collector shared secret, and rate-limit binding are absent. Its configuration guard therefore remains closed.
 
 These are deployed fail-closed artifacts, not operational endpoints. No Shopify webhook or pixel event was sent; no n8n, Supabase, Shopify, provider or production Worker configuration was changed. Do not enable either public subdomain or configure secrets until the isolated n8n endpoint, staging-only Shopify app credentials, and pixel rate-limit binding have been verified. Public health smoke tests remain pending because the subdomains are intentionally disabled.
+
+### Staging connection inventory audit — 2026-11-26
+
+A read-only staging database audit confirmed the provider-send interlock is still closed and found one pre-existing synthetic connection row: `billing-egress.myshopify.com`. It is marked active in the fixture, but it has no Shopify shop ID, no scopes, no access/refresh token secret references, no token expiry metadata, and its tenant has no membership rows. It is not an authenticated Shopify installation and must not be used as the staging development-store identity or as OAuth evidence.
+
+The same audit found zero webhook events, canonical events, recovery interventions, delivery requests, or delivery attempts; there are no live OAuth states. No rows were inserted, updated, or deleted by this audit. Preserve the fixture for its billing acceptance context unless a separately reviewed staging-fixture cleanup is performed. The synthetic row does not satisfy integrated staging readiness.
