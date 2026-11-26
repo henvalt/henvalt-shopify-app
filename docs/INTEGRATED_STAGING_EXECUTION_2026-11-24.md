@@ -457,3 +457,59 @@ A read-only Supabase migration inventory on 26 November confirms that staging ha
 
 
 **Follow-up verification (26 November 2026):** the additional inactive-connection first-assignment assertion was added to the disposable PostgreSQL test and its dollar-quoted PL/pgSQL block was corrected after the first run exposed a syntax error. On code-bearing commit `a8e9d417c9d39edbbd29d622c61d4117a5079414`, the connection-scope workflow completed both `postgres-identity-guard` and `connection-scope-contract` successfully. The six independent workflows associated with the immediately preceding code-bearing commit `ad1660d0a1b8f10d2faed841e02fa9ff8b0a83da` subsequently all completed successfully: integrated staging readiness, production-shaped delivery-generation migration, connection-scope ingress, FK index coverage, Shopify app configuration, and safety/pixel consent. The Shopify release job was skipped. The exact latest branch head is documentation/workflow-path-only and has not yet been independently revalidated; do not describe that latest head as CI-green. The SQL acceptance file is now included in the workflow path filters so future SQL-only edits retrigger the PostgreSQL job.
+
+
+## Integrated hardening follow-up — 26 November 2026
+
+This section supersedes the earlier statement that only a minimal identity-guard fixture was available.
+
+### Connection identity guard: real lineage-trigger acceptance
+
+The PostgreSQL 17 acceptance fixture now creates the relevant 11-table graph and applies the actual candidate lineage migrations `202611260007_propagate_shopify_connection_to_recovery_graph.sql` and `202611260009_enforce_shopify_connection_parent_lineage.sql` before applying `20261126150000_guard_shopify_connection_identity_immutable.sql`.
+
+The acceptance therefore exercises the real `trg_propagate_shopify_connection_scope` trigger ordering, rather than an artificial parent-trigger stand-in. It verifies:
+- A same-tenant change to a different active Shopify connection, derived from changed metadata by the real propagation trigger, is rejected by the immutable identity guard.
+- A column-only attempt to clear a customer connection is restored from authoritative metadata by the lineage trigger; the persisted connection remains unchanged.
+- Direct clearing of an established ingress connection and tenant reassignment are rejected.
+- Webhook and canonical event source rewrites are rejected.
+- First assignment to a valid active same-tenant connection succeeds; cross-tenant and inactive assignments fail.
+- Non-identity updates remain possible after a connection is deactivated.
+- All 11 identity triggers exist and function ACLs remain service-role-only.
+
+Both connection-scope CI jobs passed on code-bearing commit `13c81cd131e636abb7448fb16cc64931ef747265` (run `45862691518`). This is a targeted graph fixture with the actual propagation and lineage migrations; it is not a complete clone of the entire Supabase production schema and does not authorize applying the migration to staging.
+
+### OAuth owner-claim race and owner-role hardening
+
+A read-only inspection of the staging database's existing `control_plane_finalize_shopify_oauth_install_expiring_for_owner` RPC found that its tenant-membership ownership check ran before `control_plane_connect_shop` acquired its per-shop advisory lock. Two separate OAuth states for the same unclaimed shop could therefore both pass the initial check before one transaction committed its owner membership and token update.
+
+Candidate migration `20261126170000_serialize_shopify_oauth_owner_claim.sql` replaces the RPC while preserving its token persistence behavior and service-role-only ACL. It:
+- Acquires the same `hashtextextended(lower(btrim(p_shop_domain)), 0)` transaction advisory lock used by `control_plane_connect_shop` before checking membership.
+- Allows the initial owner claim only while the tenant has no memberships.
+- Requires an existing tenant member to have the `OWNER` role before Shopify reauthorization; ordinary members and admins cannot replace the stored Shopify token through this owner RPC.
+- Explicitly revokes execution from public, anon and authenticated, and grants it to service_role.
+
+A separate disposable PostgreSQL 17 concurrency job applies this migration against a test-only Vault and connection-helper fixture. It passed on code-bearing commit `13c81cd131e636abb7448fb16cc64931ef747265` (Shopify app configuration run `45862691438`): the first user becomes owner and retains the token; a competing callback is serialized and rejected; a non-owner member is also rejected without replacing the token. The fixture uses synthetic tokens only and makes no Shopify or Vault network requests.
+
+### Full code-bearing CI verification
+
+All six PR-triggered workflows completed successfully on `13c81cd131e636abb7448fb16cc64931ef747265`:
+- Integrated staging readiness — run `45862691383`.
+- Shopify connection scope ingress, including PostgreSQL 17 lineage/identity acceptance — run `45862691518`.
+- Foreign-key index coverage — run `45862691384`.
+- Production-shaped delivery generation migration — run `45862691433`.
+- Shopify app configuration, OAuth contract/type checks, OAuth owner-claim PostgreSQL concurrency, and billing lock safety — run `45862691438`; Shopify version deployment was skipped.
+- Safety and pixel consent — run `45862691469`.
+
+These results apply to the code-bearing commit above. Any later documentation-only commit has no independent CI run and must not be described as separately CI-green.
+
+### Staging remains isolated and runtime is still NO-GO
+
+Fresh read-only staging checks confirm:
+- Migration history still ends at `20261126120439_add_missing_fk_coverage_indexes`; neither candidate migration `20261126150000` nor `20261126170000` has been applied.
+- `henvalt.provider_sending_is_enabled()` remains false.
+- `webhook_events`, `canonical_events`, `recovery_interventions`, `delivery_requests`, and `delivery_attempts` each contain zero rows.
+- The only `shopify_connections` row remains the uncredentialed `billing-egress.myshopify.com` fixture; it has no Shopify shop ID, scopes, access/refresh token references or expiry metadata. Tenant membership count remains zero.
+- The only deployed Edge Function is `henvalt-merchant-dashboard`; `henvalt-shopify-oauth` is absent.
+- The n8n workflow inventory connector again failed internally, so live workflow versions, activation, credentials and execution remain unverified. Cloudflare inventory also returned an authentication error; no Worker settings were changed.
+
+No staging or production migrations, Edge Function deployments, Cloudflare changes, n8n workflow changes, Shopify releases, provider requests, emails, or billing mutations were performed. The candidate branch remains draft/unmerged. The isolated runtime still lacks a verified staging Shopify app/store, OAuth secrets, operational no-send ingress/pixel endpoints and a separate n8n runtime. Integrated install-to-event-to-recovery acceptance is therefore still **NO-GO**.
