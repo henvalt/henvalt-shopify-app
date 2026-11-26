@@ -267,3 +267,5 @@ The candidate now treats every Supabase project other than the explicitly identi
 - The production Supabase project retains its existing non-strict endpoint configuration path; no production function was changed.
 
 The staging OAuth deployment environment must map the two `HENVALT_STAGE_*_HOST` values alongside the corresponding `SHOPIFY_*_URL` values. Do not deploy OAuth until a dedicated staging pixel collector exists and its actual hostname has been verified. The current Cloudflare inventory has no dedicated staging pixel collector, so this gate is intentionally still blocked. The change is candidate-only and does not imply a successful OAuth runtime test.
+
+The required staging pixel collector identity is pinned to `henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev`; the existing `henvalt-pixel-collector` Worker is production and must never be supplied as the staging host. Its dedicated Worker, staging Supabase publishable key, collector shared secret, and isolated rate-limit binding must be provisioned before OAuth deployment. The current Cloudflare inventory confirms that this staging Worker does not yet exist.
