@@ -355,3 +355,23 @@ These are CI results, not a live integrated acceptance. The PR must remain draft
 **Current gate decision: NO-GO for integrated OAuth/webhook/recovery acceptance.** The remaining prerequisites are a verified dedicated Shopify development app/store, staging-only Shopify credentials, a real isolated n8n destination with the three existing workflow copies and isolated credentials, ingress HMAC secret, pixel collector secrets and real isolated rate-limit binding, and the staging OAuth Edge Function configuration. Shopify Admin API egress may be narrowly allowed only for the verified development store and staging app; MailerSend/email egress and provider sending remain denied. No secret values were read or written during this audit.
 
 No production migrations, production deployments, production workflow changes, Shopify release, provider requests, emails, billing mutations or paid-resource creation were performed. No staging workflow was activated and no external OAuth/webhook/pixel event was sent.
+
+
+### Latest CI job-level verification and dashboard preview — 2026-11-26
+
+The six latest pull-request workflow runs for commit `ed804ca738c5bb4f7cc76e2f05fad0d50595fd12` were inspected at the job/step level, not only by their top-level conclusions:
+
+- Safety/pixel consent run `45849297115`: the interlock test job passed, including offline no-send exports for the three existing workflows, workflow JSON parsing, cross-workflow boundary validation, Deno type checks for OAuth/billing/delivery/privacy/dashboard functions, and disposable PostgreSQL acceptance tests for replay fencing, billing, and privacy lifecycle behavior.
+- FK coverage run `45849296505`: the minimal PostgreSQL fixture was created, the migration applied, and all six FK indexes verified.
+- Delivery-generation migration run `45849296516`: the disposable production-shaped PostgreSQL migration chain passed, including retry generation, immutable envelope loading, lease/egress ownership, and both retry-vs-late-acceptance race orders.
+- Shopify config run `45849296662`: TOML/source validation, OAuth redirect/webhook tests, staging renderer, pixel no-send tests, OAuth Deno type-check, and billing/replay concurrency tests passed. The `deploy-shopify-version` job was skipped.
+- Connection scope run `45849296514`: all four connection ingress/recovery/delivery/parent-link test files passed.
+- Integrated staging contract run `45849296658`: Wrangler staging configuration, isolated pixel collector tests, and staging readiness contract passed.
+
+Cloudflare Pages posted successful branch-preview deployments for the dashboard at commit `ed804ca`:
+- Dashboard preview: https://feat-shopify-connection-scop.henvalt-dashboard.pages.dev
+- Dashboard-preview project: https://feat-shopify-connection-scop.henvalt-dashboard-preview.pages.dev
+
+These are branch previews only. They are not evidence of a Shopify OAuth install, authenticated tenant, live ingress, n8n execution, recovery, email delivery, or production release. No Shopify app version was deployed; the explicit release job remained skipped. PR #15 has no submitted reviews or inline review threads at this audit point.
+
+A subsequent read-only staging SQL check returned: provider sending disabled; zero webhook events, canonical events, recovery interventions, delivery requests, and delivery attempts; zero authenticated Shopify connections. Cloudflare API recheck confirmed both staging Worker subdomains and previews disabled, with zero secrets configured on each. The n8n project/workflow connector continues to fail internally, so the three live workflow states remain unverified.
