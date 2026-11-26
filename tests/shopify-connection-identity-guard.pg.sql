@@ -91,7 +91,7 @@ end $$;
 -- remains unchanged; test direct clearing separately on the ingress row below.
 update henvalt.customers set shopify_connection_id=null
  where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
-do $
+do $$
 begin
   if (select shopify_connection_id from henvalt.customers
        where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
@@ -105,7 +105,7 @@ begin
   exception when check_violation then
     if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
   end;
-end $;
+end $$;
 
 -- Webhook/canonical source identity is immutable after insert.
 insert into henvalt.webhook_events(id,tenant_id,source)
