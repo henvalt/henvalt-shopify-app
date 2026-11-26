@@ -390,3 +390,23 @@ A subsequent read-only staging SQL check returned: provider sending disabled; ze
 **Advisors:** the staging security advisor reports 19 RLS-enabled `henvalt` tables without policies (INFO). The current direct-grant audit previously found no direct anon/authenticated grants on those tables; do not add blanket policies without reviewing intended service-only access. Performance advisor reports many unused indexes (expected on a zero-traffic staging database); do not drop indexes based on this signal.
 
 **Decision remains NO-GO.** The missing items are still a verified dedicated Shopify development app/store and credentials, a working isolated n8n destination containing the three separate workflow copies, ingress HMAC secret, pixel collector secrets and real rate-limit binding, verified staging OAuth environment, and a complete synthetic checkout lifecycle acceptance with provider/email egress denied. No production resource, workflow, app release, provider, email or billing state was changed in this recheck.
+
+
+### Exact-head CI and staging recheck — 2026-11-26 (20:54 PKT)
+
+**Candidate PR #15:** remains OPEN, DRAFT, UNMERGED and mergeable. Exact head: `8cd96cfe10935da6da32ee79abcbc692ef2bce4e`. The six PR-triggered workflows completed successfully on this exact head:
+
+- Foreign-key index coverage — run `45852862133`; all six FK indexes verified in a disposable PostgreSQL fixture.
+- Shopify app configuration — run `45852862233`; billing lock/concurrency and static OAuth/config validation passed; Shopify deployment job was skipped.
+- Safety and pixel consent — run `45852862103`; offline no-send candidate exports for the three workflows, cross-workflow boundaries, Deno type checks and disposable PostgreSQL replay/billing/privacy acceptance passed.
+- Production-shaped delivery generation migration — run `45852862137`; retry-generation schema, immutable envelope, lease/egress ownership, late-acceptance routing and race-order acceptance passed.
+- Integrated staging readiness contract — run `45852861835`; isolated Wrangler config, pixel collector tests and readiness contract passed.
+- Shopify connection scope ingress — run `45852863175`; ingress, recovery graph, delivery descendants and parent-link contract tests passed.
+
+The deployment job remained skipped. There are no submitted PR reviews or inline review threads. These exact-head CI results validate repository contracts and disposable fixtures only; they do not prove a live OAuth install, webhook delivery, n8n execution or recovery lifecycle.
+
+**Read-only staging snapshot:** Supabase project `xidhtmrfvsgfmyltjuja` still has only `henvalt-merchant-dashboard` deployed; `henvalt-shopify-oauth` is absent. Migration history ends at `20261126120439_add_missing_fk_coverage_indexes`. A single aggregated read-only query returned zero webhook events, canonical events, recovery interventions, delivery requests and delivery attempts; one Shopify connection fixture remains, but it is not authenticated. `henvalt.provider_sending_is_enabled()` remains `false`.
+
+**Runtime integration blockers:** the n8n workflow search again failed with a connector-internal error; current workflow versions, activation, credentials and execution state are therefore unverified. Both dedicated Cloudflare staging Worker scripts remain deployed but non-public, with subdomains/previews disabled and zero secrets. The ingress destination remains the deliberate `.invalid` placeholder; the pixel collector still lacks its publishable key, shared secret and real rate-limit binding. The staging OAuth Edge Function is not deployed. No verified dedicated Shopify development app/store or authenticated install is present.
+
+**Decision: NO-GO for integrated acceptance.** Continue to keep PR #15 draft/unmerged. Do not deploy OAuth, enable Worker hostnames, activate staging workflows, allow MailerSend egress, send email, mutate billing, or touch production. The next executable gate is provisioning/verification of a genuinely isolated n8n runtime and dedicated Shopify development app/store identity, followed by staging-only secrets/bindings and a complete synthetic checkout acceptance. No paid resource should be created without explicit cost approval.
