@@ -35,6 +35,15 @@ test("staging Shopify config uses only the staging callback and privacy endpoint
   assert.doesNotMatch(config, /SHOPIFY_API_SECRET|SERVICE_ROLE|MAILERSEND_API_KEY/);
 });
 
+test("staging Shopify config rejects all known production application hosts", () => {
+  for (const host of ["henvalt-dashboard.pages.dev", "henvalt.com", "app.henvalt.com", "n8n.henvalt.com"]) {
+    assert.throws(() => renderShopifyStagingConfig({
+      ...valid,
+      HENVALT_STAGE_APPLICATION_URL: "https://" + host,
+    }), /matches production dashboard/);
+  }
+});
+
 test("staging Shopify config rejects production dashboard and mismatched privacy project", () => {
   assert.throws(() => renderShopifyStagingConfig({
     ...valid,
