@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL('../supabase/migrations/202611260007_propagate_shopify_connection_to_recovery_graph.sql', import.meta.url),
   'utf8'
 );
+const lineage = readFileSync(
+  new URL('../supabase/migrations/202611260009_enforce_shopify_connection_parent_lineage.sql', import.meta.url),
+  'utf8'
+);
 
 test('recovery graph tables carry nullable connection foreign keys', () => {
   for (const table of ['customers','checkouts','orders','sessions','opportunities','recovery_interventions','delivery_requests']) {
@@ -25,10 +29,10 @@ test('recovery interventions and delivery requests inherit identity from parent 
   assert.match(migration, /from henvalt\.opportunities o where o\.id=v_opportunity_id/);
   assert.match(migration, /from henvalt\.recovery_interventions ri where ri\.id=v_intervention_id/);
   assert.match(migration, /SHOPIFY_CONNECTION_SCOPE_PARENT_MISMATCH/);
-  assert.match(migration, /SHOPIFY_CONNECTION_SCOPE_CUSTOMER_STORE_MISMATCH/);
-  assert.match(migration, /SHOPIFY_CONNECTION_SCOPE_CHECKOUT_STORE_MISMATCH/);
-  assert.match(migration, /update of shopify_connection_id,metadata,source_event_id,customer_id,checkout_id/);
-  assert.match(migration, /update of shopify_connection_id,intervention_id,opportunity_id/);
+  assert.match(lineage, /SHOPIFY_CONNECTION_SCOPE_CUSTOMER_STORE_MISMATCH/);
+  assert.match(lineage, /SHOPIFY_CONNECTION_SCOPE_CHECKOUT_STORE_MISMATCH/);
+  assert.match(lineage, /update of shopify_connection_id,metadata,source_event_id,customer_id,checkout_id/);
+  assert.match(lineage, /update of shopify_connection_id,intervention_id,opportunity_id/);
 });
 
 test('connection identity must be active and belong to the same tenant', () => {
