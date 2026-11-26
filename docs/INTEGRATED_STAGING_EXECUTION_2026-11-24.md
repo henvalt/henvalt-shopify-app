@@ -436,3 +436,21 @@ The regression contract was extended in `tests/shopify-connection-scope-parent-l
 The connection-scope regression job passed with the new immutable-identity assertions. The production-shaped delivery generation migration and disposable PostgreSQL tests also passed. These CI results do not prove the new connection identity migration has been applied to a full Supabase schema; a dedicated PostgreSQL migration acceptance including the new migration is still required before any staging application.
 
 The staging runtime blockers are unchanged: n8n inventory could not be refreshed because its connector returned an internal error; OAuth Edge Function is absent; Cloudflare staging Workers remain disabled/unconfigured; there is no authenticated Shopify development-store connection or persisted lifecycle. Provider sending remains disabled. No production or staging resources were mutated by this code review.
+
+
+### PostgreSQL 17 connection-identity guard acceptance — 2026-11-26
+
+Candidate migration `20261126150000_guard_shopify_connection_identity_immutable.sql` was hardened after review found that a trigger declared `UPDATE OF tenant_id, shopify_connection_id` would not run when an earlier parent-propagation trigger changed `NEW.shopify_connection_id` during an update whose original SET list named only the parent field. The guard now runs on every UPDATE across all 11 scoped tables. It checks active-connection/tenant matching only on first assignment, so later non-identity updates remain possible when a previously valid connection is deactivated.
+
+A disposable PostgreSQL 17 CI service now creates the minimal required role/table fixture, applies the candidate migration, and executes real SQL assertions for:
+- Trigger-derived connection rewrite blocked after the earlier `trg_propagate` trigger runs.
+- Established connection clearing and tenant reassignment rejected.
+- Webhook source rewrite rejected.
+- First assignment to a valid active same-tenant connection accepted.
+- First assignment to a cross-tenant or inactive connection rejected.
+- Ordinary updates to an already-scoped row remain possible after its connection is deactivated.
+- All 11 identity triggers exist; anon/authenticated cannot directly execute the guard and service_role can.
+
+On code-bearing commit `ad1660d0a1b8f10d2faed841e02fa9ff8b0a83da`, the Shopify connection scope workflow completed both jobs successfully: Node contract and disposable PostgreSQL 17 identity-guard acceptance. The integrated staging readiness contract also completed successfully. Other independent CI workflows were still running at the time of this note; do not treat them as complete until their run conclusions are checked. The PostgreSQL fixture is deliberately minimal and proves the guard's own SQL behavior, not the full production-shaped migration chain or live Supabase staging.
+
+A read-only Supabase migration inventory on 26 November confirms that staging has not applied this candidate identity-guard migration; its migration history still ends at `20261126120439_add_missing_fk_coverage_indexes`. No staging or production DDL was executed. The n8n workflow search again failed internally, so live workflow versions, activation, credentials and execution remain unverified. The integrated runtime decision remains **NO-GO**.
