@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/202611260001_dashboard_reporting_rpc_service_role_only.sql"
+      - "supabase/migrations/202611260002_harden_security_definer_rpc_grants.sql"
+      - "tests/security-definer-rpc-grants-acceptance.sql"
       - "tests/dashboard-reporting-rpc-grants-acceptance.sql"
       - ".github/workflows/dashboard-reporting-rpc-grants.yml"
   push:
@@ -51,9 +53,17 @@ jobs:
             RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
           CREATE FUNCTION henvalt.control_plane_revenue_series(text,timestamptz,timestamptz,text)
             RETURNS jsonb LANGUAGE sql SECURITY DEFINER AS $$ SELECT '{}'::jsonb $$;
+          CREATE FUNCTION henvalt.is_tenant_member(uuid) RETURNS boolean LANGUAGE sql SECURITY DEFINER AS $ SELECT false $;
+          CREATE FUNCTION henvalt.classify_customer_reply_intent(text) RETURNS text LANGUAGE sql SECURITY DEFINER AS $ SELECT 'unknown' $;
+          CREATE FUNCTION henvalt.score_recovery_intent(uuid,uuid) RETURNS numeric LANGUAGE sql SECURITY DEFINER AS $ SELECT 0 $;
+          CREATE FUNCTION henvalt.set_initial_customer_reply_intent() RETURNS trigger LANGUAGE plpgsql AS $ BEGIN RETURN NEW; END $;
           GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA henvalt TO PUBLIC;
           SQL
       - name: Apply dashboard reporting RPC grant migration
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/202611260001_dashboard_reporting_rpc_service_role_only.sql
-      - name: Verify no client execution and service-role access
+      - name: Apply full SECURITY DEFINER grant hardening
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/202611260002_harden_security_definer_rpc_grants.sql
+      - name: Verify dashboard RPCs are backend-only
         run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/dashboard-reporting-rpc-grants-acceptance.sql
+      - name: Verify complete SECURITY DEFINER ACL and future defaults
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/security-definer-rpc-grants-acceptance.sql
