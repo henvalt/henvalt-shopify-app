@@ -123,7 +123,7 @@ This section supersedes earlier assumptions about the available staging boundary
 
 - Connected Cloudflare account currently lists seven Workers and zero Cloudflare zones.
 - The existing henvalt-clean-ingress-v1 Worker is production-bound. Its N8N_INGEST_URL points to https://n8n.henvalt.com/webhook/henvalt/ingest; its current source returns HTTP 200 whenever the upstream responds with any successful status and does not validate the durable webhook/replay-job acknowledgement. This differs from the hardened repository candidate at cloudflare/worker.js, which requires a durable UUID acknowledgement and returns retryable 503 for generic/empty/malformed 2xx.
-- The production Worker must remain untouched. A staging deployment must use a different Worker name, a distinct workers.dev hostname, staging-only secrets, and the candidate durable-ack source.
+- The production Worker must remain untouched. The dedicated staging Worker name is henvalt-shopify-ingress-staging-no-send, with the exact hostname henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev. It uses cloudflare/staging-worker.js, a separate wrangler.staging.toml, staging-only SHOPIFY_API_SECRET, HENVALT_STAGE_NO_SEND=true, provider_mode=stub, and the candidate durable-ack source. The wrapper rejects production n8n hosts, a wrong webhook path, missing no-send mode, and live provider mode before forwarding.
 - Cloudflare account's workers.dev subdomain is enabled. The domain henvalt.com is registered with Hostinger and uses Hostinger nameservers, not a Cloudflare zone.
 - Hostinger DNS currently points app.henvalt.com and n8n.henvalt.com to 43.161.214.33; the apex points to Vercel and www uses a Vercel DNS target. Hostinger account inventory shows one Premium plan and one Horizons website, but no VPS instances. Do not assume the server at 43.161.214.33 is controlled by this Hostinger account.
 
@@ -141,4 +141,4 @@ This section supersedes earlier assumptions about the available staging boundary
 
 ### Current conclusion
 
-The production boundary is now better understood, and a zero-new-project-cost Supabase restore is being investigated. However, there is still no verified isolated end-to-end staging environment. The restored project is not yet ready, n8n staging access is unverified, and no staging Worker or Shopify staging app exists. NO-GO remains in force.
+The production boundary is now better understood, and a zero-new-project-cost Supabase restore is being investigated. However, there is still no verified isolated end-to-end staging environment. The restored legacy projects inspected so far are not ready, n8n staging access is unverified, and the dedicated staging Worker and Shopify app configs are prepared but not deployed or registered. NO-GO remains in force.
