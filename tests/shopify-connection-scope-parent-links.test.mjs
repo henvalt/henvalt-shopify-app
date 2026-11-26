@@ -65,8 +65,8 @@ test('identity guard covers every connection-scoped descendant and is service-ro
 
 
 test('identity guard runs after trigger-derived identity changes on every update', () => {
-  assert.equal((identityGuard.match(/before update\\s+on henvalt\\./g) || []).length, 11);
+  assert.equal((identityGuard.match(/before update\s+on henvalt\\./g) || []).length, 11);
   assert.doesNotMatch(identityGuard, /before update of tenant_id, shopify_connection_id/);
   assert.match(identityGuard, /if v_new_connection_id is not null and v_old_connection_id is null then/);
-  assert.match(identityGuard, /Existing rows must[\\s\\S]*?remain mutable for non-identity fields even if their connection is later/);
+  assert.match(identityGuard, /Existing rows must[\s\S]*?remain mutable for non-identity fields even if their connection is later/);
 });
