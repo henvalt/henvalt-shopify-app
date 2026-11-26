@@ -9,7 +9,9 @@ const config = await readFile(new URL("../dashboard/functions/config.js", import
 test("dashboard exposes a dedicated billing review page without a service-role credential", () => {
   assert.match(html, /data-page="billing"/);
   assert.match(html, /id="page-billing"/);
-  assert.match(html, /BILLING_RECONCILIATION=CONFIG\.billingReconciliation/);\n  assert.match(config, /billingReconciliation: "https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co\/functions\/v1\/henvalt-billing-reconciliation"/);\n  assert.match(config, /billingReconciliation: `\$\{functions\}\/henvalt-billing-reconciliation`/);
+  assert.match(html, /BILLING_RECONCILIATION=CONFIG\.billingReconciliation/);
+  assert.match(config, /billingReconciliation: "https:\/\/ocyplckdojdubyrsxcxa\.supabase\.co\/functions\/v1\/henvalt-billing-reconciliation"/);
+  assert.ok(config.includes("billingReconciliation: `${functions}/henvalt-billing-reconciliation`"));
   assert.doesNotMatch(html, /SUPABASE_SERVICE_ROLE_KEY/);
 });
 
