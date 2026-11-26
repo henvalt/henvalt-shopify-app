@@ -64,6 +64,7 @@ insert into henvalt.shopify_connections(id,tenant_id,active) values
 \i supabase/migrations/202611260007_propagate_shopify_connection_to_recovery_graph.sql
 \i supabase/migrations/202611260009_enforce_shopify_connection_parent_lineage.sql
 \i supabase/migrations/20261126150000_guard_shopify_connection_identity_immutable.sql
+\i supabase/migrations/20261126180000_order_shopify_connection_identity_guard_before_propagation.sql
 
 -- Parent propagation trigger runs before the identity guard by PostgreSQL's
 -- alphabetical trigger ordering. Both connections belong to the same tenant,
@@ -86,18 +87,17 @@ begin
   end;
 end $$;
 
--- The real propagation trigger restores a column-only clear from the
--- authoritative metadata before the immutable guard runs. Verify identity
--- remains unchanged; test direct clearing separately on the ingress row below.
-update henvalt.customers set shopify_connection_id=null
- where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+-- The identity guard runs before propagation, so direct attempts to clear an
+-- established connection are rejected instead of silently normalized.
 do $$
 begin
-  if (select shopify_connection_id from henvalt.customers
-       where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')
-     is distinct from 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid then
-    raise exception 'FAIL: propagation did not preserve established connection identity';
-  end if;
+  begin
+    update henvalt.customers set shopify_connection_id=null
+     where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    raise exception 'FAIL: established customer connection was cleared';
+  exception when check_violation then
+    if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
+  end;
   begin
     update henvalt.customers set tenant_id='22222222-2222-4222-8222-222222222222'
      where id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -182,7 +182,7 @@ update henvalt.customers set note='unrelated safe update'
 
 do $$
 begin
-  if (select count(*) from pg_trigger where tgname='trg_shopify_connection_identity_immutable' and not tgisinternal) <> 11 then
+  if (select count(*) from pg_trigger where tgname='trg_00_shopify_connection_identity_immutable' and not tgisinternal) <> 11 then
     raise exception 'FAIL: expected 11 identity triggers';
   end if;
   if has_function_privilege('anon','henvalt.guard_shopify_connection_identity_immutable()','EXECUTE')
