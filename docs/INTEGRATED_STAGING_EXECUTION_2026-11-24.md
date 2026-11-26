@@ -97,10 +97,46 @@ The staging Cloudflare Worker must expose `POST /shopify/webhooks` and set its `
 
 A fresh read-only inspection of the connected Supabase and n8n accounts was performed after the candidate CI work:
 
-- Supabase currently exposes four HENVALT-related projects: one active healthy project and three inactive projects. The active project is the existing HENVALT production project; none of the inactive projects has been independently verified as an isolated staging target. No paused project was restored and no project was created.
+- Supabase currently exposes four HENVALT-related projects: one active healthy project and three inactive projects. The active project is the existing HENVALT production project. On 2026-11-26, the existing henvalt_v23 project restore request was accepted to investigate a zero-new-resource staging option; it is still COMING_UP, so its schema, secrets, functions and data have not yet been inspected and it is NOT approved as staging. No project or branch was created, and no migration or Edge Function was applied.
 - n8n workflow search returned exactly the three existing HENVALT workflows: INGEST (51 nodes), RECOVERY (46 nodes), and DELIVERY (62 nodes). All three are active, and their active version IDs match their current published versions. A separate staging workflow search returned zero results.
 - The live INGEST workflow includes direct calls to the production Supabase host and has live webhook IDs/credentials. The active workflows were inspected read-only only; none was executed, changed, unpublished, or republished.
 
 **Result: staging still cannot safely proceed.** The existing inactive Supabase projects cannot be treated as staging based on their names or paused state; the current n8n account has no separate staging workflow set. Reusing the active project or active workflows would violate the isolation requirement. Restoring or creating infrastructure could incur charges, so no such action was taken.
 
 The release gate therefore remains **NO-GO** pending a verified, cost-approved isolated Supabase project and a separate n8n staging workspace/project with outbound provider egress blocked.
+
+## Live infrastructure audit — 2026-11-26
+
+This section supersedes earlier assumptions about the available staging boundary. All observations below are read-only except the explicitly recorded restore request for the already-existing paused henvalt_v23 project.
+
+### Supabase
+
+- Organization plan: Free.
+- Active production project: ocyplckdojdubyrsxcxa.
+- Existing paused projects: henvalt_v23, henvalt-sales-factory, henvalt-core-vault.
+- Existing development branches: zero.
+- A new branch quote is USD 0.01344/hour, so it is excluded from the no-paid-resource plan.
+- Restore of the existing henvalt_v23 project was requested on 2026-11-26 and accepted; latest observed status is COMING_UP. It must not be used until its project identity, migration history, data, Edge Functions, secrets and outbound integrations have been audited. A restore is not proof of staging isolation.
+- The active production project currently has deployed OAuth, MailerSend delivery, control-plane and dashboard Edge Functions. Candidate Shopify usage billing is not among the deployed function names. Do not test the active project's delivery endpoints.
+
+### Cloudflare and domain routing
+
+- Connected Cloudflare account currently lists seven Workers and zero Cloudflare zones.
+- The existing henvalt-clean-ingress-v1 Worker is production-bound. Its N8N_INGEST_URL points to https://n8n.henvalt.com/webhook/henvalt/ingest; its current source returns HTTP 200 whenever the upstream responds with any successful status and does not validate the durable webhook/replay-job acknowledgement. This differs from the hardened repository candidate at cloudflare/worker.js, which requires a durable UUID acknowledgement and returns retryable 503 for generic/empty/malformed 2xx.
+- The production Worker must remain untouched. A staging deployment must use a different Worker name, a distinct workers.dev hostname, staging-only secrets, and the candidate durable-ack source.
+- Cloudflare account's workers.dev subdomain is enabled. The domain henvalt.com is registered with Hostinger and uses Hostinger nameservers, not a Cloudflare zone.
+- Hostinger DNS currently points app.henvalt.com and n8n.henvalt.com to 43.161.214.33; the apex points to Vercel and www uses a Vercel DNS target. Hostinger account inventory shows one Premium plan and one Horizons website, but no VPS instances. Do not assume the server at 43.161.214.33 is controlled by this Hostinger account.
+
+### Shopify app configuration
+
+- The repository's default shopify.app.toml is explicitly production-bound: it uses the existing production client ID and the production Supabase OAuth callback and privacy webhook URL.
+- Never run Shopify CLI deploy/release using the default config for staging. A dedicated staging app identity and a separately rendered staging config are required. The exact staging callback must be added to that staging app's Shopify redirect allowlist.
+
+### n8n access
+
+- Last successful live inspection found exactly three active production workflows, with no separate staging workflow set.
+- The n8n connector returned internal errors during this 2026-11-26 pass, so workflow inventory could not be refreshed. Do not infer a staging workspace exists; retry read-only inspection before any workflow creation or execution.
+
+### Current conclusion
+
+The production boundary is now better understood, and a zero-new-project-cost Supabase restore is being investigated. However, there is still no verified isolated end-to-end staging environment. The restored project is not yet ready, n8n staging access is unverified, and no staging Worker or Shopify staging app exists. NO-GO remains in force.
