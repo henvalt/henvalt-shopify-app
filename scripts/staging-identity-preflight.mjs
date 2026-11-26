@@ -73,6 +73,7 @@ try {
   const expectedN8nHost = process.env.HENVALT_STAGE_N8N_HOST?.trim().toLowerCase();
   if (n8nUrl.protocol !== "https:" || n8nUrl.username || n8nUrl.password) errors.push("staging n8n URL must be HTTPS without embedded credentials");
   if (!expectedN8nHost || n8nUrl.hostname.toLowerCase() !== expectedN8nHost) errors.push("staging n8n URL host must exactly match the explicit staging n8n host allowlist");
+  if (expectedN8nHost && /prod(uction)?/i.test(expectedN8nHost)) errors.push("staging n8n host appears to identify production");
   if (["n8n.henvalt.com", "henvalt26.app.n8n.cloud"].includes(n8nUrl.hostname.toLowerCase())) errors.push("n8n URL matches a production host");
 } catch { if (process.env.HENVALT_STAGE_N8N_BASE_URL) errors.push("staging n8n URL is malformed"); }
 if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\.myshopify\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
