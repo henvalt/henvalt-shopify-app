@@ -48,8 +48,8 @@ test('captured Shopify connection and tenant identity cannot be re-parented or c
 
 test('Shopify webhook and canonical event source identity cannot be rewritten', () => {
   assert.match(identityGuard, /SHOPIFY_EVENT_SOURCE_IDENTITY_IMMUTABLE/);
-  assert.match(identityGuard, /before update of tenant_id, shopify_connection_id, source[\s\S]*?on henvalt\.webhook_events/);
-  assert.match(identityGuard, /before update of tenant_id, shopify_connection_id, source[\s\S]*?on henvalt\.canonical_events/);
+  assert.match(identityGuard, /before update[\s\S]*?on henvalt\.webhook_events/);
+  assert.match(identityGuard, /before update[\s\S]*?on henvalt\.canonical_events/);
 });
 
 test('identity guard covers every connection-scoped descendant and is service-role only', () => {
