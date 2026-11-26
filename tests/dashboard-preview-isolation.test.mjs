@@ -55,7 +55,7 @@ test("no-send dashboard disables provider setup and billing-resolution writes", 
   assert.match(source, /if\(CONFIG\.noSend\|\|!SETUP\)/);
   assert.match(source, /Billing reconciliation decisions are disabled in no-send staging/);
   assert.match(source, /Provider setup is disabled in no-send staging/);
-  assert.match(source, /STAGING ENVIRONMENT · NO SEND/);
+  assert.match(source, /STAGING · NO SEND · SHOPIFY OAUTH, PROVIDER SETUP, PRIVACY EXPORT AND BILLING ACTIONS DISABLED/);
 });
 
 
