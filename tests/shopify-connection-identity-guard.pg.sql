@@ -138,7 +138,7 @@ insert into henvalt.webhook_events(id,tenant_id,source)
 values ('88888888-8888-4888-8888-888888888888','11111111-1111-4111-8111-111111111111','fixture');
 update henvalt.webhook_events set shopify_connection_id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
  where id='88888888-8888-4888-8888-888888888888';
-do $
+do $$
 begin
   begin
     update henvalt.webhook_events set shopify_connection_id=null
@@ -147,7 +147,7 @@ begin
   exception when check_violation then
     if sqlerrm not like '%SHOPIFY_CONNECTION_IDENTITY_IMMUTABLE%' then raise; end if;
   end;
-end $;
+end $$;
 
 insert into henvalt.webhook_events(id,tenant_id,source)
 values ('77777777-7777-4777-8777-777777777777','11111111-1111-4111-8111-111111111111','fixture');
