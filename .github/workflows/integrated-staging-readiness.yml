@@ -5,6 +5,7 @@ on:
     paths:
       - "tests/integrated-staging-readiness.test.mjs"
       - "tests/staging-identity-preflight.test.mjs"
+      - "tests/staging-pixel-collector.test.mjs"
       - "tests/shopify-staging-config.test.mjs"
       - "tests/shopify-staging-ingress-worker.test.mjs"
       - "tests/dashboard-environment-config.test.mjs"
@@ -13,7 +14,9 @@ on:
       - "scripts/staging-identity-preflight.mjs"
       - "scripts/render-shopify-staging-config.mjs"
       - "cloudflare/staging-worker.js"
+      - "cloudflare/staging-pixel-collector.js"
       - "wrangler.staging.toml"
+      - "wrangler.pixel-staging.toml"
       - "dashboard/index.html"
       - "dashboard/functions/config.js"
       - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
@@ -25,6 +28,7 @@ on:
     paths:
       - "tests/integrated-staging-readiness.test.mjs"
       - "tests/staging-identity-preflight.test.mjs"
+      - "tests/staging-pixel-collector.test.mjs"
       - "tests/shopify-staging-config.test.mjs"
       - "tests/shopify-staging-ingress-worker.test.mjs"
       - "tests/dashboard-environment-config.test.mjs"
@@ -33,7 +37,9 @@ on:
       - "scripts/staging-identity-preflight.mjs"
       - "scripts/render-shopify-staging-config.mjs"
       - "cloudflare/staging-worker.js"
+      - "cloudflare/staging-pixel-collector.js"
       - "wrangler.staging.toml"
+      - "wrangler.pixel-staging.toml"
       - "dashboard/index.html"
       - "dashboard/functions/config.js"
       - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
@@ -67,7 +73,15 @@ jobs:
           assert config["vars"]["HENVALT_STAGE_N8N_HOST"] == "staging-n8n.invalid"
           assert config["secrets"]["required"] == ["SHOPIFY_API_SECRET"]
           assert "n8n.henvalt.com" not in config["vars"]["N8N_INGEST_URL"]
+          pixel = tomllib.loads(pathlib.Path("wrangler.pixel-staging.toml").read_text())
+          assert pixel["name"] == "henvalt-pixel-collector-staging-no-send"
+          assert pixel["main"] == "cloudflare/staging-pixel-collector.js"
+          assert pixel["vars"]["HENVALT_STAGE_NO_SEND"] == "true"
+          assert pixel["vars"]["SUPABASE_URL"] == "https://xidhtmrfvsgfmyltjuja.supabase.co"
+          assert set(pixel["secrets"]["required"]) == {"SUPABASE_PUBLISHABLE_KEY", "COLLECTOR_SHARED_SECRET"}
           print("ISOLATED_STAGING_WRANGLER_CONFIG_PASSED")
           PY
+      - name: Run isolated staging pixel collector tests
+        run: node --test tests/staging-pixel-collector.test.mjs
       - name: Run integrated staging readiness contract
         run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs tests/billing-reconciliation-dashboard.test.mjs
