@@ -14,7 +14,7 @@ const valid = {
   HENVALT_STAGE_DELIVERY_WORKFLOW_ID: "staging-delivery-3",
   HENVALT_STAGE_SHOPIFY_STORE: "henvalt-stage.myshopify.com",
   HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
-  HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://staging-ingress.example.invalid/shopify/webhooks",
+  HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev/shopify/webhooks",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
   HENVALT_STAGE_NO_SEND: "true",
@@ -99,7 +99,13 @@ test("preflight rejects a production Supabase OAuth callback", () => {
 test("preflight rejects the live production Cloudflare webhook ingress", () => {
   const result = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks" });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /live production Cloudflare Worker/);
+  assert.match(result.stderr, /dedicated no-send staging Worker hostname/);
+});
+
+test("preflight rejects every webhook ingress hostname except the dedicated staging Worker", () => {
+  const result = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /dedicated no-send staging Worker hostname/);
 });
 
 test("preflight rejects malformed or insecure Shopify staging endpoints", () => {
