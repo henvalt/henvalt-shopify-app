@@ -6,6 +6,7 @@ on:
       - "tests/integrated-staging-readiness.test.mjs"
       - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
       - "scripts/staging-identity-preflight.mjs"
+      - ".github/workflows/henvalt-signed-webhook-test.yml"
       - "tests/staging-identity-preflight.test.mjs"
       - ".github/workflows/integrated-staging-readiness.yml"
   push:
