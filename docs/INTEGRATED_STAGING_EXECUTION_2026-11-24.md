@@ -375,3 +375,18 @@ Cloudflare Pages posted successful branch-preview deployments for the dashboard 
 These are branch previews only. They are not evidence of a Shopify OAuth install, authenticated tenant, live ingress, n8n execution, recovery, email delivery, or production release. No Shopify app version was deployed; the explicit release job remained skipped. PR #15 has no submitted reviews or inline review threads at this audit point.
 
 A subsequent read-only staging SQL check returned: provider sending disabled; zero webhook events, canonical events, recovery interventions, delivery requests, and delivery attempts; zero authenticated Shopify connections. Cloudflare API recheck confirmed both staging Worker subdomains and previews disabled, with zero secrets configured on each. The n8n project/workflow connector continues to fail internally, so the three live workflow states remain unverified.
+
+
+### Exact candidate and live staging re-audit — 2026-11-26 (session recheck)
+
+**PR #15:** `feat/shopify-connection-scoped-ingress` remains OPEN, DRAFT, UNMERGED and mergeable at head `5ec3c24a6a619245c89c17a73fd04435fd2ef054`. This latest head is documentation-only; it has no new PR workflow runs. The six successful job-level CI runs listed above belong to code-bearing commit `ed804ca738c5bb4f7cc76e2f05fad0d50595fd12`, not to `5ec3c24`. Do not label the latest head CI-green until CI has actually run for a code-bearing change or a new exact-head run exists.
+
+**Supabase staging project:** `xidhtmrfvsgfmyltjuja` is currently `ACTIVE_HEALTHY`, PostgreSQL 17.12.0.002. The migration inventory contains 55 entries, ending with `20261126120439_add_missing_fk_coverage_indexes`. Only `henvalt-merchant-dashboard` is deployed; `henvalt-shopify-oauth` is absent. A corrected read-only query against schema `henvalt` returned: webhook events 0; canonical events 0; recovery interventions 0; delivery requests 0; delivery attempts 0; Shopify connection rows 1; apparently authenticated Shopify connections 0; provider sending disabled. The single connection row remains an unauthenticated synthetic fixture, not an installation.
+
+**Cloudflare staging Workers:** both dedicated scripts still exist, but their workers.dev subdomains and previews are disabled and each has zero secrets. Ingress remains bound to the deliberate `.invalid` n8n destination. Pixel collector remains without its publishable key, collector shared secret and rate-limit binding. Neither endpoint is operational or publicly smoke-tested.
+
+**n8n:** a fresh workflow search, project search, and direct metadata lookups for the three previously identified workflow IDs all failed with connector-internal errors. Therefore current workflow activation, versions, credentials and execution state are unverified in this session. No workflow was executed or modified.
+
+**Advisors:** the staging security advisor reports 19 RLS-enabled `henvalt` tables without policies (INFO). The current direct-grant audit previously found no direct anon/authenticated grants on those tables; do not add blanket policies without reviewing intended service-only access. Performance advisor reports many unused indexes (expected on a zero-traffic staging database); do not drop indexes based on this signal.
+
+**Decision remains NO-GO.** The missing items are still a verified dedicated Shopify development app/store and credentials, a working isolated n8n destination containing the three separate workflow copies, ingress HMAC secret, pixel collector secrets and real rate-limit binding, verified staging OAuth environment, and a complete synthetic checkout lifecycle acceptance with provider/email egress denied. No production resource, workflow, app release, provider, email or billing state was changed in this recheck.
