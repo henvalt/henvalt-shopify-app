@@ -7,7 +7,7 @@ DECLARE
   v_request uuid := 'e3e3e3e3-e3e3-43e3-83e3-e3e3e3e3e3e3';
   v_rejected boolean := false;
 BEGIN
-  v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery(uuid,uuid)'::regprocedure);
+  v_def := pg_get_functiondef('henvalt.get_mailersend_token_for_delivery_legacy_v1(uuid,uuid)'::regprocedure);
   IF position('6d769024-cd44-4da4-be1d-a25a3dca0660' IN v_def)>0
      OR position('henvalt-one-off-email-test-2026-11-14-v1' IN v_def)>0
      OR position('urmuhammadrehan18@gmail.com' IN v_def)>0 THEN
