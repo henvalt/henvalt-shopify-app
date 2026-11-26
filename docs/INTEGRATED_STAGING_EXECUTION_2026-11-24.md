@@ -131,6 +131,8 @@ This section supersedes earlier assumptions about the available staging boundary
 
 - The repository's default shopify.app.toml is explicitly production-bound: it uses the existing production client ID and the production Supabase OAuth callback and privacy webhook URL.
 - Never run Shopify CLI deploy/release using the default config for staging. A dedicated staging app identity and a separately rendered staging config are required. The exact staging callback must be added to that staging app's Shopify redirect allowlist.
+- A staging config renderer now generates a separate shopify.app.staging.toml from explicit staging-only client ID, dashboard URL, Supabase project ref and privacy endpoint values. It rejects the production app client ID, production project ref and known production app hosts; it is covered by CI tests and does not create or deploy a Shopify app.
+- The manual signed-webhook GitHub workflow has been changed to require a staging-only Shopify secret, explicit staging ingress repository variable and HENVALT_STAGE_NO_SEND=true; its former hard-coded production endpoint has been removed. It cannot be run until a verified staging endpoint is configured.
 
 ### n8n access
 
