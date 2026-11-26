@@ -9,6 +9,7 @@ on:
       - "supabase/migrations/202611260009_enforce_shopify_connection_parent_lineage.sql"
       - "supabase/migrations/202611260010_validate_shopify_recovery_parent_links.sql"
       - "supabase/migrations/20261126150000_guard_shopify_connection_identity_immutable.sql"
+      - "supabase/migrations/20261126180000_order_shopify_connection_identity_guard_before_propagation.sql"
       - "tests/shopify-connection-scope-ingress.test.mjs"
       - "tests/shopify-connection-scope-recovery-graph.test.mjs"
       - "tests/shopify-connection-scope-delivery-descendants.test.mjs"
