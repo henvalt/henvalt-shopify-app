@@ -145,6 +145,18 @@ This section supersedes earlier assumptions about the available staging boundary
 - Last successful live inspection found exactly three active production workflows, with no separate staging workflow set.
 - The n8n connector returned internal errors during this 2026-11-26 pass, so workflow inventory could not be refreshed. Do not infer a staging workspace exists; retry read-only inspection before any workflow creation or execution.
 
+### Production Supabase advisor audit — 2026-11-26
+
+Read-only Supabase advisors reported:
+
+- 11 internal henvalt tables have RLS enabled and no policies. This is INFO, not a public exposure: client roles are denied by default. Do not add broad policies merely to silence the linter.
+- henvalt.is_tenant_member(p_tenant_id) is SECURITY DEFINER and callable by authenticated. Its current definition only returns EXISTS for tenant_memberships where user_id = auth.uid(), with a fixed search_path of henvalt, pg_temp. This is an intentional membership-check contract; no change made.
+- Supabase Auth leaked-password protection is disabled. This is a security-hardening recommendation, not changed in this pass.
+- One unindexed foreign key remains: henvalt.shopify_privacy_requests.tenant_id. Candidate index can be added in a later migration after staging baseline validation.
+- 62 indexes are reported unused. They were not dropped; the database is low-traffic and these indexes may support production query paths not yet exercised.
+
+No production SQL, settings or indexes were changed.
+
 ### Current conclusion
 
 The production boundary is now better understood, and all three existing paused projects have been inspected; none is a safe staging baseline. The organization currently has one active production project and room for a second free project, but a new project cost quote and organization selection are required before creation. There is still no verified isolated end-to-end staging environment. The restored legacy projects inspected so far are not ready, n8n staging access is unverified, and the dedicated staging Worker and Shopify app configs are prepared but not deployed or registered. NO-GO remains in force.
