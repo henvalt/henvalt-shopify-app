@@ -99,6 +99,7 @@ test("staging ingress refuses a missing or mismatched exact n8n host allowlist",
   for (const env of [
     { ...baseEnv, HENVALT_STAGE_N8N_HOST: "" },
     { ...baseEnv, HENVALT_STAGE_N8N_HOST: "different-stage.example.test" },
+    { ...baseEnv, N8N_INGEST_URL: "https://prod-stage.example.test/webhook/henvalt/ingest-candidate-no-send", HENVALT_STAGE_N8N_HOST: "prod-stage.example.test" },
   ]) {
     let calls = 0;
     const response = await handleStagingRequest(request(), env, async () => { calls++; });
