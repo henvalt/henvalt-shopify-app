@@ -301,3 +301,24 @@ These are deployed fail-closed artifacts, not operational endpoints. No Shopify 
 A read-only staging database audit confirmed the provider-send interlock is still closed and found one pre-existing synthetic connection row: `billing-egress.myshopify.com`. It is marked active in the fixture, but it has no Shopify shop ID, no scopes, no access/refresh token secret references, no token expiry metadata, and its tenant has no membership rows. It is not an authenticated Shopify installation and must not be used as the staging development-store identity or as OAuth evidence.
 
 The same audit found zero webhook events, canonical events, recovery interventions, delivery requests, or delivery attempts; there are no live OAuth states. No rows were inserted, updated, or deleted by this audit. Preserve the fixture for its billing acceptance context unless a separately reviewed staging-fixture cleanup is performed. The synthetic row does not satisfy integrated staging readiness.
+
+### OAuth and staging runtime configuration contract — 2026-11-26
+
+The OAuth source was inspected directly to enumerate its runtime configuration contract. The staging Edge Function must not be deployed until all values below are supplied from the dedicated staging Shopify app and isolated staging project; never copy production credentials.
+
+**Supabase Edge Function `henvalt-shopify-oauth` environment**
+
+- Required project/service identity: `SUPABASE_URL` (must be exactly `https://xidhtmrfvsgfmyltjuja.supabase.co`) and `SUPABASE_SERVICE_ROLE_KEY` (staging project service-role secret only).
+- Required Shopify app credentials: `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` (dedicated staging app only).
+- Required callback: `SHOPIFY_REDIRECT_URI` (must be exactly `https://xidhtmrfvsgfmyltjuja.supabase.co/functions/v1/henvalt-shopify-oauth/callback`, and separately allowlisted in the dedicated staging Shopify app).
+- Required completion destination: `HENVALT_DASHBOARD_URL` (explicit HTTPS URL on the isolated staging application origin; no production fallback).
+- Required isolated endpoints: `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` (the dedicated staging ingress Worker origin), `SHOPIFY_PIXEL_COLLECTOR_URL` (the dedicated staging pixel Worker `/v1/events` URL), `HENVALT_STAGE_INGRESS_HOST` (exact staging ingress hostname), and `HENVALT_STAGE_PIXEL_COLLECTOR_HOST` (exact staging pixel hostname).
+- `SHOPIFY_SCOPES` is optional; the code adds its required baseline scopes even when custom scopes are supplied.
+
+**Dedicated staging ingress Worker** requires `SHOPIFY_API_SECRET` as a Cloudflare secret plus the already deployed no-send/stub flags and an exact real staging n8n host/URL. Its current destination remains `staging-n8n.invalid`, and the Shopify secret is absent.
+
+**Dedicated staging pixel Worker** requires `SUPABASE_PUBLISHABLE_KEY`, `COLLECTOR_SHARED_SECRET`, and a real isolated Cloudflare rate-limit binding, in addition to its staging URL and no-send flag. Current Cloudflare inventory has none of those three bindings/secrets configured. The TOML namespace ID is a placeholder and must not be treated as provisioned infrastructure.
+
+The earlier candidate-only statements in the preceding pixel-collector section are historical and are superseded by the subsequent dedicated Worker deployment section: both Worker scripts now exist in Cloudflare, but remain non-public, unconfigured, and fail-closed. This clarification does not change their operational status.
+
+A read-only source inspection identified these exact prerequisites; it did not access or reveal secret values. No Edge Function deployment, Worker secret write, public-subdomain enablement, Shopify OAuth request, or external provider request was performed.
