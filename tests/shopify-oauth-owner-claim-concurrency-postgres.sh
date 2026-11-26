@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set -x
+trap 'status=$?; if [ "$status" -ne 0 ]; then echo "OAuth owner-claim test failed; diagnostic logs:"; for log in /tmp/henvalt-oauth-owner-a.log /tmp/henvalt-oauth-owner-b.log /tmp/henvalt-oauth-owner-c.log; do if [ -f "$log" ]; then echo "--- $log"; cat "$log"; fi; done; fi' EXIT
 
 psql -v ON_ERROR_STOP=1 -c "begin; select henvalt.control_plane_finalize_shopify_oauth_install_expiring_for_owner('state-user-a','race-shop.myshopify.com','access-token-user-a-1234567890','refresh-token-user-a-1234567890',3600,86400,'shop-100',array['read_orders'],'aaaaaaaa-0000-4000-8000-000000000001'); select pg_sleep(2); commit;" > /tmp/henvalt-oauth-owner-a.log 2>&1 &
 owner_a_pid=$!
