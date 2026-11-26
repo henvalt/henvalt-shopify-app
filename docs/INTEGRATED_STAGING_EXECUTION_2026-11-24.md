@@ -160,3 +160,53 @@ No production SQL, settings or indexes were changed.
 ### Current conclusion
 
 The production boundary is now better understood, and all three existing paused projects have been inspected; none is a safe staging baseline. The organization currently has one active production project and room for a second free project, but a new project cost quote and organization selection are required before creation. There is still no verified isolated end-to-end staging environment. The restored legacy projects inspected so far are not ready, n8n staging access is unverified, and the dedicated staging Worker and Shopify app configs are prepared but not deployed or registered. NO-GO remains in force.
+
+
+### Integrated staging execution — 2026-11-26
+
+A dedicated second Supabase project was created in the existing Henvalt organization after the user approved the Free-plan-only option and the project cost quote returned $0/month. The project is isolated from production and is healthy. Its project reference and API keys are intentionally not recorded in this repository.
+
+#### Production-shaped baseline
+
+The staging baseline was reconstructed from read-only PostgreSQL catalogs of the active production project. Only schema metadata and routine definitions were transferred; no production rows, credentials, Vault secrets, customer data, or access tokens were copied.
+
+The initial baseline matched production exactly across fingerprints for:
+- 41 tables and 464 columns
+- 14 enums
+- 206 constraints (including 80 foreign keys)
+- 173 indexes
+- 123 functions
+- 32 RLS policies
+- 5 triggers
+- RLS enabled on all 41 tables
+
+The exact fingerprints for columns, constraints, indexes, functions, policies, triggers, and RLS settings matched before candidate migrations were applied. Six baseline migrations record the structure-only import.
+
+#### Candidate migrations and test results
+
+All 37 candidate migrations from this branch were applied to isolated staging. Two migration scripts needed a compatibility correction because the provider interlock migration wraps the public MailerSend credential-release RPC and moves the original claim implementation to `get_mailersend_token_for_delivery_legacy_v1`. The lifecycle lock-order and legacy one-off shutdown migrations now target that private implementation. The lock-order workflow now applies the provider-interlock prerequisite first, and its acceptance tests explicitly open and then close the test gate.
+
+The resulting staging schema has 49 application tables, 199 functions, and RLS enabled on all 49 tables. The global provider-send interlock is confirmed closed. Supabase security advisors report 19 INFO-level internal tables with RLS enabled and no policies; these remain server-only and have no client grants. No critical advisor finding was reported in the staging security pass.
+
+PostgreSQL acceptance checks passed for:
+- Production-shaped delivery generation and retry authorization
+- Immutable retry-job creation and envelope loading
+- Late provider acceptance and incident handling
+- Exact-tag MailerSend webhook routing
+- Provider-send interlock default-deny, credential release and token-refresh behavior
+- Parent-first lifecycle lock ordering and legacy one-off shutdown (full disposable schema workflow)
+
+The billing final-egress authorization acceptance script also completed without SQL errors. It exercised exact charge-envelope matching, repeat authorization idempotency, subscription cancellation, stale-attempt rejection, and changed subscription-line-item rejection. Its test marker was persisted only in staging; no Shopify usage API request was made.
+
+#### Safety boundary and remaining integration work
+
+- No production SQL, migrations, settings, Edge Functions, Cloudflare Workers, or n8n workflows were changed.
+- No email was sent and no Shopify billing mutation was made.
+- The staging provider-send gate remains closed.
+- No staging n8n runtime has yet been verified or connected.
+- The dedicated staging Shopify app identity and its credentials/callbacks still need to be created.
+- The staging Cloudflare ingress Worker has not been deployed or connected to a staging n8n endpoint.
+- The dashboard preview remains backend-disabled until staging runtime configuration is safely supplied.
+- PR #7 remains draft and unmerged; the full review surface is still too large for a safe merge.
+
+The system remains **NO-GO for merchant launch** until a synthetic Shopify checkout traverses the isolated ingress, durable replay, recovery, generation-bound delivery authorization, blocked provider-egress boundary, order attribution, and billing measurement end to end. No production cutover is authorized by this staging work.
