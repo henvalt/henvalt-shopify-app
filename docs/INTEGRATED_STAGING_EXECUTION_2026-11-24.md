@@ -282,3 +282,16 @@ A separate Cloudflare Worker entry point now wraps the existing pixel collector 
 - Unit tests cover exact project binding, production/arbitrary host rejection, required safety configuration, and fail-closed health behavior. CI now executes these tests and validates the dedicated Wrangler config.
 
 This is candidate code only. The Worker has not been deployed, secrets have not been configured, and no pixel event has been sent. The staging Shopify OAuth function must remain undeployed until the dedicated ingress and pixel collector Workers and isolated n8n endpoint are all provisioned and verified.
+
+### Dedicated Cloudflare staging Worker deployment — 2026-11-26
+
+Two isolated Cloudflare Worker scripts have now been uploaded from the reviewed candidate branch:
+
+- `henvalt-shopify-ingress-staging-no-send`, version 1 / deployment `e21dfc2d-43e7-41b6-9445-6266cb2d2491`.
+- `henvalt-pixel-collector-staging-no-send`, version 1 / deployment `2e240f2e-88b2-422e-9ed5-232a557a6329`.
+
+Both scripts were verified through the Cloudflare API after upload. Their `workers.dev` subdomains and preview URLs remain **disabled**, and both scripts have zero configured secrets.
+
+The ingress script is bound only to no-send/stub flags and the deliberately invalid `staging-n8n.invalid` destination. The Shopify HMAC secret is absent, and the staging host/path guard rejects the placeholder. The pixel collector is bound only to the isolated staging Supabase URL and no-send flag; its publishable key, collector shared secret, and rate-limit binding are absent. Its configuration guard therefore remains closed.
+
+These are deployed fail-closed artifacts, not operational endpoints. No Shopify webhook or pixel event was sent; no n8n, Supabase, Shopify, provider or production Worker configuration was changed. Do not enable either public subdomain or configure secrets until the isolated n8n endpoint, staging-only Shopify app credentials, and pixel rate-limit binding have been verified. Public health smoke tests remain pending because the subdomains are intentionally disabled.
