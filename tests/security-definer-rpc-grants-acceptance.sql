@@ -41,3 +41,13 @@ BEGIN
   END IF;
 END $$;
 
+
+CREATE OR REPLACE FUNCTION henvalt.default_service_role_acl_probe()
+RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;
+DO $$
+BEGIN
+  IF NOT has_function_privilege('service_role', 'henvalt.default_service_role_acl_probe()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'production service_role function default grant missing';
+  END IF;
+END $$;
+DROP FUNCTION henvalt.default_service_role_acl_probe();
