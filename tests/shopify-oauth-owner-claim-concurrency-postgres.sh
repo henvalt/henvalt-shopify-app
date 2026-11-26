@@ -15,7 +15,7 @@ if [ "$owner_b_status" -eq 0 ]; then
   echo "FAIL: concurrent second owner claim unexpectedly succeeded"
   exit 1
 fi
-grep -q "tenant_already_claimed" /tmp/henvalt-oauth-owner-b.log
+grep -q "tenant_owner_required" /tmp/henvalt-oauth-owner-b.log
 
 result="$(psql -At -v ON_ERROR_STOP=1 -c "select tm.user_id::text || '|' || s.secret from henvalt.tenant_memberships tm join henvalt.shopify_connections sc on sc.tenant_id=tm.tenant_id join vault.secrets s on s.id=sc.access_token_secret_ref::uuid where sc.shop_domain='race-shop.myshopify.com' and s.name='henvalt_shop_race-shop_myshopify_com_access'")"
 expected="aaaaaaaa-0000-4000-8000-000000000001|access-token-user-a-1234567890"
