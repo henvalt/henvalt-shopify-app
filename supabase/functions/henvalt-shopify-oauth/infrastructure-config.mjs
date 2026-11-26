@@ -1,12 +1,3 @@
-const PRODUCTION_INGRESS_HOSTS = new Set([
-  "henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev",
-  "ingress.henvalt.com",
-]);
-const PRODUCTION_PIXEL_HOSTS = new Set([
-  "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
-  "pixel.henvalt.com",
-]);
-
 export function resolveOAuthInfrastructure({
   ingressBaseUrl,
   pixelCollectorUrl,
@@ -25,9 +16,7 @@ export function resolveOAuthInfrastructure({
       const pixelHost = String(expectedPixelCollectorHost).trim().toLowerCase();
       if (!ingressHost || !pixelHost ||
           ingress.hostname.toLowerCase() !== ingressHost ||
-          collector.hostname.toLowerCase() !== pixelHost ||
-          PRODUCTION_INGRESS_HOSTS.has(ingressHost) ||
-          PRODUCTION_PIXEL_HOSTS.has(pixelHost)) return { valid: false };
+          collector.hostname.toLowerCase() !== pixelHost) return { valid: false };
     }
     return {
       valid: true,
