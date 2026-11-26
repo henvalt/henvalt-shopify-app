@@ -123,4 +123,5 @@ end $$;
 insert into henvalt.shopify_oauth_states(state_hash,shop_domain,expires_at,initiated_by_user_id)
 values
  ('state-user-a','race-shop.myshopify.com',now()+interval '10 minutes','aaaaaaaa-0000-4000-8000-000000000001'),
- ('state-user-b','race-shop.myshopify.com',now()+interval '10 minutes','bbbbbbbb-0000-4000-8000-000000000002');
+ ('state-user-b','race-shop.myshopify.com',now()+interval '10 minutes','bbbbbbbb-0000-4000-8000-000000000002'),
+ ('state-user-c','race-shop.myshopify.com',now()+interval '10 minutes','cccccccc-0000-4000-8000-000000000003');
