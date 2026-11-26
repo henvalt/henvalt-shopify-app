@@ -4,13 +4,16 @@ import { spawnSync } from "node:child_process";
 
 const script = "scripts/staging-identity-preflight.mjs";
 const valid = {
-  HENVALT_STAGE_SUPABASE_PROJECT_REF: "staging-project-ref-123",
+  HENVALT_STAGE_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
+  HENVALT_STAGE_SHOPIFY_CLIENT_ID: "staging-shopify-client-id",
+  HENVALT_STAGE_APPLICATION_URL: "https://staging-dashboard.example.invalid",
+  HENVALT_STAGE_PRIVACY_WEBHOOK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-privacy",
   HENVALT_STAGE_N8N_BASE_URL: "https://staging-n8n.example.invalid",
   HENVALT_STAGE_INGEST_WORKFLOW_ID: "staging-ingest-1",
   HENVALT_STAGE_RECOVERY_WORKFLOW_ID: "staging-recovery-2",
   HENVALT_STAGE_DELIVERY_WORKFLOW_ID: "staging-delivery-3",
   HENVALT_STAGE_SHOPIFY_STORE: "henvalt-stage.myshopify.com",
-  HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://staging-project-ref-123.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
+  HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "https://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-oauth/callback",
   HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "https://staging-ingress.example.invalid/shopify/webhooks",
   HENVALT_STAGE_PROVIDER_MODE: "stub",
   HENVALT_STAGE_NETWORK_EGRESS_DENIED: "true",
@@ -100,7 +103,7 @@ test("preflight rejects the live production Cloudflare webhook ingress", () => {
 });
 
 test("preflight rejects malformed or insecure Shopify staging endpoints", () => {
-  const callback = run({ ...valid, HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "http://staging-project-ref-123.supabase.co/functions/v1/henvalt-shopify-oauth/callback" });
+  const callback = run({ ...valid, HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL: "http://abcdefghijklmnopqrst.supabase.co/functions/v1/henvalt-shopify-oauth/callback" });
   assert.notEqual(callback.status, 0);
   assert.match(callback.stderr, /exact staging Supabase project/);
   const ingress = run({ ...valid, HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL: "http://staging-ingress.example.invalid/shopify/webhooks" });
