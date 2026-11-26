@@ -76,8 +76,8 @@ try {
       ingress.pathname !== "/shopify/webhooks") {
     errors.push("Shopify webhook ingress must be an HTTPS /shopify/webhooks URL without embedded credentials");
   }
-  if (ingress.hostname === "henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev") {
-    errors.push("Shopify webhook ingress matches the live production Cloudflare Worker");
+  if (ingress.hostname !== "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev") {
+    errors.push("Shopify webhook ingress must use the dedicated no-send staging Worker hostname");
   }
 } catch {
   if (process.env.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL) errors.push("Shopify webhook ingress URL is malformed");
