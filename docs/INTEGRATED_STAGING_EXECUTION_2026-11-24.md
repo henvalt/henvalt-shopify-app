@@ -223,3 +223,17 @@ Remediation applied to the isolated staging project and committed as candidate m
 - Added a disposable PostgreSQL 17 CI workflow and SQL acceptance test to prevent regression.
 
 No production grants or functions were changed. The staging dashboard Edge Function is present, but the other production Edge Functions (OAuth, ingress/control plane, delivery, billing, etc.) have not yet been deployed to staging. The dashboard preview remains unconfigured and backend-disabled. End-to-end Shopify testing remains blocked on a dedicated staging Shopify app identity and a usable isolated n8n runtime.
+
+
+### Full RPC privilege parity correction — 2026-11-26
+
+The deeper ACL comparison found that the initial structure-only staging reconstruction had not preserved PostgreSQL function ACLs/default privileges. This was not a production defect: the production inventory had 118 SECURITY DEFINER functions, zero executable by anon, one executable by authenticated (`is_tenant_member`), and all 118 executable by service_role. The first staging reconstruction had inherited PUBLIC EXECUTE on 109 SECURITY DEFINER functions because the schema import did not carry the original ACL/default-privilege configuration.
+
+This staging mismatch is now corrected:
+- `202611260001_dashboard_reporting_rpc_service_role_only.sql` closes direct client execution for the two dashboard reporting RPCs.
+- `202611260002_harden_security_definer_rpc_grants.sql` revokes PUBLIC/anon/authenticated execution from all SECURITY DEFINER functions, grants service_role, preserves the authenticated `is_tenant_member(uuid)` RLS helper, explicitly restricts candidate-only internal helpers, and changes postgres's future function defaults in the henvalt schema.
+- Staging now has 190 SECURITY DEFINER functions: anon execution **0**, authenticated execution **1** (`is_tenant_member` only), service_role execution **190**. This matches the production privilege pattern while accounting for candidate-only functions.
+- Non-SECURITY DEFINER public helpers now match production's exposed helper list (only `render_email_plain_text` and the trigger helper `stamp_recovery_intervention_delivery_times` in addition to `is_tenant_member`).
+- A dedicated PostgreSQL 17 CI workflow tests both the exact dashboard RPC grant boundary and the complete SECURITY DEFINER/default-privilege policy. Its first run exposed a shell-heredoc quoting defect in the test fixture; that fixture was corrected and the new workflow has been queued again.
+
+The ACL parity issue was discovered in isolated staging and fixed there only. Production ACLs, SQL, Edge Functions and service settings remain unchanged.
