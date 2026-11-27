@@ -1,0 +1,2 @@
+[functions.henvalt-shopify-webhook-ingress]
+verify_jwt = false
