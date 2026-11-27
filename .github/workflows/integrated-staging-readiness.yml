@@ -17,7 +17,6 @@ on:
       - "cloudflare/staging-supabase-ingress-worker.js"
       - "cloudflare/staging-pixel-collector.js"
       - "wrangler.staging.toml"
-      - "wrangler.staging-supabase.toml"
       - "wrangler.pixel-staging.toml"
       - "dashboard/index.html"
       - "dashboard/functions/config.js"
