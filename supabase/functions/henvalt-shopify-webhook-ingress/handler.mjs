@@ -17,8 +17,6 @@ function configured(env) {
       url.pathname === "/" && !url.username && !url.password && !url.search && !url.hash &&
       typeof env.SUPABASE_SERVICE_ROLE_KEY === "string" &&
       env.SUPABASE_SERVICE_ROLE_KEY.length > 40 &&
-      typeof env.HENVALT_INGRESS_SHARED_SECRET === "string" &&
-      env.HENVALT_INGRESS_SHARED_SECRET.length >= 32 &&
       typeof env.SHOPIFY_API_SECRET === "string" &&
       env.SHOPIFY_API_SECRET.length >= 16;
   } catch {
@@ -89,9 +87,6 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   if (request.method !== "POST" || url.pathname !== "/") return json(404, { error: "not_found" });
   if (!configured(env)) return json(503, { error: "staging_ingress_configuration_missing" });
 
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!constantTimeEqual(supplied, env.HENVALT_INGRESS_SHARED_SECRET)) {
-    return json(401, { error: "unauthorized_ingress_worker" });
   }
 
   const shop = (request.headers.get("x-shopify-shop-domain") || "").toLowerCase();
