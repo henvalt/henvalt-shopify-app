@@ -30,9 +30,15 @@ jobs:
           assert c["workers_dev"] is True
           assert c["vars"]["SUPABASE_URL"] == "https://xidhtmrfvsgfmyltjuja.supabase.co"
           assert c["vars"]["HENVALT_STAGE_NO_SEND"] == "true"
-          assert c["secrets"]["required"] == ["SUPABASE_SERVICE_ROLE_KEY"]
+          assert c["secrets"]["required"] == ["HENVALT_INGRESS_SHARED_SECRET"]
           assert "ocyplckdojdubyrsxcxa" not in c["vars"]["SUPABASE_URL"]
           print("STAGING_SUPABASE_INGRESS_CONFIG_PASSED")
           PY
       - name: Run no-send durable ingress tests
-        run: node --test tests/staging-supabase-ingress-worker.test.mjs
+        run: node --test tests/staging-supabase-ingress-worker.test.mjs tests/shopify-webhook-ingress-edge-handler.test.mjs
+      - name: Type-check isolated Shopify ingress Edge Function
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check isolated Shopify ingress Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-webhook-ingress/index.ts
