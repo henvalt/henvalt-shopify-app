@@ -4,11 +4,13 @@ import { handleShopifyWebhookIngress } from "./handler.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const HENVALT_INGRESS_SHARED_SECRET = Deno.env.get("HENVALT_INGRESS_SHARED_SECRET") ?? "";
+const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const HENVALT_STAGE_NO_SEND = Deno.env.get("HENVALT_STAGE_NO_SEND") ?? "";
 
 Deno.serve((request) => handleShopifyWebhookIngress(request, {
   SUPABASE_URL,
   SUPABASE_SERVICE_ROLE_KEY,
   HENVALT_INGRESS_SHARED_SECRET,
+  SHOPIFY_API_SECRET,
   HENVALT_STAGE_NO_SEND,
 }));
