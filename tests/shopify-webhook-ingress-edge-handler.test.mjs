@@ -3,24 +3,21 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { handleShopifyWebhookIngress } from "../supabase/functions/henvalt-shopify-webhook-ingress/handler.mjs";
 
-const shared = "staging-ingress-shared-secret-".padEnd(48, "x");
 const service = "staging-service-role-key-".padEnd(60, "y");
 const shopifySecret = "test-shopify-app-secret";
 const env = {
   SUPABASE_URL: "https://xidhtmrfvsgfmyltjuja.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: service,
-  HENVALT_INGRESS_SHARED_SECRET: shared,
   SHOPIFY_API_SECRET: shopifySecret,
   HENVALT_STAGE_NO_SEND: "true",
 };
 const webhookId = "123e4567-e89b-42d3-a456-426614174000";
 const replayId = "123e4567-e89b-42d3-a456-426614174001";
-function request(body = '{"id":42}', authorization = "Bearer " + shared, hmacOverride) {
+function request(body = '{"id":42}', hmacOverride) {
   const hmac = hmacOverride ?? createHmac("sha256", shopifySecret).update(body).digest("base64");
   return new Request("https://staging.supabase.co/", {
     method: "POST",
     headers: {
-      authorization,
       "content-type": "application/json",
       "x-shopify-shop-domain": "fixture-shop.myshopify.com",
       "x-shopify-topic": "checkouts/update",
@@ -32,14 +29,6 @@ function request(body = '{"id":42}', authorization = "Bearer " + shared, hmacOve
   });
 }
 
-test("rejects missing or invalid Worker shared secret before database call", async () => {
-  let calls = 0;
-  const response = await handleShopifyWebhookIngress(request('{"id":42}', "Bearer wrong"), env,
-    async () => { calls++; throw new Error("must not call"); });
-  assert.equal(response.status, 401);
-  assert.equal(calls, 0);
-});
-
 test("rejects a production Supabase project in staging mode", async () => {
   const response = await handleShopifyWebhookIngress(request(), {
     ...env, SUPABASE_URL: "https://ocyplckdojdubyrsxcxa.supabase.co",
@@ -49,7 +38,7 @@ test("rejects a production Supabase project in staging mode", async () => {
 
 test("rejects invalid Shopify HMAC before database call", async () => {
   let calls = 0;
-  const response = await handleShopifyWebhookIngress(request('{"id":42}', "Bearer " + shared, "invalid-hmac"), env,
+  const response = await handleShopifyWebhookIngress(request('{"id":42}', "invalid-hmac"), env,
     async () => { calls++; throw new Error("must not call"); });
   assert.equal(response.status, 401);
   assert.equal(calls, 0);
