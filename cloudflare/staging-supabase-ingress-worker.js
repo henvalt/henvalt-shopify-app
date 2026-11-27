@@ -1,5 +1,6 @@
 const STAGING_PROJECT_REF = "xidhtmrfvsgfmyltjuja";
 const MAX_BODY_BYTES = 1_000_000;
+export const STAGING_SUPABASE_INGRESS_TIMEOUT_MS = 3500;
 
 function configured(env) {
   try {
@@ -88,7 +89,7 @@ export async function handleStagingSupabaseIngress(request, env, fetchImpl = fet
   try {
     upstream = await fetchImpl(`${env.SUPABASE_URL}/functions/v1/henvalt-shopify-webhook-ingress`, {
       method: "POST", headers, body: raw, redirect: "manual",
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(STAGING_SUPABASE_INGRESS_TIMEOUT_MS),
     });
   } catch {
     return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 });

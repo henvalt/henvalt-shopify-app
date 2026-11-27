@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { handleStagingSupabaseIngress } from "../cloudflare/staging-supabase-ingress-worker.js";
+import { handleStagingSupabaseIngress, STAGING_SUPABASE_INGRESS_TIMEOUT_MS } from "../cloudflare/staging-supabase-ingress-worker.js";
 
 const secret = "staging-ingress-shared-secret-".padEnd(48, "x");
 const env = {
@@ -24,6 +24,10 @@ function webhookRequest(body = '{"id":42}', headers = {}) {
     body,
   });
 }
+
+test("Supabase ingress upstream timeout stays inside Shopify's five-second response budget", () => {
+  assert.equal(STAGING_SUPABASE_INGRESS_TIMEOUT_MS, 3500);
+});
 
 test("health reports exact staging project and no-send mode", async () => {
   const response = await handleStagingSupabaseIngress(new Request("https://worker.example/health"), env);
