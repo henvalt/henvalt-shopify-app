@@ -10,6 +10,10 @@ node scripts/supabase-staging-preflight.mjs
 
 The script makes no network calls, deploys nothing, and never prints secret values. It requires the operator to supply the actual staging environment settings and explicit boolean confirmations.
 
+## Canonical Worker deployment configuration
+
+Use only `wrangler.staging.toml` for the staging ingress Worker. It now points to `cloudflare/staging-supabase-ingress-worker.js` and the exact staging Supabase project. The duplicate `wrangler.staging-supabase.toml` file was removed so two configs cannot accidentally target the same Worker name with different code. The older `cloudflare/staging-worker.js` n8n adapter remains only as a legacy test fixture and is no longer selected by the canonical staging Wrangler config.
+
 ## Required staging identity
 
 - `SUPABASE_URL=https://xidhtmrfvsgfmyltjuja.supabase.co`
