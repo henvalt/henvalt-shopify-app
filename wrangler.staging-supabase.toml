@@ -1,4 +1,4 @@
-name = "henvalt-shopify-ingress-staging-supabase-no-send"
+name = "henvalt-shopify-ingress-staging-no-send"
 main = "cloudflare/staging-supabase-ingress-worker.js"
 compatibility_date = "2026-11-27"
 workers_dev = true
