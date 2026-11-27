@@ -25,7 +25,7 @@ jobs:
           python3 - <<'PY'
           import pathlib, tomllib
           c = tomllib.loads(pathlib.Path("wrangler.staging-supabase.toml").read_text())
-          assert c["name"] == "henvalt-shopify-ingress-staging-supabase-no-send"
+          assert c["name"] == "henvalt-shopify-ingress-staging-no-send"
           assert c["main"] == "cloudflare/staging-supabase-ingress-worker.js"
           assert c["workers_dev"] is True
           assert c["vars"]["SUPABASE_URL"] == "https://xidhtmrfvsgfmyltjuja.supabase.co"
