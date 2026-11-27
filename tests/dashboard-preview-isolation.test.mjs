@@ -55,23 +55,23 @@ test("no-send dashboard disables provider setup and billing-resolution writes", 
   assert.match(source, /if\(CONFIG\.noSend\|\|!SETUP\)/);
   assert.match(source, /Billing reconciliation decisions are disabled in no-send staging/);
   assert.match(source, /Provider setup is disabled in no-send staging/);
-  assert.match(source, /STAGING · NO SEND · SHOPIFY OAUTH, PROVIDER SETUP, PRIVACY EXPORT AND BILLING ACTIONS DISABLED/);
+  assert.match(source, /STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP, PRIVACY EXPORT AND BILLING LOCKED/);
 });
 
 
-test("staging config exposes only the deployed dashboard endpoint", () => {
+test("staging config exposes dashboard and isolated OAuth endpoints while keeping money paths disabled", () => {
   const staging = configSource.slice(configSource.indexOf('environment: "staging"'));
   assert.match(staging, /noSend: true/);
   assert.match(staging, /api:.*henvalt-merchant-dashboard/);
   assert.match(staging, /billingReconciliation: null/);
   assert.match(staging, /privacyExport: null/);
-  assert.match(staging, /shopifyOAuth: null/);
+  assert.match(staging, /shopifyOAuth: `\$\{functions\}\/henvalt-shopify-oauth\/auth`/);
 });
 
-test("no-send preview hides unsupported privacy, billing and Shopify OAuth surfaces", () => {
+test("no-send preview hides unsupported privacy and billing surfaces but permits OAuth test", () => {
   assert.match(source, /data-page=.*page.*style\.display="none"/);
   assert.match(source, /Privacy export is not deployed in staging/);
   assert.match(source, /Billing reconciliation is not deployed in staging/);
-  assert.match(source, /Shopify OAuth is not deployed in no-send staging/);
+  assert.match(source, /Staging OAuth test only · email and billing remain disabled/);\n  assert.match(source, /if\(!SHOPIFY_OAUTH\)/);\n  assert.doesNotMatch(source, /if\(CONFIG\.noSend\|\|!SHOPIFY_OAUTH\)/);
   assert.match(source, /SHOPIFY OAUTH, PROVIDER SETUP, PRIVACY EXPORT AND BILLING ACTIONS DISABLED/);
 });
