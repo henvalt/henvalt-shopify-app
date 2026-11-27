@@ -18,7 +18,9 @@ function configured(env) {
       typeof env.SUPABASE_SERVICE_ROLE_KEY === "string" &&
       env.SUPABASE_SERVICE_ROLE_KEY.length > 40 &&
       typeof env.HENVALT_INGRESS_SHARED_SECRET === "string" &&
-      env.HENVALT_INGRESS_SHARED_SECRET.length >= 32;
+      env.HENVALT_INGRESS_SHARED_SECRET.length >= 32 &&
+      typeof env.SHOPIFY_API_SECRET === "string" &&
+      env.SHOPIFY_API_SECRET.length >= 16;
   } catch {
     return false;
   }
@@ -31,6 +33,17 @@ function constantTimeEqual(a, b) {
   let diff = 0;
   for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
   return diff === 0;
+}
+
+async function verifyShopifyHmac(raw, supplied, secret) {
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(supplied)) return false;
+  const key = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+  );
+  const digest = new Uint8Array(await crypto.subtle.sign("HMAC", key, raw));
+  let binary = "";
+  for (const byte of digest) binary += String.fromCharCode(byte);
+  return constantTimeEqual(btoa(binary), supplied);
 }
 
 async function readLimited(request, limit) {
@@ -56,7 +69,7 @@ async function readLimited(request, limit) {
   let offset = 0;
   for (const chunk of chunks) {
     bytes.set(chunk, offset);
-    offset += chunk.byteLength;
+    offset += chunk.length;
   }
   return bytes;
 }
@@ -76,7 +89,7 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   if (request.method !== "POST" || url.pathname !== "/") return json(404, { error: "not_found" });
   if (!configured(env)) return json(503, { error: "staging_ingress_configuration_missing" });
 
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  const supplied = request.headers.get("authorization")?.replace(/^Bearer\\s+/i, "") ?? "";
   if (!constantTimeEqual(supplied, env.HENVALT_INGRESS_SHARED_SECRET)) {
     return json(401, { error: "unauthorized_ingress_worker" });
   }
@@ -85,7 +98,7 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
   const deliveryId = request.headers.get("x-shopify-webhook-id") || "";
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ||
+  if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop) ||
       !/^[a-z0-9_./-]{2,100}$/.test(topic) || !hmac || !deliveryId || deliveryId.length > 200) {
     return json(400, { error: "invalid_webhook_headers" });
   }
@@ -95,6 +108,10 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   const raw = await readLimited(request, MAX_BODY_BYTES);
   if (raw === null) return json(413, { error: "body_too_large" });
 
+  if (!await verifyShopifyHmac(raw, hmac, env.SHOPIFY_API_SECRET)) {
+    return json(401, { error: "invalid_hmac" });
+  }
+
   let payload;
   try {
     payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
@@ -103,7 +120,7 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   }
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return json(422, { error: "malformed_event" });
 
-  const metadata = {};
+  const metadata = { ingress_hmac_verified: true, hmac_verifier: "shopify_edge_function" };
   for (const [header, key] of [
     ["x-shopify-event-id", "shopify_event_id"],
     ["x-shopify-api-version", "shopify_api_version"],
@@ -115,7 +132,7 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
 
   let upstream;
   try {
-    upstream = await fetchImpl(`${env.SUPABASE_URL}/rest/v1/rpc/receive_shopify_webhook_v1`, {
+    upstream = await fetchImpl(`${env.SUPABASE_URL}/rest/v1/rpc/receive_shopify_webhook_edge_verified_v1`, {
       method: "POST",
       headers: {
         apikey: env.SUPABASE_SERVICE_ROLE_KEY,
@@ -128,7 +145,6 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
         p_shop_domain: shop,
         p_topic: topic,
         p_delivery_id: deliveryId,
-        p_hmac: hmac,
         p_raw_body_base64: base64(raw),
         p_payload: payload,
         p_metadata: metadata,
@@ -145,7 +161,6 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   try { rows = await upstream.json(); } catch { return json(503, { error: "durable_ingest_unavailable" }); }
   const row = Array.isArray(rows) ? rows[0] : null;
   if (!row || !Number.isInteger(row.http_status)) return json(503, { error: "durable_ingest_ack_invalid" });
-  if (row.http_status === 401) return json(401, { error: "invalid_hmac" });
   if (row.http_status === 404) return json(404, { error: "unknown_tenant" });
   if (row.http_status === 422) return json(422, { error: "malformed_event" });
   if (row.http_status !== 200 || !UUID_RE.test(String(row.webhook_id || ""))) {
