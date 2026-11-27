@@ -53,6 +53,18 @@ Supabase's current scheduling guidance uses `pg_cron` plus `pg_net` to invoke Ed
 
 The safe order is: finish and test worker endpoints with a network-denied provider adapter → deploy only to isolated staging → verify authenticated no-send invocation → enable `pg_net` in staging → create exactly three logical schedules (INGEST replay, RECOVERY, DELIVERY) → inspect cron run history and queue outcomes. No schedule is created by this preflight.
 
+## Current Cloudflare and Supabase deployment inventory
+
+A fresh read-only account check on 27 November confirmed:
+
+- The staging ingress Worker and staging pixel collector Worker both exist in Cloudflare.
+- Both Workers have a prior uploaded version, but their `workers.dev` subdomains are disabled.
+- Neither Worker has any bound secret names.
+- The Supabase staging project currently has only `henvalt-merchant-dashboard` deployed; OAuth and webhook-ingress Edge Functions are absent.
+- Supabase Vault does not contain the secret name `henvalt_shopify_app_secret`.
+
+This means the existing Cloudflare Worker records are not a usable ingress runtime. Do not enable either public subdomain or register Shopify webhooks yet. First upload the candidate code using the single canonical Wrangler config, provision the staging-only shared secret in Cloudflare and Supabase, add the Shopify app secret to Vault, deploy the OAuth and ingress Edge Functions, then verify their health and authentication boundaries while no-send remains enforced.
+
 ## Validation status
 
 A dedicated GitHub Actions contract test covers production-host rejection, exact staging callback and Worker host binding, mandatory no-send controls, development-store identity, and suppression of secret values in output.
