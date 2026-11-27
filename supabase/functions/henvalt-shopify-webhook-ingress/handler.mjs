@@ -87,8 +87,6 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   if (request.method !== "POST" || url.pathname !== "/") return json(404, { error: "not_found" });
   if (!configured(env)) return json(503, { error: "staging_ingress_configuration_missing" });
 
-  }
-
   const shop = (request.headers.get("x-shopify-shop-domain") || "").toLowerCase();
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
