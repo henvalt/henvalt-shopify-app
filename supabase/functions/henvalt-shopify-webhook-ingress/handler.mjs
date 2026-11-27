@@ -89,7 +89,7 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   if (request.method !== "POST" || url.pathname !== "/") return json(404, { error: "not_found" });
   if (!configured(env)) return json(503, { error: "staging_ingress_configuration_missing" });
 
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\\s+/i, "") ?? "";
+  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!constantTimeEqual(supplied, env.HENVALT_INGRESS_SHARED_SECRET)) {
     return json(401, { error: "unauthorized_ingress_worker" });
   }
@@ -98,7 +98,7 @@ export async function handleShopifyWebhookIngress(request, env, fetchImpl = fetc
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
   const deliveryId = request.headers.get("x-shopify-webhook-id") || "";
-  if (!/^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(shop) ||
+  if (!/^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$/.test(shop) ||
       !/^[a-z0-9_./-]{2,100}$/.test(topic) || !hmac || !deliveryId || deliveryId.length > 200) {
     return json(400, { error: "invalid_webhook_headers" });
   }
