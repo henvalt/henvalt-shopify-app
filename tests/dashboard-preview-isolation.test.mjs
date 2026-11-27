@@ -72,6 +72,8 @@ test("no-send preview hides unsupported privacy and billing surfaces but permits
   assert.match(source, /data-page=.*page.*style\.display="none"/);
   assert.match(source, /Privacy export is not deployed in staging/);
   assert.match(source, /Billing reconciliation is not deployed in staging/);
-  assert.match(source, /Staging OAuth test only · email and billing remain disabled/);\n  assert.match(source, /if\(!SHOPIFY_OAUTH\)/);\n  assert.doesNotMatch(source, /if\(CONFIG\.noSend\|\|!SHOPIFY_OAUTH\)/);
-  assert.match(source, /SHOPIFY OAUTH, PROVIDER SETUP, PRIVACY EXPORT AND BILLING ACTIONS DISABLED/);
+  assert.match(source, /Staging OAuth test only · email and billing remain disabled/);
+  assert.match(source, /if\(!SHOPIFY_OAUTH\)/);
+  assert.doesNotMatch(source, /if\(CONFIG\.noSend\|\|!SHOPIFY_OAUTH\)/);
+  assert.match(source, /SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP, PRIVACY EXPORT AND BILLING LOCKED/);
 });
