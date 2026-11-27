@@ -292,13 +292,25 @@ Deno.serve(async (req: Request) => {
       return json(502, { error: "shopify_expiring_offline_token_response_invalid" });
     }
 
-    const shopRes = await fetch(`https://${shop}/admin/api/2026-10/shop.json`, { headers: { "x-shopify-access-token": accessToken, accept: "application/json" } });
+    // New public Shopify apps must use the GraphQL Admin API; REST Admin API
+    // resources are legacy. Convert the Shop GID back to its numeric database ID.
+    const shopRes = await fetch(`https://${shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ query: "query HENVALTShopIdentity { shop { id } }" }),
+      signal: AbortSignal.timeout(10000),
+    });
     if (!shopRes.ok) {
-      console.error("Shopify shop verification failed", shopRes.status);
+      console.error("Shopify GraphQL shop verification failed", shopRes.status);
       return json(502, { error: "shopify_shop_verification_failed" });
     }
-    const shopData = await shopRes.json();
-    const shopId = String(shopData?.shop?.id ?? "");
+    const shopData = await shopRes.json().catch(() => ({}));
+    if (shopData?.errors?.length) {
+      console.error("Shopify GraphQL shop identity query returned errors");
+      return json(502, { error: "shopify_shop_verification_failed" });
+    }
+    const shopGid = typeof shopData?.data?.shop?.id === "string" ? shopData.data.shop.id : "";
+    const shopId = shopGid.match(/^gid:\/\/shopify\/Shop\/(\d+)$/)?.[1] ?? "";
     if (!shopId) return json(502, { error: "shopify_shop_id_missing" });
 
     const finalized = await db("/rest/v1/rpc/control_plane_finalize_shopify_oauth_install_expiring_for_owner", {
