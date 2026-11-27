@@ -37,7 +37,7 @@ export function resolveDashboardConfig(hostname, env = {}) {
     setup: null,
     billingReconciliation: null,
     privacyExport: null,
-    shopifyOAuth: null,
+    shopifyOAuth: `${functions}/henvalt-shopify-oauth/auth`,
   };
 }
 
