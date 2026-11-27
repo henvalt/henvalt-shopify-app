@@ -34,7 +34,7 @@ DECLARE
 BEGIN
   v_shop_domain := lower(btrim(COALESCE(p_shop_domain, '')));
 
-  IF v_shop_domain !~ '^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$'
+  IF v_shop_domain !~ '^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$'
      OR NULLIF(btrim(p_topic), '') IS NULL
      OR NULLIF(btrim(p_delivery_id), '') IS NULL
      OR NULLIF(btrim(p_raw_body_base64), '') IS NULL
