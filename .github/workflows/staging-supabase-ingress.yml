@@ -34,6 +34,17 @@ jobs:
           assert "ocyplckdojdubyrsxcxa" not in c["vars"]["SUPABASE_URL"]
           print("STAGING_SUPABASE_INGRESS_CONFIG_PASSED")
           PY
+      - name: Validate Edge Function gateway authentication boundary
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          c = tomllib.loads(pathlib.Path("supabase/config.toml").read_text())
+          assert c["functions"]["henvalt-shopify-webhook-ingress"]["verify_jwt"] is False
+          source = pathlib.Path("supabase/functions/henvalt-shopify-webhook-ingress/index.ts").read_text()
+          assert "SUPABASE_SERVICE_ROLE_KEY" in source
+          assert "HENVALT_INGRESS_SHARED_SECRET" in source
+          print("EDGE_FUNCTION_AUTH_BOUNDARY_PASSED")
+          PY
       - name: Run no-send durable ingress tests
         run: node --test tests/staging-supabase-ingress-worker.test.mjs tests/shopify-webhook-ingress-edge-handler.test.mjs
       - name: Type-check isolated Shopify ingress Edge Function
