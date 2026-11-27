@@ -10,6 +10,9 @@ function stagingUpstream(env) {
   try {
     const url = new URL(env.N8N_INGEST_URL);
     if (url.protocol !== "https:" || url.username || url.password || url.search || url.hash) return null;
+    const expectedHost = String(env.HENVALT_STAGE_N8N_HOST ?? "").trim().toLowerCase();
+    if (!expectedHost || url.hostname.toLowerCase() !== expectedHost) return null;
+    if (/prod(uction)?/i.test(expectedHost)) return null;
     if (PRODUCTION_N8N_HOSTS.has(url.hostname.toLowerCase())) return null;
     if (url.pathname !== EXPECTED_INGEST_PATH) return null;
     if (url.hostname.endsWith(".invalid")) return null;

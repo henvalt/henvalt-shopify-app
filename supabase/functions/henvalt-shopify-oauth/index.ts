@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { buildShopifyCompletionUrl } from "./completion-url.mjs";
+import { buildShopifyCompletionUrl, isSafeCompletionDashboardUrl } from "./completion-url.mjs";
 import { isOAuthCallbackBoundToSupabase, resolveOAuthInfrastructure } from "./infrastructure-config.mjs";
 import { SHOPIFY_WEBHOOK_SPECS, verifyWebhookDestination } from "./webhook-specs.mjs";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -7,10 +7,20 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
 const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
-const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "https://henvalt-dashboard.pages.dev";
+const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
+const IS_NON_PRODUCTION_SUPABASE = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname !== "ocyplckdojdubyrsxcxa.supabase.co";
+  } catch {
+    return true;
+  }
+})();
 const OAUTH_INFRASTRUCTURE = resolveOAuthInfrastructure({
   ingressBaseUrl: Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "",
   pixelCollectorUrl: Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "",
+  requireExplicitHostBinding: IS_NON_PRODUCTION_SUPABASE,
+  expectedIngressHost: Deno.env.get("HENVALT_STAGE_INGRESS_HOST") ?? "",
+  expectedPixelCollectorHost: Deno.env.get("HENVALT_STAGE_PIXEL_COLLECTOR_HOST") ?? "",
 });
 const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
@@ -53,7 +63,7 @@ async function db(path: string, init: RequestInit = {}, schema = "henvalt"): Pro
   });
 }
 function configOk(): boolean {
-  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && isOAuthCallbackBoundToSupabase(SUPABASE_URL, SHOPIFY_REDIRECT_URI) && OAUTH_INFRASTRUCTURE.valid);
+  return Boolean(SUPABASE_URL && SERVICE_ROLE_KEY && SHOPIFY_API_KEY && SHOPIFY_API_SECRET && isOAuthCallbackBoundToSupabase(SUPABASE_URL, SHOPIFY_REDIRECT_URI) && isSafeCompletionDashboardUrl(HENVALT_DASHBOARD_URL) && OAUTH_INFRASTRUCTURE.valid);
 }
 async function verifyCallbackHmac(params: URLSearchParams): Promise<boolean> {
   const supplied = params.get("hmac");
@@ -282,13 +292,25 @@ Deno.serve(async (req: Request) => {
       return json(502, { error: "shopify_expiring_offline_token_response_invalid" });
     }
 
-    const shopRes = await fetch(`https://${shop}/admin/api/2026-10/shop.json`, { headers: { "x-shopify-access-token": accessToken, accept: "application/json" } });
+    // New public Shopify apps must use the GraphQL Admin API; REST Admin API
+    // resources are legacy. Convert the Shop GID back to its numeric database ID.
+    const shopRes = await fetch(`https://${shop}/admin/api/2026-10/graphql.json`, {
+      method: "POST",
+      headers: { "x-shopify-access-token": accessToken, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ query: "query HENVALTShopIdentity { shop { id } }" }),
+      signal: AbortSignal.timeout(10000),
+    });
     if (!shopRes.ok) {
-      console.error("Shopify shop verification failed", shopRes.status);
+      console.error("Shopify GraphQL shop verification failed", shopRes.status);
       return json(502, { error: "shopify_shop_verification_failed" });
     }
-    const shopData = await shopRes.json();
-    const shopId = String(shopData?.shop?.id ?? "");
+    const shopData = await shopRes.json().catch(() => ({}));
+    if (shopData?.errors?.length) {
+      console.error("Shopify GraphQL shop identity query returned errors");
+      return json(502, { error: "shopify_shop_verification_failed" });
+    }
+    const shopGid = typeof shopData?.data?.shop?.id === "string" ? shopData.data.shop.id : "";
+    const shopId = shopGid.match(/^gid:\/\/shopify\/Shop\/(\d+)$/)?.[1] ?? "";
     if (!shopId) return json(502, { error: "shopify_shop_id_missing" });
 
     const finalized = await db("/rest/v1/rpc/control_plane_finalize_shopify_oauth_install_expiring_for_owner", {
@@ -412,6 +434,7 @@ Deno.serve(async (req: Request) => {
       webhooksStatus: allWebhooksRegistered && webhookAuditPersisted ? "verified" : "attention",
       pixelIssue: !pixelActivated && typeof pixelActivation.error === "string" ? pixelActivation.error : undefined,
     });
+    if (!completionUrl) return json(503, { error: "oauth_completion_redirect_not_configured" });
     return redirect(completionUrl);
   }
   return json(404, { error: "not_found" });

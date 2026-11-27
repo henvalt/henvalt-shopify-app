@@ -1,0 +1,53 @@
+name: Shopify connection scope ingress
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611260005_capture_shopify_connection_at_ingress.sql"
+      - "supabase/migrations/202611260006_propagate_connection_scope_metadata.sql"
+      - "supabase/migrations/202611260007_propagate_shopify_connection_to_recovery_graph.sql"
+      - "supabase/migrations/202611260008_propagate_shopify_connection_to_delivery_descendants.sql"
+      - "supabase/migrations/202611260009_enforce_shopify_connection_parent_lineage.sql"
+      - "supabase/migrations/202611260010_validate_shopify_recovery_parent_links.sql"
+      - "supabase/migrations/20261126150000_guard_shopify_connection_identity_immutable.sql"
+      - "supabase/migrations/20261126180000_order_shopify_connection_identity_guard_before_propagation.sql"
+      - "supabase/migrations/20261126190000_guard_shopify_connection_identity_metadata_immutable.sql"
+      - "tests/shopify-connection-scope-ingress.test.mjs"
+      - "tests/shopify-connection-scope-recovery-graph.test.mjs"
+      - "tests/shopify-connection-scope-delivery-descendants.test.mjs"
+      - "tests/shopify-connection-scope-parent-links.test.mjs"
+      - "tests/shopify-connection-identity-guard.pg.sql"
+      - ".github/workflows/shopify-connection-scope-ingress.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  connection-scope-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test tests/shopify-connection-scope-ingress.test.mjs tests/shopify-connection-scope-recovery-graph.test.mjs tests/shopify-connection-scope-delivery-descendants.test.mjs tests/shopify-connection-scope-parent-links.test.mjs
+
+  postgres-identity-guard:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: henvalt_guard_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d henvalt_guard_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migration and run PostgreSQL 17 acceptance
+        env:
+          PGPASSWORD: postgres
+        run: psql -h localhost -U postgres -d henvalt_guard_test -v ON_ERROR_STOP=1 -f tests/shopify-connection-identity-guard.pg.sql

@@ -86,11 +86,11 @@ Before any staging mutation, run:
 node scripts/staging-identity-preflight.mjs
 ```
 
-The tool requires explicit metadata for the staging Supabase ref, HTTPS n8n URL and three distinct workflow IDs, Shopify development-store confirmation, the exact staging Supabase OAuth callback URL, a staging HTTPS `/shopify/webhooks` ingress URL, provider stub mode, network-denial proof, no-send flag, `HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED` unset, and inactive-workflow confirmation. It rejects the live production Supabase project ref, all three inspected live production n8n workflow IDs, the known production n8n hostname, and the live production Cloudflare webhook Worker hostname. It verifies that the OAuth callback hostname is exactly `<staging-project-ref>.supabase.co` and that its callback path is exact. Separately verify that this exact callback URL is present in the Shopify app\u0027s `redirect_urls` allowlist (or use a dedicated staging app configuration); a correct Supabase hostname alone does not make Shopify accept the callback. Never replace the production callback with the staging callback. It makes no network requests and does not access credentials. For no-send acceptance, the billing worker must refuse before any database/token/provider request unless the flag is exactly `true`; keep it unset, and independently deny public egress to MailerSend and Shopify Admin GraphQL at the runtime boundary. Confirm `billing_measurements` may be created for confirmed recoveries but no `billing_usage_charges` row or Shopify `appUsageRecordCreate` request is created. The billing scheduler remains a branch inside RECOVERY; do not add a fourth workflow. Passing preflight is identity/safety evidence only, not integrated acceptance.
+The tool requires explicit metadata for the staging Supabase ref, HTTPS n8n URL and three distinct workflow IDs, an explicit HTTPS `HENVALT_STAGE_DASHBOARD_URL` matching the isolated staging application origin (map it to the OAuth function's `HENVALT_DASHBOARD_URL` setting), Shopify development-store confirmation, the exact staging Supabase OAuth callback URL, a staging HTTPS `/shopify/webhooks` ingress URL, provider stub mode, network-denial proof, no-send flag, `HENVALT_SHOPIFY_BILLING_EGRESS_ENABLED` unset, and inactive-workflow confirmation. It rejects the live production Supabase project ref, all three inspected live production n8n workflow IDs, the known production n8n hostname, and the live production Cloudflare webhook Worker hostname. It verifies that the OAuth callback hostname is exactly `<staging-project-ref>.supabase.co` and that its callback path is exact. Separately verify that this exact callback URL is present in the Shopify app\u0027s `redirect_urls` allowlist (or use a dedicated staging app configuration); a correct Supabase hostname alone does not make Shopify accept the callback. Never replace the production callback with the staging callback. It makes no network requests and does not access credentials. For no-send acceptance, the billing worker must refuse before any database/token/provider request unless the flag is exactly `true`; keep it unset, and independently deny public egress to MailerSend and Shopify Admin GraphQL at the runtime boundary. Confirm `billing_measurements` may be created for confirmed recoveries but no `billing_usage_charges` row or Shopify `appUsageRecordCreate` request is created. The billing scheduler remains a branch inside RECOVERY; do not add a fourth workflow. Passing preflight is identity/safety evidence only, not integrated acceptance.
 
 Environment variables are intentionally not documented as values here; populate them from verified staging inventory only. Never paste production secrets.
 
-The staging Cloudflare Worker must expose `POST /shopify/webhooks` and set its `N8N_INGEST_URL` to the exact staging n8n webhook URL ending in `/webhook/henvalt/ingest-candidate-no-send`. The Worker must verify Shopify HMAC over the raw bytes, forward only the allowlisted Shopify headers, and return HTTP 200 only for the durable acknowledgement envelope containing a webhook UUID and active replay-job UUID/status. Generic 2xx, 204, malformed acknowledgement, or missing replay job must remain retryable 503 responses. The Supabase ingress RPC independently verifies the signed raw body and atomically persists the webhook plus replay job.
+The staging Cloudflare Worker must expose `POST /shopify/webhooks`, set `HENVALT_STAGE_N8N_HOST` to the exact staging n8n hostname, and set `N8N_INGEST_URL` to the exact HTTPS webhook URL on that same host ending in `/webhook/henvalt/ingest-candidate-no-send`. The Worker rejects any host that does not exactly match the explicit allowlist, in addition to rejecting known production n8n hosts. The Worker must verify Shopify HMAC over the raw bytes, forward only the allowlisted Shopify headers, and return HTTP 200 only for the durable acknowledgement envelope containing a webhook UUID and active replay-job UUID/status. Generic 2xx, 204, malformed acknowledgement, or missing replay job must remain retryable 503 responses. The Supabase ingress RPC independently verifies the signed raw body and atomically persists the webhook plus replay job.
 
 
 ## Live staging-boundary recheck — 2026-11-25
@@ -252,3 +252,312 @@ The latest preview deployment for commit `b5660c1969b51e06c495688e6cadd855a0d1d7
 The preview runtime now exposes only the deployed staging merchant-dashboard API. Staging billing reconciliation, privacy export, Shopify OAuth and MailerSend setup endpoints are explicitly null/unavailable until their corresponding isolated Edge Functions and Shopify app identity exist. The no-send dashboard hides billing/privacy navigation and Shopify reauthorization, and guards those actions in code. This prevents the preview UI from calling production or nonexistent staging endpoints. The production dashboard hostname/configuration was not changed.
 
 The Pages API confirms the environment configuration and successful deployment stages. A direct HTTP fetch of the preview `/config` endpoint was not available through the web inspection channel, so endpoint response content is not claimed as independently fetched.
+
+
+### OAuth endpoint identity hardening — 2026-11-26
+
+A source review found that the OAuth function validated ingress and pixel collector URLs as HTTPS, but did not bind either endpoint to the isolated staging host inventory. That left a misconfiguration path where a staging OAuth install could register Shopify webhooks against an unintended HTTPS destination or initialize the web pixel against a production collector.
+
+The candidate now treats every Supabase project other than the explicitly identified production project as non-production and requires exact host bindings for both endpoints:
+- `HENVALT_STAGE_INGRESS_HOST` must equal the dedicated staging ingress Worker hostname.
+- `HENVALT_STAGE_PIXEL_COLLECTOR_HOST` must equal the dedicated staging pixel collector hostname.
+- `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` must use the exact ingress host.
+- `SHOPIFY_PIXEL_COLLECTOR_URL` must use the exact collector host and `/v1/events` path.
+- Staging preflight now requires the corresponding explicit host and URL metadata, rejects the known production pixel collector hostname, and checks the ingress host against the dedicated no-send Worker.
+- The production Supabase project retains its existing non-strict endpoint configuration path; no production function was changed.
+
+The staging OAuth deployment environment must map the two `HENVALT_STAGE_*_HOST` values alongside the corresponding `SHOPIFY_*_URL` values. Do not deploy OAuth until a dedicated staging pixel collector exists and its actual hostname has been verified. The current Cloudflare inventory has no dedicated staging pixel collector, so this gate is intentionally still blocked. The change is candidate-only and does not imply a successful OAuth runtime test.
+
+The required staging pixel collector identity is pinned to `henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev`; the existing `henvalt-pixel-collector` Worker is production and must never be supplied as the staging host. Its dedicated Worker, staging Supabase publishable key, collector shared secret, and isolated rate-limit binding must be provisioned before OAuth deployment. The current Cloudflare inventory confirms that this staging Worker does not yet exist.
+
+
+### Dedicated staging pixel collector candidate — 2026-11-26
+
+A separate Cloudflare Worker entry point now wraps the existing pixel collector for isolated staging:
+- Worker identity: `henvalt-pixel-collector-staging-no-send`.
+- Config: `wrangler.pixel-staging.toml`; entry point: `cloudflare/staging-pixel-collector.js`.
+- It requires `HENVALT_STAGE_NO_SEND=true`, the exact staging Supabase hostname `xidhtmrfvsgfmyltjuja.supabase.co`, an `sb_publishable_` key, a collector shared secret of at least 32 characters, and a rate-limit binding.
+- Invalid or missing configuration blocks event POSTs before any Supabase request. Health reports whether the configuration is complete without exposing secrets.
+- The worker requires two secrets to be configured at deployment time: `SUPABASE_PUBLISHABLE_KEY` and `COLLECTOR_SHARED_SECRET`. The rate-limit binding uses its own namespace and must remain separate from production.
+- Unit tests cover exact project binding, production/arbitrary host rejection, required safety configuration, and fail-closed health behavior. CI now executes these tests and validates the dedicated Wrangler config.
+
+This is candidate code only. The Worker has not been deployed, secrets have not been configured, and no pixel event has been sent. The staging Shopify OAuth function must remain undeployed until the dedicated ingress and pixel collector Workers and isolated n8n endpoint are all provisioned and verified.
+
+### Dedicated Cloudflare staging Worker deployment — 2026-11-26
+
+Two isolated Cloudflare Worker scripts have now been uploaded from the reviewed candidate branch:
+
+- `henvalt-shopify-ingress-staging-no-send`, version 1 / deployment `e21dfc2d-43e7-41b6-9445-6266cb2d2491`.
+- `henvalt-pixel-collector-staging-no-send`, version 1 / deployment `2e240f2e-88b2-422e-9ed5-232a557a6329`.
+
+Both scripts were verified through the Cloudflare API after upload. Their `workers.dev` subdomains and preview URLs remain **disabled**, and both scripts have zero configured secrets.
+
+The ingress script is bound only to no-send/stub flags and the deliberately invalid `staging-n8n.invalid` destination. The Shopify HMAC secret is absent, and the staging host/path guard rejects the placeholder. The pixel collector is bound only to the isolated staging Supabase URL and no-send flag; its publishable key, collector shared secret, and rate-limit binding are absent. Its configuration guard therefore remains closed.
+
+These are deployed fail-closed artifacts, not operational endpoints. No Shopify webhook or pixel event was sent; no n8n, Supabase, Shopify, provider or production Worker configuration was changed. Do not enable either public subdomain or configure secrets until the isolated n8n endpoint, staging-only Shopify app credentials, and pixel rate-limit binding have been verified. Public health smoke tests remain pending because the subdomains are intentionally disabled.
+
+### Staging connection inventory audit — 2026-11-26
+
+A read-only staging database audit confirmed the provider-send interlock is still closed and found one pre-existing synthetic connection row: `billing-egress.myshopify.com`. It is marked active in the fixture, but it has no Shopify shop ID, no scopes, no access/refresh token secret references, no token expiry metadata, and its tenant has no membership rows. It is not an authenticated Shopify installation and must not be used as the staging development-store identity or as OAuth evidence.
+
+The same audit found zero webhook events, canonical events, recovery interventions, delivery requests, or delivery attempts; there are no live OAuth states. No rows were inserted, updated, or deleted by this audit. Preserve the fixture for its billing acceptance context unless a separately reviewed staging-fixture cleanup is performed. The synthetic row does not satisfy integrated staging readiness.
+
+### OAuth and staging runtime configuration contract — 2026-11-26
+
+The OAuth source was inspected directly to enumerate its runtime configuration contract. The staging Edge Function must not be deployed until all values below are supplied from the dedicated staging Shopify app and isolated staging project; never copy production credentials.
+
+**Supabase Edge Function `henvalt-shopify-oauth` environment**
+
+- Required project/service identity: `SUPABASE_URL` (must be exactly `https://xidhtmrfvsgfmyltjuja.supabase.co`) and `SUPABASE_SERVICE_ROLE_KEY` (staging project service-role secret only).
+- Required Shopify app credentials: `SHOPIFY_API_KEY` and `SHOPIFY_API_SECRET` (dedicated staging app only).
+- Required callback: `SHOPIFY_REDIRECT_URI` (must be exactly `https://xidhtmrfvsgfmyltjuja.supabase.co/functions/v1/henvalt-shopify-oauth/callback`, and separately allowlisted in the dedicated staging Shopify app).
+- Required completion destination: `HENVALT_DASHBOARD_URL` (explicit HTTPS URL on the isolated staging application origin; no production fallback).
+- Required isolated endpoints: `SHOPIFY_WEBHOOK_INGRESS_BASE_URL` (the dedicated staging ingress Worker origin), `SHOPIFY_PIXEL_COLLECTOR_URL` (the dedicated staging pixel Worker `/v1/events` URL), `HENVALT_STAGE_INGRESS_HOST` (exact staging ingress hostname), and `HENVALT_STAGE_PIXEL_COLLECTOR_HOST` (exact staging pixel hostname).
+- `SHOPIFY_SCOPES` is optional; the code adds its required baseline scopes even when custom scopes are supplied.
+
+**Dedicated staging ingress Worker** requires `SHOPIFY_API_SECRET` as a Cloudflare secret plus the already deployed no-send/stub flags and an exact real staging n8n host/URL. Its current destination remains `staging-n8n.invalid`, and the Shopify secret is absent.
+
+**Dedicated staging pixel Worker** requires `SUPABASE_PUBLISHABLE_KEY`, `COLLECTOR_SHARED_SECRET`, and a real isolated Cloudflare rate-limit binding, in addition to its staging URL and no-send flag. Current Cloudflare inventory has none of those three bindings/secrets configured. The TOML namespace ID is a placeholder and must not be treated as provisioned infrastructure.
+
+The earlier candidate-only statements in the preceding pixel-collector section are historical and are superseded by the subsequent dedicated Worker deployment section: both Worker scripts now exist in Cloudflare, but remain non-public, unconfigured, and fail-closed. This clarification does not change their operational status.
+
+A read-only source inspection identified these exact prerequisites; it did not access or reveal secret values. No Edge Function deployment, Worker secret write, public-subdomain enablement, Shopify OAuth request, or external provider request was performed.
+
+### OAuth outbound-call boundary clarification — 2026-11-26
+
+A source-level call-graph review found that the OAuth callback performs Shopify Admin API operations after token exchange: it reads `/admin/api/2026-10/shop.json`, creates or updates the Web Pixel through Admin GraphQL, and lists/creates/verifies webhook subscriptions through Admin GraphQL. Therefore a staging network policy that denies all Shopify Admin API egress cannot produce a fully verified OAuth + pixel + webhook installation; it will cause those steps to fail or remain in an attention state.
+
+For an eventual controlled staging acceptance, keep MailerSend and all email-delivery egress denied, keep provider sending disabled in Supabase, and permit Shopify Admin API egress only for the explicitly verified Shopify development store and only for the dedicated staging app token. Never allow production stores or production app credentials. This is a staging-only integration prerequisite, not authorization to make a live request now. Until the dev store, app credentials, and scoped egress rule are verified, do not deploy OAuth or enable either Worker hostname.
+
+
+### Exact-head CI and integrated staging re-audit — 2026-11-26 (latest)
+
+**Candidate PR:** [#15](https://github.com/henvalt/henvalt-shopify-app/pull/15) remains open, draft, and unmerged. Latest verified head: `fd5beb4c6100c3eee4a9fd572ebab0cd0ea6bae1`. The six PR-triggered GitHub Actions workflows completed successfully on this exact head:
+
+- Shopify connection scope ingress — run `45847537922`.
+- Integrated staging readiness contract — run `45847537724`.
+- Foreign-key index coverage — run `45847537846`.
+- Shopify app configuration checks and deployment — run `45847538136` (release/deployment remains opt-in and was not performed).
+- Production-shaped delivery generation migration — run `45847538064`.
+- Safety and pixel consent tests — run `45847537826`.
+
+These are CI results, not a live integrated acceptance. The PR must remain draft/unmerged until the staging gates below are met.
+
+**Read-only staging re-audit:**
+
+- Supabase project `xidhtmrfvsgfmyltjuja` reports only the `henvalt-merchant-dashboard` Edge Function as deployed. `henvalt-shopify-oauth` is not deployed.
+- Migration history includes the connection-scope lineage migrations through `20261126093221_validate_shopify_recovery_parent_links` and FK index coverage migration `20261126120439_add_missing_fk_coverage_indexes`.
+- `henvalt.provider_sending_is_enabled()` returned `false`.
+- The staging n8n connector search returned an internal tool error. Workflow activation, current versions, credentials and execution state therefore remain **unverified**; do not infer them from sanitized repository fixtures.
+- The two dedicated Cloudflare staging Worker scripts remain deployed but their workers.dev subdomains/previews are disabled and each has zero configured secrets. Ingress still points to the deliberate `.invalid` placeholder; pixel collector still lacks its publishable key, shared secret and rate-limit binding. They are fail-closed artifacts, not usable endpoints.
+- The prior staging inventory remains applicable: no authenticated Shopify development-store connection or synthetic lifecycle evidence exists. The pre-existing `billing-egress.myshopify.com` row is a non-authenticated fixture and is not installation evidence.
+
+**Current gate decision: NO-GO for integrated OAuth/webhook/recovery acceptance.** The remaining prerequisites are a verified dedicated Shopify development app/store, staging-only Shopify credentials, a real isolated n8n destination with the three existing workflow copies and isolated credentials, ingress HMAC secret, pixel collector secrets and real isolated rate-limit binding, and the staging OAuth Edge Function configuration. Shopify Admin API egress may be narrowly allowed only for the verified development store and staging app; MailerSend/email egress and provider sending remain denied. No secret values were read or written during this audit.
+
+No production migrations, production deployments, production workflow changes, Shopify release, provider requests, emails, billing mutations or paid-resource creation were performed. No staging workflow was activated and no external OAuth/webhook/pixel event was sent.
+
+
+### Latest CI job-level verification and dashboard preview — 2026-11-26
+
+The six latest pull-request workflow runs for commit `ed804ca738c5bb4f7cc76e2f05fad0d50595fd12` were inspected at the job/step level, not only by their top-level conclusions:
+
+- Safety/pixel consent run `45849297115`: the interlock test job passed, including offline no-send exports for the three existing workflows, workflow JSON parsing, cross-workflow boundary validation, Deno type checks for OAuth/billing/delivery/privacy/dashboard functions, and disposable PostgreSQL acceptance tests for replay fencing, billing, and privacy lifecycle behavior.
+- FK coverage run `45849296505`: the minimal PostgreSQL fixture was created, the migration applied, and all six FK indexes verified.
+- Delivery-generation migration run `45849296516`: the disposable production-shaped PostgreSQL migration chain passed, including retry generation, immutable envelope loading, lease/egress ownership, and both retry-vs-late-acceptance race orders.
+- Shopify config run `45849296662`: TOML/source validation, OAuth redirect/webhook tests, staging renderer, pixel no-send tests, OAuth Deno type-check, and billing/replay concurrency tests passed. The `deploy-shopify-version` job was skipped.
+- Connection scope run `45849296514`: all four connection ingress/recovery/delivery/parent-link test files passed.
+- Integrated staging contract run `45849296658`: Wrangler staging configuration, isolated pixel collector tests, and staging readiness contract passed.
+
+Cloudflare Pages posted successful branch-preview deployments for the dashboard at commit `ed804ca`:
+- Dashboard preview: https://feat-shopify-connection-scop.henvalt-dashboard.pages.dev
+- Dashboard-preview project: https://feat-shopify-connection-scop.henvalt-dashboard-preview.pages.dev
+
+These are branch previews only. They are not evidence of a Shopify OAuth install, authenticated tenant, live ingress, n8n execution, recovery, email delivery, or production release. No Shopify app version was deployed; the explicit release job remained skipped. PR #15 has no submitted reviews or inline review threads at this audit point.
+
+A subsequent read-only staging SQL check returned: provider sending disabled; zero webhook events, canonical events, recovery interventions, delivery requests, and delivery attempts; zero authenticated Shopify connections. Cloudflare API recheck confirmed both staging Worker subdomains and previews disabled, with zero secrets configured on each. The n8n project/workflow connector continues to fail internally, so the three live workflow states remain unverified.
+
+
+### Exact candidate and live staging re-audit — 2026-11-26 (session recheck)
+
+**PR #15:** `feat/shopify-connection-scoped-ingress` remains OPEN, DRAFT, UNMERGED and mergeable at head `069bae87b5d1c7fab875e3530e8b9d4a6bc4a9c7`. This latest head is documentation-only; it has no new PR workflow runs. Its parent documentation-only head was `5ec3c24a6a619245c89c17a73fd04435fd2ef054`. The six successful job-level CI runs listed above belong to code-bearing commit `ed804ca738c5bb4f7cc76e2f05fad0d50595fd12`, not to either documentation-only head. Do not label the latest head CI-green until CI has actually run for a code-bearing change or a new exact-head run exists.
+
+**Supabase staging project:** `xidhtmrfvsgfmyltjuja` is currently `ACTIVE_HEALTHY`, PostgreSQL 17.12.0.002. The migration inventory contains 55 entries, ending with `20261126120439_add_missing_fk_coverage_indexes`. Only `henvalt-merchant-dashboard` is deployed; `henvalt-shopify-oauth` is absent. A corrected read-only query against schema `henvalt` returned: webhook events 0; canonical events 0; recovery interventions 0; delivery requests 0; delivery attempts 0; Shopify connection rows 1; apparently authenticated Shopify connections 0; provider sending disabled. The single connection row remains an unauthenticated synthetic fixture, not an installation.
+
+**Cloudflare staging Workers:** both dedicated scripts still exist, but their workers.dev subdomains and previews are disabled and each has zero secrets. Ingress remains bound to the deliberate `.invalid` n8n destination. Pixel collector remains without its publishable key, collector shared secret and rate-limit binding. Neither endpoint is operational or publicly smoke-tested.
+
+**n8n:** a fresh workflow search, project search, and direct metadata lookups for the three previously identified workflow IDs all failed with connector-internal errors. Therefore current workflow activation, versions, credentials and execution state are unverified in this session. No workflow was executed or modified.
+
+**Advisors:** the staging security advisor reports 19 RLS-enabled `henvalt` tables without policies (INFO). The current direct-grant audit previously found no direct anon/authenticated grants on those tables; do not add blanket policies without reviewing intended service-only access. Performance advisor reports many unused indexes (expected on a zero-traffic staging database); do not drop indexes based on this signal.
+
+**Decision remains NO-GO.** The missing items are still a verified dedicated Shopify development app/store and credentials, a working isolated n8n destination containing the three separate workflow copies, ingress HMAC secret, pixel collector secrets and real rate-limit binding, verified staging OAuth environment, and a complete synthetic checkout lifecycle acceptance with provider/email egress denied. No production resource, workflow, app release, provider, email or billing state was changed in this recheck.
+
+
+### Exact-head CI and staging recheck — 2026-11-26 (20:54 PKT)
+
+**Candidate PR #15:** remains OPEN, DRAFT, UNMERGED and mergeable. Exact head: `8cd96cfe10935da6da32ee79abcbc692ef2bce4e`. The six PR-triggered workflows completed successfully on this exact head:
+
+- Foreign-key index coverage — run `45852862133`; all six FK indexes verified in a disposable PostgreSQL fixture.
+- Shopify app configuration — run `45852862233`; billing lock/concurrency and static OAuth/config validation passed; Shopify deployment job was skipped.
+- Safety and pixel consent — run `45852862103`; offline no-send candidate exports for the three workflows, cross-workflow boundaries, Deno type checks and disposable PostgreSQL replay/billing/privacy acceptance passed.
+- Production-shaped delivery generation migration — run `45852862137`; retry-generation schema, immutable envelope, lease/egress ownership, late-acceptance routing and race-order acceptance passed.
+- Integrated staging readiness contract — run `45852861835`; isolated Wrangler config, pixel collector tests and readiness contract passed.
+- Shopify connection scope ingress — run `45852863175`; ingress, recovery graph, delivery descendants and parent-link contract tests passed.
+
+The deployment job remained skipped. There are no submitted PR reviews or inline review threads. These exact-head CI results validate repository contracts and disposable fixtures only; they do not prove a live OAuth install, webhook delivery, n8n execution or recovery lifecycle.
+
+**Read-only staging snapshot:** Supabase project `xidhtmrfvsgfmyltjuja` still has only `henvalt-merchant-dashboard` deployed; `henvalt-shopify-oauth` is absent. Migration history ends at `20261126120439_add_missing_fk_coverage_indexes`. A single aggregated read-only query returned zero webhook events, canonical events, recovery interventions, delivery requests and delivery attempts; one Shopify connection fixture remains, but it is not authenticated. `henvalt.provider_sending_is_enabled()` remains `false`.
+
+**Runtime integration blockers:** the n8n workflow search again failed with a connector-internal error; current workflow versions, activation, credentials and execution state are therefore unverified. Both dedicated Cloudflare staging Worker scripts remain deployed but non-public, with subdomains/previews disabled and zero secrets. The ingress destination remains the deliberate `.invalid` placeholder; the pixel collector still lacks its publishable key, shared secret and real rate-limit binding. The staging OAuth Edge Function is not deployed. No verified dedicated Shopify development app/store or authenticated install is present.
+
+**Decision: NO-GO for integrated acceptance.** Continue to keep PR #15 draft/unmerged. Do not deploy OAuth, enable Worker hostnames, activate staging workflows, allow MailerSend egress, send email, mutate billing, or touch production. The next executable gate is provisioning/verification of a genuinely isolated n8n runtime and dedicated Shopify development app/store identity, followed by staging-only secrets/bindings and a complete synthetic checkout acceptance. No paid resource should be created without explicit cost approval.
+
+
+### Connection identity immutability hardening — 2026-11-26
+
+A further source review found that the connection-lineage triggers did not fire for tenant-only updates on every scoped table, and event source identity could be changed without invoking the ingress lineage trigger. That could allow a previously scoped record to be re-parented to another tenant or have its Shopify source classification rewritten through an update path not covered by the original trigger column lists.
+
+Candidate migration `20261126150000_guard_shopify_connection_identity_immutable.sql` adds a shared SECURITY DEFINER guard to all 11 connection-scoped tables:
+- Once a row has a non-null Shopify connection ID, that connection ID and tenant ID cannot be changed or cleared.
+- Any newly assigned connection must exist, remain active, and belong to the row's tenant.
+- The source field on webhook and canonical event rows is immutable after insert.
+- Function execution is revoked from public/anon/authenticated and granted to service_role; trigger execution remains database-enforced.
+- Historical unscoped rows remain nullable and are not assigned guessed ownership.
+
+The regression contract was extended in `tests/shopify-connection-scope-parent-links.test.mjs`, and the connection-scope workflow now watches the new migration. This is candidate code only; the migration has NOT been applied to Supabase staging or production.
+
+**Exact candidate commit:** `4bb44a47490baee72d0d1079e75a139265fd690a`. All six PR-triggered workflows completed successfully on this code-bearing head:
+- Connection scope ingress contract — run `45855185570`.
+- Integrated staging readiness contract — run `45855185401`.
+- Safety and pixel consent — run `45855185403`.
+- FK index coverage — run `45855185492`.
+- Shopify app configuration/billing lock — run `45855185505` (Shopify deployment job skipped).
+- Production-shaped delivery generation migration — run `45855185565`.
+
+The connection-scope regression job passed with the new immutable-identity assertions. The production-shaped delivery generation migration and disposable PostgreSQL tests also passed. These CI results do not prove the new connection identity migration has been applied to a full Supabase schema; a dedicated PostgreSQL migration acceptance including the new migration is still required before any staging application.
+
+The staging runtime blockers are unchanged: n8n inventory could not be refreshed because its connector returned an internal error; OAuth Edge Function is absent; Cloudflare staging Workers remain disabled/unconfigured; there is no authenticated Shopify development-store connection or persisted lifecycle. Provider sending remains disabled. No production or staging resources were mutated by this code review.
+
+
+### PostgreSQL 17 connection-identity guard acceptance — 2026-11-26
+
+Candidate migration `20261126150000_guard_shopify_connection_identity_immutable.sql` was hardened after review found that a trigger declared `UPDATE OF tenant_id, shopify_connection_id` would not run when an earlier parent-propagation trigger changed `NEW.shopify_connection_id` during an update whose original SET list named only the parent field. The guard now runs on every UPDATE across all 11 scoped tables. It checks active-connection/tenant matching only on first assignment, so later non-identity updates remain possible when a previously valid connection is deactivated.
+
+A disposable PostgreSQL 17 CI service now creates the minimal required role/table fixture, applies the candidate migration, and executes real SQL assertions for:
+- Trigger-derived connection rewrite blocked after the earlier `trg_propagate` trigger runs.
+- Established connection clearing and tenant reassignment rejected.
+- Webhook source rewrite rejected.
+- First assignment to a valid active same-tenant connection accepted.
+- First assignment to a cross-tenant or inactive connection rejected.
+- Ordinary updates to an already-scoped row remain possible after its connection is deactivated.
+- All 11 identity triggers exist; anon/authenticated cannot directly execute the guard and service_role can.
+
+On code-bearing commit `ad1660d0a1b8f10d2faed841e02fa9ff8b0a83da`, the Shopify connection scope workflow completed both jobs successfully: Node contract and disposable PostgreSQL 17 identity-guard acceptance. The integrated staging readiness contract also completed successfully. Other independent CI workflows were still running at the time of this note; do not treat them as complete until their run conclusions are checked. The PostgreSQL fixture is deliberately minimal and proves the guard's own SQL behavior, not the full production-shaped migration chain or live Supabase staging.
+
+A read-only Supabase migration inventory on 26 November confirms that staging has not applied this candidate identity-guard migration; its migration history still ends at `20261126120439_add_missing_fk_coverage_indexes`. No staging or production DDL was executed. The n8n workflow search again failed internally, so live workflow versions, activation, credentials and execution remain unverified. The integrated runtime decision remains **NO-GO**.
+
+
+**Follow-up verification (26 November 2026):** the additional inactive-connection first-assignment assertion was added to the disposable PostgreSQL test and its dollar-quoted PL/pgSQL block was corrected after the first run exposed a syntax error. On code-bearing commit `a8e9d417c9d39edbbd29d622c61d4117a5079414`, the connection-scope workflow completed both `postgres-identity-guard` and `connection-scope-contract` successfully. The six independent workflows associated with the immediately preceding code-bearing commit `ad1660d0a1b8f10d2faed841e02fa9ff8b0a83da` subsequently all completed successfully: integrated staging readiness, production-shaped delivery-generation migration, connection-scope ingress, FK index coverage, Shopify app configuration, and safety/pixel consent. The Shopify release job was skipped. The exact latest branch head is documentation/workflow-path-only and has not yet been independently revalidated; do not describe that latest head as CI-green. The SQL acceptance file is now included in the workflow path filters so future SQL-only edits retrigger the PostgreSQL job.
+
+
+## Integrated hardening follow-up — 26 November 2026
+
+This section supersedes the earlier statement that only a minimal identity-guard fixture was available.
+
+### Connection identity guard: real lineage-trigger acceptance
+
+The PostgreSQL 17 acceptance fixture now creates the relevant 11-table graph and applies the actual candidate lineage migrations `202611260007_propagate_shopify_connection_to_recovery_graph.sql` and `202611260009_enforce_shopify_connection_parent_lineage.sql` before applying `20261126150000_guard_shopify_connection_identity_immutable.sql`.
+
+The acceptance therefore exercises the real `trg_propagate_shopify_connection_scope` trigger ordering, rather than an artificial parent-trigger stand-in. It verifies:
+- A same-tenant change to a different active Shopify connection, derived from changed metadata by the real propagation trigger, is rejected by the immutable identity guard.
+- A column-only attempt to clear a customer connection is restored from authoritative metadata by the lineage trigger; the persisted connection remains unchanged.
+- Direct clearing of an established ingress connection and tenant reassignment are rejected.
+- Webhook and canonical event source rewrites are rejected.
+- First assignment to a valid active same-tenant connection succeeds; cross-tenant and inactive assignments fail.
+- Non-identity updates remain possible after a connection is deactivated.
+- All 11 identity triggers exist and function ACLs remain service-role-only.
+
+Both connection-scope CI jobs passed on code-bearing commit `13c81cd131e636abb7448fb16cc64931ef747265` (run `45862691518`). This is a targeted graph fixture with the actual propagation and lineage migrations; it is not a complete clone of the entire Supabase production schema and does not authorize applying the migration to staging.
+
+### OAuth owner-claim race and owner-role hardening
+
+A read-only inspection of the staging database's existing `control_plane_finalize_shopify_oauth_install_expiring_for_owner` RPC found that its tenant-membership ownership check ran before `control_plane_connect_shop` acquired its per-shop advisory lock. Two separate OAuth states for the same unclaimed shop could therefore both pass the initial check before one transaction committed its owner membership and token update.
+
+Candidate migration `20261126170000_serialize_shopify_oauth_owner_claim.sql` replaces the RPC while preserving its token persistence behavior and service-role-only ACL. It:
+- Acquires the same `hashtextextended(lower(btrim(p_shop_domain)), 0)` transaction advisory lock used by `control_plane_connect_shop` before checking membership.
+- Allows the initial owner claim only while the tenant has no memberships.
+- Requires an existing tenant member to have the `OWNER` role before Shopify reauthorization; ordinary members and admins cannot replace the stored Shopify token through this owner RPC.
+- Explicitly revokes execution from public, anon and authenticated, and grants it to service_role.
+
+A separate disposable PostgreSQL 17 concurrency job applies this migration against a test-only Vault and connection-helper fixture. It passed on code-bearing commit `13c81cd131e636abb7448fb16cc64931ef747265` (Shopify app configuration run `45862691438`): the first user becomes owner and retains the token; a competing callback is serialized and rejected; a non-owner member is also rejected without replacing the token. The fixture uses synthetic tokens only and makes no Shopify or Vault network requests.
+
+### Full code-bearing CI verification
+
+All six PR-triggered workflows completed successfully on `13c81cd131e636abb7448fb16cc64931ef747265`:
+- Integrated staging readiness — run `45862691383`.
+- Shopify connection scope ingress, including PostgreSQL 17 lineage/identity acceptance — run `45862691518`.
+- Foreign-key index coverage — run `45862691384`.
+- Production-shaped delivery generation migration — run `45862691433`.
+- Shopify app configuration, OAuth contract/type checks, OAuth owner-claim PostgreSQL concurrency, and billing lock safety — run `45862691438`; Shopify version deployment was skipped.
+- Safety and pixel consent — run `45862691469`.
+
+These results apply to the code-bearing commit above. Any later documentation-only commit has no independent CI run and must not be described as separately CI-green.
+
+### Staging remains isolated and runtime is still NO-GO
+
+Fresh read-only staging checks confirm:
+- Migration history still ends at `20261126120439_add_missing_fk_coverage_indexes`; neither candidate migration `20261126150000` nor `20261126170000` has been applied.
+- `henvalt.provider_sending_is_enabled()` remains false.
+- `webhook_events`, `canonical_events`, `recovery_interventions`, `delivery_requests`, and `delivery_attempts` each contain zero rows.
+- The only `shopify_connections` row remains the uncredentialed `billing-egress.myshopify.com` fixture; it has no Shopify shop ID, scopes, access/refresh token references or expiry metadata. Tenant membership count remains zero.
+- The only deployed Edge Function is `henvalt-merchant-dashboard`; `henvalt-shopify-oauth` is absent.
+- The n8n workflow inventory connector again failed internally, so live workflow versions, activation, credentials and execution remain unverified. Cloudflare inventory also returned an authentication error; no Worker settings were changed.
+
+No staging or production migrations, Edge Function deployments, Cloudflare changes, n8n workflow changes, Shopify releases, provider requests, emails, or billing mutations were performed. The candidate branch remains draft/unmerged. The isolated runtime still lacks a verified staging Shopify app/store, OAuth secrets, operational no-send ingress/pixel endpoints and a separate n8n runtime. Integrated install-to-event-to-recovery acceptance is therefore still **NO-GO**.
+
+
+## Integrated execution update — 26 November 2026 (latest staging run)
+
+This section supersedes the earlier staging-state paragraph above. It records the actual isolated staging changes and the follow-up trigger-order correction.
+
+### Staging migrations applied and verified
+
+The following additive migrations are now applied only to `henvalt-integrated-staging`:
+
+- `20261126170401_guard_shopify_connection_identity_immutable`
+- `20261126170438_serialize_shopify_oauth_owner_claim`
+- `20261126171033_order_shopify_connection_identity_guard_before_propagation`
+- `20261126171253_guard_shopify_connection_identity_metadata_immutable`
+
+The identity guard covers all 11 connection-scoped tables. Its trigger name is deliberately ordered before propagation triggers. The guard also checks the metadata-derived Shopify connection identity before later triggers can derive or normalize the connection column. Execution is granted to `service_role` only; `anon` and `authenticated` cannot execute the function.
+
+Rollback-only tests against staging verified that:
+- Rewriting or clearing a webhook's metadata connection identity is rejected.
+- Clearing an established `shopify_connection_id` is rejected.
+- Reassigning an established row to a different tenant is rejected.
+- A normal non-identity payload update succeeds.
+- No synthetic rows remain after rollback.
+- All 11 ordered guard triggers exist and provider sending remains disabled.
+
+The first CI run exposed a real ordering gap: a propagation trigger could restore a cleared connection before the later-named identity guard inspected it. The guard was renamed to execute first, then extended to inspect metadata identity. The disposable PostgreSQL 17 acceptance fixture was updated to apply all four candidate migrations and test metadata rewrite/clear, direct column clear, tenant reassignment and safe updates.
+
+### Latest PR verification
+
+PR #15 remains draft and unmerged. On code-bearing head `6a69ad977374bffa61822c5c07391641b178fad9`:
+- Shopify connection scope ingress passed, including the PostgreSQL 17 identity-guard acceptance (run `45865986244`).
+- Shopify app configuration/static validation passed, including OAuth Edge Function Deno type-check and OAuth owner-claim concurrency (run `45865986041`); Shopify version deployment was skipped.
+- Integrated staging readiness passed (run `45865985905`).
+- Production-shaped delivery generation migration passed (run `45865985880`).
+- Foreign-key index coverage passed (run `45865985914`).
+- Safety and pixel consent was still in progress at the time this section was written (run `45865985984`); do not count it as passed until a completed success is observed.
+
+These CI results do not establish a live runtime integration.
+
+### Remaining runtime blockers
+
+- Supabase staging has zero Auth users and zero credentialed Shopify connections. OAuth finalization was not exercised with a real staging user or Shopify token.
+- The `henvalt-shopify-oauth` Edge Function is not deployed. Its required secrets cannot be verified through the available connector.
+- The dedicated Cloudflare staging ingress and pixel Workers are uploaded but their public subdomains are disabled and required secrets are absent. The pixel Worker's rate-limit namespace value `1001` remains a placeholder, not a provisioned namespace.
+- n8n search, project lookup and direct reads of the three required workflow IDs repeatedly fail internally. No live workflow versions, credentials, activation state or executions are claimed verified.
+- The ingress Worker still has an intentionally invalid n8n destination. No public staging ingress was enabled.
+
+No production resources were changed, no live n8n workflow was edited or executed, no Shopify version was released, no provider request/email was sent and no billing mutation occurred. Provider sending remains disabled in staging. End-to-end Shopify install → webhook → ingress → the three existing workflows → recovery → delivery → attribution remains **NO-GO**.

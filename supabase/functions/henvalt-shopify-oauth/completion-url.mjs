@@ -1,4 +1,16 @@
-const DEFAULT_DASHBOARD_URL = "https://henvalt-dashboard.pages.dev";
+export function isSafeCompletionDashboardUrl(configuredBaseUrl) {
+  if (typeof configuredBaseUrl !== "string" || configuredBaseUrl.trim() === "") return false;
+  try {
+    const base = new URL(configuredBaseUrl);
+    return base.protocol === "https:" &&
+      !base.username &&
+      !base.password &&
+      !base.search &&
+      !base.hash;
+  } catch {
+    return false;
+  }
+}
 
 export function buildShopifyCompletionUrl(configuredBaseUrl, {
   shop,
@@ -6,16 +18,8 @@ export function buildShopifyCompletionUrl(configuredBaseUrl, {
   webhooksStatus,
   pixelIssue,
 }) {
-  let base;
-  try {
-    base = new URL(configuredBaseUrl || DEFAULT_DASHBOARD_URL);
-  } catch {
-    base = new URL(DEFAULT_DASHBOARD_URL);
-  }
-  if (base.protocol !== "https:" || base.username || base.password) {
-    base = new URL(DEFAULT_DASHBOARD_URL);
-  }
-
+  if (!isSafeCompletionDashboardUrl(configuredBaseUrl)) return null;
+  const base = new URL(configuredBaseUrl);
   const completion = new URL("/settings", base.origin);
   completion.searchParams.set("shopify_status", "connected");
   completion.searchParams.set("shop", shop);

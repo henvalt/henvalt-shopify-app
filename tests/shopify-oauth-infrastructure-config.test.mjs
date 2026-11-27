@@ -55,3 +55,65 @@ test("Shopify static configuration validation runs on the active candidate branc
   assert.match(workflow, /push:\s*\n\s*branches: \[main, work\/48h-system-readiness-2026-11-21\]/);
   assert.match(workflow, /static-validation:/);
 });
+
+test("OAuth refuses to start without an explicit completion dashboard URL", () => {
+  const source = readFileSync("supabase/functions/henvalt-shopify-oauth/index.ts", "utf8");
+  assert.match(source, /Deno\.env\.get\("HENVALT_DASHBOARD_URL"\)\s*\?\?\s*""/);
+  assert.match(source, /isSafeCompletionDashboardUrl\(HENVALT_DASHBOARD_URL\)/);
+  assert.doesNotMatch(source, /HENVALT_DASHBOARD_URL[^\n]*henvalt-dashboard\.pages\.dev/);
+  const helper = readFileSync("supabase/functions/henvalt-shopify-oauth/completion-url.mjs", "utf8");
+  assert.match(helper, /if \(!isSafeCompletionDashboardUrl\(configuredBaseUrl\)\) return null/);
+});
+
+test("non-production OAuth requires exact explicit ingress and pixel collector host bindings", () => {
+  const base = {
+    ingressBaseUrl: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
+    pixelCollectorUrl: "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events",
+    requireExplicitHostBinding: true,
+    expectedIngressHost: "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
+    expectedPixelCollectorHost: "henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev",
+  };
+  assert.equal(resolveOAuthInfrastructure(base).valid, true);
+  assert.equal(resolveOAuthInfrastructure({ ...base, expectedIngressHost: "other.example.workers.dev" }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({ ...base, expectedPixelCollectorHost: "" }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({ ...base, pixelCollectorUrl: "https://production.example.workers.dev/v1/events" }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({
+    ...base,
+    ingressBaseUrl: "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev",
+    pixelCollectorUrl: "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events",
+    expectedIngressHost: "",
+  }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({
+    ...base,
+    ingressBaseUrl: "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev",
+    expectedIngressHost: "henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev",
+  }).valid, false);
+  assert.equal(resolveOAuthInfrastructure({
+    ...base,
+    pixelCollectorUrl: "https://henvalt-pixel-collector.chmuhammadrehan18.workers.dev/v1/events",
+    expectedPixelCollectorHost: "henvalt-pixel-collector.chmuhammadrehan18.workers.dev",
+  }).valid, false);
+});
+
+test("OAuth derives strict endpoint binding for non-production Supabase deployments", () => {
+  const source = readFileSync("supabase/functions/henvalt-shopify-oauth/index.ts", "utf8");
+  assert.match(source, /IS_NON_PRODUCTION_SUPABASE/);
+  assert.match(source, /requireExplicitHostBinding: IS_NON_PRODUCTION_SUPABASE/);
+  assert.match(source, /HENVALT_STAGE_INGRESS_HOST/);
+  assert.match(source, /HENVALT_STAGE_PIXEL_COLLECTOR_HOST/);
+});
+
+
+test("Shopify OAuth owner claim is serialized before checking tenant ownership", () => {
+  const migration = readFileSync(
+    new URL("../supabase/migrations/20261126170000_serialize_shopify_oauth_owner_claim.sql", import.meta.url),
+    "utf8",
+  );
+  const lock = migration.indexOf("pg_advisory_xact_lock(hashtextextended(lower(btrim(p_shop_domain)), 0))");
+  const ownershipCheck = migration.indexOf("select tenant_id into v_tenant_id");
+  assert.ok(lock >= 0 && ownershipCheck > lock, "shop advisory lock must precede tenant ownership check");
+  assert.match(migration, /tenant_owner_required/);
+  assert.match(migration, /role = 'OWNER'::henvalt\.member_role/);
+  assert.match(migration, /revoke all on function[\s\S]*from public, anon, authenticated/);
+  assert.match(migration, /grant execute on function[\s\S]*to service_role/);
+});

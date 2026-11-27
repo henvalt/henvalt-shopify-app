@@ -103,22 +103,20 @@ test("candidate workflow builders retain inactive no-send isolation", () => {
   assert.match(recoveryBuilder, /availableInMCP: false/);
 });
 
-test("staging Cloudflare Worker is a separate no-send wrapper and has a dedicated Wrangler config", () => {
-  const worker = read("cloudflare/staging-worker.js");
+test("canonical staging Worker config targets the Supabase-backed no-send ingress", () => {
+  const worker = read("cloudflare/staging-supabase-ingress-worker.js");
   const config = read("wrangler.staging.toml");
   assert.match(worker, /HENVALT_STAGE_NO_SEND === "true"/);
-  assert.match(worker, /HENVALT_STAGE_PROVIDER_MODE === "stub"/);
-  assert.match(worker, /n8n\.henvalt\.com/);
-  assert.match(worker, /henvalt26\.app\.n8n\.cloud/);
-  assert.match(worker, /ingest-candidate-no-send/);
-  assert.match(worker, /handleRequest\(request, env, fetchImpl\)/);
-  assert.match(config, /name = "henvalt-shopify-ingress-staging-no-send"/);
-  assert.match(config, /main = "cloudflare\/staging-worker\.js"/);
-  assert.match(config, /workers_dev = true/);
-  assert.match(config, /HENVALT_STAGE_NO_SEND = "true"/);
-  assert.match(config, /HENVALT_STAGE_PROVIDER_MODE = "stub"/);
-  assert.match(config, /required = \["SHOPIFY_API_SECRET"\]/);
-  assert.doesNotMatch(config, /n8n\.henvalt\.com|henvalt26\.app\.n8n\.cloud/);
+  assert.match(worker, /HENVALT_INGRESS_SHARED_SECRET/);
+  assert.match(worker, /henvalt-shopify-webhook-ingress/);
+  assert.ok(config.includes('name = "henvalt-shopify-ingress-staging-no-send"'));
+  assert.ok(config.includes('main = "cloudflare/staging-supabase-ingress-worker.js"'));
+  assert.ok(config.includes('SUPABASE_URL = "https://xidhtmrfvsgfmyltjuja.supabase.co"'));
+  assert.ok(config.includes('HENVALT_STAGE_NO_SEND = "true"'));
+  assert.ok(config.includes('required = ["HENVALT_INGRESS_SHARED_SECRET"]'));
+  assert.ok(config.includes("workers_dev = true"));
+  assert.doesNotMatch(config, /N8N_INGEST_URL|n8n\\.henvalt\\.com|henvalt26\\.app\\.n8n\\.cloud/);
+  assert.doesNotMatch(worker, /N8N_INGEST_URL|henvalt26\\.app\\.n8n\\.cloud/);
 });
 
 test("manual signed Shopify webhook test is staging-only and cannot target the production ingress", () => {

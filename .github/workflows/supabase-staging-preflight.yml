@@ -1,0 +1,31 @@
+name: HENVALT Supabase staging preflight contract
+
+on:
+  pull_request:
+    paths:
+      - "scripts/supabase-staging-preflight.mjs"
+      - "tests/supabase-staging-preflight.test.mjs"
+      - ".github/workflows/supabase-staging-preflight.yml"
+  push:
+    branches:
+      - "feat/shopify-connection-scoped-ingress"
+    paths:
+      - "scripts/supabase-staging-preflight.mjs"
+      - "tests/supabase-staging-preflight.test.mjs"
+      - ".github/workflows/supabase-staging-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate Supabase-backed staging identity without credentials
+        run: node --test tests/supabase-staging-preflight.test.mjs

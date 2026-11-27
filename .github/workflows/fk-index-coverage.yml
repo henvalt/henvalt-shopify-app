@@ -1,0 +1,68 @@
+name: HENVALT foreign-key index coverage
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611260011_add_missing_fk_coverage_indexes.sql"
+      - "tests/shopify-fk-index-coverage-acceptance.sql"
+      - ".github/workflows/fk-index-coverage.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fk-index-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create minimal FK-equivalent schema
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          create schema henvalt;
+          create table henvalt.billing_measurements (id uuid primary key);
+          create table henvalt.delivery_requests (id uuid primary key);
+          create table henvalt.recovery_interventions (id uuid primary key);
+          create table henvalt.email_usage_reservations (id uuid primary key);
+          create table henvalt.billing_measurement_credit_offsets (
+            tenant_id uuid not null,
+            credit_measurement_id uuid not null references henvalt.billing_measurements(id),
+            charge_measurement_id uuid not null references henvalt.billing_measurements(id)
+          );
+          create table henvalt.delivery_generation_incidents (
+            delivery_request_id uuid not null references henvalt.delivery_requests(id),
+            intervention_id uuid not null references henvalt.recovery_interventions(id)
+          );
+          create table henvalt.delivery_retry_commands (
+            tenant_id uuid not null,
+            intervention_id uuid not null references henvalt.recovery_interventions(id),
+            retry_command_id uuid not null,
+            generation_number integer not null,
+            primary key (tenant_id, intervention_id, retry_command_id),
+            unique (tenant_id, intervention_id, generation_number)
+          );
+          create table henvalt.email_usage_reservation_events (
+            reservation_id uuid not null references henvalt.email_usage_reservations(id)
+          );
+          SQL
+      - name: Apply FK coverage index migration
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f supabase/migrations/202611260011_add_missing_fk_coverage_indexes.sql
+      - name: Verify all six FK coverage indexes
+        run: psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 -f tests/shopify-fk-index-coverage-acceptance.sql

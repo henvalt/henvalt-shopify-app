@@ -1,0 +1,55 @@
+name: HENVALT Supabase-backed staging ingress
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/staging-supabase-ingress-worker.js"
+      - "wrangler.staging.toml"
+      - "tests/staging-supabase-ingress-worker.test.mjs"
+      - ".github/workflows/staging-supabase-ingress.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  staging-ingress-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate staging-only Worker configuration
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          c = tomllib.loads(pathlib.Path("wrangler.staging.toml").read_text())
+          assert c["name"] == "henvalt-shopify-ingress-staging-no-send"
+          assert c["main"] == "cloudflare/staging-supabase-ingress-worker.js"
+          assert c["workers_dev"] is True
+          assert c["vars"]["SUPABASE_URL"] == "https://xidhtmrfvsgfmyltjuja.supabase.co"
+          assert c["vars"]["HENVALT_STAGE_NO_SEND"] == "true"
+          assert c["secrets"]["required"] == ["HENVALT_INGRESS_SHARED_SECRET"]
+          assert "ocyplckdojdubyrsxcxa" not in c["vars"]["SUPABASE_URL"]
+          print("STAGING_SUPABASE_INGRESS_CONFIG_PASSED")
+          PY
+      - name: Validate Edge Function gateway authentication boundary
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          c = tomllib.loads(pathlib.Path("supabase/config.toml").read_text())
+          assert c["functions"]["henvalt-shopify-webhook-ingress"]["verify_jwt"] is False
+          source = pathlib.Path("supabase/functions/henvalt-shopify-webhook-ingress/index.ts").read_text()
+          assert "SUPABASE_SERVICE_ROLE_KEY" in source
+          assert "HENVALT_INGRESS_SHARED_SECRET" in source
+          print("EDGE_FUNCTION_AUTH_BOUNDARY_PASSED")
+          PY
+      - name: Run no-send durable ingress tests
+        run: node --test tests/staging-supabase-ingress-worker.test.mjs tests/shopify-webhook-ingress-edge-handler.test.mjs
+      - name: Type-check isolated Shopify ingress Edge Function
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Check isolated Shopify ingress Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-webhook-ingress/index.ts

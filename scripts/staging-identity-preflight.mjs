@@ -8,14 +8,19 @@ const required = [
   "HENVALT_STAGE_SUPABASE_PROJECT_REF",
   "HENVALT_STAGE_SHOPIFY_CLIENT_ID",
   "HENVALT_STAGE_APPLICATION_URL",
+  "HENVALT_STAGE_DASHBOARD_URL",
   "HENVALT_STAGE_PRIVACY_WEBHOOK_URL",
   "HENVALT_STAGE_N8N_BASE_URL",
+  "HENVALT_STAGE_N8N_HOST",
   "HENVALT_STAGE_INGEST_WORKFLOW_ID",
   "HENVALT_STAGE_RECOVERY_WORKFLOW_ID",
   "HENVALT_STAGE_DELIVERY_WORKFLOW_ID",
   "HENVALT_STAGE_SHOPIFY_STORE",
   "HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL",
   "HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL",
+  "HENVALT_STAGE_INGRESS_HOST",
+  "HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL",
+  "HENVALT_STAGE_PIXEL_COLLECTOR_HOST",
   "HENVALT_STAGE_PROVIDER_MODE",
   "HENVALT_STAGE_NETWORK_EGRESS_DENIED",
   "HENVALT_STAGE_NO_SEND",
@@ -48,6 +53,19 @@ for (const [key, value] of Object.entries({
   }
 }
 if (process.env.HENVALT_STAGE_SUPABASE_PROJECT_REF === productionProjectRef) errors.push("staging project ref matches production");
+try {
+  const dashboard = new URL(process.env.HENVALT_STAGE_DASHBOARD_URL);
+  const application = new URL(process.env.HENVALT_STAGE_APPLICATION_URL);
+  if (dashboard.protocol !== "https:" || dashboard.username || dashboard.password ||
+      dashboard.search || dashboard.hash || dashboard.origin !== application.origin) {
+    errors.push("OAuth completion dashboard URL must be explicit HTTPS and match the isolated staging application origin");
+  }
+  if (["henvalt-dashboard.pages.dev", "henvalt.com", "app.henvalt.com"].includes(dashboard.hostname.toLowerCase())) {
+    errors.push("OAuth completion dashboard URL matches a production host");
+  }
+} catch {
+  if (process.env.HENVALT_STAGE_DASHBOARD_URL) errors.push("OAuth completion dashboard URL is malformed");
+}
 if (process.env.HENVALT_STAGE_PROVIDER_MODE && process.env.HENVALT_STAGE_PROVIDER_MODE !== "stub") errors.push("provider mode must be stub");
 if (process.env.HENVALT_STAGE_NETWORK_EGRESS_DENIED !== "true") errors.push("outbound network egress denial must be explicitly confirmed");
 if (process.env.HENVALT_STAGE_NO_SEND !== "true") errors.push("no-send safety flag must be explicitly true");
@@ -55,9 +73,12 @@ if (process.env.HENVALT_STAGE_WORKFLOWS_INACTIVE !== "true") errors.push("all im
 if (process.env.HENVALT_STAGE_SHOPIFY_DEV_STORE_CONFIRMED !== "true") errors.push("Shopify development store must be explicitly confirmed");
 try {
   const n8nUrl = new URL(process.env.HENVALT_STAGE_N8N_BASE_URL);
+  const expectedN8nHost = process.env.HENVALT_STAGE_N8N_HOST?.trim().toLowerCase();
   if (n8nUrl.protocol !== "https:" || n8nUrl.username || n8nUrl.password) errors.push("staging n8n URL must be HTTPS without embedded credentials");
+  if (!expectedN8nHost || n8nUrl.hostname.toLowerCase() !== expectedN8nHost) errors.push("staging n8n URL host must exactly match the explicit staging n8n host allowlist");
+  if (expectedN8nHost && /prod(uction)?/i.test(expectedN8nHost)) errors.push("staging n8n host appears to identify production");
+  if (["n8n.henvalt.com", "henvalt26.app.n8n.cloud"].includes(n8nUrl.hostname.toLowerCase())) errors.push("n8n URL matches a production host");
 } catch { if (process.env.HENVALT_STAGE_N8N_BASE_URL) errors.push("staging n8n URL is malformed"); }
-if (process.env.HENVALT_STAGE_N8N_BASE_URL && /henvalt26\.app\.n8n\.cloud|prod/i.test(process.env.HENVALT_STAGE_N8N_BASE_URL)) errors.push("n8n URL appears to identify production");
 if (process.env.HENVALT_STAGE_SHOPIFY_STORE && !/\.myshopify\.com$/i.test(process.env.HENVALT_STAGE_SHOPIFY_STORE)) errors.push("staging Shopify store must be a myshopify.com development store");
 try {
   const callback = new URL(process.env.HENVALT_STAGE_SHOPIFY_OAUTH_CALLBACK_URL);
@@ -79,8 +100,24 @@ try {
   if (ingress.hostname !== "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev") {
     errors.push("Shopify webhook ingress must use the dedicated no-send staging Worker hostname");
   }
+  if (ingress.hostname !== process.env.HENVALT_STAGE_INGRESS_HOST?.trim().toLowerCase()) {
+    errors.push("OAuth ingress host binding must exactly match the dedicated staging Worker hostname");
+  }
 } catch {
   if (process.env.HENVALT_STAGE_SHOPIFY_WEBHOOK_INGRESS_URL) errors.push("Shopify webhook ingress URL is malformed");
+}
+try {
+  const pixel = new URL(process.env.HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL);
+  if (pixel.protocol !== "https:" || pixel.username || pixel.password || pixel.search || pixel.hash ||
+      pixel.pathname !== "/v1/events" ||
+      pixel.hostname !== process.env.HENVALT_STAGE_PIXEL_COLLECTOR_HOST?.trim().toLowerCase()) {
+    errors.push("Shopify pixel collector must be HTTPS /v1/events on its exact explicit staging host");
+  }
+  if (pixel.hostname !== "henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev") {
+    errors.push("Shopify pixel collector must use the dedicated no-send staging Worker hostname");
+  }
+} catch {
+  if (process.env.HENVALT_STAGE_SHOPIFY_PIXEL_COLLECTOR_URL) errors.push("Shopify pixel collector URL is malformed");
 }
 try { renderShopifyStagingConfig(process.env); } catch (error) { errors.push(error.message); }
 if (errors.length) {
