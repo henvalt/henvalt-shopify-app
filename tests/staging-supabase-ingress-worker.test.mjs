@@ -78,6 +78,36 @@ test("does not acknowledge generic upstream 2xx", async () => {
   assert.equal(response.status, 503);
 });
 
+test("preserves only explicit Shopify event rejection statuses from the Supabase boundary", async (t) => {
+  const cases = [
+    ["invalid HMAC", 401, "invalid_hmac", 401, "invalid_hmac"],
+    ["unknown tenant", 404, "unknown_tenant", 404, "unknown_tenant"],
+    ["malformed event", 422, "malformed_event", 422, "malformed_event"],
+  ];
+  for (const [name, upstreamStatus, upstreamError, expectedStatus, expectedError] of cases) {
+    await t.test(name, async () => {
+      const response = await handleStagingSupabaseIngress(webhookRequest(), env,
+        async () => Response.json({ error: upstreamError }, { status: upstreamStatus }));
+      assert.equal(response.status, expectedStatus);
+      assert.deepEqual(await response.json(), { error: expectedError });
+    });
+  }
+});
+
+test("does not misreport ingress worker authentication failure as invalid Shopify HMAC", async () => {
+  const response = await handleStagingSupabaseIngress(webhookRequest(), env,
+    async () => Response.json({ error: "unauthorized_ingress_worker" }, { status: 401 }));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "durable_ingest_unavailable" });
+});
+
+test("unexpected upstream errors remain retryable and do not leak internal details", async () => {
+  const response = await handleStagingSupabaseIngress(webhookRequest(), env,
+    async () => Response.json({ error: "secret_configuration_detail" }, { status: 500 }));
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { error: "durable_ingest_unavailable" });
+});
+
 test("rejects malformed JSON before reaching Supabase", async () => {
   let calls = 0;
   const response = await handleStagingSupabaseIngress(webhookRequest("{broken"), env,

@@ -93,10 +93,28 @@ export async function handleStagingSupabaseIngress(request, env, fetchImpl = fet
   } catch {
     return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 });
   }
-  if (upstream.status !== 200) return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 });
-  let acknowledgement;
-  try { acknowledgement = await upstream.json(); }
-  catch { return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 }); }
+  let upstreamBody;
+  try { upstreamBody = await upstream.json(); } catch { upstreamBody = null; }
+  if (upstream.status !== 200) {
+    const upstreamError = upstreamBody && typeof upstreamBody === "object"
+      ? upstreamBody.error
+      : null;
+    // Preserve only the three intentional event-rejection outcomes. An
+    // internal worker-auth/configuration failure must remain retryable (503),
+    // not be misreported to Shopify as a bad customer event.
+    if (upstream.status === 401 && upstreamError === "invalid_hmac") {
+      return Response.json({ error: "invalid_hmac" }, { status: 401 });
+    }
+    if (upstream.status === 404 && upstreamError === "unknown_tenant") {
+      return Response.json({ error: "unknown_tenant" }, { status: 404 });
+    }
+    if (upstream.status === 422 && upstreamError === "malformed_event") {
+      return Response.json({ error: "malformed_event" }, { status: 422 });
+    }
+    return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 });
+  }
+  const acknowledgement = upstreamBody;
+
   const uuid = (v) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
   if (!uuid(acknowledgement?.webhook_id)) {
     return Response.json({ error: "durable_ingest_ack_invalid" }, { status: 503 });
