@@ -1,0 +1,11 @@
+name = "henvalt-shopify-ingress-staging-supabase-no-send"
+main = "cloudflare/staging-supabase-ingress-worker.js"
+compatibility_date = "2026-11-27"
+workers_dev = true
+
+[vars]
+SUPABASE_URL = "https://xidhtmrfvsgfmyltjuja.supabase.co"
+HENVALT_STAGE_NO_SEND = "true"
+
+[secrets]
+required = ["SUPABASE_SERVICE_ROLE_KEY"]
