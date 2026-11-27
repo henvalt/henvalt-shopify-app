@@ -6,6 +6,14 @@ on:
       - "scripts/supabase-staging-preflight.mjs"
       - "tests/supabase-staging-preflight.test.mjs"
       - ".github/workflows/supabase-staging-preflight.yml"
+  push:
+    branches:
+      - "feat/shopify-connection-scoped-ingress"
+    paths:
+      - "scripts/supabase-staging-preflight.mjs"
+      - "tests/supabase-staging-preflight.test.mjs"
+      - ".github/workflows/supabase-staging-preflight.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
