@@ -1,6 +1,6 @@
 client_id = "1c0fd15c032fa26cd15ad7a63577a506"
 name = "HENVALT"
-application_url = "https://henvalt-dashboard.lovable.app"
+application_url = "https://henvalt-dashboard.pages.dev"
 embedded = false
 
 [build]
@@ -17,3 +17,7 @@ redirect_urls = [
 
 [webhooks]
 api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+uri = "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy"

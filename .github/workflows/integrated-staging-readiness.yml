@@ -1,0 +1,72 @@
+name: HENVALT integrated staging readiness contract
+
+on:
+  pull_request:
+    paths:
+      - "tests/integrated-staging-readiness.test.mjs"
+      - "tests/staging-identity-preflight.test.mjs"
+      - "tests/shopify-staging-config.test.mjs"
+      - "tests/shopify-staging-ingress-worker.test.mjs"
+      - "tests/dashboard-environment-config.test.mjs"
+      - "tests/dashboard-preview-isolation.test.mjs"
+      - "tests/billing-reconciliation-dashboard.test.mjs"
+      - "scripts/staging-identity-preflight.mjs"
+      - "scripts/render-shopify-staging-config.mjs"
+      - "cloudflare/staging-worker.js"
+      - "wrangler.staging.toml"
+      - "dashboard/index.html"
+      - "dashboard/functions/config.js"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - ".github/workflows/henvalt-signed-webhook-test.yml"
+      - ".github/workflows/integrated-staging-readiness.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "tests/integrated-staging-readiness.test.mjs"
+      - "tests/staging-identity-preflight.test.mjs"
+      - "tests/shopify-staging-config.test.mjs"
+      - "tests/shopify-staging-ingress-worker.test.mjs"
+      - "tests/dashboard-environment-config.test.mjs"
+      - "tests/dashboard-preview-isolation.test.mjs"
+      - "tests/billing-reconciliation-dashboard.test.mjs"
+      - "scripts/staging-identity-preflight.mjs"
+      - "scripts/render-shopify-staging-config.mjs"
+      - "cloudflare/staging-worker.js"
+      - "wrangler.staging.toml"
+      - "dashboard/index.html"
+      - "dashboard/functions/config.js"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - ".github/workflows/henvalt-signed-webhook-test.yml"
+      - ".github/workflows/integrated-staging-readiness.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate isolated staging Wrangler configuration
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          config = tomllib.loads(pathlib.Path("wrangler.staging.toml").read_text())
+          assert config["name"] == "henvalt-shopify-ingress-staging-no-send"
+          assert config["main"] == "cloudflare/staging-worker.js"
+          assert config["workers_dev"] is True
+          assert config["vars"]["HENVALT_STAGE_NO_SEND"] == "true"
+          assert config["vars"]["HENVALT_STAGE_PROVIDER_MODE"] == "stub"
+          assert config["vars"]["N8N_INGEST_URL"].endswith("/webhook/henvalt/ingest-candidate-no-send")
+          assert config["vars"]["N8N_INGEST_URL"].startswith("https://")
+          assert config["secrets"]["required"] == ["SHOPIFY_API_SECRET"]
+          assert "n8n.henvalt.com" not in config["vars"]["N8N_INGEST_URL"]
+          print("ISOLATED_STAGING_WRANGLER_CONFIG_PASSED")
+          PY
+      - name: Run integrated staging readiness contract
+        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs tests/billing-reconciliation-dashboard.test.mjs

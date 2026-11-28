@@ -1,0 +1,55 @@
+{
+  "captured_at_utc": "2026-11-22",
+  "source": "Read-only Supabase Edge Function source retrieval and active n8n workflow inspection",
+  "production_project_id": "ocyplckdojdubyrsxcxa",
+  "control_plane": {
+    "slug": "henvalt-control-plane",
+    "deployed_version": 24,
+    "status": "ACTIVE",
+    "gateway_verify_jwt": false,
+    "handler_bearer_verifier": "henvalt.control_plane_verify_api_token",
+    "vault_secret_name": "HENVALT_CONTROL_PLANE_TOKEN",
+    "billing_routes": [
+      {
+        "method": "POST",
+        "path": "/v1/billing/usage/claim",
+        "rpc": "control_plane_claim_billing_usage"
+      },
+      {
+        "method": "POST",
+        "path": "/v1/billing/usage/result",
+        "rpc": "control_plane_record_billing_usage_result"
+      }
+    ],
+    "risk": "Legacy result RPC can downgrade SUBMITTED on a late failure; legacy claim RPC lacks candidate locking and deterministic reconciliation protections.",
+    "database_acl": "Legacy billing RPCs are executable by service_role only."
+  },
+  "active_workflows": [
+    {
+      "name": "HENVALT_INGEST",
+      "id": "VTpfGKNtu1CSQ4Rv",
+      "active_version_id": "6368d539-708f-494a-8be8-b9601d0e8607",
+      "node_count": 51,
+      "observed_legacy_billing_route_calls": []
+    },
+    {
+      "name": "HENVALT_RECOVERY",
+      "id": "3GEDoeCA4paXTaDF",
+      "active_version_id": "32e50bf7-4cbd-4070-bbba-f259ed17b369",
+      "node_count": 46,
+      "observed_legacy_billing_route_calls": []
+    },
+    {
+      "name": "HENVALT_DELIVERY",
+      "id": "CvVyybGJZSnklxiZ",
+      "active_version_id": "621ae6ce-a006-4fed-a70e-acf774c360fb",
+      "node_count": 62,
+      "observed_legacy_billing_route_calls": []
+    }
+  ],
+  "limitations": [
+    "This snapshot records the three active n8n graphs inspected at capture time; it does not inventory every external caller of the global control-plane bearer token.",
+    "No secret value is stored in this fixture.",
+    "The legacy routes remain deployed and must not be exposed as the merchant billing interface."
+  ]
+}

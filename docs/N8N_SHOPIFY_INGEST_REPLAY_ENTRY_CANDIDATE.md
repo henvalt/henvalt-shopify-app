@@ -1,6 +1,6 @@
 # HENVALT_INGEST replay entry — candidate contract
 
-Status: candidate-only engineering specification and pure helpers. This is not an importable n8n workflow, does not modify a live workflow, and is not staging evidence.
+Status: the full offline candidate export has now been generated from the exact pinned active workflow and retained as a CI artifact. It has not been imported into n8n, executed, or validated against an isolated n8n draft. No live workflow was modified.
 
 ## Fixed identities and safety
 
@@ -52,7 +52,7 @@ The replay branch must not call the public ingress RPC again, because that would
 
 ## Write-boundary requirements
 
-All 18 observed mutating operations in `n8n/shopify-ingest-replay-write-map.json` must dispatch to their matching `*_fenced` wrapper whenever replay context is present. The exact tuple `job_id + worker_id + lease_id` is the first three arguments. Every write remains sequential. A replay branch must never call the unfenced counterpart. The processed and failed webhook markers must use `mark_webhook_processed_fenced` and `mark_webhook_failed_fenced`.
+All 18 observed active mutating operations plus the candidate-only order-edit revenue reconciliation mutation in `n8n/shopify-ingest-replay-write-map.json` must dispatch to their matching `*_fenced` wrapper whenever replay context is present. The exact tuple `job_id + worker_id + lease_id` is the first three arguments. Every write remains sequential. A replay branch must never call the unfenced counterpart. The processed and failed webhook markers must use `mark_webhook_processed_fenced` and `mark_webhook_failed_fenced`.
 
 The existing workflow's raw error capture must not write customer data or exception text into replay queue error fields. Replay retry reasons should remain constant and non-PII.
 
@@ -66,12 +66,24 @@ Missing IDs, an unknown result, a terminal job, an old generic 409, or a transpo
 
 `n8n/shopify-ingest-ack-classifier-candidate.mjs` implements this fail-closed decision. It is a pure classifier, not a live n8n node.
 
-## Deferred payment reconciliation handoff — verified active recovery path
+## Deferred payment reconciliation handoff
 
-The live production function `defer_payment_webhook_reconciliation(uuid,text)` marks the webhook `FAILED`, sets `payment_reconciliation_pending=true`, and schedules `payment_reconciliation_next_at`. The active `HENVALT_RECOVERY` workflow (version `32e50bf7-4cbd-4070-bbba-f259ed17b369`) has an `Every Minute` trigger connected to `Reconcile Deferred Payment Webhooks`, which calls `henvalt.reconcile_deferred_payment_webhooks(10)`. Read-only production catalog inspection confirms that reconciler selects due FAILED rows with `payment_reconciliation_pending=true` using `FOR UPDATE SKIP LOCKED`, then marks them PROCESSED, reschedules retry, or dead-letters after 60 attempts. Therefore, a successful `defer_payment_webhook_reconciliation_fenced(...)=true` is a durable terminal handoff for the replay job, although the webhook itself remains FAILED pending its separate reconciler. The candidate replay result must expose `deferred_payment_handoff=true` only on a true fenced RPC result; the recovery worker may complete the replay job on either `mark_webhook_processed===true` or this verified handoff flag. Add isolated acceptance proving the handoff and later reconciler pickup. Do not treat a false/ambiguous RPC result as success.
+The candidate routes this operation through `defer_payment_webhook_reconciliation_fenced` and requires an explicit true result before exposing top-level `deferred_payment_handoff=true`. The recovery worker completes the replay job on either `mark_webhook_processed=true` or `deferred_payment_handoff=true`. The webhook itself remains FAILED pending the already-active every-minute reconciler, which claims the durable pending row and processes, reschedules or dead-letters it. This is a durable handoff, not a claim that the webhook is already PROCESSED.
 
 ## Acceptance and release boundary
 
-Static checks cover the envelope, durable acknowledgement classifier, loader signature, write-map inventory, and no-provider route. They do not prove an n8n graph has been authored, imported, or executed. Before staging, build a complete isolated workflow JSON candidate, audit every mutation node, resolve the deferred-payment branch, and run the full replay matrix against disposable PostgreSQL with provider egress denied.
+Static checks cover the envelope, durable acknowledgement classifier, loader signature, write-map inventory, and no-provider route. The complete candidate is regenerated from `n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json`: 71 nodes, 71 unique IDs, 71 unique names, all 19 mapped mutations fenced (18 active-inventory writes plus the candidate-only order-edit reconciliation write), no credential references, and no live webhook ID. The candidate artifact is `henvalt-ingest-candidate-no-send` from CI run [44923015914](https://github.com/henvalt/henvalt-shopify-app/actions/runs/44923015914). That run passed all 136 Node tests, both Deno type checks, all disposable PostgreSQL migrations/acceptance tests, and the transactional lease-heartbeat acceptance. Migration `202611210011_shopify_replay_write_lease_heartbeat.sql` now renews the current lease inside every fenced business-write transaction; a stale or expired lease still fails before mutation. The public ingress branch now calls the atomic ingress RPC directly; tenant lookup is reserved for trusted internal replay. A processed event discovered at the second loader boundary returns an idempotent completion flag.
 
-Production remains NO-GO until isolated staging proves durable ingress, replay, lease replacement, all fenced writes, terminal status, and end-to-end event-to-ledger behavior. Provider sending stays disabled.
+The generated JSON is a raw inactive workflow export with credentials intentionally removed; it still requires credential rebinding and import/schema validation in an approved isolated n8n draft. The recovery graph patch is also still a candidate specification, not an imported workflow. Disposable PostgreSQL is not a substitute for isolated Supabase staging or full n8n runtime acceptance. Production remains NO-GO until staging proves durable ingress, replay, lease replacement, all fenced writes, terminal status, and end-to-end event-to-ledger behavior. Provider sending stays disabled.
+
+
+## Candidate graph builder and additional guards
+
+`n8n/shopify-ingest-candidate-builder.mjs` transforms a version-pinned workflow export into an offline candidate. It rewrites all 18 active audited mutation nodes and the candidate-only order-edit reconciliation node to select their corresponding `*_fenced` RPC when replay context exists, adds the internal replay trigger and lease-bound loader, adds tenant equality and lease-renewal guards, switches public ingress to `receive_shopify_webhook_v1`, and requires explicit processed/deferred terminal booleans. It also forces Shopify delivery identity to `X-Shopify-Webhook-Id`.
+
+The builder removes credential references from the offline candidate. The Supabase service-role credential must be rebound only in an isolated n8n draft. The fixture-driven regression suite is `tests/shopify-ingest-candidate-builder.test.mjs`. The generated graph has not been imported, executed or validated against a live n8n draft.
+
+
+## Verified deferred-payment handoff in the active recovery worker
+
+Production catalog inspection confirms `defer_payment_webhook_reconciliation(uuid,text)` marks the webhook `FAILED`, sets `payment_reconciliation_pending=true`, and schedules `payment_reconciliation_next_at`. The active `HENVALT_RECOVERY` workflow (ID `3GEDoeCA4paXTaDF`, version `32e50bf7-4cbd-4070-bbba-f259ed17b369`) has an `Every Minute` trigger connected to `Reconcile Deferred Payment Webhooks`, which calls `henvalt.reconcile_deferred_payment_webhooks(10)`. The reconciler claims due FAILED rows with `FOR UPDATE SKIP LOCKED`, then marks them PROCESSED, reschedules retry, or dead-letters after 60 attempts. A successful fenced defer RPC is therefore a durable terminal handoff for the replay job, not a claim that the webhook is already PROCESSED. The candidate may expose `deferred_payment_handoff=true` only after the fenced RPC returns true; the recovery worker may complete the replay job on that flag or on `mark_webhook_processed=true`. Isolated acceptance must prove both the durable handoff and the later reconciler pickup.

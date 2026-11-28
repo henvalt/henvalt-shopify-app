@@ -1,0 +1,615 @@
+name: HENVALT safety and pixel consent tests
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql"
+      - "supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql"
+      - "supabase/migrations/202611210004_align_shopify_token_refresh_window.sql"
+      - "supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql"
+      - "supabase/migrations/202611210006_shopify_webhook_replay_load.sql"
+      - "supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql"
+      - "supabase/migrations/202611210008_shopify_replay_lease_fencing.sql"
+      - "supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql"
+      - "supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql"
+      - "supabase/migrations/202611210011_shopify_replay_write_lease_heartbeat.sql"
+      - "supabase/migrations/202611210012_shopify_privacy_tenant_fk_index.sql"
+      - "supabase/migrations/202611220001_shopify_privacy_claim_and_minimization.sql"
+      - "supabase/migrations/202611220002_shopify_privacy_redaction_guards.sql"
+      - "supabase/migrations/202611220003_shopify_privacy_retention_cron.sql"
+      - "supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql"
+      - "supabase/migrations/202611220005_shopify_privacy_queue_worker.sql"
+      - "supabase/migrations/202611220006_shopify_privacy_export_acknowledgement.sql"
+      - "supabase/migrations/202611220007_shopify_replay_tenant_binding.sql"
+      - "supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql"
+      - "supabase/migrations/202611220009_mailersend_delivery_envelope_binding.sql"
+      - "supabase/migrations/202611220010_promote_confirmed_recovery_ledger.sql"
+      - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
+      - "supabase/migrations/202611220012_dashboard_net_revenue_series.sql"
+      - "tests/revenue-ledger-attribution-promotion.test.mjs"
+      - "tests/revenue-ledger-attribution-promotion-postgres-acceptance.sql"
+      - "tests/billing-refund-credit-offsets.test.mjs"
+      - "tests/dashboard-net-revenue.test.mjs"
+      - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
+      - "tests/billing-refund-credit-concurrency-postgres.sh"
+      - "supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql"
+      - "supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql"
+      - "supabase/migrations/202611220015_billing_claim_subscription_lock.sql"
+      - "supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql"
+      - "supabase/functions/henvalt-shopify-usage-billing/handler.mjs"
+      - "supabase/functions/henvalt-shopify-usage-billing/index.ts"
+      - "supabase/functions/henvalt-billing-reconciliation/handler.mjs"
+      - "supabase/functions/henvalt-billing-reconciliation/index.ts"
+      - "tests/billing-reconciliation-handler.test.mjs"
+      - "tests/billing-reconciliation-dashboard.test.mjs"
+      - "dashboard/index.html"
+      - "tests/dashboard-preview-isolation.test.mjs"
+      - "supabase/migrations/202611220011_billing_refund_credit_offsets.sql"
+      - "tests/billing-refund-credit-offsets-postgres-acceptance.sql"
+      - "tests/shopify-usage-billing-worker.test.mjs"
+      - "tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql"
+      - "tests/shopify-order-edit-revenue-reconciliation.test.mjs"
+      - "n8n/shopify-ingest-candidate-builder.mjs"
+      - "tests/shopify-ingest-full-export-candidate.test.mjs"
+      - "tests/provider-send-interlock-postgres-bootstrap.sql"
+      - "tests/mailersend-delivery-envelope-binding.test.mjs"
+      - "tests/mailersend-delivery-envelope-postgres-acceptance.sql"
+      - "tests/shopify-replay-object-tenant-binding-static.test.mjs"
+      - "tests/shopify-replay-tenant-binding-postgres-acceptance.sql"
+      - "tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql"
+      - "tests/shopify-replay-tenant-binding-static.test.mjs"
+      - "tests/shopify-replay-lease-concurrency-static.test.mjs"
+      - "tests/shopify-replay-lease-concurrency-postgres.sh"
+      - "tests/shopify-privacy-queue-worker.test.mjs"
+      - "tests/shopify-privacy-export-ack.test.mjs"
+      - "tests/shopify-privacy-export-ack-postgres-acceptance.sql"
+      - "tests/shopify-privacy-retention.test.mjs"
+      - "tests/shopify-privacy-redaction-guards.test.mjs"
+      - "tests/shopify-privacy-lease-migration.test.mjs"
+      - "tests/shopify-privacy-lease-postgres-bootstrap.sql"
+      - "tests/shopify-privacy-lease-postgres-acceptance.sql"
+      - "tests/shopify-privacy-redaction-postgres-acceptance.sql"
+      - "tests/shopify-privacy-idempotency-postgres-acceptance.sql"
+      - "docs/SHOPIFY_PRIVACY_ATOMIC_PROCESSING_2026-11-22.md"
+      - "docs/SHOPIFY_PRIVACY_DEPLOYMENT_RUNBOOK_2026-11-22.md"
+      - "docs/HENVALT_V1_CONTROLLED_RELEASE_CUTOVER_RUNBOOK_2026-11-22.md"
+      - "docs/CONTROL_PLANE_V24_LEGACY_ROUTE_RETIREMENT_PLAN_2026-11-22.md"
+      - "supabase/audit-baselines/henvalt-control-plane-v24.ts"
+      - "supabase/audit-baselines/henvalt-control-plane-v24.json"
+      - "tests/control-plane-v24-baseline.test.mjs"
+      - "supabase/audit-baselines/deployed-2026-11-22/**"
+      - "docs/PRODUCTION_EDGE_FUNCTION_SOURCE_BASELINE_2026-11-22.md"
+      - "tests/production-edge-function-baseline.test.mjs"
+      - "tests/merchant-dashboard-api-contract.test.mjs"
+      - "tests/shopify-privacy-deployment-runbook.test.mjs tests/control-plane-legacy-billing-route-audit.test.mjs"
+      - "tests/fixtures/legacy-control-plane-billing-route-audit.json"
+      - "tests/control-plane-legacy-billing-route-audit.test.mjs"
+      - "tests/shopify-privacy-deployment-runbook.test.mjs"
+      - "tests/shopify-privacy-tenant-index-bootstrap.sql"
+      - "tests/shopify-privacy-tenant-index-acceptance.sql"
+      - "docs/SUPABASE_ADVISOR_REVIEW_2026-11-21.md"
+      - "docs/SHOPIFY_PRIVACY_COMPLIANCE_BLOCKER_2026-11-21.md"
+      - "tests/shopify-privacy-compliance-blocker.test.mjs"
+      - "tests/shopify-privacy-deployed-baseline.test.mjs"
+      - "supabase/functions/henvalt-shopify-privacy/index.ts"
+      - "tests/shopify-privacy-handler-candidate.test.mjs"
+      - "supabase/functions/henvalt-shopify-privacy/body-limiter.mjs"
+      - "tests/shopify-privacy-body-limiter.test.mjs"
+      - "supabase/functions/henvalt-privacy-export/index.ts"
+      - "supabase/functions/henvalt-merchant-dashboard/index.ts"
+      - "supabase/audit-baselines/henvalt-privacy-export-v1.ts"
+      - "shopify.app.toml"
+      - "tests/token-refresh-window-static.test.mjs"
+      - "dashboard/index.html"
+      - "tests/dashboard-privacy-export.test.mjs"
+      - "cloudflare/pixel-collector.js"
+      - "cloudflare/worker.js"
+      - "tests/shopify-ingress-header-allowlist.test.mjs"
+      - "extensions/henvalt-pixel/src/index.js"
+      - "tests/provider-send-interlock-static.test.mjs"
+      - "tests/n8n-delivery-route-snapshot.test.mjs"
+      - "tests/n8n-shopify-ingest-route-snapshot.test.mjs"
+      - "tests/n8n-recovery-route-snapshot.test.mjs"
+      - "tests/fixtures/n8n-recovery-route-snapshot.json"
+      - "tests/fixtures/n8n-recovery-route-snapshot.json"
+      - "tests/fixtures/n8n-shopify-ingest-route-snapshot.json"
+      - "tests/shopify-oauth-completion-url.test.mjs"
+      - "tests/shopify-oauth-infrastructure-config.test.mjs"
+      - "tests/shopify-oauth-webhook-contract.test.mjs"
+      - "tests/shopify-ingest-ack-contract.test.mjs"
+      - "tests/shopify-replay-worker-spec-static.test.mjs"
+      - "tests/shopify-ingest-delivery-identity.test.mjs"
+      - "tests/shopify-ingest-classifier-candidate.test.mjs"
+      - "cloudflare/shopify-ingest-ack-contract.mjs"
+      - "n8n/shopify-ingest-normalizer-candidate.js"
+      - "n8n/shopify-ingest-classifier-candidate.js"
+      - "n8n/shopify-ingest-replay-write-map.json"
+      - "n8n/shopify-recovery-replay-branch-contract.json"
+      - "n8n/shopify-recovery-replay-graph-patch.json"
+      - "n8n/fixtures/henvalt-recovery-active-2026-11-21.sanitized.json"
+      - "n8n/shopify-recovery-candidate-builder.mjs"
+      - "n8n/shopify-recovery-billing-candidate-builder.mjs"
+      - "docs/N8N_BILLING_WORKER_SCHEDULER_CANDIDATE.md"
+      - "n8n/fixtures/henvalt-delivery-active-2026-11-21.sanitized.json"
+      - "n8n/shopify-delivery-candidate-builder.mjs"
+      - "tests/shopify-delivery-full-export-candidate.test.mjs"
+      - "tests/shopify-three-workflow-candidate-package.test.mjs"
+      - "tests/shopify-recovery-full-export-candidate.test.mjs"
+      - "n8n/shopify-replay-claim-normalizer-candidate.mjs"
+      - "n8n/shopify-replay-claim-normalizer-node-candidate.js"
+      - "tests/shopify-replay-claim-normalizer-node-static.test.mjs"
+      - "n8n/shopify-ingest-replay-envelope-candidate.mjs"
+      - "n8n/shopify-ingest-ack-classifier-candidate.mjs"
+      - "n8n/shopify-ingest-replay-entry-candidate.json"
+      - "n8n/shopify-ingest-candidate-builder.mjs"
+      - "n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json"
+      - "tests/shopify-ingest-full-export-candidate.test.mjs"
+      - "tests/shopify-ingest-candidate-builder.test.mjs"
+      - "tests/shopify-replay-claim-normalizer.test.mjs"
+      - "tests/shopify-ingest-replay-envelope.test.mjs"
+      - "tests/shopify-ingest-ack-classifier-candidate.test.mjs"
+      - "tests/shopify-ingest-replay-entry-static.test.mjs"
+      - "tests/shopify-recovery-replay-graph-patch-static.test.mjs"
+      - "tests/shopify-recovery-replay-branch-contract.test.mjs"
+      - "tests/shopify-recovery-delivery-retry-branch-contract.test.mjs"
+      - "supabase/functions/henvalt-shopify-oauth/infrastructure-config.mjs"
+      - "supabase/functions/henvalt-shopify-oauth/index.ts"
+      - "supabase/functions/henvalt-shopify-oauth/completion-url.mjs"
+      - "supabase/functions/henvalt-shopify-oauth/webhook-specs.mjs"
+      - "supabase/functions/henvalt-mailersend-delivery/handler.mjs"
+      - "supabase/functions/henvalt-mailersend-delivery/index.ts"
+      - "supabase/functions/henvalt-mailersend-setup/index.ts"
+      - "tests/henvalt-mailersend-delivery-handler.test.mjs"
+      - "tests/mailersend-setup-redirect.test.mjs"
+      - "tests/fixtures/n8n-delivery-route-snapshot.json"
+      - "tests/pixel-consent-static.test.mjs"
+      - "tests/provider-send-interlock-postgres-bootstrap.sql"
+      - "tests/provider-send-interlock-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-loader-postgres-acceptance.sql"
+      - "tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql"
+      - "tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-business-write-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql"
+      - "tests/shopify-replay-business-write-fencing-static.test.mjs"
+      - "tests/active-workflow-cutover-contract-static.test.mjs"
+      - "tests/billing-refund-credit-offsets.test.mjs"
+      - "tests/dashboard-net-revenue.test.mjs"
+      - "tests/shopify-order-edit-revenue-reconciliation.test.mjs"
+      - "tests/shopify-replay-worker-spec-static.test.mjs"
+      - "docs/N8N_SHOPIFY_WEBHOOK_REPLAY_WORKER_CANDIDATE.md"
+      - "docs/N8N_SHOPIFY_INGEST_REPLAY_ENTRY_CANDIDATE.md"
+      - "docs/ACTIVE_WORKFLOW_CUTOVER_BLOCKERS_2026-11-21.md"
+      - "tests/active-workflow-cutover-contract-static.test.mjs"
+      - ".github/workflows/provider-send-interlock-static.yml"
+  workflow_dispatch:
+  push:
+    branches:
+      - work/48h-system-readiness-2026-11-21
+
+permissions:
+  contents: read
+
+jobs:
+  interlock-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify static safety and pixel consent invariants
+        run: node --test tests/dashboard-preview-isolation.test.mjs tests/dashboard-privacy-export.test.mjs tests/shopify-privacy-deployment-runbook.test.mjs tests/shopify-privacy-export-ack.test.mjs tests/shopify-privacy-lease-migration.test.mjs tests/shopify-privacy-redaction-guards.test.mjs tests/shopify-privacy-handler-candidate.test.mjs tests/shopify-privacy-retention.test.mjs tests/provider-send-interlock-static.test.mjs tests/mailersend-delivery-envelope-binding.test.mjs tests/pixel-consent-static.test.mjs tests/token-refresh-window-static.test.mjs tests/n8n-delivery-route-snapshot.test.mjs tests/n8n-shopify-ingest-route-snapshot.test.mjs tests/n8n-recovery-route-snapshot.test.mjs tests/henvalt-mailersend-delivery-handler.test.mjs tests/mailersend-setup-redirect.test.mjs tests/revenue-ledger-attribution-promotion.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-webhook-contract.test.mjs tests/shopify-webhook-ingress-handler.test.mjs tests/shopify-ingress-header-allowlist.test.mjs tests/shopify-ingest-ack-contract.test.mjs tests/shopify-replay-worker-spec-static.test.mjs tests/shopify-replay-business-write-fencing-static.test.mjs tests/shopify-replay-tenant-binding-static.test.mjs tests/shopify-replay-object-tenant-binding-static.test.mjs tests/shopify-replay-lease-concurrency-static.test.mjs tests/shopify-recovery-replay-branch-contract.test.mjs tests/shopify-recovery-delivery-retry-branch-contract.test.mjs tests/shopify-recovery-replay-graph-patch-static.test.mjs tests/shopify-replay-claim-normalizer.test.mjs tests/shopify-replay-claim-normalizer-node-static.test.mjs tests/shopify-ingest-replay-envelope.test.mjs tests/shopify-ingest-ack-classifier-candidate.test.mjs tests/shopify-ingest-replay-entry-static.test.mjs tests/shopify-ingest-candidate-builder.test.mjs tests/shopify-ingest-full-export-candidate.test.mjs tests/active-workflow-cutover-contract-static.test.mjs tests/billing-refund-credit-offsets.test.mjs tests/dashboard-net-revenue.test.mjs tests/shopify-order-edit-revenue-reconciliation.test.mjs tests/shopify-usage-billing-worker.test.mjs tests/billing-reconciliation-handler.test.mjs tests/billing-reconciliation-dashboard.test.mjs tests/control-plane-v24-baseline.test.mjs tests/production-edge-function-baseline.test.mjs tests/merchant-dashboard-api-contract.test.mjs tests/shopify-privacy-body-limiter.test.mjs
+      - name: Generate full offline no-send HENVALT_INGEST candidate export
+        run: node n8n/shopify-ingest-candidate-builder.mjs n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json 6368d539-708f-494a-8be8-b9601d0e8607
+      - name: Upload offline no-send workflow candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-ingest-candidate-no-send
+          path: n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Test full recovery candidate graph and safety invariants
+        run: node --test tests/shopify-recovery-full-export-candidate.test.mjs
+      - name: Test full delivery no-send candidate graph and provider-egress invariants
+        run: node --test tests/shopify-delivery-full-export-candidate.test.mjs
+      - name: Generate full offline no-send HENVALT_RECOVERY candidate export
+        run: node n8n/shopify-recovery-candidate-builder.mjs
+      - name: Parse and verify generated recovery candidate JSON
+        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json", "utf8")); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999997" || w.nodes.length !== 74) process.exit(1)'
+      - name: Upload offline no-send recovery workflow candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-recovery-candidate-no-send
+          path: n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Generate recovery billing scheduler staging-only candidate
+        run: node n8n/shopify-recovery-billing-candidate-builder.mjs
+      - name: Parse and verify recovery billing scheduler candidate JSON
+        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY.json", "utf8")); const s = JSON.stringify(w); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999995" || w.nodes.length !== 76 || !s.includes("supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing") || s.includes("ocyplckdojdubyrsxcxa.supabase.co")) process.exit(1)'
+      - name: Upload recovery billing scheduler staging-only candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-recovery-billing-staging-candidate
+          path: n8n/HENVALT_RECOVERY_CANDIDATE_BILLING_STAGING_ONLY.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Generate full offline no-send HENVALT_DELIVERY candidate export
+        run: node n8n/shopify-delivery-candidate-builder.mjs
+      - name: Parse and verify generated delivery candidate JSON
+        run: node --input-type=module -e 'import fs from "node:fs"; const w = JSON.parse(fs.readFileSync("n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json", "utf8")); if (w.active !== false || w.id !== "00000000-0000-4000-8000-999999999996" || w.nodes.length !== 54) process.exit(1)'
+      - name: Validate cross-workflow candidate package boundaries
+        run: node --test tests/shopify-three-workflow-candidate-package.test.mjs
+      - name: Upload offline no-send delivery workflow candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-delivery-candidate-no-send
+          path: n8n/HENVALT_DELIVERY_CANDIDATE_NO_SEND.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Validate candidate Shopify app TOML privacy subscriptions
+        run: |
+          python3 - <<'PY'
+          import pathlib, tomllib
+          app = tomllib.loads(pathlib.Path("shopify.app.toml").read_text())
+          subscriptions = app["webhooks"]["subscriptions"]
+          topics = [topic for item in subscriptions for topic in item.get("compliance_topics", [])]
+          assert set(topics) == {"customers/data_request", "customers/redact", "shop/redact"}
+          privacy = [item for item in subscriptions if item.get("compliance_topics")]
+          assert len(privacy) == 1
+          assert privacy[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy"
+          print("SHOPIFY_PRIVACY_COMPLIANCE_TOML_ACCEPTANCE_PASSED")
+          PY
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Assert mandatory Shopify privacy compliance remains a release gate
+        run: node --test tests/shopify-privacy-compliance-blocker.test.mjs tests/shopify-privacy-deployed-baseline.test.mjs
+      - name: Type-check Shopify OAuth Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
+      - name: Type-check Shopify usage billing Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-usage-billing/index.ts
+      - name: Type-check billing reconciliation Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-billing-reconciliation/index.ts
+      - name: Type-check MailerSend delivery Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-delivery/index.ts
+      - name: Type-check MailerSend provider setup Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-mailersend-setup/index.ts
+      - name: Type-check Shopify privacy Edge Function at deployment path
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-privacy/index.ts
+      - name: Type-check merchant privacy export Edge Function at deployment path
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-privacy-export/index.ts
+      - name: Type-check merchant dashboard Edge Function
+        run: deno check --node-modules-dir=auto supabase/functions/henvalt-merchant-dashboard/index.ts
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap disposable PostgreSQL 17 fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-bootstrap.sql
+      - name: Apply candidate interlock migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
+      - name: Apply confirmed recovery ledger promotion migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220010_promote_confirmed_recovery_ledger.sql
+      - name: Exercise probable-to-confirmed recovery ledger promotion
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/revenue-ledger-attribution-promotion-postgres-acceptance.sql
+      - name: Apply refund credit offset migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220011_billing_refund_credit_offsets.sql
+      - name: Apply dashboard net-revenue series migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220012_dashboard_net_revenue_series.sql
+      - name: Apply candidate MailerSend delivery envelope binding migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220009_mailersend_delivery_envelope_binding.sql
+      - name: Exercise MailerSend delivery envelope authorization
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/mailersend-delivery-envelope-postgres-acceptance.sql
+      - name: Apply candidate pixel consent migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210002_pixel_consent_and_marketing_gate.sql
+      - name: Apply candidate dashboard metrics migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210003_dashboard_confirmed_revenue_metrics.sql
+      - name: Apply candidate token refresh alignment migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210004_align_shopify_token_refresh_window.sql
+      - name: Apply candidate Shopify webhook replay enqueue migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql
+      - name: Exercise atomic Shopify webhook replay enqueue and rollback
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-postgres-acceptance.sql
+      - name: Apply candidate Shopify webhook replay loader migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210006_shopify_webhook_replay_load.sql
+      - name: Exercise worker-bound Shopify webhook replay loader
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-loader-postgres-acceptance.sql
+      - name: Apply candidate single-round-trip Shopify ingress migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql
+      - name: Exercise single-round-trip Shopify ingress acceptance
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-single-roundtrip-postgres-acceptance.sql
+      - name: Apply candidate Shopify replay lease fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210008_shopify_replay_lease_fencing.sql
+      - name: Exercise Shopify replay lease expiry and stale-worker fencing
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-webhook-replay-lease-fencing-postgres-acceptance.sql
+      - name: Apply candidate Shopify replay business-write fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql
+      - name: Exercise stale-worker rejection at a business write boundary
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-business-write-fencing-postgres-acceptance.sql
+      - name: Apply Shopify order-edit revenue reconciliation migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql
+      - name: Exercise Shopify order-edit revenue and fee reconciliation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql
+      - name: Apply billing result lock-order migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql
+      - name: Apply billing claim subscription lock migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
+      - name: Apply deterministic billing failure reconciliation migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql
+      - name: Exercise billing reconciliation, monotonic results and refund credits
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
+      - name: Exercise concurrent refund credit allocation and subscription cancellation
+        env:
+          PGPASSWORD: postgres
+        run: |
+          bash tests/billing-refund-credit-concurrency-postgres.sh
+      - name: Apply complete active-ingest mutation fencing migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql
+      - name: Apply transactional replay write lease heartbeat migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210011_shopify_replay_write_lease_heartbeat.sql
+      - name: Apply replay tenant and webhook binding migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220007_shopify_replay_tenant_binding.sql
+      - name: Apply replay object-tenant binding migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220008_shopify_replay_object_tenant_binding.sql
+      - name: Exercise cross-tenant replay write rejection
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-tenant-binding-postgres-acceptance.sql
+
+      - name: Exercise cross-tenant replay object graph rejection
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-object-tenant-graph-postgres-acceptance.sql
+      - name: Exercise complete active-ingest fencing and transactional lease heartbeat
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-replay-complete-ingest-write-fencing-postgres-acceptance.sql
+
+      - name: Exercise concurrent replay lease reclaim during an in-flight write
+        env:
+          PGPASSWORD: postgres
+        run: bash tests/shopify-replay-lease-concurrency-postgres.sh
+      - name: Exercise deny, allow, audit, consent and fail-closed paths
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-acceptance.sql
+
+      - name: Bootstrap isolated Shopify privacy queue index fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-tenant-index-bootstrap.sql
+      - name: Apply candidate Shopify privacy tenant index migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210012_shopify_privacy_tenant_fk_index.sql
+      - name: Verify Shopify privacy tenant foreign-key index
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-tenant-index-acceptance.sql
+      - name: Bootstrap isolated Shopify privacy lease fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-lease-postgres-bootstrap.sql
+      - name: Apply candidate Shopify privacy lease and minimization migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220001_shopify_privacy_claim_and_minimization.sql
+      - name: Apply candidate Shopify privacy redaction guard migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220002_shopify_privacy_redaction_guards.sql
+      - name: Apply candidate Shopify privacy retention migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220003_shopify_privacy_retention_cron.sql
+      - name: Apply candidate Shopify signed-payload idempotency migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220004_shopify_privacy_signed_payload_idempotency.sql
+      - name: Apply candidate durable Shopify privacy queue worker migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220005_shopify_privacy_queue_worker.sql
+      - name: Apply candidate Shopify export acknowledgement migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220006_shopify_privacy_export_acknowledgement.sql
+      - name: Exercise signed-payload privacy webhook idempotency
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-idempotency-postgres-acceptance.sql
+      - name: Exercise durable Shopify privacy queue worker
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-queue-worker-postgres-acceptance.sql
+      - name: Exercise owner export download acknowledgement
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-export-ack-postgres-acceptance.sql
+      - name: Exercise privacy lease fencing and PII minimization
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-lease-postgres-acceptance.sql
+      - name: Exercise privacy redaction and export lease wrappers
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-privacy-redaction-postgres-acceptance.sql

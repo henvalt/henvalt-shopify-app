@@ -2,7 +2,7 @@ name: Shopify app configuration checks and deployment
 
 on:
   push:
-    branches: [main]
+    branches: [main, work/48h-system-readiness-2026-11-21]
   pull_request:
   workflow_dispatch:
 
@@ -27,10 +27,17 @@ jobs:
 
           assert app["client_id"], "Missing Shopify Client ID"
           assert app["application_url"].startswith("https://"), "Application URL must use HTTPS"
+          assert app["application_url"] == "https://henvalt-dashboard.pages.dev", "Application URL must match the verified Cloudflare Pages production domain"
           assert "read_orders" in app["access_scopes"]["scopes"].split(","), "Missing read_orders scope"
           assert "write_pixels" in app["access_scopes"]["scopes"].split(","), "Missing write_pixels scope"
           assert "read_customer_events" in app["access_scopes"]["scopes"].split(","), "Missing read_customer_events scope"
           assert app["auth"]["redirect_urls"], "Missing OAuth callback URL"
+          subscriptions = app["webhooks"]["subscriptions"]
+          compliance = [topic for subscription in subscriptions for topic in subscription.get("compliance_topics", [])]
+          assert set(compliance) == {"customers/data_request", "customers/redact", "shop/redact"}, "Missing or duplicate mandatory privacy compliance topics"
+          privacy_subscriptions = [s for s in subscriptions if s.get("compliance_topics")]
+          assert len(privacy_subscriptions) == 1, "Expected one dedicated privacy compliance subscription"
+          assert privacy_subscriptions[0]["uri"] == "https://ocyplckdojdubyrsxcxa.supabase.co/functions/v1/henvalt-shopify-privacy", "Privacy webhook endpoint must match the registered Supabase function"
           assert ext["type"] == "web_pixel_extension", "Unexpected extension type"
           assert ext["runtime_context"] == "strict", "Pixel must use strict runtime"
           assert set(ext["settings"]["fields"]) == {"collectorUrl", "publicKey"}, "Pixel settings schema mismatch"
@@ -41,6 +48,110 @@ jobs:
           assert "fetch(" in source, "Missing collector delivery"
           print("HENVALT Shopify app configuration and Pixel source checks passed.")
           PY
+      - name: Run OAuth redirect and webhook contract tests
+        run: node --test tests/shopify-oauth-infrastructure-config.test.mjs tests/shopify-oauth-completion-url.test.mjs tests/shopify-oauth-webhook-contract.test.mjs
+      - name: Verify isolated Shopify staging config renderer
+        run: node --test tests/shopify-staging-config.test.mjs
+
+  billing-lock-safety:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Run billing and scheduler regression tests
+        run: |
+          node --test \
+            tests/billing-refund-credit-offsets.test.mjs \
+            tests/shopify-usage-billing-worker.test.mjs
+      - name: Bootstrap disposable PostgreSQL fixture
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/provider-send-interlock-postgres-bootstrap.sql
+      - name: Apply refund credit offset migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220011_billing_refund_credit_offsets.sql
+      - name: Apply dashboard net-revenue migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220012_dashboard_net_revenue_series.sql
+      - name: Apply Shopify webhook replay enqueue migration for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210005_shopify_webhook_replay_enqueue.sql
+      - name: Apply Shopify webhook replay loader migration for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210006_shopify_webhook_replay_load.sql
+      - name: Apply atomic Shopify webhook ingress migration for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210007_shopify_webhook_single_roundtrip_ingress.sql
+      - name: Apply Shopify replay lease foundation for fenced order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210008_shopify_replay_lease_fencing.sql
+      - name: Apply Shopify replay business-write fencing for order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210009_shopify_replay_business_write_fencing.sql
+      - name: Apply complete Shopify replay mutation fencing for order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210010_shopify_replay_complete_ingest_write_fencing.sql
+      - name: Apply transactional replay lease heartbeat for order-edit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611210011_shopify_replay_write_lease_heartbeat.sql
+      - name: Apply Shopify order-edit reconciliation migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220013_shopify_order_edit_revenue_reconciliation.sql
+      - name: Exercise Shopify order-edit revenue and fee reconciliation
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/shopify-order-edit-revenue-reconciliation-postgres-acceptance.sql
+      - name: Apply billing result lock-order migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220014_billing_result_lock_order_and_monotonicity.sql
+      - name: Apply billing claim subscription lock migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220015_billing_claim_subscription_lock.sql
+      - name: Apply deterministic billing failure reconciliation migration
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f supabase/migrations/202611220016_billing_deterministic_failure_reconciliation.sql
+      - name: Exercise billing reconciliation, monotonic result and refund-credit acceptance
+        run: |
+          psql -h 127.0.0.1 -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -f tests/billing-refund-credit-offsets-postgres-acceptance.sql
+      - name: Exercise concurrent refund credit and subscription cancellation races
+        run: bash tests/billing-refund-credit-concurrency-postgres.sh
 
   deploy-shopify-version:
     # Version creation is an explicit operator action, never an automatic push side effect.

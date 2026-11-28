@@ -3,6 +3,7 @@ const ALLOWED_EVENTS = new Set([
   "page_viewed",
   "product_viewed",
   "product_added_to_cart",
+  "product_removed_from_cart",
   "checkout_started",
 ]);
 
@@ -22,11 +23,11 @@ function validId(value, max) {
   return typeof value === "string" && value.length > 0 && value.length <= max;
 }
 
-function safePageUrl(value) {
+export function safePageUrl(value, expectedOrigin) {
   if (typeof value !== "string" || value.length > 4096) return null;
   try {
     const url = new URL(value);
-    if (url.protocol !== "https:") return null;
+    if (url.protocol !== "https:" || url.username || url.password || url.origin !== expectedOrigin) return null;
     // Never persist query strings or fragments; they can contain customer data.
     return url.origin + url.pathname.slice(0, 1000);
   } catch {
@@ -109,6 +110,13 @@ export default {
       return corsJson({ error: "invalid_json" }, 400);
     }
 
+    // The storefront extension normally suppresses events without analytics
+    // consent. Enforce that boundary again at the collector so crafted or stale
+    // clients cannot persist identifiers or storefront payload without consent.
+    if (payload.analytics_consent !== true) {
+      return corsJson({ error: "analytics_consent_required" }, 403);
+    }
+
     if (
       payload.schema_version !== 1 ||
       !validId(payload.event_id, 160) ||
@@ -138,7 +146,7 @@ export default {
       customer_reference: validId(payload.customer_reference, 200) ? payload.customer_reference : null,
       analytics_consent: payload.analytics_consent === true,
       marketing_consent: payload.marketing_consent === true,
-      page_url: safePageUrl(payload.page_url),
+      page_url: safePageUrl(payload.page_url, origin),
       product: payload.product ? {
         id: validId(payload.product.id, 200) ? payload.product.id : null,
         title: typeof payload.product.title === "string" ? payload.product.title.slice(0, 200) : null,

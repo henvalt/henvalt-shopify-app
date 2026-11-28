@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-22",
+  "project_id": "ocyplckdojdubyrsxcxa",
+  "function_slug": "henvalt-control-plane",
+  "function_id": "5baa9bc0-ca55-477f-8840-fd6625067048",
+  "deployed_version": 24,
+  "deployed_status": "ACTIVE",
+  "verify_jwt": false,
+  "source_file": "supabase/audit-baselines/henvalt-control-plane-v24.ts",
+  "routes": {
+    "legacy_billing_claim": "/v1/billing/usage/claim",
+    "legacy_billing_result": "/v1/billing/usage/result",
+    "shopify_ingest_proxy": "/v1/webhooks/shopify"
+  },
+  "legacy_rpc_dependencies": [
+    "control_plane_claim_billing_usage",
+    "control_plane_record_billing_usage_result"
+  ],
+  "auth_boundary": {
+    "gateway_jwt_verification": false,
+    "handler_requires_bearer_token": true,
+    "token_verifier_rpc": "control_plane_verify_api_token",
+    "vault_secret_name": "HENVALT_CONTROL_PLANE_TOKEN",
+    "shop_header_required": "x-henvalt-shop"
+  },
+  "evidence_limits": [
+    "This snapshot proves the deployed function source and configured gateway JWT mode at capture time.",
+    "It does not establish the complete set of external callers.",
+    "It does not establish whether any external caller still uses either legacy billing route.",
+    "No token, service-role key, Shopify token, or provider credential value is included."
+  ],
+  "deployment_artifact_ezbr_sha256": "b3975326b8805f7883aedd797c34f8667cd2289ffc56a84765517b373eb90fdf"
+}

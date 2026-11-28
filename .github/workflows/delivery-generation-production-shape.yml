@@ -1,0 +1,127 @@
+name: HENVALT production-shaped delivery generation migration
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
+      - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
+      - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
+      - "supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql"
+      - "tests/delivery-generation-parent-first-lock-order-acceptance.sql"
+      - "tests/delivery-generation-legacy-one-off-disable-acceptance.sql"
+      - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
+      - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
+      - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
+      - "supabase/migrations/202611280001_mailersend_retry_lease_credential_release.sql"
+      - "tests/mailersend-retry-credential-release-contract.test.mjs"
+      - "tests/delivery-generation-retry-job-acceptance.sql"
+      - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
+      - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
+      - "tests/delivery-generation-retry-egress-lease-acceptance.sql"
+      - "tests/delivery-generation-production-shaped-webhook-routing.sql"
+      - "tests/delivery-generation-production-shaped-late-acceptance.sql"
+      - "tests/delivery-generation-production-shaped-bootstrap.sql"
+      - "tests/delivery-generation-parent-first-lock-order-acceptance.sql"
+      - "tests/delivery-generation-legacy-one-off-disable-acceptance.sql"
+      - "tests/delivery-generation-production-shaped-*.sql"
+      - "tests/integrated-staging-readiness.test.mjs"
+      - "docs/INTEGRATED_STAGING_EXECUTION_2026-11-24.md"
+      - ".github/workflows/delivery-generation-production-shape.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql"
+      - "supabase/migrations/202611230003_delivery_provider_egress_fence.sql"
+      - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
+      - "supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql"
+      - "tests/delivery-generation-parent-first-lock-order-acceptance.sql"
+      - "tests/delivery-generation-legacy-one-off-disable-acceptance.sql"
+      - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
+      - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
+      - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
+      - "supabase/migrations/202611280001_mailersend_retry_lease_credential_release.sql"
+      - "tests/mailersend-retry-credential-release-contract.test.mjs"
+      - "tests/delivery-generation-retry-job-acceptance.sql"
+      - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
+      - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
+      - "tests/delivery-generation-retry-egress-lease-acceptance.sql"
+      - "tests/delivery-generation-production-shaped-bootstrap.sql"
+      - "tests/delivery-generation-production-shaped-*.sql"
+      - ".github/workflows/delivery-generation-production-shape.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Create disposable production-shaped database
+        run: createdb -h 127.0.0.1 -U postgres delivery_generation_prodshape
+      - name: Bootstrap live-shape schema and Supabase roles
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-bootstrap.sql
+      - name: Apply provider-send interlock prerequisite
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
+      - name: Apply generation schema and retry RPC candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230002_delivery_generation_schema_and_retry_rpc.sql
+      - name: Apply durable provider egress fence candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230003_delivery_provider_egress_fence.sql
+      - name: Apply parent-first delivery lifecycle lock-order candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql
+      - name: Verify parent-first delivery lifecycle lock order
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-parent-first-lock-order-acceptance.sql
+      - name: Disable legacy one-off delivery path
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql
+      - name: Verify legacy one-off delivery path is disabled
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-legacy-one-off-disable-acceptance.sql
+      - name: Apply late provider acceptance incident candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230006_late_provider_acceptance_incidents.sql
+      - name: Verify generation, evidence, idempotency and immutable fences
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-acceptance.sql
+      - name: Verify late provider acceptance settlement and quota evidence
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-late-acceptance.sql
+      - name: Apply exact-tag MailerSend webhook routing candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql
+      - name: Verify MailerSend exact-tag webhook routing
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-production-shaped-webhook-routing.sql
+      - name: Verify integrated staging readiness contract and no-send boundaries
+        run: node --test tests/integrated-staging-readiness.test.mjs
+      - name: Apply queued immutable delivery retry generation candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611240001_delivery_retry_generation_jobs.sql
+      - name: Verify retry job creation, generation limits and immutable envelope loading
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-job-acceptance.sql
+      - name: Apply retry-lease-bound MailerSend credential release candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611280001_mailersend_retry_lease_credential_release.sql
+      - name: Verify retry credential release privilege and lease contract
+        run: node --test tests/mailersend-retry-credential-release-contract.test.mjs
+      - name: Verify retry lease before delivery request authorization
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-authorization-lease-acceptance.sql
+      - name: Verify retry lease heartbeat and final provider-egress ownership
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-egress-lease-acceptance.sql
+      - name: Race retry generation against late acceptance in both lock orders
+        run: bash tests/delivery-generation-retry-late-acceptance-race-postgres.sh

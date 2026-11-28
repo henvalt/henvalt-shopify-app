@@ -1,0 +1,64 @@
+name: HENVALT delivery lifecycle parent-first lock order
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/202611210001_provider_send_interlock_v1.sql"
+      - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
+      - "supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql"
+      - "tests/legacy-one-off-delivery-disable-acceptance.sql"
+      - "tests/delivery-lifecycle-lock-order-*.sql"
+      - ".github/workflows/delivery-lifecycle-lock-order.yml"
+  push:
+    branches:
+      - "work/48h-system-readiness-2026-11-21"
+    paths:
+      - "supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql"
+      - "tests/delivery-lifecycle-lock-order-*.sql"
+      - ".github/workflows/delivery-lifecycle-lock-order.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lock-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Create isolated lifecycle database
+        run: createdb -h 127.0.0.1 -U postgres delivery_lock_order
+      - name: Bootstrap production-shaped lifecycle RPC signatures
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f tests/delivery-lifecycle-lock-order-bootstrap.sql
+      - name: Apply provider-send interlock prerequisite
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f supabase/migrations/202611210001_provider_send_interlock_v1.sql
+      - name: Validate candidate migration revision
+        run: echo "parent-first-lock-order-candidate-v2"
+      - name: Apply guarded parent-first patch
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f supabase/migrations/202611230004_delivery_lifecycle_parent_first_lock_order.sql
+      - name: Verify lock order and RPC behavior
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f tests/delivery-lifecycle-lock-order-acceptance.sql
+      - name: Disable legacy one-off reauthorization and test-sender routes
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f supabase/migrations/202611230005_disable_legacy_one_off_delivery.sql
+      - name: Verify normal token path and one-off fail-closed behavior
+        run: psql -h 127.0.0.1 -U postgres -d delivery_lock_order -v ON_ERROR_STOP=1 -f tests/legacy-one-off-delivery-disable-acceptance.sql

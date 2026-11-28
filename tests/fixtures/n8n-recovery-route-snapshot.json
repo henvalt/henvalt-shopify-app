@@ -1,0 +1,61 @@
+{
+  "workflowId": "3GEDoeCA4paXTaDF",
+  "activeVersionId": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
+  "schedulerTrigger": "Every Minute",
+  "claimNode": "Claim Due Job",
+  "claimFunction": "henvalt.claim_next_job",
+  "activeClaimJobTypes": [
+    "execute_intervention"
+  ],
+  "observedBackgroundJobTypes": [
+    "execute_intervention",
+    "HENVALT_TEST_JOB"
+  ],
+  "staleRepairFunctions": [
+    "henvalt.requeue_stale_jobs(900)",
+    "henvalt.recover_stale_interventions(900)"
+  ],
+  "paymentReconciliationFunction": "henvalt.reconcile_deferred_payment_webhooks",
+  "requiredReplayJobType": "process_shopify_webhook",
+  "replayJobTypeCurrentlyClaimed": false,
+  "generalWebhookReplayRpcPresent": false,
+  "generalWebhookReplayLaunchBlocker": true,
+  "normalizeGuard": {
+    "currentHasJobExpression": "jobId != null && interventionId != null",
+    "requiresInterventionId": true,
+    "replayPayloadHasInterventionId": false,
+    "replayJobsPassCurrentGuard": false,
+    "requiresJobTypeRouter": true
+  },
+  "schedulerGraph": {
+    "loopInterventions": {
+      "done": "Tick Complete",
+      "loop": "Claim Due Job"
+    },
+    "jobClaimedTrue": "Atomic Claim Intervention",
+    "jobClaimedFalse": null,
+    "terminalEdges": {
+      "Complete Job": "Loop Interventions",
+      "Retry Job": "Loop Interventions",
+      "Retry Preflight Job": null,
+      "Retry Delivery Job": null,
+      "Retry Pipeline Job": null
+    }
+  },
+  "deferredPaymentReconciler": {
+    "node": "Reconcile Deferred Payment Webhooks",
+    "trigger": "Every Minute",
+    "rpc": "henvalt.reconcile_deferred_payment_webhooks(10)",
+    "connectedFrom": "Every Minute",
+    "onError": "continueErrorOutput",
+    "observedActive": true,
+    "selection": "FAILED + payment_reconciliation_pending=true + payment_reconciliation_next_at<=now()",
+    "rowLock": "FOR UPDATE SKIP LOCKED",
+    "terminalStates": [
+      "PROCESSED",
+      "FAILED with next retry timestamp",
+      "FAILED dead-letter after 60 attempts"
+    ]
+  },
+  "lastReadOnlyCheckedAt": "2026-11-24"
+}

@@ -1,0 +1,1522 @@
+{
+  "schema_version": 1,
+  "source": {
+    "workflow_id": "3GEDoeCA4paXTaDF",
+    "workflow_name": "HENVALT_RECOVERY",
+    "active_version_id": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
+    "baseline_node_count": 46,
+    "exported_read_only": true,
+    "credentials_removed": true,
+    "webhook_ids_removed": true,
+    "customer_payloads_redacted": true,
+    "exported_at": "2026-11-24"
+  },
+  "workflow": {
+    "id": "3GEDoeCA4paXTaDF",
+    "name": "HENVALT_RECOVERY",
+    "active": false,
+    "isArchived": false,
+    "versionId": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
+    "activeVersionId": "3fd9fca9-a83f-4c2a-8618-24496a695eb8",
+    "triggerCount": 1,
+    "nodeCount": 46,
+    "createdAt": "2026-10-08T06:07:06.051Z",
+    "updatedAt": "2026-11-22T18:25:12.387Z",
+    "settings": {
+      "executionOrder": "v1",
+      "binaryMode": "separate",
+      "timeSavedMode": "fixed",
+      "callerPolicy": "workflowsFromSameOwner",
+      "availableInMCP": false
+    },
+    "tags": [],
+    "parentFolderId": null,
+    "scopes": [
+      "execution:delete",
+      "execution:list",
+      "execution:read",
+      "execution:reveal",
+      "workflow:create",
+      "workflow:delete",
+      "workflow:disableRedaction",
+      "workflow:enableRedaction",
+      "workflow:execute",
+      "workflow:execute-chat",
+      "workflow:export",
+      "workflow:import",
+      "workflow:list",
+      "workflow:move",
+      "workflow:publish",
+      "workflow:read",
+      "workflow:share",
+      "workflow:unpublish",
+      "workflow:unshare",
+      "workflow:update"
+    ],
+    "canExecute": true,
+    "connections": {
+      "Init Worker": {
+        "main": [
+          [
+            {
+              "node": "Loop Interventions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claim Due Job": {
+        "main": [
+          [
+            {
+              "node": "Normalize & Guard",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize & Guard": {
+        "main": [
+          [
+            {
+              "node": "Job Claimed?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Job Claimed?": {
+        "main": [
+          [
+            {
+              "node": "Atomic Claim Intervention",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          []
+        ]
+      },
+      "Atomic Claim Intervention": {
+        "main": [
+          [
+            {
+              "node": "Get Intervention Context",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Get Intervention Context": {
+        "main": [
+          [
+            {
+              "node": "Preflight & AI Context",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preflight & AI Context": {
+        "main": [
+          [
+            {
+              "node": "Sendable?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sendable?": {
+        "main": [
+          [
+            {
+              "node": "Create Tracking Token",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Preflight Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Tracking Token": {
+        "main": [
+          [
+            {
+              "node": "Create Unsubscribe Token",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Grok Generate": {
+        "main": [
+          [
+            {
+              "node": "Validate AI Output",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Validate AI Output": {
+        "main": [
+          [
+            {
+              "node": "Grok Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Grok Valid?": {
+        "main": [
+          [
+            {
+              "node": "Render & Queue Message",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Resolve AI Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Render & Queue Message": {
+        "main": [
+          [
+            {
+              "node": "Create Delivery Request",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Delivery Request": {
+        "main": [
+          [
+            {
+              "node": "Build Delivery Payload",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Complete Job": {
+        "main": [
+          [
+            {
+              "node": "Loop Interventions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Loop Interventions": {
+        "main": [
+          [
+            {
+              "node": "Tick Complete",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Claim Due Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Retry Job": {
+        "main": [
+          [
+            {
+              "node": "Loop Interventions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Classify Preflight Failure": {
+        "main": [
+          [
+            {
+              "node": "Resolve Preflight Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve Preflight Failure": {
+        "main": [
+          [
+            {
+              "node": "Preflight Retryable?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Preflight Retryable?": {
+        "main": [
+          [
+            {
+              "node": "Retry Preflight Job",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Complete Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve AI Failure": {
+        "main": [
+          [
+            {
+              "node": "Retry Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delivery Accepted?": {
+        "main": [
+          [
+            {
+              "node": "Complete Job",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Delivery Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Classify Delivery Failure": {
+        "main": [
+          [
+            {
+              "node": "Resolve Delivery Failure",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve Delivery Failure": {
+        "main": [
+          [
+            {
+              "node": "Delivery Retryable?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delivery Retryable?": {
+        "main": [
+          [
+            {
+              "node": "Retry Delivery Job",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Complete Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Classify Pipeline Error": {
+        "main": [
+          [
+            {
+              "node": "Resolve Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Resolve Pipeline Error": {
+        "main": [
+          [
+            {
+              "node": "Retry Pipeline Job",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create Unsubscribe Token": {
+        "main": [
+          [
+            {
+              "node": "Grok Generate",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Classify Pipeline Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Repair Stale Work": {
+        "main": [
+          [
+            {
+              "node": "Find Shopify Tokens Due",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Discover Browse Abandonment",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Discover Abandoned Cart",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Discover Abandoned Checkout",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Find Shopify Tokens Due": {
+        "main": [
+          [
+            {
+              "node": "Refresh Shopify Offline Token",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build Delivery Payload": {
+        "main": [
+          [
+            {
+              "node": "Call HENVALT_DELIVERY",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Call HENVALT_DELIVERY": {
+        "main": [
+          [
+            {
+              "node": "Delivery Accepted?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Discover Browse Abandonment": {
+        "main": [
+          [
+            {
+              "node": "Init Worker",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Every Minute": {
+        "main": [
+          [
+            {
+              "node": "Reconcile Deferred Payment Webhooks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Reconcile Deferred Payment Webhooks": {
+        "main": [
+          [
+            {
+              "node": "Repair Stale Work",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Repair Stale Work",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "HENVALT One-Off Email Preview": {
+        "main": [
+          [
+            {
+              "node": "Build One-Off Email Preview Context",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build One-Off Email Preview Context": {
+        "main": [
+          [
+            {
+              "node": "Generate One-Off Email Preview with Groq",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Generate One-Off Email Preview with Groq": {
+        "main": [
+          [
+            {
+              "node": "Return One-Off Email Preview",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "minutes",
+                "minutesInterval": 1
+              }
+            ]
+          }
+        },
+        "id": "060767aa-7537-4e9c-b8a0-7e885656c3bf",
+        "name": "Every Minute",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.4,
+        "position": [
+          -672,
+          480
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const MAX = 10;\nconst workerId = \"henvalt_recovery:\" + $execution.id;\nconst cfg = {\n  worker_id: workerId,\n  model: \"openai/gpt-oss-120b\",\n  tracking_ttl_seconds: 259200,\n  prompt_version: \"recovery.email.v2\",\n  policy_version: \"v1\",\n  engine_version: \"henvalt-recovery-1.0.0\",\n};\nconst out = [];\nfor (let i = 0; i < MAX; i++) { out.push({ json: Object.assign({ slot: i }, cfg) }); }\nreturn out;"
+        },
+        "id": "f189f2f3-5ba9-4192-9d6e-6d3405d9abd7",
+        "name": "Init Worker",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -448,
+          480
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "eaaea0e6-86dd-4855-a60e-b387ce7f3994",
+        "name": "Tick Complete",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          -32,
+          -192
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM henvalt.claim_next_job($1, ARRAY['execute_intervention']::text[])",
+          "options": {
+            "queryReplacement": "={{ [$json.worker_id] }}"
+          }
+        },
+        "id": "9bf97e42-05a5-43f1-b8c7-6007aa72f159",
+        "name": "Claim Due Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          0,
+          192
+        ],
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const j = $json || {};\nconst jobId = j.job_id != null ? j.job_id : (j.id != null ? j.id : null);\nlet payload = j.payload != null ? j.payload : {};\nif (typeof payload === \"string\") { try { payload = JSON.parse(payload); } catch (e) { payload = {}; } }\nconst workerId = $(\"Init Worker\").first().json.worker_id;\nconst interventionId = payload.intervention_id != null ? payload.intervention_id : null;\nreturn { json: {\n  job_id: jobId,\n  job_type: j.job_type != null ? j.job_type : null,\n  intervention_id: interventionId,\n  tenant_id: payload.tenant_id != null ? payload.tenant_id : null,\n  correlation_id: j.correlation_id != null ? j.correlation_id : (payload.correlation_id != null ? payload.correlation_id : null),\n  attempts: j.attempts != null ? j.attempts : 0,\n  worker_id: workerId,\n  has_job: jobId != null && interventionId != null,\n} };"
+        },
+        "id": "eb648d78-c5f7-4268-860f-56f05ce4af16",
+        "name": "Normalize & Guard",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          224,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.has_job }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "2da406c2-1803-4603-a940-d25e82f94015",
+        "name": "Job Claimed?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          448,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT intervention_id, claim_state FROM henvalt.claim_intervention_for_send($1)",
+          "options": {
+            "queryReplacement": "={{ [$json.intervention_id] }}"
+          }
+        },
+        "id": "c5be7c2f-c3e5-4683-b48a-feedd5a4399f",
+        "name": "Atomic Claim Intervention",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          672,
+          192
+        ],
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.get_recovery_worker_context($1) AS context",
+          "options": {
+            "queryReplacement": "={{ [$('Normalize & Guard').item.json.intervention_id] }}"
+          }
+        },
+        "id": "f64817dd-2ecd-4485-aa76-5a66c5d74fb6",
+        "name": "Get Intervention Context",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          896,
+          192
+        ],
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const c = ($json && $json.context && typeof $json.context === \"object\") ? $json.context : ($json || {});\nconst claimRow = $(\"Atomic Claim Intervention\").item.json || {};\nconst claim = claimRow.claim_state || claimRow.claim_result;\nconst ng = $(\"Normalize & Guard\").item.json;\nconst cfg = $(\"Init Worker\").first().json;\nconst nowMs = Date.now();\nconst scheduledMs = c.scheduled_at ? Date.parse(c.scheduled_at) : nowMs;\nconst checkoutUpdatedMs = c.checkout_updated_at ? Date.parse(c.checkout_updated_at) : NaN;\nconst configuredDelay = Number(c.flow_delay_minutes);\nconst delayIsValid = Number.isInteger(configuredDelay) && configuredDelay >= 5 && configuredDelay <= 10080;\nconst recoveryType = String(c.recovery_type || c.opportunity_type || \"\").toUpperCase();\nconst idleWindowElapsed = [\"PAYMENT_FAILURE\",\"PAYMENT_DECLINED\"].includes(recoveryType)\n  ? delayIsValid\n  : delayIsValid && Number.isFinite(checkoutUpdatedMs) && (nowMs - checkoutUpdatedMs) >= configuredDelay * 60 * 1000;\nconst checks = {\n  claimed_by_us: String(claim || \"\").toUpperCase() === \"CLAIMED\",\n  tenant_active: c.tenant_active === true,\n  shop_connection_active: c.shop_connection_active === true,\n  sendable_status: [\"READY\",\"SCHEDULED\",\"SENDING\"].indexOf(String(c.intervention_status || \"\").toUpperCase()) !== -1,\n  recovery_active: c.recovery_active === true,\n  opportunity_open: c.opportunity_open === true,\n  not_recovered: c.order_recovered !== true,\n  consent_valid: c.consent_valid === true,\n  recipient: !!(c.recipient || c.message_recipient || c.recipient_reference),\n  email_channel: String(c.channel || \"\").toUpperCase() === \"EMAIL\",\n  sender: !!c.sender_reference,\n  sender_configured: c.sender_configured === true,\n  time_arrived: scheduledMs <= nowMs,\n  flow_delay_configured: delayIsValid,\n  idle_window_elapsed: idleWindowElapsed,\n  no_suppression: c.suppression_exists === false,\n};\nconst destination_url = c.checkout_url || c.destination_url || null;\nchecks.destination_url = !!destination_url;\nconst failed = Object.keys(checks).filter(function (k) { return !checks[k]; });\nconst sendable = failed.length === 0;\nconst stepNumber = Math.max(1, Math.min(3, Number(c.step_number || 1)));\nconst previousMessages = Array.isArray(c.previous_messages)\n  ? c.previous_messages.slice(0, 2).map((m) => ({\n      step_number: Number(m.step_number || 0),\n      subject: String(m.subject || \"\").slice(0, 200),\n      body: String(m.body || \"\").slice(0, 1200)\n    }))\n  : [];\nconst context = {\n  recovery_type: c.recovery_type || c.opportunity_type || null,\n  step_number: stepNumber,\n  previous_messages: previousMessages,\n  store_name: c.store_name || c.merchant_name || null,\n  customer_first_name: c.customer_first_name || null,\n  products: Array.isArray(c.products) ? c.products.slice(0, 20) : [],\n  cart_or_checkout_value: c.value_at_risk != null ? c.value_at_risk : null,\n  currency: c.currency || null,\n  brand_tone: c.brand_tone || \"friendly\",\n  email_branding: c.email_branding || {},\n  recovery_context: c.recovery_context || null,\n  destination_url: destination_url,\n};\nconst stepGuidance = stepNumber === 1\n  ? \"STEP 1 — RECONNECT: Open with a natural, warm human greeting. Acknowledge that life gets busy without claiming to know what the customer did. Make the next step feel effortless. Lead with a supplied product detail only if it genuinely helps. Offer a simple reply if they have a question.\"\n  : stepNumber === 2\n    ? \"STEP 2 — REMOVE FRICTION: This is a genuinely new angle, not a louder reminder. Help with a likely decision question only when supported by supplied facts; otherwise invite the customer to ask about anything holding them back. Do not repeat the previous subject, opening, or sales angle.\"\n    : \"STEP 3 — LEAVE THE DOOR OPEN: A short, gracious final note. Make it clear there is no pressure. Do not manufacture a deadline, scarcity, discount, or consequence. Do not say this is the last chance.\";\nconst typeGuidance = String(context.recovery_type || \"\").toUpperCase() === \"ABANDONED_CART\"\n  ? \"For abandoned cart: talk about the actual supplied cart items when available and invite the customer to return to their cart. The tracked destination is the cart, not a checkout. Never imply a checkout already exists.\"\n  : String(context.recovery_type || \"\").toUpperCase() === \"BROWSE_ABANDONMENT\"\n    ? \"For browse abandonment: refer naturally to the actual supplied product viewed and invite the customer to take another look. The tracked destination is the product page. Never imply a cart or checkout exists.\"\n    : [\"PAYMENT_FAILURE\",\"PAYMENT_DECLINED\"].includes(String(context.recovery_type || \"\").toUpperCase())\n      ? \"For payment failure: be calm and reassuring. Say only that the payment did not complete if that fact is supplied. Never mention card details or infer a decline reason. Invite the customer to retry securely through the supplied destination.\"\n      : \"For checkout recovery: help the customer resume the existing checkout without rebuilding it. Do not claim that price, stock, shipping, or availability is guaranteed.\";\nconst system = [\n  \"You are the senior lifecycle copywriter for a respected, customer-loved ecommerce brand. Your work should combine the warmth and clarity of excellent hospitality marketing with the discipline of high-performing direct response.\",\n  \"You write one customer recovery email inside an already-approved recovery action. You do NOT decide eligibility, whether a recovery should happen, attribution, consent, or any state. The backend has already authorised this intervention.\",\n  \"The customer is a person, not a conversion metric. Write with empathy, confidence, generosity, and restraint. Make the customer feel welcome—not watched, chased, manipulated, or profiled.\",\n  \"Never use surveillance language: do not say 'we noticed you were browsing', 'you showed intent', 'we saw you leave', 'we've been watching', or anything that reveals tracking.\",\n  \"Never use robotic ecommerce filler such as 'complete your purchase smoothly', 'act now', 'don't miss out', 'your journey awaits', 'we value your business', or generic 'just checking in' language.\",\n  \"Do not invent customers, product details, prices, discounts, shipping promises, returns policies, guarantees, stock levels, deadlines, urgency, testimonials, or URLs. Use ONLY supplied authoritative facts.\",\n  \"Use previous_messages to avoid repeating earlier wording, subject lines, and persuasion angles. Never claim the customer opened, read, ignored, or considered an earlier email.\",\n  \"Write as a thoughtful person from the store's own team. Use natural contractions, short sentences, a conversational rhythm, and specific language. Avoid corporate jargon and overexcited punctuation.\",\n  \"If customer_first_name is supplied, greet them by first name. Otherwise use 'Hi there,' or begin naturally. Never mistake store_name or merchant_name for the customer's name.\",\n  \"If real product titles are supplied, mention at most one or two relevant items naturally. Never invent or overstuff the email with catalogue details. Mention a cart/checkout total only when both exact value and currency are supplied.\",\n  \"The email must have one clear job and one primary CTA. Make resuming feel easy; do not stack competing buttons or requests. The CTA label should sound natural and match the actual destination.\",\n  \"Use a short subject line (roughly 4–8 words), specific and human, not clickbait. Do not append the store name as if it were the customer's name.\",\n  \"The opening should feel like a genuine personal note, not a template. The body should add one useful thought, remove friction, or invite a reply. Keep the full copy concise—usually 45–90 words for checkout/cart and 35–75 for browse or payment failure.\",\n  typeGuidance,\n  stepGuidance,\n  \"Ask at most one simple, sincere question. Invite the customer to reply if they need help, without promising a response time or a specific support capability that was not supplied.\",\n  \"Never use guilt, fake familiarity, false urgency, scarcity, pressure, discount bait, or excessive exclamation marks. Do not call the customer's action an 'intent signal'.\",\n  \"Do not output any URL or markdown link. HENVALT adds a verified tracked destination and unsubscribe link after generation.\",\n  \"Return STRICT JSON only, no markdown or surrounding prose, matching exactly:\",\n  '{\"subject\":\"\",\"opening\":\"\",\"body\":\"\",\"cta_text\":\"\"}'\n].join(\" \");\nconst user = \"Authoritative store and recovery facts (JSON): \" + JSON.stringify(context);\nreturn { json: Object.assign({}, c, {\n  recipient: c.recipient || c.message_recipient || c.recipient_reference || null,\n  sendable: sendable,\n  failed_checks: failed,\n  skip_reason: sendable ? null : (\"PREFLIGHT_\" + failed.join(\",\")),\n  destination_url: destination_url,\n  ai_context: context,\n  ai_system: system,\n  ai_user: user,\n  model: cfg.model,\n  worker_id: ng.worker_id,\n  job_id: ng.job_id,\n  intervention_id: ng.intervention_id,\n  tenant_id: c.tenant_id || ng.tenant_id,\n  correlation_id: ng.correlation_id,\n  recovery_id: c.recovery_id,\n  opportunity_id: c.opportunity_id,\n}) };"
+        },
+        "id": "5ebdc0e5-12a6-45af-9720-4f5997f78816",
+        "name": "Preflight & AI Context",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.sendable }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "19e11cd5-34c4-4a4d-9b49-820301033b8b",
+        "name": "Sendable?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1344,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM henvalt.create_tracking_token($1, $2, $3)",
+          "options": {
+            "queryReplacement": "={{ [$('Preflight & AI Context').item.json.intervention_id, $('Preflight & AI Context').item.json.destination_url, $('Init Worker').first().json.tracking_ttl_seconds] }}"
+          }
+        },
+        "id": "d4465b8d-2aff-4556-8ca1-3e2b71eb91d8",
+        "name": "Create Tracking Token",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          1568,
+          128
+        ],
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://supabase-staging.invalid/functions/v1/henvalt-groq-generate",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { model: $('Preflight & AI Context').item.json.model, temperature: 0.3, response_format: { type: 'json_object' }, messages: [ { role: 'system', content: $('Preflight & AI Context').item.json.ai_system }, { role: 'user', content: $('Preflight & AI Context').item.json.ai_user } ] } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "id": "c82454df-d818-4838-9f7f-b6a6b4b431e7",
+        "name": "Grok Generate",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1792,
+          128
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const resp = $json || {};\nconst pf = $(\"Preflight & AI Context\").item.json;\nconst ng = $(\"Normalize & Guard\").item.json;\nconst cfg = $(\"Init Worker\").first().json;\nconst ctx = pf.ai_context || {};\nconst tok = $(\"Create Tracking Token\").item.json || {};\nconst unsub = $(\"Create Unsubscribe Token\").item.json || {};\nconst allowedUrl = ctx.destination_url;\nlet ai = null;\ntry {\n  const content = resp.body && resp.body.choices && resp.body.choices[0] && resp.body.choices[0].message && resp.body.choices[0].message.content;\n  ai = typeof content === \"string\" ? JSON.parse(content) : content;\n} catch (e) { ai = null; }\nfunction urlsIn(s) { return (String(s || \"\").match(/https?:\\/\\/[^\\s\"\\)<]+/g)) || []; }\nconst flags = [];\nlet valid = !!ai && !!tok.token && !!tok.tracking_token_id && !!allowedUrl && !!unsub.token && !!unsub.unsubscribe_token_id;\nif (!tok.token || !tok.tracking_token_id) flags.push(\"missing_tracking_token\");\nif (!allowedUrl) flags.push(\"missing_destination_url\");\nif (!unsub.token || !unsub.unsubscribe_token_id) flags.push(\"missing_unsubscribe_token\");\nif (valid) {\n  if (!ai.subject || typeof ai.subject !== \"string\") { valid = false; flags.push(\"missing_subject\"); }\n  if (!ai.body || typeof ai.body !== \"string\" || ai.body.trim() === \"\") { valid = false; flags.push(\"missing_body\"); }\n  if ((ai.subject || \"\").length > 200 || (ai.body || \"\").length > 5000) { valid = false; flags.push(\"oversized\"); }\n  const urls = urlsIn(ai.body).concat(urlsIn(ai.opening)).concat(urlsIn(ai.cta_text)).concat(urlsIn(ai.subject));\n  if (urls.length > 0) { valid = false; flags.push(\"grok_emitted_url\"); }\n}\nconst trustedUrl = tok.token ? (\"https://supabase-staging.invalid/functions/v1/henvalt-public-mail-actions/track/\" + encodeURIComponent(String(tok.token))) : \"\";\nconst unsubscribeUrl = unsub.token ? (\"https://supabase-staging.invalid/functions/v1/henvalt-public-mail-actions/unsubscribe/\" + encodeURIComponent(String(unsub.token))) : \"\";\nlet subject = null, bodyHtml = null, bodyText = null, cta = null;\nconst storeName = String(ctx.store_name || \"Our store\").trim().slice(0,100);\nconst branding = ctx.email_branding && typeof ctx.email_branding === \"object\" ? ctx.email_branding : {};\nconst isHexColor = (value) => typeof value === \"string\" && /^#[0-9a-fA-F]{6}$/.test(value);\nconst primaryColor = isHexColor(branding.primary_color) ? branding.primary_color : \"#171717\";\nconst pageColor = isHexColor(branding.background_color) ? branding.background_color : \"#f4f4f1\";\nconst accentColor = isHexColor(branding.accent_color) ? branding.accent_color : \"#77776f\";\nconst candidateLogo = typeof branding.logo_url === \"string\" ? branding.logo_url.trim() : \"\";\nconst logoUrl = /^https:\\/\\//i.test(candidateLogo) ? candidateLogo : \"\";\nif (valid) {\n  subject = ai.subject;\n  cta = (ai.cta_text && String(ai.cta_text).trim()) ? String(ai.cta_text).trim().slice(0,60) : (String(ctx.recovery_type || \"\").toUpperCase() === \"BROWSE_ABANDONMENT\" ? \"View product\" : (String(ctx.recovery_type || \"\").toUpperCase() === \"ABANDONED_CART\" ? \"Return to your cart\" : \"Return to your checkout\"));\n  const opening = ai.opening ? String(ai.opening) : \"\";\n  const bodyMsg = String(ai.body);\n  const escapeHtml = (s) => String(s || \"\").replace(/&/g, \"&amp;\").replace(/</g, \"&lt;\").replace(/>/g, \"&gt;\").replace(/\"/g, \"&quot;\").replace(/'/g, \"&#39;\");\n  const paragraphHtml = [opening, bodyMsg].filter(Boolean).map(s => \"<p style=\\\"margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.65;color:#292929;\\\">\" + escapeHtml(s).replace(/\\n/g,\"<br>\") + \"</p>\").join(\"\");\n  const safeStore = escapeHtml(storeName);\n  const safeCta = escapeHtml(cta);\n  const headerBrand = logoUrl\n    ? `<img src=\"${escapeHtml(logoUrl)}\" alt=\"${safeStore}\" width=\"160\" style=\"display:block;max-width:160px;max-height:48px;width:auto;height:auto;object-fit:contain;border:0;\">`\n    : `<div style=\"font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:700;letter-spacing:-.4px;color:${primaryColor};\">${safeStore}</div>`;\n  bodyHtml = `<!doctype html>\n<html lang=\"en\">\n<head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><meta name=\"x-apple-disable-message-reformatting\"><title>${escapeHtml(subject)}</title></head>\n<body style=\"margin:0;padding:0;background:${pageColor};\">\n<div style=\"display:none;font-size:1px;color:${pageColor};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;\">Your ${String(ctx.recovery_type || \"\").toUpperCase() === \"BROWSE_ABANDONMENT\" ? \"product page is here whenever you are.\" : (String(ctx.recovery_type || \"\").toUpperCase() === \"ABANDONED_CART\" ? \"cart is ready whenever you are.\" : \"checkout is ready whenever you are.\")}</div>\n<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"background:${pageColor};width:100%;\">\n<tr><td align=\"center\" style=\"padding:34px 14px;\">\n<table role=\"presentation\" width=\"600\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"width:100%;max-width:600px;background:#ffffff;border:1px solid #e9e9e5;border-radius:16px;overflow:hidden;\">\n<tr><td style=\"padding:27px 34px 23px;border-bottom:1px solid #eeeeea;\">${headerBrand}<div style=\"margin-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:#8a8a83;\">A little note for you</div></td></tr>\n<tr><td style=\"padding:34px 34px 20px;\"><div style=\"font-family:Arial,Helvetica,sans-serif;font-size:24px;line-height:1.25;font-weight:700;letter-spacing:-.6px;color:#171717;margin:0 0 24px;\">Still thinking it over?</div>${paragraphHtml}\n<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" style=\"margin:26px 0 10px;\"><tr><td bgcolor=\"${primaryColor}\" style=\"border-radius:8px;\"><a href=\"${escapeHtml(trustedUrl)}\" style=\"display:inline-block;padding:15px 25px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px;background:${primaryColor};\">${safeCta}</a></td></tr></table>\n<p style=\"margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.5;color:#8a8a83;\">${String(ctx.recovery_type || \"\").toUpperCase() === \"BROWSE_ABANDONMENT\" ? \"This link takes you back to the product you viewed.\" : (String(ctx.recovery_type || \"\").toUpperCase() === \"ABANDONED_CART\" ? \"Your cart link takes you back to the items you selected.\" : \"Your checkout link will take you back to where you left off.\")}</p></td></tr>\n<tr><td style=\"padding:22px 34px 27px;background:#fafaf8;border-top:1px solid #eeeeea;\"><p style=\"margin:0 0 9px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;color:#55554f;\">If you have a question, simply reply to this email.</p>\n<p style=\"margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.6;color:#999990;\">You're receiving this because you opted in to hear from ${safeStore}.</p>\n<p style=\"margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:1.5;color:#999990;\"><a href=\"${escapeHtml(unsubscribeUrl)}\" style=\"color:${accentColor};text-decoration:underline;\">Unsubscribe from recovery emails</a></p>\n</td></tr>\n</table>\n</td></tr></table></body></html>`;\n  bodyText = [storeName, \"\", opening, bodyMsg, \"\", cta + \": \" + trustedUrl, \"\", \"If you have a question, simply reply to this email.\", \"Unsubscribe: \" + unsubscribeUrl, \"\", \"\"].filter(Boolean).join(\"\\n\");\n}\nreturn { json: {\n  is_valid: valid,\n  safety_flags: flags,\n  subject: subject,\n  body_html: bodyHtml,\n  body_text: bodyText,\n  cta_text: cta,\n  trusted_url: trustedUrl,\n  tracking_token: tok.token || null,\n  tracking_token_id: tok.tracking_token_id != null ? tok.tracking_token_id : (tok.id != null ? tok.id : null),\n  unsubscribe_token_id: unsub.unsubscribe_token_id || null,\n  unsubscribe_url: unsubscribeUrl,\n  recipient: pf.recipient,\n  sender_reference: pf.sender_reference,\n  reply_to: pf.reply_to || null,\n  delivery_mode: pf.delivery_mode,\n  template_reference: pf.template_reference,\n  tenant_id: pf.tenant_id,\n  intervention_id: pf.intervention_id,\n  recovery_id: pf.recovery_id,\n  opportunity_id: pf.opportunity_id,\n  recovery_type: ctx.recovery_type || null,\n  store_name: storeName,\n  correlation_id: pf.correlation_id,\n  job_id: pf.job_id,\n  worker_id: pf.worker_id,\n  attempts: ng.attempts,\n  ai_provider: \"GROQ\",\n  ai_model: pf.model,\n  prompt_version: cfg.prompt_version,\n  policy_version: cfg.policy_version,\n  engine_version: cfg.engine_version,\n  idempotency_key: \"deliver:\" + pf.intervention_id,\n} };"
+        },
+        "id": "5d1acb62-43aa-4051-afeb-8f7aed8ffbee",
+        "name": "Validate AI Output",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2016,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "c1",
+                "leftValue": "={{ $json.is_valid }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "5445d0a1-369d-4069-9cb0-88bf044be899",
+        "name": "Grok Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2240,
+          128
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.render_and_queue_message($1,$2,$3,$4,$5,$6::jsonb) AS message_id",
+          "options": {
+            "queryReplacement": "={{ [$json.intervention_id, $json.recipient, $json.subject, $json.body_html, $json.tracking_token_id, JSON.stringify({ engine_version: $json.engine_version, ai_provider: $json.ai_provider, ai_model: $json.ai_model, prompt_version: $json.prompt_version, policy_version: $json.policy_version, safety_flags: $json.safety_flags, recovery_type: $json.recovery_type, correlation_id: $json.correlation_id, unsubscribe_url: $json.unsubscribe_url, unsubscribe_token_id: $json.unsubscribe_token_id })] }}"
+          }
+        },
+        "id": "127efba5-3888-4c83-8423-a2e210f12130",
+        "name": "Render & Queue Message",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          2464,
+          32
+        ],
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.create_delivery_request($1,$2,$3,$4,'MAILERSEND',$5,$6,now(),$7,$8) AS delivery_request_id",
+          "options": {
+            "queryReplacement": "={{ [$('Validate AI Output').item.json.intervention_id, $('Render & Queue Message').item.json.message_id, $('Validate AI Output').item.json.recipient, $('Validate AI Output').item.json.delivery_mode, $('Validate AI Output').item.json.template_reference, $('Validate AI Output').item.json.tracking_token, $('Validate AI Output').item.json.idempotency_key, $('Validate AI Output').item.json.correlation_id] }}"
+          }
+        },
+        "id": "5ffff016-20aa-4101-b005-8e06d2866120",
+        "name": "Create Delivery Request",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          2688,
+          32
+        ],
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.complete_job($1, $2) AS result",
+          "options": {
+            "queryReplacement": "={{ [$('Normalize & Guard').item.json.job_id, $('Normalize & Guard').item.json.worker_id] }}"
+          }
+        },
+        "id": "06b28634-a2ed-4959-aee2-03f8e6c07fdb",
+        "name": "Complete Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          3136,
+          336
+        ]
+      },
+      {
+        "parameters": {
+          "options": {}
+        },
+        "id": "bfe154e8-6e51-466e-a5ce-69c9b203ebaf",
+        "name": "Loop Interventions",
+        "type": "n8n-nodes-base.splitInBatches",
+        "typeVersion": 3,
+        "position": [
+          -224,
+          480
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.retry_job($1, $2, $3, $4) AS result",
+          "options": {
+            "queryReplacement": "={{ [$('Normalize & Guard').item.json.job_id, $('Normalize & Guard').item.json.worker_id, 'GROK_INVALID_OUTPUT', 300] }}"
+          }
+        },
+        "id": "6c14c44c-4a0c-4214-a08f-f31a602e9fe9",
+        "name": "Retry Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          2464,
+          224
+        ]
+      },
+      {
+        "id": "742ca093-c5a6-4844-bb38-7b45fa2aea44",
+        "name": "Classify Preflight Failure",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -224,
+          720
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const p = $(\"Preflight & AI Context\").item.json;\nconst failed = Array.isArray(p.failed_checks) ? p.failed_checks : [];\nconst retryable = failed.length > 0 && failed.every(k => [\"sender\",\"sender_configured\",\"idle_window_elapsed\"].includes(k));\nreturn { json: {\n  intervention_id: p.intervention_id,\n  job_id: p.job_id,\n  worker_id: p.worker_id,\n  retryable,\n  final_status: retryable ? \"READY\" : \"SKIPPED\",\n  reason: p.skip_reason || failed.join(\",\") || \"PREFLIGHT_NOT_SENDABLE\"\n} };"
+        }
+      },
+      {
+        "id": "752a6501-c9ca-4c1d-9117-cc3401981cf7",
+        "name": "Resolve Preflight Failure",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          0,
+          720
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.resolve_intervention_send_failure($1, $2::henvalt.intervention_status, $3) AS resolved",
+          "options": {
+            "queryReplacement": "={{ [$('Classify Preflight Failure').item.json.intervention_id, $('Classify Preflight Failure').item.json.final_status, $('Classify Preflight Failure').item.json.reason] }}"
+          }
+        }
+      },
+      {
+        "id": "3f94a3f0-3394-4c2e-a6c3-670dfca2bc3b",
+        "name": "Preflight Retryable?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          224,
+          720
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "preflight-retryable",
+                "leftValue": "={{ $('Classify Preflight Failure').item.json.retryable === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "2ef347c7-fce9-4880-b8a2-2a80344d1a66",
+        "name": "Retry Preflight Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          448,
+          624
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.retry_job($1, $2, $3, $4) AS result",
+          "options": {
+            "queryReplacement": "={{ [$('Classify Preflight Failure').item.json.job_id, $('Classify Preflight Failure').item.json.worker_id, $('Classify Preflight Failure').item.json.reason, 300] }}"
+          }
+        }
+      },
+      {
+        "id": "1308a965-bdad-409c-a533-1ce2a5beb57a",
+        "name": "Resolve AI Failure",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          2464,
+          416
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.resolve_intervention_send_failure($1, 'READY'::henvalt.intervention_status, $2) AS resolved",
+          "options": {
+            "queryReplacement": "={{ [$('Normalize & Guard').item.json.intervention_id, 'GROK_INVALID_OUTPUT'] }}"
+          }
+        }
+      },
+      {
+        "id": "69637b2c-8535-428b-a053-6e9829c73b3f",
+        "name": "Delivery Accepted?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3136,
+          32
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "delivery-accepted",
+                "leftValue": "={{ $json.statusCode >= 200 && $json.statusCode < 300 && $json.body && $json.body.state === 'ACCEPTED' }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "a06bb3de-8162-427a-b762-47ceae74affb",
+        "name": "Classify Delivery Failure",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3360,
+          160
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const response = $json || {};\nconst body = response.body && typeof response.body === \"object\" ? response.body : {};\nconst state = String(body.state || \"UNKNOWN\").toUpperCase();\nconst reason = String(body.failure_category || \"DELIVERY_RESULT_UNAVAILABLE\").toUpperCase();\nconst retryable = state === \"REJECTED\" && [\"SENDER_IDENTITY_NOT_CONFIGURED\",\"EMAIL_PROVIDER_NOT_CONFIGURED\"].includes(reason);\nconst final_status = retryable ? \"READY\" : (state === \"REJECTED\" ? \"SKIPPED\" : \"FAILED\");\nconst ng = $(\"Normalize & Guard\").item.json;\nreturn { json: {\n  intervention_id: ng.intervention_id,\n  job_id: ng.job_id,\n  worker_id: ng.worker_id,\n  retryable,\n  final_status,\n  reason,\n  delivery_state: state,\n  http_status: response.statusCode || null\n} };"
+        }
+      },
+      {
+        "id": "7e22ed6e-c5bc-482c-aa16-90e5075286d6",
+        "name": "Resolve Delivery Failure",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          3584,
+          160
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.resolve_intervention_send_failure($1, $2::henvalt.intervention_status, $3) AS resolved",
+          "options": {
+            "queryReplacement": "={{ [$('Classify Delivery Failure').item.json.intervention_id, $('Classify Delivery Failure').item.json.final_status, $('Classify Delivery Failure').item.json.reason] }}"
+          }
+        }
+      },
+      {
+        "id": "89645f41-777f-4fdb-b09d-c9d71abca9ce",
+        "name": "Delivery Retryable?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3808,
+          160
+        ],
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict",
+              "version": 2
+            },
+            "combinator": "and",
+            "conditions": [
+              {
+                "id": "delivery-retryable",
+                "leftValue": "={{ $('Classify Delivery Failure').item.json.retryable === true }}",
+                "rightValue": true,
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "04a79565-e520-43d5-9f1f-26c120c14201",
+        "name": "Retry Delivery Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          4032,
+          64
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.retry_job($1, $2, $3, $4) AS result",
+          "options": {
+            "queryReplacement": "={{ [$('Classify Delivery Failure').item.json.job_id, $('Classify Delivery Failure').item.json.worker_id, $('Classify Delivery Failure').item.json.reason, 300] }}"
+          }
+        }
+      },
+      {
+        "id": "81c9121d-63d3-413f-ba29-6505cecc23b3",
+        "name": "Classify Pipeline Error",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          720
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const err = $json && $json.error ? $json.error : $json;\nconst ng = $(\"Normalize & Guard\").item.json;\nconst message = typeof err === \"string\" ? err : (err && err.message ? err.message : JSON.stringify(err || {}));\nreturn { json: {\n  intervention_id: ng.intervention_id,\n  job_id: ng.job_id,\n  worker_id: ng.worker_id,\n  retryable: true,\n  final_status: \"READY\",\n  reason: (\"RECOVERY_PIPELINE_ERROR: \" + String(message || \"unknown error\")).slice(0, 500)\n} };"
+        },
+        "notes": "Recover a failed internal database step without leaving an intervention stuck in SENDING."
+      },
+      {
+        "id": "8c30acba-0542-4d75-a665-00dec7809b7a",
+        "name": "Resolve Pipeline Error",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          1344,
+          720
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.resolve_intervention_send_failure($1, 'READY'::henvalt.intervention_status, $2) AS resolved",
+          "options": {
+            "queryReplacement": "={{ [$('Classify Pipeline Error').item.json.intervention_id, $('Classify Pipeline Error').item.json.reason] }}"
+          }
+        }
+      },
+      {
+        "id": "8dac7f11-9dfc-4760-8839-cf615dc18c29",
+        "name": "Retry Pipeline Job",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          1568,
+          720
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.retry_job($1, $2, $3, $4) AS result",
+          "options": {
+            "queryReplacement": "={{ [$('Classify Pipeline Error').item.json.job_id, $('Classify Pipeline Error').item.json.worker_id, $('Classify Pipeline Error').item.json.reason, 300] }}"
+          }
+        }
+      },
+      {
+        "id": "dce1f586-366b-4aa3-9bff-df937e69ee7d",
+        "name": "Create Unsubscribe Token",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          672,
+          32
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT * FROM henvalt.create_unsubscribe_token($1)",
+          "options": {
+            "queryReplacement": "={{ [$('Preflight & AI Context').item.json.intervention_id] }}"
+          }
+        },
+        "notes": "Create a long-lived, hashed one-click unsubscribe token for this consented customer.",
+        "onError": "continueErrorOutput"
+      },
+      {
+        "id": "eeaeecd4-1a21-4dd1-82e7-312a1afc1e73",
+        "name": "Repair Stale Work",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          -656,
+          240
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.requeue_stale_jobs(900) AS requeued_jobs, henvalt.recover_stale_interventions(900) AS recovered_interventions",
+          "options": {}
+        },
+        "notes": "Repair stale claims every tick. The database protects non-pending delivery requests to avoid duplicate sends.",
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 1000
+      },
+      {
+        "id": "78bc77b3-5deb-41a0-b176-adfcf63bb513",
+        "name": "Find Shopify Tokens Due",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          -432,
+          64
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT shop_domain\nFROM henvalt.shopify_connections\nWHERE active = true\n  AND token_type = 'offline_expiring'\n  AND access_token_expires_at <= now() + interval '5 minutes'\n  AND refresh_token_expires_at > now()\n  AND reauth_required_at IS NULL\n  AND (token_refresh_lease_until IS NULL OR token_refresh_lease_until <= now())\nORDER BY access_token_expires_at ASC\nLIMIT 25",
+          "options": {}
+        }
+      },
+      {
+        "id": "1e5f33e6-422a-4597-adac-d58d90e118e2",
+        "name": "Refresh Shopify Offline Token",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -176,
+          64
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://supabase-staging.invalid/functions/v1/henvalt-shopify-token-refresh",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { shop_domain: $json.shop_domain } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 20000
+          }
+        },
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 2000
+      },
+      {
+        "id": "d157e768-73d6-4433-b52d-c6afbcd3c903",
+        "name": "Build Delivery Payload",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2912,
+          32
+        ],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "jsCode": "const v = $(\"Validate AI Output\").item.json || {};\nconst created = $(\"Create Delivery Request\").item.json || {};\nreturn { json: {\n  delivery_request_id: created.delivery_request_id,\n  message_id: $(\"Render & Queue Message\").item.json.message_id,\n  tenant_id: v.tenant_id,\n  recovery_id: v.recovery_id,\n  opportunity_id: v.opportunity_id,\n  intervention_id: v.intervention_id,\n  channel: \"EMAIL\",\n  to: v.recipient,\n  subject: v.subject,\n  html_body: v.body_html,\n  text_body: v.body_text,\n  tracking_token: v.tracking_token,\n  correlation_id: v.correlation_id,\n  idempotency_key: v.idempotency_key,\n  recovery_type: v.recovery_type\n} };"
+        }
+      },
+      {
+        "id": "e8c90584-c51d-499b-94a3-9582ef8ae9b0",
+        "name": "Call HENVALT_DELIVERY",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.4,
+        "position": [
+          3136,
+          32
+        ],
+        "parameters": {
+          "mode": "once",
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "CvVyybGJZSnklxiZ"
+          },
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        }
+      },
+      {
+        "id": "75736ca7-31d3-4b79-be41-bc3a5c57ddd3",
+        "name": "Discover Browse Abandonment",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          -760,
+          240
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.process_browse_abandonment_candidates(60, 24, 100) AS result",
+          "options": {}
+        }
+      },
+      {
+        "id": "cd38003a-fc4b-40d0-98cc-ea47fb0b17d1",
+        "name": "Discover Abandoned Cart",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          -760,
+          480
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.process_abandoned_cart_candidates(60, 24, 100) AS result",
+          "options": {}
+        }
+      },
+      {
+        "id": "67e16cf8-f968-4970-a2c3-8e00b0d4c4e3",
+        "name": "Reconcile Deferred Payment Webhooks",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [
+          -656,
+          64
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.reconcile_deferred_payment_webhooks(10) AS result",
+          "options": {}
+        },
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 1000,
+        "alwaysOutputData": true
+      },
+      {
+        "id": "9687f6fa-d9e5-4ad2-ae61-4d4d4657673a",
+        "name": "Discover Abandoned Checkout",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.6,
+        "position": [
+          -760,
+          720
+        ],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT henvalt.process_abandoned_checkout_candidates(60, 48, 100) AS result",
+          "options": {}
+        }
+      },
+      {
+        "id": "97cf7426-cdf2-4cc4-833b-438ff2c6034c",
+        "name": "HENVALT One-Off Email Preview",
+        "type": "n8n-nodes-base.manualTrigger",
+        "typeVersion": 1,
+        "position": [
+          -1200,
+          900
+        ],
+        "parameters": {}
+      },
+      {
+        "id": "4621be1a-0a1d-4e58-81e9-5660978ef0a7",
+        "name": "Build One-Off Email Preview Context",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -960,
+          900
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const context = {\n  recovery_type: \"ABANDONED_CHECKOUT\",\n  step_number: 1,\n  previous_messages: [],\n  store_name: \"My Store\",\n  customer_first_name: null,\n  products: [],\n  cart_or_checkout_value: 229650,\n  currency: \"PKR\",\n  brand_tone: \"friendly\",\n  email_branding: { primary_color: \"#171717\", background_color: \"#F4F4F1\", accent_color: \"#77776F\" },\n  recovery_context: \"A real Shopify checkout opportunity is eligible. Use only the fact that the customer can return to their checkout.\",\n  destination_url: \"VERIFIED_SHOPIFY_CHECKOUT_DESTINATION\"\n};\nconst system = [\n\"You are a senior lifecycle copywriter. Write a calm, warm, premium abandoned-CHECKOUT email.\",\n\"Use checkout only. Never say cart, browsing, visiting, noticed, saw, left, tracked, saved, reserved, or still open.\",\n\"Do not invent a customer name, product fact, availability, shipping promise, discount, urgency, deadline, guarantee, or support promise.\",\n\"Do not mention price. No links or URLs.\",\n\"Use exactly this safe message structure and meaning; polish only lightly, do not add claims:\",\n\"Subject: Your checkout, whenever you're ready\",\n\"Opening: Hi there,\",\n\"Body: If you'd still like to place your order, you can return to your checkout whenever it suits you. If you have a question before deciding, simply reply to this email. No pressure at all.\",\n\"CTA: Return to your checkout\",\n\"Return strict JSON only with keys subject, opening, body, cta_text. The body must not repeat the greeting.\"\n].join(\" \");\nconst user = \"Authoritative preview context (JSON): \" + JSON.stringify(context);\nreturn [{json:{model:\"openai/gpt-oss-120b\",temperature:0.1,response_format:{type:\"json_object\"},messages:[{role:\"system\",content:system},{role:\"user\",content:user}],preview_context:context}}];"
+        }
+      },
+      {
+        "id": "8895a58b-431f-4da1-8e98-a10da3b5014f",
+        "name": "Generate One-Off Email Preview with Groq",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          -700,
+          900
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://supabase-staging.invalid/functions/v1/henvalt-groq-generate",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "supabaseApi",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ { model: $json.model, temperature: $json.temperature, response_format: $json.response_format, messages: $json.messages } }}",
+          "options": {
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "json"
+              }
+            },
+            "timeout": 30000
+          }
+        }
+      },
+      {
+        "id": "258fae6f-dbb9-4695-9b09-57bf1c9a31f6",
+        "name": "Return One-Off Email Preview",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -440,
+          900
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const response = $input.first().json || {};\nconst payload = response.body || response;\nconst content = payload.choices?.[0]?.message?.content;\nlet draft = null;\ntry { draft = typeof content === \"string\" ? JSON.parse(content) : content; } catch {}\nif (!draft || typeof draft.subject !== \"string\" || typeof draft.body !== \"string\") {\n  return [{json:{preview_status:\"failed\",http_status:response.statusCode||null,error:\"Groq returned an invalid email draft. No email was sent.\"}}];\n}\nreturn [{json:{\n  preview_status:\"generated\",\n  ai_provider:\"GROQ\",\n  ai_model:\"openai/gpt-oss-120b\",\n  http_status:response.statusCode||200,\n  store_name:\"My Store\",\n  sender:\"redacted@example.invalid\",\n  recipient:\"redacted@example.invalid\",\n  subject:draft.subject,\n  opening:draft.opening||\"\",\n  body:draft.body,\n  cta_text:draft.cta_text||\"Return to your checkout\",\n  branding:{primary_color:\"#171717\",background_color:\"#F4F4F1\",accent_color:\"#77776F\"},\n  note:\"AI-generated copy preview only. No tracking/unsubscribe footer has been attached and no email has been sent.\"\n}}];"
+        }
+      }
+    ],
+    "nodeGroups": [
+      {
+        "id": "1289a7b3-d18e-48a2-ae60-aa6d27338ccd",
+        "name": "Claim due work",
+        "nodeNames": [
+          "Claim Due Job",
+          "Normalize & Guard",
+          "Job Claimed?"
+        ],
+        "description": "Pulls the next due recovery intervention from the Supabase queue and atomically dequeues it so overlapping workers never take the same one"
+      }
+    ],
+    "activeVersion": {
+      "sameAsDraft": true
+    }
+  }
+}

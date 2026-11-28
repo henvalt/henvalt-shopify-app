@@ -1,0 +1,49 @@
+# HENVALT billing worker — recovery scheduler integration candidate
+
+Status: candidate-only. This specification and graph builder do not edit, publish, execute, or activate the connected n8n workflow.
+
+## Architecture
+
+The billing worker is scheduled from the existing `HENVALT_RECOVERY` workflow's `Every Minute` trigger. It does not create a fourth workflow and does not change `HENVALT_INGEST` or `HENVALT_DELIVERY`.
+
+Candidate branch:
+
+1. `Find Shopify Usage Billing Shops` selects up to ten active shops with an active usage line item and a confirmed, billable, positive recovery-fee measurement that is new or retry-due.
+2. `Call Shopify Usage Billing Worker` sends only the shop domain to the dedicated Edge Function. The worker itself claims exactly one charge through `control_plane_claim_billing_usage`, allocates refund credits transactionally, calls Shopify's `appUsageRecordCreate` with the persisted idempotency key, and records a confirmed result.
+3. The worker HTTP node is terminal. No email/delivery node is called by this billing branch.
+
+The discovery query also requires `billing_accounts.test_mode = true`. The candidate claim RPC independently rejects every non-test subscription with `TEST_MODE_REQUIRED` and returns an explicit `testMode: true` attestation. The Edge Function refuses claims where that attestation is false or absent, before retrieving the Shopify token or making provider requests; the worker therefore cannot create a live merchant charge through this candidate migration. Enabling live billing must be a separate reviewed migration and cutover.
+
+The discovery query is deliberately read-only. It does not allocate credits, create usage charges, or change billing state. The claim RPC remains the sole authority for charge creation and refund-credit allocation. The query mirrors the worker's retry windows so the scheduler does not repeatedly call shops whose charges are not yet due.
+
+Billing accounts are currently tenant-scoped, not shop-scoped. Therefore the discovery query admits a tenant only when exactly one Shopify connection is active, and the database claim RPC independently returns `SINGLE_ACTIVE_SHOP_REQUIRED` when that invariant is not met. The database guard is authoritative; the scheduler filter is only an efficiency measure. This prevents a tenant with multiple active stores from submitting a fee against the wrong store's subscription line item. The claim RPC locks the selected connection and tenant row before counting, so a concurrent connection insert cannot slip between the cardinality check and the durable claim.
+
+## Credential and endpoint gate
+
+The generated candidate uses `https://supabase-staging.invalid/functions/v1/henvalt-shopify-usage-billing` and contains no credential material. Before isolated staging execution only:
+
+- Replace the invalid host with the isolated staging project's function URL.
+- Create a dedicated n8n Header Auth credential with `Authorization: Bearer <staging worker token>`.
+- Store the same staging token as `HENVALT_BILLING_WORKER_TOKEN` in the staging Edge Function secrets.
+- Deploy the staging Edge Function with `verify_jwt=false`; the handler performs constant-time bearer-token validation itself. Do not use the production service-role key as the worker token.
+- Use a Shopify development store and a test-mode usage subscription. Add a provider stub/network-egress gate for timeout-after-acceptance and manual-reconciliation tests before allowing Shopify GraphQL egress.
+
+The candidate does not set a real URL, credential ID, token, or production project reference.
+
+## Retry and timeout behavior
+
+- The SQL discovery branch returns at most ten shops per scheduler tick.
+- The claim RPC serializes charge claims and reuses the original Shopify idempotency key for a retry.
+- The HTTP node does not enable blind node-level retries. Ambiguous transport outcomes stay PENDING in the database and are retried only through the worker's persisted attempt/backoff rules.
+- The worker's 202 response indicates an ambiguous pending outcome, not a successful charge.
+- Exhausted ambiguous attempts require operator reconciliation; they must not be rewritten to FAILED solely because the client timed out.
+- If the first attempt to persist the reconciliation marker itself fails, the scheduler continues selecting the exhausted PENDING row while its marker is still NONE. The next claim RPC repairs it to REQUIRED and writes an audit event before it can claim another charge; the same row then drops out of the scheduler query and appears in the operator queue.
+
+## Release boundary
+
+No live n8n workflow was modified or published. No Edge Function was deployed. No SQL migration was applied. No Shopify usage record or email was created. The candidate graph remains inactive, has no credentials, and targets an invalid staging hostname.
+
+Remaining staging acceptance: full-schema migration replay, development-store billing approval, normal charge, refund-credit offsets, duplicate claim race, timeout after Shopify acceptance, and operator reconciliation.
+
+
+The database claim is authoritative and performs the final eligibility check. The discovery query also includes exhausted `FAILED` charges with `reconciliation_status = 'NONE'`, so if the worker records a deterministic Shopify rejection but the subsequent reconciliation marker write fails, the next scheduler tick reaches the database repair path. That claim repairs the row into `REQUIRED` and returns without another provider call. After a complete operator-side no-match lookup, the resolver resets the attempt budget and preserves the same charge ID and idempotency key for a controlled retry.
