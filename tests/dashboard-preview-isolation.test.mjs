@@ -78,3 +78,12 @@ test("no-send preview exposes privacy export but keeps billing and provider path
   assert.doesNotMatch(configSource.slice(configSource.indexOf('environment: "staging"')), /privacyExport: null/);
   assert.match(source, /SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP AND BILLING LOCKED/);
 });
+
+test("staging preview can create its own Supabase owner account without enabling production sign-up", () => {
+  assert.match(source, /id="ownercreatebtn"/);
+  assert.match(source, /CONFIG\.environment==="staging"&&CONFIG\.noSend/);
+  assert.match(source, /sb\.auth\.signUp\(/);
+  assert.match(source, /emailRedirectTo:window\.location\.origin/);
+  assert.match(source, /if\(CONFIG\.environment!=="staging"\|\|!CONFIG\.noSend\)/);
+  assert.match(source, /detectSessionInUrl:CONFIG\.environment==="staging"/);
+});
