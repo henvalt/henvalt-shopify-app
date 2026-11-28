@@ -6,6 +6,7 @@ on:
       - "work/staging-delivery-dispatcher"
     paths:
       - "supabase/functions/henvalt-delivery-dispatcher/**"
+      - "supabase/functions/henvalt-mailersend-delivery/**"
       - "tests/henvalt-delivery-dispatcher-handler.test.mjs"
       - ".github/workflows/staging-delivery-dispatcher.yml"
   pull_request:
@@ -32,4 +33,4 @@ jobs:
       - name: Run delivery dispatcher safety tests
         run: node --test tests/henvalt-delivery-dispatcher-handler.test.mjs
       - name: Type-check staging Edge Function
-        run: deno check --no-remote supabase/functions/henvalt-delivery-dispatcher/index.ts
+        run: deno check --no-remote supabase/functions/henvalt-delivery-dispatcher/index.ts supabase/functions/henvalt-mailersend-delivery/index.ts
