@@ -91,7 +91,7 @@ test("loads a trusted envelope, invokes protected delivery, and records ACCEPTED
       assert.equal(body.from_name, "Example Store");
       assert.equal(body.reply_to, "support@store.example");
       assert.equal(body.to, "customer@example.test");
-      return new Response(JSON.stringify({ message_id: "provider-message" }), {
+      return new Response(JSON.stringify({ message_id: "provider-message", henvalt_delivery_stage: "provider_response" }), {
         status: 202, headers: { "content-type": "application/json", "x-message-id": "provider-message" },
       });
     }
