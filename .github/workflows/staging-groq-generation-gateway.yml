@@ -1,0 +1,35 @@
+name: Staging Groq generation gateway
+
+on:
+  push:
+    branches:
+      - "work/staging-groq-generation-gateway"
+    paths:
+      - "supabase/functions/henvalt-groq-generate/**"
+      - "tests/henvalt-groq-generation-handler.test.mjs"
+      - ".github/workflows/staging-groq-generation-gateway.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/henvalt-groq-generate/**"
+      - "tests/henvalt-groq-generation-handler.test.mjs"
+      - ".github/workflows/staging-groq-generation-gateway.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safety-and-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run isolated provider gateway safety tests
+        run: node --test tests/henvalt-groq-generation-handler.test.mjs
+      - name: Type-check staging Edge Function
+        run: deno check --no-remote supabase/functions/henvalt-groq-generate/index.ts
