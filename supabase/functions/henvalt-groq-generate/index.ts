@@ -1,4 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createGroqGenerationHandler } from "./handler.mjs";
 
 const handler = createGroqGenerationHandler({
