@@ -67,6 +67,29 @@ test("returns IDLE when sending is enabled but no due delivery request exists", 
   assert.equal(calls.length, 2);
 });
 
+test("blocks retry generations until a retry-job lease is wired", async () => {
+  const calls = [];
+  const tenantId = "11111111-1111-4111-8111-111111111111";
+  const interventionId = "22222222-2222-4222-8222-222222222222";
+  const deliveryId = "33333333-3333-4333-8333-333333333333";
+  const run = create({ fetchImpl: async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.includes("/provider_send_control")) return Response.json([{ provider_sending_enabled: true }]);
+    if (url.includes("/delivery_requests?")) return Response.json([{
+      id: deliveryId, tenant_id: tenantId, intervention_id: interventionId, generation_number: 2,
+    }]);
+    throw new Error("retry generation must not reach context or provider: " + url);
+  }});
+  const response = await run(request());
+  assert.equal(response.status, 409);
+  assert.deepEqual(await response.json(), {
+    state: "BLOCKED",
+    reason: "retry_generation_requires_leased_worker",
+    delivery_request_id: deliveryId,
+  });
+  assert.equal(calls.length, 2);
+});
+
 test("loads a trusted envelope, invokes protected delivery, and records ACCEPTED", async () => {
   const calls = [];
   const tenantId = "11111111-1111-4111-8111-111111111111";
@@ -78,6 +101,7 @@ test("loads a trusted envelope, invokes protected delivery, and records ACCEPTED
     if (url.includes("/provider_send_control")) return Response.json([{ provider_sending_enabled: true }]);
     if (url.includes("/delivery_requests?")) return Response.json([{
       id: deliveryId, tenant_id: tenantId, intervention_id: interventionId,
+      generation_number: 1,
       correlation_id: "55555555-5555-4555-8555-555555555555",
     }]);
     if (url.endsWith("/rpc/get_intervention_delivery_context")) return Response.json([{
@@ -128,7 +152,7 @@ test("records ambiguous provider transport as UNKNOWN and never retries it autom
   const run = create({ fetchImpl: async (url, options = {}) => {
     calls.push({ url, options });
     if (url.includes("/provider_send_control")) return Response.json([{ provider_sending_enabled: true }]);
-    if (url.includes("/delivery_requests?")) return Response.json([{ id: deliveryId, tenant_id: tenantId, intervention_id: interventionId }]);
+    if (url.includes("/delivery_requests?")) return Response.json([{ id: deliveryId, tenant_id: tenantId, intervention_id: interventionId, generation_number: 1 }]);
     if (url.endsWith("/rpc/get_intervention_delivery_context")) return Response.json([{
       intervention_id: interventionId, tenant_id: tenantId, channel: "EMAIL", provider: "MAILERSEND",
       delivery_mode: "HENVALT_MANAGED", message_recipient: "customer@example.test",
