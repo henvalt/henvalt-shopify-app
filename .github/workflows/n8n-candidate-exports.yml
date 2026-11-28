@@ -1,0 +1,74 @@
+name: Build isolated three-workflow n8n candidates
+
+on:
+  pull_request:
+    paths:
+      - "n8n/shopify-ingest-candidate-builder.mjs"
+      - "n8n/shopify-recovery-candidate-builder.mjs"
+      - "n8n/shopify-ingest-replay-write-map.json"
+      - "n8n/shopify-recovery-replay-graph-patch.json"
+      - "n8n/shopify-replay-claim-normalizer-node-candidate.js"
+      - "n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json"
+      - "n8n/fixtures/henvalt-recovery-active-2026-11-24.sanitized.json"
+      - "tests/shopify-ingest-full-export-candidate.test.mjs"
+      - "tests/shopify-recovery-full-export-candidate.test.mjs"
+      - ".github/workflows/n8n-candidate-exports.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-candidates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build isolated HENVALT_INGEST candidate
+        run: |
+          node n8n/shopify-ingest-candidate-builder.mjs \
+            n8n/fixtures/henvalt-ingest-active-2026-11-21.sanitized.json \
+            n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json \
+            6368d539-708f-494a-8be8-b9601d0e8607
+      - name: Build isolated HENVALT_RECOVERY candidate
+        run: node n8n/shopify-recovery-candidate-builder.mjs
+      - name: Verify candidate graph contracts
+        run: |
+          node --test \
+            tests/shopify-ingest-full-export-candidate.test.mjs \
+            tests/shopify-recovery-full-export-candidate.test.mjs \
+            tests/shopify-recovery-replay-branch-contract.test.mjs \
+            tests/shopify-replay-worker-spec-static.test.mjs
+      - name: Verify exports are inactive, credential-free and no-send
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          const files = [
+            "n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json",
+            "n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json"
+          ];
+          for (const path of files) {
+            const workflow = JSON.parse(readFileSync(path, "utf8"));
+            if (workflow.active !== false) throw new Error(path + " is active");
+            if (workflow.settings?.availableInMCP !== false) throw new Error(path + " is available in MCP");
+            if (workflow.nodes.some((node) => node.credentials || node.webhookId)) {
+              throw new Error(path + " contains credentials or webhook IDs");
+            }
+            const serialized = JSON.stringify(workflow);
+            if (serialized.includes("ocyplckdojdubyrsxcxa.supabase.co")) {
+              throw new Error(path + " contains a production Supabase URL");
+            }
+          }
+          console.log("INACTIVE_CREDENTIAL_FREE_NO_SEND_EXPORTS_VERIFIED");
+          NODE
+      - name: Upload import-ready candidate exports
+        uses: actions/upload-artifact@v4
+        with:
+          name: henvalt-three-workflow-staging-candidates
+          if-no-files-found: error
+          path: |
+            n8n/HENVALT_INGEST_CANDIDATE_NO_SEND.json
+            n8n/HENVALT_RECOVERY_CANDIDATE_NO_SEND.json
+          retention-days: 14
