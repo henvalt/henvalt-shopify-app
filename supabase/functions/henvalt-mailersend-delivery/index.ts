@@ -178,7 +178,14 @@ Deno.serve(async (req: Request) => {
     if (!egressFenceResponse.ok) {
       return json(409, { error: "delivery_egress_not_authorized", henvalt_delivery_stage: "pre_provider" });
     }
-    const egressFenceResult = await egressFenceResponse.json().catch(() => null);
+    let egressFenceResult: unknown;
+    try {
+      egressFenceResult = await egressFenceResponse.json();
+    } catch {
+      // A successful HTTP status with an unreadable RPC body is ambiguous:
+      // the database may have committed the one-way marker.
+      return json(502, { error: "provider_transport_ambiguous" });
+    }
     if (egressFenceResult !== true) {
       return json(409, { error: "delivery_egress_not_authorized", henvalt_delivery_stage: "pre_provider" });
     }
