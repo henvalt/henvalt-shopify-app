@@ -1,5 +1,3 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
@@ -47,7 +45,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(503, { error: "delivery_service_not_configured" });
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(503, { error: "delivery_service_not_configured", henvalt_delivery_stage: "pre_provider" });
 
   const authorization = req.headers.get("authorization") ?? "";
   const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
@@ -84,10 +82,54 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "message_content_required" });
     }
 
-    // Only a delivery request already claimed by authorize_delivery_request
-    // (status UNKNOWN) can release its tenant-specific Vault credential.
+    // Resolve the immutable generation before choosing a credential-release
+    // contract. Generations 2/3 require the exact active retry-job lease.
+    const requestIdentityResponse = await fetch(
+      SUPABASE_URL + "/rest/v1/delivery_requests?id=eq." + encodeURIComponent(deliveryRequestId) +
+        "&tenant_id=eq." + encodeURIComponent(tenantId) + "&select=generation_number&limit=1",
+      {
+        method: "GET",
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          authorization: "Bearer " + SERVICE_ROLE_KEY,
+          accept: "application/json",
+          "accept-profile": "henvalt",
+        },
+      },
+    );
+    if (!requestIdentityResponse.ok) {
+      return json(409, { error: "delivery_request_identity_unavailable", henvalt_delivery_stage: "pre_provider" });
+    }
+    const requestIdentityRows = await requestIdentityResponse.json().catch(() => null);
+    const requestIdentity = Array.isArray(requestIdentityRows) ? requestIdentityRows[0] : null;
+    const generationNumber = requestIdentity?.generation_number;
+    const retryJobId = body.retry_job_id;
+    const retryWorkerId = body.retry_worker_id;
+    const retryIdentityValid = isUuid(retryJobId) &&
+      typeof retryWorkerId === "string" && retryWorkerId.length > 0 && retryWorkerId.length <= 160 &&
+      Number.isInteger(body.generation_number) && body.generation_number === generationNumber &&
+      [2, 3].includes(body.generation_number);
+
+    if (!requestIdentity || ![1, 2, 3].includes(generationNumber) ||
+        (generationNumber === 1 && (retryJobId != null || retryWorkerId != null)) ||
+        (generationNumber > 1 && !retryIdentityValid)) {
+      return json(409, { error: "retry_generation_requires_valid_lease", henvalt_delivery_stage: "pre_provider" });
+    }
+
+    // Both paths reuse the tenant's Vault-backed credential lookup. Retry
+    // generations use the overload that verifies and locks the exact job lease.
+    const tokenRpcArgs = generationNumber === 1
+      ? { p_tenant_id: tenantId, p_delivery_request_id: deliveryRequestId }
+      : {
+          p_tenant_id: tenantId,
+          p_delivery_request_id: deliveryRequestId,
+          p_retry_job_id: retryJobId,
+          p_retry_worker_id: retryWorkerId,
+          p_generation_number: generationNumber,
+        };
     const tokenResponse = await fetch(
-      SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery",
+      SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery" +
+        (generationNumber === 1 ? "" : ""),
       {
         method: "POST",
         headers: {
@@ -97,18 +139,15 @@ Deno.serve(async (req: Request) => {
           "accept-profile": "henvalt",
           "content-profile": "henvalt",
         },
-        body: JSON.stringify({
-          p_tenant_id: tenantId,
-          p_delivery_request_id: deliveryRequestId,
-        }),
+        body: JSON.stringify(tokenRpcArgs),
       },
     );
 
-    if (!tokenResponse.ok) return json(409, { error: "tenant_provider_credential_unavailable" });
+    if (!tokenResponse.ok) return json(409, { error: "tenant_provider_credential_unavailable", henvalt_delivery_stage: "pre_provider" });
 
     const tokenValue = await tokenResponse.json().catch(() => null);
     if (typeof tokenValue !== "string" || tokenValue.length < 20 || tokenValue.length > 512) {
-      return json(409, { error: "tenant_provider_credential_unavailable" });
+      return json(409, { error: "tenant_provider_credential_unavailable", henvalt_delivery_stage: "pre_provider" });
     }
     apiToken = tokenValue;
 
@@ -125,6 +164,55 @@ Deno.serve(async (req: Request) => {
     };
     if (typeof html === "string" && html.length > 0) message.html = html;
     if (typeof textBody === "string" && textBody.length > 0) message.text = textBody;
+
+    // Commit the one-way database egress fence immediately before the
+    // provider HTTP request. If the RPC transport is ambiguous, do not send:
+    // the marker may already have committed, so the dispatcher must record
+    // UNKNOWN and require reconciliation rather than risk a duplicate.
+    let egressFenceResponse: Response;
+    try {
+      egressFenceResponse = await fetch(
+        SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started",
+        {
+          method: "POST",
+          headers: {
+            apikey: SERVICE_ROLE_KEY,
+            authorization: "Bearer " + SERVICE_ROLE_KEY,
+            "content-type": "application/json",
+            "accept-profile": "henvalt",
+            "content-profile": "henvalt",
+          },
+          body: JSON.stringify(generationNumber === 1
+            ? {
+                p_tenant_id: tenantId,
+                p_delivery_request_id: deliveryRequestId,
+              }
+            : {
+                p_tenant_id: tenantId,
+                p_delivery_request_id: deliveryRequestId,
+                p_retry_job_id: retryJobId,
+                p_retry_worker_id: retryWorkerId,
+                p_generation_number: generationNumber,
+              }),
+        },
+      );
+    } catch {
+      return json(502, { error: "provider_transport_ambiguous" });
+    }
+    if (!egressFenceResponse.ok) {
+      return json(409, { error: "delivery_egress_not_authorized", henvalt_delivery_stage: "pre_provider" });
+    }
+    let egressFenceResult: unknown;
+    try {
+      egressFenceResult = await egressFenceResponse.json();
+    } catch {
+      // A successful HTTP status with an unreadable RPC body is ambiguous:
+      // the database may have committed the one-way marker.
+      return json(502, { error: "provider_transport_ambiguous" });
+    }
+    if (egressFenceResult !== true) {
+      return json(409, { error: "delivery_egress_not_authorized", henvalt_delivery_stage: "pre_provider" });
+    }
 
     let providerResponse: Response;
     try {
@@ -158,8 +246,8 @@ Deno.serve(async (req: Request) => {
     return json(
       providerResponse.status,
       providerBody && typeof providerBody === "object"
-        ? providerBody as Record<string, unknown>
-        : { result: providerBody },
+        ? { ...(providerBody as Record<string, unknown>), henvalt_delivery_stage: "provider_response" }
+        : { result: providerBody, henvalt_delivery_stage: "provider_response" },
       responseHeaders,
     );
   } catch {
