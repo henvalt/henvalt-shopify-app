@@ -55,7 +55,7 @@ test("no-send dashboard disables provider setup and billing-resolution writes", 
   assert.match(source, /if\(CONFIG\.noSend\|\|!SETUP\)/);
   assert.match(source, /Billing reconciliation decisions are disabled in no-send staging/);
   assert.match(source, /Provider setup is disabled in no-send staging/);
-  assert.match(source, /STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP, PRIVACY EXPORT AND BILLING LOCKED/);
+  assert.match(source, /STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP AND BILLING LOCKED/);
 });
 
 
@@ -64,16 +64,17 @@ test("staging config exposes dashboard and isolated OAuth endpoints while keepin
   assert.match(staging, /noSend: true/);
   assert.match(staging, /api:.*henvalt-merchant-dashboard/);
   assert.match(staging, /billingReconciliation: null/);
-  assert.match(staging, /privacyExport: null/);
+  assert.match(staging, /privacyExport: `\$\{functions\}\/henvalt-privacy-export`/);
   assert.match(staging, /shopifyOAuth: `\$\{functions\}\/henvalt-shopify-oauth\/auth`/);
 });
 
-test("no-send preview hides unsupported privacy and billing surfaces but permits OAuth test", () => {
-  assert.match(source, /data-page=.*page.*style\.display="none"/);
+test("no-send preview exposes privacy export but keeps billing and provider paths disabled", () => {
   assert.match(source, /Privacy export is not deployed in staging/);
   assert.match(source, /Billing reconciliation is not deployed in staging/);
   assert.match(source, /Staging OAuth test only · email and billing remain disabled/);
   assert.match(source, /if\(!SHOPIFY_OAUTH\)/);
   assert.doesNotMatch(source, /if\(CONFIG\.noSend\|\|!SHOPIFY_OAUTH\)/);
-  assert.match(source, /SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP, PRIVACY EXPORT AND BILLING LOCKED/);
+  assert.match(configSource, /privacyExport: `\$\{functions\}\/henvalt-privacy-export`/);
+  assert.doesNotMatch(configSource.slice(configSource.indexOf('environment: "staging"')), /privacyExport: null/);
+  assert.match(source, /SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP AND BILLING LOCKED/);
 });
