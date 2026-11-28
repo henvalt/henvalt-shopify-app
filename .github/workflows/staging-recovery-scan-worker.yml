@@ -1,0 +1,37 @@
+name: Staging recovery scan worker
+
+on:
+  push:
+    branches:
+      - "work/staging-recovery-scan-worker"
+    paths:
+      - "supabase/functions/henvalt-recovery-scan/**"
+      - "tests/henvalt-recovery-scan-handler.test.mjs"
+      - "docs/STAGING_RECOVERY_SCAN_WORKER.md"
+      - ".github/workflows/staging-recovery-scan-worker.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/henvalt-recovery-scan/**"
+      - "tests/henvalt-recovery-scan-handler.test.mjs"
+      - "docs/STAGING_RECOVERY_SCAN_WORKER.md"
+      - ".github/workflows/staging-recovery-scan-worker.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safety-and-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run isolated handler safety tests
+        run: node --test tests/henvalt-recovery-scan-handler.test.mjs
+      - name: Type-check staging Edge Function
+        run: deno check --no-remote supabase/functions/henvalt-recovery-scan/index.ts
