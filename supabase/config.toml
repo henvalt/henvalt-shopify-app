@@ -3,3 +3,12 @@ verify_jwt = false
 
 [functions.henvalt-pixel-ingest-proxy]
 verify_jwt = false
+
+[functions.henvalt-shopify-oauth]
+verify_jwt = false
+
+[functions.henvalt-shopify-privacy]
+verify_jwt = false
+
+[functions.henvalt-privacy-export]
+verify_jwt = true
