@@ -25,7 +25,7 @@ const HENVALT_DASHBOARD_URL = IS_STAGING_SUPABASE
   ? STAGING_DASHBOARD_URL
   : Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
 const SHOPIFY_REDIRECT_URI = IS_STAGING_SUPABASE
-  ? SUPABASE_URL.replace(/\\/+$/, "") + "/functions/v1/henvalt-shopify-oauth/callback"
+  ? SUPABASE_URL.replace(/\/+$/, "") + "/functions/v1/henvalt-shopify-oauth/callback"
   : Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
 const STAGING_INGRESS_BASE_URL = "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev";
 const STAGING_PIXEL_COLLECTOR_URL = "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events";
