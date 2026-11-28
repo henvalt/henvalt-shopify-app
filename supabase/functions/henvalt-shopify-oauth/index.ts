@@ -6,8 +6,13 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
 const SHOPIFY_API_SECRET = Deno.env.get("SHOPIFY_API_SECRET") ?? "";
-const SHOPIFY_REDIRECT_URI = Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
-const HENVALT_DASHBOARD_URL = Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
+const IS_STAGING_SUPABASE = (() => {
+  try {
+    return new URL(SUPABASE_URL).hostname === "xidhtmrfvsgfmyltjuja.supabase.co";
+  } catch {
+    return false;
+  }
+})();
 const IS_NON_PRODUCTION_SUPABASE = (() => {
   try {
     return new URL(SUPABASE_URL).hostname !== "ocyplckdojdubyrsxcxa.supabase.co";
@@ -15,12 +20,21 @@ const IS_NON_PRODUCTION_SUPABASE = (() => {
     return true;
   }
 })();
+const STAGING_DASHBOARD_URL = "https://65003dc3.henvalt-dashboard-preview.pages.dev";
+const HENVALT_DASHBOARD_URL = IS_STAGING_SUPABASE
+  ? STAGING_DASHBOARD_URL
+  : Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
+const SHOPIFY_REDIRECT_URI = IS_STAGING_SUPABASE
+  ? SUPABASE_URL.replace(/\\/+$/, "") + "/functions/v1/henvalt-shopify-oauth/callback"
+  : Deno.env.get("SHOPIFY_REDIRECT_URI") ?? "";
+const STAGING_INGRESS_BASE_URL = "https://henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev";
+const STAGING_PIXEL_COLLECTOR_URL = "https://henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev/v1/events";
 const OAUTH_INFRASTRUCTURE = resolveOAuthInfrastructure({
-  ingressBaseUrl: Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "",
-  pixelCollectorUrl: Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "",
+  ingressBaseUrl: IS_STAGING_SUPABASE ? STAGING_INGRESS_BASE_URL : Deno.env.get("SHOPIFY_WEBHOOK_INGRESS_BASE_URL") ?? "",
+  pixelCollectorUrl: IS_STAGING_SUPABASE ? STAGING_PIXEL_COLLECTOR_URL : Deno.env.get("SHOPIFY_PIXEL_COLLECTOR_URL") ?? "",
   requireExplicitHostBinding: IS_NON_PRODUCTION_SUPABASE,
-  expectedIngressHost: Deno.env.get("HENVALT_STAGE_INGRESS_HOST") ?? "",
-  expectedPixelCollectorHost: Deno.env.get("HENVALT_STAGE_PIXEL_COLLECTOR_HOST") ?? "",
+  expectedIngressHost: IS_STAGING_SUPABASE ? "henvalt-shopify-ingress-staging-no-send.chmuhammadrehan18.workers.dev" : Deno.env.get("HENVALT_STAGE_INGRESS_HOST") ?? "",
+  expectedPixelCollectorHost: IS_STAGING_SUPABASE ? "henvalt-pixel-collector-staging-no-send.chmuhammadrehan18.workers.dev" : Deno.env.get("HENVALT_STAGE_PIXEL_COLLECTOR_HOST") ?? "",
 });
 const SCOPES = [...new Set((Deno.env.get("SHOPIFY_SCOPES") ?? "read_orders,read_customers,write_pixels,read_pixels,read_customer_events").split(",").map((s) => s.trim()).filter(Boolean).concat(["read_orders", "read_customers", "write_pixels", "read_pixels", "read_customer_events"]))].join(",");
 const STATE_TTL_SECONDS = 600;
