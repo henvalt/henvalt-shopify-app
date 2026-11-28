@@ -13,9 +13,12 @@ on:
       - "docs/PRIVACY_EXPORT_DELIVERY_SEMANTICS_2026-11-22.md"
       - "dashboard/functions/config.js"
       - "dashboard/index.html"
-      - "tests/dashboard-preview-isolation.test.mjs"
+      - "tests/dashboard-preview-isolation.test.mjs tests/shopify-staging-config.test.mjs"
       - "tests/privacy-export-delivery-semantics.test.mjs"
       - "supabase/config.toml"
+      - "supabase/functions/henvalt-shopify-oauth/index.ts"
+      - "shopify.app.staging.toml"
+      - "tests/shopify-staging-config.test.mjs"
   push:
     branches:
       - work/48h-system-readiness-2026-11-21
@@ -41,4 +44,5 @@ jobs:
       - name: Type-check staging Shopify privacy webhook and owner export functions
         run: |
           deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-privacy/index.ts
+          deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-oauth/index.ts
           deno check --node-modules-dir=auto supabase/functions/henvalt-privacy-export/index.ts
