@@ -82,6 +82,31 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "message_content_required" });
     }
 
+    // The ordinary dispatcher is allowed to send generation one only.
+    // Retry generations require a separately leased retry worker and must never
+    // fall through the legacy authorization path.
+    const requestIdentityResponse = await fetch(
+      SUPABASE_URL + "/rest/v1/delivery_requests?id=eq." + encodeURIComponent(deliveryRequestId) +
+        "&tenant_id=eq." + encodeURIComponent(tenantId) + "&select=generation_number&limit=1",
+      {
+        method: "GET",
+        headers: {
+          apikey: SERVICE_ROLE_KEY,
+          authorization: "Bearer " + SERVICE_ROLE_KEY,
+          accept: "application/json",
+          "accept-profile": "henvalt",
+        },
+      },
+    );
+    if (!requestIdentityResponse.ok) {
+      return json(409, { error: "delivery_request_identity_unavailable", henvalt_delivery_stage: "pre_provider" });
+    }
+    const requestIdentityRows = await requestIdentityResponse.json().catch(() => null);
+    const requestIdentity = Array.isArray(requestIdentityRows) ? requestIdentityRows[0] : null;
+    if (!requestIdentity || requestIdentity.generation_number !== 1) {
+      return json(409, { error: "retry_generation_requires_leased_worker", henvalt_delivery_stage: "pre_provider" });
+    }
+
     // Only a delivery request already claimed by authorize_delivery_request
     // (status UNKNOWN) can release its tenant-specific Vault credential.
     const tokenResponse = await fetch(
@@ -123,6 +148,40 @@ Deno.serve(async (req: Request) => {
     };
     if (typeof html === "string" && html.length > 0) message.html = html;
     if (typeof textBody === "string" && textBody.length > 0) message.text = textBody;
+
+    // Commit the one-way database egress fence immediately before the
+    // provider HTTP request. If the RPC transport is ambiguous, do not send:
+    // the marker may already have committed, so the dispatcher must record
+    // UNKNOWN and require reconciliation rather than risk a duplicate.
+    let egressFenceResponse: Response;
+    try {
+      egressFenceResponse = await fetch(
+        SUPABASE_URL + "/rest/v1/rpc/mark_mailersend_provider_egress_started",
+        {
+          method: "POST",
+          headers: {
+            apikey: SERVICE_ROLE_KEY,
+            authorization: "Bearer " + SERVICE_ROLE_KEY,
+            "content-type": "application/json",
+            "accept-profile": "henvalt",
+            "content-profile": "henvalt",
+          },
+          body: JSON.stringify({
+            p_tenant_id: tenantId,
+            p_delivery_request_id: deliveryRequestId,
+          }),
+        },
+      );
+    } catch {
+      return json(502, { error: "provider_transport_ambiguous" });
+    }
+    if (!egressFenceResponse.ok) {
+      return json(409, { error: "delivery_egress_not_authorized", henvalt_delivery_stage: "pre_provider" });
+    }
+    const egressFenceResult = await egressFenceResponse.json().catch(() => null);
+    if (egressFenceResult !== true) {
+      return json(409, { error: "delivery_egress_not_authorized", henvalt_delivery_stage: "pre_provider" });
+    }
 
     let providerResponse: Response;
     try {
