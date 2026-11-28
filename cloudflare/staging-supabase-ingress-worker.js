@@ -1,6 +1,21 @@
 const STAGING_PROJECT_REF = "xidhtmrfvsgfmyltjuja";
 const MAX_BODY_BYTES = 1_000_000;
-export const STAGING_SUPABASE_INGRESS_TIMEOUT_MS = 3500;
+export const STAGING_SUPABASE_INGRESS_TIMEOUT_MS = 4_300;
+const UPSTREAM_PATH = "/functions/v1/henvalt-shopify-webhook-ingress";
+const HEADER_ALLOWLIST = [
+  "content-type",
+  "x-shopify-hmac-sha256",
+  "x-shopify-shop-domain",
+  "x-shopify-topic",
+  "x-shopify-webhook-id",
+  "x-shopify-event-id",
+  "x-shopify-api-version",
+  "x-shopify-triggered-at",
+];
+const SHOP_RE = /^[a-z0-9][a-z0-9-]*[.]myshopify[.]com$/;
+const TOPIC_RE = /^[a-z0-9_./-]{2,100}$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ACTIVE_JOB_STATES = new Set(["QUEUED", "CLAIMED", "RUNNING", "RETRY_WAIT"]);
 
 function configured(env) {
   try {
@@ -8,9 +23,7 @@ function configured(env) {
     return env.HENVALT_STAGE_NO_SEND === "true" &&
       url.protocol === "https:" &&
       url.hostname === `${STAGING_PROJECT_REF}.supabase.co` &&
-      url.pathname === "/" && !url.username && !url.password && !url.search && !url.hash &&
-      typeof env.HENVALT_INGRESS_SHARED_SECRET === "string" &&
-      env.HENVALT_INGRESS_SHARED_SECRET.length >= 32;
+      url.pathname === "/" && !url.username && !url.password && !url.search && !url.hash;
   } catch {
     return false;
   }
@@ -26,109 +39,122 @@ async function readLimited(request, limit) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > limit) { await reader.cancel(); return null; }
+      if (size > limit) {
+        await reader.cancel();
+        return null;
+      }
       chunks.push(value);
     }
-  } finally { reader.releaseLock(); }
+  } finally {
+    reader.releaseLock();
+  }
   const bytes = new Uint8Array(size);
   let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
   return bytes;
 }
+
+const json = (status, body) => Response.json(body, {
+  status,
+  headers: { "cache-control": "no-store" },
+});
 
 export async function handleStagingSupabaseIngress(request, env, fetchImpl = fetch) {
   const url = new URL(request.url);
   const isConfigured = configured(env);
   if (request.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
-    return Response.json({
+    return json(200, {
       service: "henvalt-shopify-ingress-staging-no-send",
       configured: isConfigured,
       no_send: env.HENVALT_STAGE_NO_SEND === "true",
+      hmac_verification: "supabase_edge_function",
       runtime: "supabase-edge-function-durable-ingest-rpc",
-    }, { headers: { "cache-control": "no-store" } });
+    });
   }
   if (request.method === "OPTIONS") return new Response(null, { status: 204 });
   if (request.method !== "POST" || url.pathname !== "/shopify/webhooks") {
-    return Response.json({ error: "not_found" }, { status: 404 });
+    return json(404, { error: "not_found" });
   }
-  if (!isConfigured) return Response.json({ error: "staging_ingress_configuration_missing" }, { status: 503 });
+  if (!isConfigured) return json(503, { error: "staging_ingress_configuration_missing" });
 
   const shop = (request.headers.get("x-shopify-shop-domain") || "").toLowerCase();
   const topic = (request.headers.get("x-shopify-topic") || "").toLowerCase();
   const hmac = request.headers.get("x-shopify-hmac-sha256") || "";
   const deliveryId = request.headers.get("x-shopify-webhook-id") || "";
-  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ||
-      !/^[a-z0-9_./-]{2,100}$/.test(topic) || !hmac || !deliveryId || deliveryId.length > 200) {
-    return Response.json({ error: "invalid_webhook_headers" }, { status: 400 });
-  }
-  const declaredLength = Number(request.headers.get("content-length") || "0");
-  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
-    return Response.json({ error: "body_too_large" }, { status: 413 });
-  }
-  const raw = await readLimited(request, MAX_BODY_BYTES);
-  if (raw === null) return Response.json({ error: "body_too_large" }, { status: 413 });
-  let payload;
-  try { payload = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw)); }
-  catch { return Response.json({ error: "malformed_event" }, { status: 422 }); }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return Response.json({ error: "malformed_event" }, { status: 422 });
+  if (!SHOP_RE.test(shop) || !TOPIC_RE.test(topic) || !hmac || !deliveryId || deliveryId.length > 200) {
+    return json(400, { error: "invalid_webhook_headers" });
   }
 
-  const headers = new Headers({
-    authorization: `Bearer ${env.HENVALT_INGRESS_SHARED_SECRET}`,
-    "content-type": request.headers.get("content-type") || "application/json",
-  });
-  for (const name of [
-    "x-shopify-hmac-sha256", "x-shopify-shop-domain", "x-shopify-topic",
-    "x-shopify-webhook-id", "x-shopify-event-id", "x-shopify-api-version", "x-shopify-triggered-at",
-  ]) {
+  const declaredLength = Number(request.headers.get("content-length") || "0");
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_BODY_BYTES) {
+    return json(413, { error: "body_too_large" });
+  }
+  const raw = await readLimited(request, MAX_BODY_BYTES);
+  if (raw === null) return json(413, { error: "body_too_large" });
+
+  // Preserve the exact raw bytes: Supabase verifies Shopify's HMAC before parsing.
+  // The Worker never accepts or forwards an internal bearer/shared-secret header.
+  const headers = new Headers();
+  for (const name of HEADER_ALLOWLIST) {
     const value = request.headers.get(name);
     if (value !== null) headers.set(name, value);
   }
+
   let upstream;
   try {
-    upstream = await fetchImpl(`${env.SUPABASE_URL}/functions/v1/henvalt-shopify-webhook-ingress`, {
-      method: "POST", headers, body: raw, redirect: "manual",
+    upstream = await fetchImpl(`https://${STAGING_PROJECT_REF}.supabase.co${UPSTREAM_PATH}`, {
+      method: "POST",
+      headers,
+      body: raw,
+      redirect: "manual",
       signal: AbortSignal.timeout(STAGING_SUPABASE_INGRESS_TIMEOUT_MS),
     });
   } catch {
-    return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 });
+    return json(503, { error: "durable_ingest_unavailable" });
   }
-  let upstreamBody;
-  try { upstreamBody = await upstream.json(); } catch { upstreamBody = null; }
-  if (upstream.status !== 200) {
-    const upstreamError = upstreamBody && typeof upstreamBody === "object"
-      ? upstreamBody.error
-      : null;
-    // Preserve only the three intentional event-rejection outcomes. An
-    // internal worker-auth/configuration failure must remain retryable (503),
-    // not be misreported to Shopify as a bad customer event.
-    if (upstream.status === 401 && upstreamError === "invalid_hmac") {
-      return Response.json({ error: "invalid_hmac" }, { status: 401 });
-    }
-    if (upstream.status === 404 && upstreamError === "unknown_tenant") {
-      return Response.json({ error: "unknown_tenant" }, { status: 404 });
-    }
-    if (upstream.status === 422 && upstreamError === "malformed_event") {
-      return Response.json({ error: "malformed_event" }, { status: 422 });
-    }
-    return Response.json({ error: "durable_ingest_unavailable" }, { status: 503 });
-  }
-  const acknowledgement = upstreamBody;
 
-  const uuid = (v) => typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
-  if (!uuid(acknowledgement?.webhook_id)) {
-    return Response.json({ error: "durable_ingest_ack_invalid" }, { status: 503 });
+  let body;
+  try { body = await upstream.json(); } catch { body = null; }
+  if (upstream.status !== 200) {
+    const error = body && typeof body === "object" ? body.error : null;
+    if (upstream.status === 401 && error === "invalid_hmac") return json(401, { error: "invalid_hmac" });
+    if (upstream.status === 404 && error === "unknown_tenant") return json(404, { error: "unknown_tenant" });
+    if (upstream.status === 422 && error === "malformed_event") return json(422, { error: "malformed_event" });
+    return json(503, { error: "durable_ingest_unavailable" });
   }
-  if (acknowledgement.status === "duplicate" && acknowledgement.processing_status === "PROCESSED") {
-    return Response.json(acknowledgement, { status: 200, headers: { "cache-control": "no-store" } });
+
+  if (!body || typeof body !== "object" || !UUID_RE.test(String(body.webhook_id || ""))) {
+    return json(503, { error: "durable_ingest_ack_invalid" });
   }
-  if (!["accepted", "replay_accepted"].includes(acknowledgement.status) ||
-      !uuid(acknowledgement.replay_job_id) ||
-      !["QUEUED", "CLAIMED", "RUNNING", "RETRY_WAIT"].includes(String(acknowledgement.replay_job_status).toUpperCase())) {
-    return Response.json({ error: "durable_replay_job_not_confirmed" }, { status: 503 });
+  if (body.status === "duplicate" && body.processing_status === "PROCESSED") {
+    return json(200, {
+      status: "duplicate",
+      webhook_id: body.webhook_id,
+      processing_status: "PROCESSED",
+      correlation_id: body.correlation_id,
+    });
   }
-  return Response.json(acknowledgement, { status: 200, headers: { "cache-control": "no-store" } });
+  const jobId = String(body.replay_job_id || "");
+  const jobStatus = String(body.replay_job_status || "").toUpperCase();
+  if (!["accepted", "replay_accepted"].includes(String(body.status)) ||
+      !UUID_RE.test(jobId) || !ACTIVE_JOB_STATES.has(jobStatus)) {
+    return json(503, { error: "durable_replay_job_not_confirmed" });
+  }
+  return json(200, {
+    status: body.status,
+    webhook_id: body.webhook_id,
+    replay_job_id: jobId,
+    replay_job_status: jobStatus,
+    processing_status: body.processing_status,
+    correlation_id: body.correlation_id,
+  });
 }
 
-export default { fetch(request, env) { return handleStagingSupabaseIngress(request, env); } };
+export default {
+  fetch(request, env) {
+    return handleStagingSupabaseIngress(request, env);
+  },
+};

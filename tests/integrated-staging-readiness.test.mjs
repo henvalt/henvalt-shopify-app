@@ -107,16 +107,19 @@ test("canonical staging Worker config targets the Supabase-backed no-send ingres
   const worker = read("cloudflare/staging-supabase-ingress-worker.js");
   const config = read("wrangler.staging.toml");
   assert.match(worker, /HENVALT_STAGE_NO_SEND === "true"/);
-  assert.match(worker, /HENVALT_INGRESS_SHARED_SECRET/);
+  assert.match(worker, /HEADER_ALLOWLIST/);
+  assert.match(worker, /x-shopify-hmac-sha256/);
   assert.match(worker, /henvalt-shopify-webhook-ingress/);
+  assert.doesNotMatch(worker, /HENVALT_INGRESS_SHARED_SECRET|authorization:\\s*Bearer/);
   assert.ok(config.includes('name = "henvalt-shopify-ingress-staging-no-send"'));
   assert.ok(config.includes('main = "cloudflare/staging-supabase-ingress-worker.js"'));
   assert.ok(config.includes('SUPABASE_URL = "https://xidhtmrfvsgfmyltjuja.supabase.co"'));
   assert.ok(config.includes('HENVALT_STAGE_NO_SEND = "true"'));
-  assert.ok(config.includes('required = ["HENVALT_INGRESS_SHARED_SECRET"]'));
   assert.ok(config.includes("workers_dev = true"));
-  assert.doesNotMatch(config, /N8N_INGEST_URL|n8n\\.henvalt\\.com|henvalt26\\.app\\.n8n\\.cloud/);
+  assert.doesNotMatch(config, /N8N_INGEST_URL|HENVALT_INGRESS_SHARED_SECRET|n8n\\.henvalt\\.com|henvalt26\\.app\\.n8n\\.cloud/);
   assert.doesNotMatch(worker, /N8N_INGEST_URL|henvalt26\\.app\\.n8n\\.cloud/);
+  const edgeHandler = read("supabase/functions/henvalt-shopify-webhook-ingress/handler.mjs");
+  assert.match(edgeHandler, /verifyShopifyHmac/);
 });
 
 test("manual signed Shopify webhook test is staging-only and cannot target the production ingress", () => {

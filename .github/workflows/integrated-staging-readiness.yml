@@ -8,6 +8,7 @@ on:
       - "tests/staging-pixel-collector.test.mjs"
       - "tests/shopify-staging-config.test.mjs"
       - "tests/shopify-staging-ingress-worker.test.mjs"
+      - "tests/staging-supabase-ingress-worker.test.mjs"
       - "tests/dashboard-environment-config.test.mjs"
       - "tests/dashboard-preview-isolation.test.mjs"
       - "tests/billing-reconciliation-dashboard.test.mjs"
@@ -69,7 +70,7 @@ jobs:
           assert config["workers_dev"] is True
           assert config["vars"]["HENVALT_STAGE_NO_SEND"] == "true"
           assert config["vars"]["SUPABASE_URL"] == "https://xidhtmrfvsgfmyltjuja.supabase.co"
-          assert config["secrets"]["required"] == ["HENVALT_INGRESS_SHARED_SECRET"]
+          assert "secrets" not in config
           assert "N8N_INGEST_URL" not in config["vars"]
           pixel = tomllib.loads(pathlib.Path("wrangler.pixel-staging.toml").read_text())
           assert pixel["name"] == "henvalt-pixel-collector-staging-no-send"
@@ -82,4 +83,4 @@ jobs:
       - name: Run isolated staging pixel collector tests
         run: node --test tests/staging-pixel-collector.test.mjs
       - name: Run integrated staging readiness contract
-        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/shopify-staging-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs tests/billing-reconciliation-dashboard.test.mjs
+        run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/staging-supabase-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs tests/billing-reconciliation-dashboard.test.mjs
