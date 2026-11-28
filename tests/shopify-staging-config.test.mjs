@@ -61,11 +61,11 @@ test("checked-in staging Shopify app config binds the exact verified staging app
   const oauth = readFileSync(new URL("../supabase/functions/henvalt-shopify-oauth/index.ts", import.meta.url), "utf8");
   const supabaseConfig = readFileSync(new URL("../supabase/config.toml", import.meta.url), "utf8");
   assert.match(config, /client_id = "18867683f4dce4d63179a83e84447e5b"/);
-  assert.match(config, /application_url = "https:\/\/65003dc3\.henvalt-dashboard-preview\.pages\.dev"/);
+  assert.match(config, /application_url = "https:\/\/id-preview--6382eaeb-7d73-473e-810b-2b89184d4bf0\.lovable\.app"/);
   assert.match(config, /xidhtmrfvsgfmyltjuja\.supabase\.co\/functions\/v1\/henvalt-shopify-oauth\/callback/);
   assert.match(config, /xidhtmrfvsgfmyltjuja\.supabase\.co\/functions\/v1\/henvalt-shopify-privacy/);
   assert.doesNotMatch(config, /ocyplckdojdubyrsxcxa|henvalt-dashboard\.pages\.dev/);
-  assert.match(oauth, /STAGING_DASHBOARD_URL = "https:\/\/65003dc3\.henvalt-dashboard-preview\.pages\.dev"/);
+  assert.match(oauth, /STAGING_DASHBOARD_URL = "https:\/\/id-preview--6382eaeb-7d73-473e-810b-2b89184d4bf0\.lovable\.app"/);
   assert.match(oauth, /STAGING_INGRESS_BASE_URL/);
   assert.match(oauth, /STAGING_PIXEL_COLLECTOR_URL/);
   assert.match(supabaseConfig, /\[functions\.henvalt-shopify-oauth\]\s+verify_jwt = false/);
