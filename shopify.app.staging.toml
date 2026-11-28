@@ -3,7 +3,7 @@
 # This file is intentionally separate from shopify.app.toml (production).
 client_id = "18867683f4dce4d63179a83e84447e5b"
 name = "HENVALT Staging"
-application_url = "https://chore-staging-shopify-app-co.henvalt-dashboard.pages.dev"
+application_url = "https://chore-staging-shopify-app-co.henvalt-dashboard-preview.pages.dev"
 embedded = false
 
 [build]
