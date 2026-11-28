@@ -58,7 +58,8 @@ test("staging Shopify config rejects production dashboard and mismatched privacy
 
 test("checked-in staging Shopify app config binds the exact verified staging app and endpoints", () => {
   const config = readFileSync(new URL("../shopify.app.staging.toml", import.meta.url), "utf8");
-  const oauth = readFileSync(new URL("../supabase/functions/henvalt-shopify-oauth/index.ts", import.meta.url), "utf8");\n  const supabaseConfig = readFileSync(new URL("../supabase/config.toml", import.meta.url), "utf8");
+  const oauth = readFileSync(new URL("../supabase/functions/henvalt-shopify-oauth/index.ts", import.meta.url), "utf8");
+  const supabaseConfig = readFileSync(new URL("../supabase/config.toml", import.meta.url), "utf8");
   assert.match(config, /client_id = "18867683f4dce4d63179a83e84447e5b"/);
   assert.match(config, /application_url = "https:\/\/65003dc3\.henvalt-dashboard-preview\.pages\.dev"/);
   assert.match(config, /xidhtmrfvsgfmyltjuja\.supabase\.co\/functions\/v1\/henvalt-shopify-oauth\/callback/);
@@ -66,5 +67,8 @@ test("checked-in staging Shopify app config binds the exact verified staging app
   assert.doesNotMatch(config, /ocyplckdojdubyrsxcxa|henvalt-dashboard\.pages\.dev/);
   assert.match(oauth, /STAGING_DASHBOARD_URL = "https:\/\/65003dc3\.henvalt-dashboard-preview\.pages\.dev"/);
   assert.match(oauth, /STAGING_INGRESS_BASE_URL/);
-  assert.match(oauth, /STAGING_PIXEL_COLLECTOR_URL/);\n  assert.match(supabaseConfig, /\[functions\.henvalt-shopify-oauth\]\s+verify_jwt = false/);\n  assert.match(supabaseConfig, /\[functions\.henvalt-shopify-privacy\]\s+verify_jwt = false/);\n  assert.match(supabaseConfig, /\[functions\.henvalt-privacy-export\]\s+verify_jwt = true/);
+  assert.match(oauth, /STAGING_PIXEL_COLLECTOR_URL/);
+  assert.match(supabaseConfig, /\[functions\.henvalt-shopify-oauth\]\s+verify_jwt = false/);
+  assert.match(supabaseConfig, /\[functions\.henvalt-shopify-privacy\]\s+verify_jwt = false/);
+  assert.match(supabaseConfig, /\[functions\.henvalt-privacy-export\]\s+verify_jwt = true/);
 });
