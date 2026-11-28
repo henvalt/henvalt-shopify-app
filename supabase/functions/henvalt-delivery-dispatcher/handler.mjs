@@ -77,6 +77,7 @@ export function createDeliveryDispatcherHandler({
     try {
       const controlResponse = await rest(
         "/rest/v1/provider_send_control?control_key=eq.global&select=provider_sending_enabled&limit=1",
+        { headers: { "accept-profile": "henvalt" } },
       );
       if (!controlResponse.ok) return json(503, { state: "BLOCKED", reason: "provider_control_unavailable" });
       const controls = await controlResponse.json();
