@@ -20,7 +20,7 @@ const validPayload = {
 const makeRequest = (payload = validPayload, token = serviceRoleKey, method = "POST") =>
   new Request("https://worker.test/functions/v1/henvalt-groq-generate", {
     method,
-    headers: token ? { authorization: \`Bearer \${token}\`, "content-type": "application/json" } : {},
+    headers: token ? { authorization: "Bearer " + token, "content-type": "application/json" } : {},
     body: method === "POST" ? JSON.stringify(payload) : undefined,
   });
 
@@ -111,7 +111,7 @@ test("forwards only the allowlisted request contract and returns only generated 
   assert.equal(result.status, 200);
   assert.equal(captured.url, GROQ_CHAT_COMPLETIONS_URL);
   assert.equal(captured.options.redirect, "error");
-  assert.equal(captured.options.headers.authorization, \`Bearer \${groqApiKey}\`);
+  assert.equal(captured.options.headers.authorization, "Bearer " + groqApiKey);
   assert.deepEqual(captured.body, {
     model: validPayload.model,
     temperature: validPayload.temperature,
