@@ -82,9 +82,8 @@ Deno.serve(async (req: Request) => {
       return json(400, { error: "message_content_required" });
     }
 
-    // The ordinary dispatcher is allowed to send generation one only.
-    // Retry generations require a separately leased retry worker and must never
-    // fall through the legacy authorization path.
+    // Resolve the immutable generation before choosing a credential-release
+    // contract. Generations 2/3 require the exact active retry-job lease.
     const requestIdentityResponse = await fetch(
       SUPABASE_URL + "/rest/v1/delivery_requests?id=eq." + encodeURIComponent(deliveryRequestId) +
         "&tenant_id=eq." + encodeURIComponent(tenantId) + "&select=generation_number&limit=1",
@@ -103,14 +102,34 @@ Deno.serve(async (req: Request) => {
     }
     const requestIdentityRows = await requestIdentityResponse.json().catch(() => null);
     const requestIdentity = Array.isArray(requestIdentityRows) ? requestIdentityRows[0] : null;
-    if (!requestIdentity || requestIdentity.generation_number !== 1) {
-      return json(409, { error: "retry_generation_requires_leased_worker", henvalt_delivery_stage: "pre_provider" });
+    const generationNumber = requestIdentity?.generation_number;
+    const retryJobId = body.retry_job_id;
+    const retryWorkerId = body.retry_worker_id;
+    const retryIdentityValid = isUuid(retryJobId) &&
+      typeof retryWorkerId === "string" && retryWorkerId.length > 0 && retryWorkerId.length <= 160 &&
+      Number.isInteger(body.generation_number) && body.generation_number === generationNumber &&
+      [2, 3].includes(body.generation_number);
+
+    if (!requestIdentity || ![1, 2, 3].includes(generationNumber) ||
+        (generationNumber === 1 && (retryJobId != null || retryWorkerId != null)) ||
+        (generationNumber > 1 && !retryIdentityValid)) {
+      return json(409, { error: "retry_generation_requires_valid_lease", henvalt_delivery_stage: "pre_provider" });
     }
 
-    // Only a delivery request already claimed by authorize_delivery_request
-    // (status UNKNOWN) can release its tenant-specific Vault credential.
+    // Both paths reuse the tenant's Vault-backed credential lookup. Retry
+    // generations use the overload that verifies and locks the exact job lease.
+    const tokenRpcArgs = generationNumber === 1
+      ? { p_tenant_id: tenantId, p_delivery_request_id: deliveryRequestId }
+      : {
+          p_tenant_id: tenantId,
+          p_delivery_request_id: deliveryRequestId,
+          p_retry_job_id: retryJobId,
+          p_retry_worker_id: retryWorkerId,
+          p_generation_number: generationNumber,
+        };
     const tokenResponse = await fetch(
-      SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery",
+      SUPABASE_URL + "/rest/v1/rpc/get_mailersend_token_for_delivery" +
+        (generationNumber === 1 ? "" : ""),
       {
         method: "POST",
         headers: {
@@ -120,10 +139,7 @@ Deno.serve(async (req: Request) => {
           "accept-profile": "henvalt",
           "content-profile": "henvalt",
         },
-        body: JSON.stringify({
-          p_tenant_id: tenantId,
-          p_delivery_request_id: deliveryRequestId,
-        }),
+        body: JSON.stringify(tokenRpcArgs),
       },
     );
 
@@ -166,10 +182,18 @@ Deno.serve(async (req: Request) => {
             "accept-profile": "henvalt",
             "content-profile": "henvalt",
           },
-          body: JSON.stringify({
-            p_tenant_id: tenantId,
-            p_delivery_request_id: deliveryRequestId,
-          }),
+          body: JSON.stringify(generationNumber === 1
+            ? {
+                p_tenant_id: tenantId,
+                p_delivery_request_id: deliveryRequestId,
+              }
+            : {
+                p_tenant_id: tenantId,
+                p_delivery_request_id: deliveryRequestId,
+                p_retry_job_id: retryJobId,
+                p_retry_worker_id: retryWorkerId,
+                p_generation_number: generationNumber,
+              }),
         },
       );
     } catch {
