@@ -12,6 +12,7 @@ on:
   pull_request:
     paths:
       - "supabase/functions/henvalt-delivery-dispatcher/**"
+      - "supabase/functions/henvalt-mailersend-delivery/**"
       - "tests/henvalt-delivery-dispatcher-handler.test.mjs"
       - ".github/workflows/staging-delivery-dispatcher.yml"
 
