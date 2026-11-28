@@ -1,0 +1,35 @@
+name: Staging public mail actions
+
+on:
+  push:
+    branches:
+      - "work/staging-public-mail-actions"
+    paths:
+      - "supabase/functions/henvalt-public-mail-actions/**"
+      - "tests/henvalt-public-mail-actions-handler.test.mjs"
+      - ".github/workflows/staging-public-mail-actions.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/henvalt-public-mail-actions/**"
+      - "tests/henvalt-public-mail-actions-handler.test.mjs"
+      - ".github/workflows/staging-public-mail-actions.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safety-and-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run public mail actions safety tests
+        run: node --test tests/henvalt-public-mail-actions-handler.test.mjs
+      - name: Type-check staging Edge Function
+        run: deno check --no-remote supabase/functions/henvalt-public-mail-actions/index.ts
