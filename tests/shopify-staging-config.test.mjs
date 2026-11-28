@@ -1,5 +1,6 @@
 import test from "node:test";
-import assert from "node:assert/strict";\nimport { readFileSync } from "node:fs";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { renderShopifyStagingConfig } from "../scripts/render-shopify-staging-config.mjs";
 
 const valid = {
