@@ -11,7 +11,7 @@ test("retry credential release requires service role and exact generation lease"
   assert.match(migration, /auth\.role\(\) IS DISTINCT FROM 'service_role'/);
   assert.match(migration, /p_generation_number NOT IN \(2,3\)/);
   assert.match(migration, /renew_delivery_retry_job_lease\(/);
-  assert.match(migration, /p_retry_job_id,\\s*p_retry_worker_id,\\s*p_generation_number/);
+  assert.match(migration, /p_retry_job_id,\s*p_retry_worker_id,\s*p_generation_number/);
 });
 
 test("retry credential release reuses global interlock and legacy eligibility checks", () => {
