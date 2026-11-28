@@ -34,22 +34,30 @@ test("fails closed if configured for production", async () => {
 
 test("provider sending interlock stops before selecting or processing delivery requests", async () => {
   const calls = [];
-  const run = create({ fetchImpl: async (url) => {
-    calls.push(url);
-    return Response.json([{ provider_sending_enabled: false }]);
+  const run = create({ fetchImpl: async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.includes("/provider_send_control")) {
+      assert.equal(options.headers["accept-profile"], "henvalt");
+      return Response.json([{ provider_sending_enabled: false }]);
+    }
+    throw new Error("unexpected " + url);
   }});
   const response = await run(request());
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { state: "PAUSED", reason: "provider_sending_disabled" });
   assert.equal(calls.length, 1);
-  assert.ok(calls[0].includes("/provider_send_control"));
+  assert.ok(calls[0].url.includes("/provider_send_control"));
+  assert.equal(calls[0].options.headers["accept-profile"], "henvalt");
 });
 
 test("returns IDLE when sending is enabled but no due delivery request exists", async () => {
   const calls = [];
-  const run = create({ fetchImpl: async (url) => {
-    calls.push(url);
-    if (url.includes("/provider_send_control")) return Response.json([{ provider_sending_enabled: true }]);
+  const run = create({ fetchImpl: async (url, options = {}) => {
+    calls.push({ url, options });
+    if (url.includes("/provider_send_control")) {
+      assert.equal(options.headers["accept-profile"], "henvalt");
+      return Response.json([{ provider_sending_enabled: true }]);
+    }
     if (url.includes("/delivery_requests?")) return Response.json([]);
     throw new Error("unexpected " + url);
   }});
