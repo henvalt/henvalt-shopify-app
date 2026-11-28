@@ -102,7 +102,7 @@ if(!CONFIG || CONFIG.enabled !== true){
 }
 if(CONFIG.noSend){
   const banner=document.createElement("div");
-  banner.textContent="STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP, PRIVACY EXPORT AND BILLING LOCKED";
+  banner.textContent="STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP AND BILLING LOCKED";
   banner.style.cssText="position:sticky;top:0;z-index:9999;background:#171816;color:#fff;padding:9px 16px;text-align:center;font:600 10px/1.4 system-ui;letter-spacing:.12em";
   document.body.prepend(banner);
   for(const page of ["privacy","billing"]){
