@@ -96,7 +96,6 @@ function buildEmail({ copy, context, trackingUrl, unsubscribeUrl }) {
 export function createRecoveryExecutorHandler({
   supabaseUrl,
   serviceRoleKey,
-  groqApiKey,
   publicActionsBaseUrl,
   fetchImpl = fetch,
   now = () => Date.now(),
@@ -126,24 +125,6 @@ export function createRecoveryExecutorHandler({
     });
     if (!response.ok) throw new Error("rpc_" + name + "_failed");
     return response.json();
-  }
-
-  async function retry(jobId, id, interventionClaimed, reason, finalStatus = "READY") {
-    if (interventionClaimed && isUuid(id)) {
-      await rpc("resolve_intervention_send_failure", {
-        p_intervention_id: id,
-        p_final_status: finalStatus,
-        p_reason: reason,
-      });
-    }
-    if (isUuid(jobId)) {
-      await rpc("retry_job", {
-        p_job_id: jobId,
-        p_worker_id: id && typeof id === "object" ? id.workerId : "",
-        p_error: reason,
-        p_delay_seconds: 300,
-      });
-    }
   }
 
   return async (request) => {
@@ -259,14 +240,6 @@ export function createRecoveryExecutorHandler({
         });
         return json(200, { state: "RETRY_SCHEDULED", reason: "public_actions_endpoint_not_configured" });
       }
-      if (!groqApiKey || groqApiKey.length < 20) {
-        await rpc("resolve_intervention_send_failure", {
-          p_intervention_id: interventionId, p_final_status: "READY", p_reason: "AI_PROVIDER_NOT_CONFIGURED",
-        });
-        await rpc("retry_job", { p_job_id: jobId, p_worker_id: id, p_error: "AI_PROVIDER_NOT_CONFIGURED", p_delay_seconds: 900 });
-        return json(200, { state: "RETRY_SCHEDULED", reason: "ai_provider_not_configured" });
-      }
-
       const prior = await fetchImpl(
         supabaseUrl + "/rest/v1/delivery_requests?intervention_id=eq." + encodeURIComponent(interventionId) + "&select=id&limit=1",
         { method: "GET", redirect: "error", headers: { apikey: serviceRoleKey, authorization: "Bearer " + serviceRoleKey, "accept-profile": "henvalt" } },
@@ -288,9 +261,22 @@ export function createRecoveryExecutorHandler({
       const unsubscribe = Array.isArray(unsubscribeRows) ? unsubscribeRows[0] : null;
       if (!unsubscribe?.token || !isUuid(unsubscribe.unsubscribe_token_id)) throw new Error("unsubscribe_token_creation_failed");
 
+      const stepNumber = Math.max(1, Math.min(3, Number(context.step_number || 1)));
+      const stepGuidance = stepNumber === 1
+        ? "Reconnect warmly and make resuming effortless."
+        : stepNumber === 2
+          ? "Remove friction with a new angle; do not repeat previous wording."
+          : "Leave the door open graciously, with no pressure.";
+      const typeGuidance = recoveryType === "ABANDONED_CART"
+        ? "This is a cart, not a checkout. Refer only to supplied cart items."
+        : recoveryType === "BROWSE_ABANDONMENT"
+          ? "This is a product page, not a cart or checkout."
+          : ["PAYMENT_FAILURE", "PAYMENT_DECLINED"].includes(recoveryType)
+            ? "Be calm about the payment not completing. Never infer a decline reason."
+            : "Help the customer resume the existing checkout.";
       const limitedContext = {
         recovery_type: recoveryType,
-        step_number: Math.max(1, Math.min(3, Number(context.step_number || 1))),
+        step_number: stepNumber,
         previous_messages: Array.isArray(context.previous_messages) ? context.previous_messages.slice(0, 2) : [],
         store_name: context.store_name || "Our store",
         customer_first_name: context.customer_first_name || null,
@@ -298,13 +284,18 @@ export function createRecoveryExecutorHandler({
         cart_or_checkout_value: context.value_at_risk ?? null,
         currency: context.currency || null,
       };
-      const prompt = "Authoritative recovery facts (JSON): " + JSON.stringify(limitedContext);
+      const prompt = [typeGuidance, stepGuidance, "Authoritative recovery facts (JSON): " + JSON.stringify(limitedContext)].join(" ");
       if (prompt.length > MAX_PROMPT_CHARS) throw new Error("ai_context_too_large");
 
-      const aiResponse = await fetchImpl("https://api.groq.com/openai/v1/chat/completions", {
+      const aiResponse = await fetchImpl(supabaseUrl + "/functions/v1/henvalt-groq-generate", {
         method: "POST",
         redirect: "error",
-        headers: { authorization: "Bearer " + groqApiKey, "content-type": "application/json", accept: "application/json" },
+        headers: {
+          authorization: "Bearer " + serviceRoleKey,
+          apikey: serviceRoleKey,
+          "content-type": "application/json",
+          accept: "application/json",
+        },
         body: JSON.stringify({
           model: DEFAULT_MODEL,
           temperature: 0.3,
@@ -312,7 +303,7 @@ export function createRecoveryExecutorHandler({
           messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: prompt }],
           stream: false,
         }),
-        signal: AbortSignal.timeout(25000),
+        signal: AbortSignal.timeout(30000),
       });
       if (!aiResponse.ok) {
         await aiResponse.arrayBuffer().catch(() => new ArrayBuffer(0));
@@ -380,4 +371,4 @@ export function createRecoveryExecutorHandler({
   };
 }
 
-export { STAGING_SUPABASE_URL, DEFAULT_MODEL };
+export { STAGING_SUPABASE_URL, DEFAULT_MODEL, parseJsonContent };
