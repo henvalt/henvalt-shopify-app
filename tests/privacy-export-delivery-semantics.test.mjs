@@ -30,7 +30,7 @@ test("candidate export endpoint separates download start from client acknowledge
 
 test("candidate export endpoint binds CORS to the isolated staging or production dashboard", () => {
   assert.match(candidate, /STAGING_SUPABASE_URL = "https:\/\/xidhtmrfvsgfmyltjuja\.supabase\.co"/);
-  assert.match(candidate, /STAGING_DASHBOARD_ORIGIN = "https:\/\/chore-staging-shopify-app-co\.henvalt-dashboard-preview\.pages\.dev"/);
+  assert.match(candidate, /STAGING_DASHBOARD_ORIGIN = "https:\/\/65003dc3\.henvalt-dashboard-preview\.pages\.dev"/);
   assert.match(candidate, /PRODUCTION_DASHBOARD_ORIGIN = "https:\/\/henvalt-dashboard\.pages\.dev"/);
   assert.match(candidate, /const DASHBOARD_ORIGIN = NORMALIZED_SUPABASE_URL === STAGING_SUPABASE_URL/);
   assert.match(candidate, /IS_STAGING && Deno\.env\.get\("HENVALT_STAGE_NO_SEND"\) !== "true"/);
