@@ -183,10 +183,7 @@ export function createRecoveryExecutorHandler({
           p_final_status: "SKIPPED",
           p_reason: "recovery_context_missing",
         });
-        await rpc("retry_job", {
-          p_job_id: jobId, p_worker_id: id,
-          p_error: "recovery_context_missing", p_delay_seconds: 900,
-        });
+        await rpc("complete_job", { p_job_id: jobId, p_worker_id: id });
         return json(200, { state: "SKIPPED", reason: "recovery_context_missing" });
       }
       const recoveryType = String(context.recovery_type || context.opportunity_type || "").toUpperCase();
@@ -227,12 +224,14 @@ export function createRecoveryExecutorHandler({
           p_final_status: finalStatus,
           p_reason: "PREFLIGHT_" + failed.join(","),
         });
-        await rpc("retry_job", {
-          p_job_id: jobId,
-          p_worker_id: id,
-          p_error: "PREFLIGHT_" + failed.join(","),
-          p_delay_seconds: retryable ? 300 : 900,
-        });
+        if (retryable) {
+          await rpc("retry_job", {
+            p_job_id: jobId, p_worker_id: id,
+            p_error: "PREFLIGHT_" + failed.join(","), p_delay_seconds: 300,
+          });
+        } else {
+          await rpc("complete_job", { p_job_id: jobId, p_worker_id: id });
+        }
         return json(200, { state: retryable ? "RETRY_SCHEDULED" : "SKIPPED", failed_checks: failed });
       }
 
@@ -339,6 +338,7 @@ export function createRecoveryExecutorHandler({
           correlation_id: context.correlation_id || job.correlation_id || null,
           unsubscribe_url: unsubscribeUrl,
           unsubscribe_token_id: unsubscribe.unsubscribe_token_id,
+          text_body: rendered.text,
         },
       });
       const deliveryId = await rpc("create_delivery_request", {
