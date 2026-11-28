@@ -172,11 +172,21 @@ export function createDeliveryDispatcherHandler({
       const providerMessageId = deliveryResponse.headers.get("x-message-id") || providerBody?.message_id || null;
 
       if (stage === "pre_provider") {
-        return json(200, {
-          state: "BLOCKED",
-          reason: providerBody?.error || "delivery_preflight_rejected",
-          delivery_request_id: delivery.id,
+        const error = String(providerBody?.error || "delivery_preflight_rejected");
+        if (error === "tenant_provider_credential_unavailable" || error === "delivery_service_not_configured") {
+          return json(200, { state: "BLOCKED", reason: error, delivery_request_id: delivery.id });
+        }
+        const attemptId = await rpc("record_delivery_result", {
+          p_delivery_request_id: delivery.id,
+          p_provider: "MAILERSEND",
+          p_provider_message_id: null,
+          p_provider_status_code: deliveryResponse.status,
+          p_state: "REJECTED",
+          p_error_class: error.toUpperCase().slice(0, 100),
+          p_retryable: false,
+          p_provider_response: { stage: "pre_provider", error },
         });
+        return json(200, { state: "REJECTED", delivery_request_id: delivery.id, attempt_id: attemptId, reason: error });
       }
       if (providerBody?.error === "provider_transport_ambiguous") {
         const attemptId = await rpc("record_delivery_result", {
