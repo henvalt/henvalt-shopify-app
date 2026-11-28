@@ -13,6 +13,8 @@ on:
       - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
+      - "supabase/migrations/202611280001_mailersend_retry_lease_credential_release.sql"
+      - "tests/mailersend-retry-credential-release-contract.test.mjs"
       - "tests/delivery-generation-retry-job-acceptance.sql"
       - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
       - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
@@ -40,6 +42,8 @@ on:
       - "supabase/migrations/202611230006_late_provider_acceptance_incidents.sql"
       - "supabase/migrations/202611230007_mailersend_webhook_generation_routing.sql"
       - "supabase/migrations/202611240001_delivery_retry_generation_jobs.sql"
+      - "supabase/migrations/202611280001_mailersend_retry_lease_credential_release.sql"
+      - "tests/mailersend-retry-credential-release-contract.test.mjs"
       - "tests/delivery-generation-retry-job-acceptance.sql"
       - "tests/delivery-generation-retry-authorization-lease-acceptance.sql"
       - "tests/delivery-generation-retry-late-acceptance-race-postgres.sh"
@@ -111,6 +115,10 @@ jobs:
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611240001_delivery_retry_generation_jobs.sql
       - name: Verify retry job creation, generation limits and immutable envelope loading
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-job-acceptance.sql
+      - name: Apply retry-lease-bound MailerSend credential release candidate
+        run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f supabase/migrations/202611280001_mailersend_retry_lease_credential_release.sql
+      - name: Verify retry credential release privilege and lease contract
+        run: node --test tests/mailersend-retry-credential-release-contract.test.mjs
       - name: Verify retry lease before delivery request authorization
         run: psql -h 127.0.0.1 -U postgres -d delivery_generation_prodshape -v ON_ERROR_STOP=1 -f tests/delivery-generation-retry-authorization-lease-acceptance.sql
       - name: Verify retry lease heartbeat and final provider-egress ownership
