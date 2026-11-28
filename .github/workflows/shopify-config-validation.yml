@@ -64,7 +64,7 @@ jobs:
           assert "SUPABASE_PUBLISHABLE_KEY" in config["secrets"]["required"]
           assert "COLLECTOR_SHARED_SECRET" in config["secrets"]["required"]
           PY
-          node --test tests/staging-pixel-collector.test.mjs
+          node --test tests/staging-pixel-collector.test.mjs tests/pixel-ingest-proxy-handler.test.mjs
       - name: Type-check the Shopify OAuth Edge Function
         uses: denoland/setup-deno@v2
         with:
