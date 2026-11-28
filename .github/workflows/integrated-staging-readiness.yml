@@ -6,6 +6,10 @@ on:
       - "tests/integrated-staging-readiness.test.mjs"
       - "tests/staging-identity-preflight.test.mjs"
       - "tests/staging-pixel-collector.test.mjs"
+      - "tests/pixel-ingest-proxy-handler.test.mjs"
+      - "supabase/functions/henvalt-pixel-ingest-proxy/index.ts"
+      - "supabase/functions/henvalt-pixel-ingest-proxy/handler.mjs"
+      - "supabase/migrations/20261128100000_pixel_collector_auth_service_role_read.sql"
       - "tests/shopify-staging-config.test.mjs"
       - "tests/shopify-staging-ingress-worker.test.mjs"
       - "tests/staging-supabase-ingress-worker.test.mjs"
@@ -31,6 +35,10 @@ on:
       - "tests/integrated-staging-readiness.test.mjs"
       - "tests/staging-identity-preflight.test.mjs"
       - "tests/staging-pixel-collector.test.mjs"
+      - "tests/pixel-ingest-proxy-handler.test.mjs"
+      - "supabase/functions/henvalt-pixel-ingest-proxy/index.ts"
+      - "supabase/functions/henvalt-pixel-ingest-proxy/handler.mjs"
+      - "supabase/migrations/20261128100000_pixel_collector_auth_service_role_read.sql"
       - "tests/shopify-staging-config.test.mjs"
       - "tests/shopify-staging-ingress-worker.test.mjs"
       - "tests/dashboard-environment-config.test.mjs"
@@ -81,6 +89,6 @@ jobs:
           print("CANONICAL_SUPABASE_STAGING_WRANGLER_CONFIG_PASSED")
           PY
       - name: Run isolated staging pixel collector tests
-        run: node --test tests/staging-pixel-collector.test.mjs
+        run: node --test tests/staging-pixel-collector.test.mjs tests/pixel-ingest-proxy-handler.test.mjs
       - name: Run integrated staging readiness contract
         run: node --test tests/integrated-staging-readiness.test.mjs tests/staging-identity-preflight.test.mjs tests/shopify-staging-config.test.mjs tests/staging-supabase-ingress-worker.test.mjs tests/dashboard-environment-config.test.mjs tests/dashboard-preview-isolation.test.mjs tests/billing-reconciliation-dashboard.test.mjs
