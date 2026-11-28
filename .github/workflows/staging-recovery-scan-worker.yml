@@ -34,4 +34,4 @@ jobs:
       - name: Run isolated handler safety tests
         run: node --test tests/henvalt-recovery-scan-handler.test.mjs
       - name: Type-check staging Edge Function
-        run: deno check supabase/functions/henvalt-recovery-scan/index.ts
+        run: deno check --no-remote supabase/functions/henvalt-recovery-scan/index.ts
