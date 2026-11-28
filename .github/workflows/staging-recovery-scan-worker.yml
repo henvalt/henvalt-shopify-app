@@ -1,6 +1,14 @@
 name: Staging recovery scan worker
 
 on:
+  push:
+    branches:
+      - "work/staging-recovery-scan-worker"
+    paths:
+      - "supabase/functions/henvalt-recovery-scan/**"
+      - "tests/henvalt-recovery-scan-handler.test.mjs"
+      - "docs/STAGING_RECOVERY_SCAN_WORKER.md"
+      - ".github/workflows/staging-recovery-scan-worker.yml"
   pull_request:
     paths:
       - "supabase/functions/henvalt-recovery-scan/**"
