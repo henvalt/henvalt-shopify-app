@@ -34,7 +34,7 @@ test("Pages preview receives only the isolated staging Supabase project and endp
   assert.match(config.api, /^https:\/\/abcdefghijklmnopqrst\.supabase\.co\/functions\/v1\//);
   assert.equal(config.shopifyOAuth, `${stageEnv.HENVALT_STAGE_SUPABASE_URL}/functions/v1/henvalt-shopify-oauth/auth`);
   assert.equal(config.billingReconciliation, null);
-  assert.equal(config.privacyExport, null);
+  assert.equal(config.privacyExport, `${stageEnv.HENVALT_STAGE_SUPABASE_URL}/functions/v1/henvalt-privacy-export`);
   assert.doesNotMatch(JSON.stringify(config), /ocyplckdojdubyrsxcxa/);
 });
 
@@ -74,7 +74,7 @@ test("dashboard HTML consumes environment-scoped config and blocks no-send provi
   assert.match(html, /window\.HENVALT_CONFIG/);
   assert.match(html, /CONFIG\.noSend\|\|!SETUP/);
   assert.match(html, /Billing reconciliation decisions are disabled in no-send staging/);
-  assert.match(html, /fetch\(SHOPIFY_OAUTH/);
-  assert.match(html, /STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP, PRIVACY EXPORT AND BILLING LOCKED/);
+  assert.match(html, /fetch\(SHOPIFY_OAUTH/);\n  assert.match(html, /sb\.auth\.signUp\(/);\n  assert.match(html, /Create staging owner account/);
+  assert.match(html, /STAGING · NO SEND · SHOPIFY OAUTH TESTING ALLOWED · EMAIL, PROVIDER SETUP AND BILLING LOCKED/);
   assert.doesNotMatch(html, /const PRIVACY_EXPORT="https:\/\/ocyplckdojdubyrsxcxa/);
 });
