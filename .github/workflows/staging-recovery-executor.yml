@@ -1,0 +1,35 @@
+name: Staging recovery executor
+
+on:
+  push:
+    branches:
+      - "work/staging-recovery-executor"
+    paths:
+      - "supabase/functions/henvalt-recovery-executor/**"
+      - "tests/henvalt-recovery-executor-handler.test.mjs"
+      - ".github/workflows/staging-recovery-executor.yml"
+  pull_request:
+    paths:
+      - "supabase/functions/henvalt-recovery-executor/**"
+      - "tests/henvalt-recovery-executor-handler.test.mjs"
+      - ".github/workflows/staging-recovery-executor.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  safety-and-typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run recovery executor safety tests
+        run: node --test tests/henvalt-recovery-executor-handler.test.mjs
+      - name: Type-check staging Edge Function
+        run: deno check --no-remote supabase/functions/henvalt-recovery-executor/index.ts
