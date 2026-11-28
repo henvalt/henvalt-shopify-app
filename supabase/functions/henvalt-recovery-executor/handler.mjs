@@ -178,7 +178,15 @@ export function createRecoveryExecutorHandler({
 
       const context = await rpc("get_recovery_worker_context", { p_intervention_id: interventionId });
       if (!context || context.context_found === false) {
-        await retry(jobId, { workerId: id }, interventionId, true, "recovery_context_missing", "SKIPPED");
+        await rpc("resolve_intervention_send_failure", {
+          p_intervention_id: interventionId,
+          p_final_status: "SKIPPED",
+          p_reason: "recovery_context_missing",
+        });
+        await rpc("retry_job", {
+          p_job_id: jobId, p_worker_id: id,
+          p_error: "recovery_context_missing", p_delay_seconds: 900,
+        });
         return json(200, { state: "SKIPPED", reason: "recovery_context_missing" });
       }
       const recoveryType = String(context.recovery_type || context.opportunity_type || "").toUpperCase();
