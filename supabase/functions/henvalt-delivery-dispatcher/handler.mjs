@@ -88,13 +88,23 @@ export function createDeliveryDispatcherHandler({
       const due = new Date(now()).toISOString();
       const requestResponse = await rest(
         "/rest/v1/delivery_requests?status=eq.PENDING&channel=eq.EMAIL&provider=eq.MAILERSEND&scheduled_at=lte." +
-        encodeURIComponent(due) + "&select=id,tenant_id,intervention_id,correlation_id,scheduled_at&order=created_at.asc&limit=1",
+        encodeURIComponent(due) + "&select=id,tenant_id,intervention_id,correlation_id,scheduled_at,generation_number&order=created_at.asc&limit=1",
         { headers: { "accept-profile": "henvalt" } },
       );
       if (!requestResponse.ok) return json(503, { state: "BLOCKED", reason: "delivery_queue_unavailable" });
       const pending = await requestResponse.json();
       const delivery = Array.isArray(pending) ? pending[0] : null;
       if (!delivery) return json(200, { state: "IDLE", processed: 0 });
+      // This simple dispatcher is intentionally generation-one only. Retry
+      // generations require their own claimed background-job lease and the
+      // retry-specific authorization and egress RPC signatures.
+      if (delivery.generation_number !== 1) {
+        return json(409, {
+          state: "BLOCKED",
+          reason: "retry_generation_requires_leased_worker",
+          delivery_request_id: delivery.id,
+        });
+      }
       if (!isUuid(delivery.id) || !isUuid(delivery.tenant_id) || !isUuid(delivery.intervention_id)) {
         return json(409, { state: "BLOCKED", reason: "invalid_delivery_identity" });
       }
