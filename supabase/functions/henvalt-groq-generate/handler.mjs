@@ -44,7 +44,7 @@ export function createGroqGenerationHandler({
       return json(503, { error: "staging_generation_service_not_configured" });
     }
 
-    const bearer = request.headers.get("authorization")?.match(/^Bearer\\s+(.+)$/i)?.[1] ?? "";
+    const bearer = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
     if (!constantTimeEqual(bearer, serviceRoleKey)) {
       return json(401, { error: "service_role_required" });
     }
@@ -96,8 +96,6 @@ export function createGroqGenerationHandler({
     }
 
     if (!upstream.ok) {
-      // Provider error bodies can contain account or request details. Do not
-      // relay them to the caller or persist them in logs.
       await upstream.arrayBuffer().catch(() => new ArrayBuffer(0));
       return json(502, { error: "ai_provider_request_failed" });
     }
