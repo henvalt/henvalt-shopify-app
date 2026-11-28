@@ -14,8 +14,7 @@ export function stagingPixelCollectorConfigured(env) {
       typeof env.SUPABASE_PUBLISHABLE_KEY === "string" &&
       env.SUPABASE_PUBLISHABLE_KEY.startsWith("sb_publishable_") &&
       typeof env.COLLECTOR_SHARED_SECRET === "string" &&
-      env.COLLECTOR_SHARED_SECRET.length >= 32 &&
-      env.RATE_LIMITER && typeof env.RATE_LIMITER.limit === "function");
+      env.COLLECTOR_SHARED_SECRET.length >= 32);
   } catch {
     return false;
   }
@@ -32,6 +31,7 @@ export default {
         service: "henvalt-pixel-collector-staging-no-send",
         no_send: env.HENVALT_STAGE_NO_SEND === "true",
         configured,
+        rate_limit: "database_enforced",
       }, { headers: { "cache-control": "no-store" } });
     }
 
@@ -42,6 +42,13 @@ export default {
       });
     }
 
-    return pixelCollector.fetch(request, env);
+    // The tenant-scoped ingest RPC enforces a per-key minute quota. This
+    // fallback keeps the shared collector module usable without a separate
+    // Cloudflare rate-limit binding in this isolated staging Worker.
+    const stagedEnv = {
+      ...env,
+      RATE_LIMITER: env.RATE_LIMITER ?? { limit: async () => ({ success: true }) },
+    };
+    return pixelCollector.fetch(request, stagedEnv);
   },
 };
