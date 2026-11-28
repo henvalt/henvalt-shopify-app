@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createRecoveryExecutorHandler, STAGING_SUPABASE_URL } from "../supabase/functions/henvalt-recovery-executor/handler.mjs";
+import { createRecoveryExecutorHandler, STAGING_SUPABASE_URL, parseJsonContent } from "../supabase/functions/henvalt-recovery-executor/handler.mjs";
 
 const key = "test-service-role-secret";
 const makeRequest = (token = key, body = {}) => new Request("https://staging.test/functions/v1/henvalt-recovery-executor", {
@@ -11,7 +11,6 @@ const makeRequest = (token = key, body = {}) => new Request("https://staging.tes
 const create = (overrides = {}) => createRecoveryExecutorHandler({
   supabaseUrl: STAGING_SUPABASE_URL,
   serviceRoleKey: key,
-  groqApiKey: "test-groq-key-123456789012345",
   publicActionsBaseUrl: "https://actions.staging.example.test",
   fetchImpl: async () => { throw new Error("unexpected_network_call"); },
   ...overrides,
@@ -88,11 +87,11 @@ test("requires a configured HTTPS public action origin before creating tokens", 
   assert.equal(calls.includes("create_unsubscribe_token"), false);
 });
 
-test("validates model output with an exact schema and rejects generated URLs", async () => {
-  // The public handler is deliberately tested through the full request path
-  // in the integrated staging suite; these tests exercise the exported API
-  // boundary by injecting provider output and observing no unsafe handoff.
-  const run = create({ groqApiKey: "" });
-  const response = await run(makeRequest());
-  assert.equal(response.status, 503);
+test("accepts only exact, bounded JSON copy without URLs", () => {
+  const valid = JSON.stringify({ subject: "A note for you", opening: "Hi there,", body: "Your cart is ready.", cta_text: "Return to your cart" });
+  assert.deepEqual(parseJsonContent(valid), JSON.parse(valid));
+  assert.equal(parseJsonContent(JSON.stringify({ subject: "A note", opening: "", body: "Visit https://bad.example", cta_text: "Return" })), null);
+  assert.equal(parseJsonContent(JSON.stringify({ subject: "A note", opening: "", body: "Hello", cta_text: "Return", extra: "not allowed" })), null);
+  assert.equal(parseJsonContent("not-json"), null);
+  assert.equal(parseJsonContent("x".repeat(12001)), null);
 });
