@@ -109,3 +109,75 @@ jobs:
       - name: Create an unreleased Shopify app version
         if: env.SHOPIFY_SERVICE_ACCOUNT_TOKEN != ''
         run: shopify app deploy --no-release --config=shopify.app.toml
+
+
+  token-refresh-validation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check token refresh handler
+        run: deno check supabase/functions/henvalt-shopify-token-refresh/index.ts
+      - name: Run token refresh lease regression tests
+        run: deno test --allow-env supabase/functions/henvalt-shopify-token-refresh/index_test.ts
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+      - name: Execute lease fencing migration against disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host 127.0.0.1 --username postgres --dbname postgres --set ON_ERROR_STOP=1 \
+            --file supabase/tests/shopify_token_refresh_lease_fencing.sql
+      - name: Exercise concurrent claims and post-lock lease expiry
+        env:
+          PGPASSWORD: postgres
+        run: bash supabase/tests/shopify_token_refresh_concurrency.sh
+      - name: Validate migration contract and regex
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          files = list(Path("supabase/migrations").glob("*fence_shopify_token_refresh_leases.sql"))
+          assert len(files) == 1, f"Expected one lease-fencing migration, found {len(files)}"
+          sql = files[0].read_text().lower()
+          for fragment in (
+              "add column if not exists token_refresh_lease_until timestamptz",
+              "add column if not exists token_refresh_started_at timestamptz",
+              "add column if not exists token_refresh_last_error text",
+              "add column if not exists token_refresh_lease_id uuid",
+              "v_lease_id := gen_random_uuid()",
+              "token_refresh_lease_id=v_lease_id",
+              "v_conn.token_refresh_lease_id is distinct from p_lease_id",
+              "token_refresh_lease_id=p_lease_id",
+              "v_conn.access_token_expires_at > clock_timestamp()+interval '5 minutes'",
+              "v_conn.token_refresh_lease_until>clock_timestamp()",
+              "v_conn.token_refresh_lease_until<=clock_timestamp()",
+              "and token_refresh_lease_until>clock_timestamp()",
+              "token_refresh_lease_until=clock_timestamp()+interval '10 minutes'",
+              "v_access_expires_at := clock_timestamp()+make_interval(secs=>p_access_expires_in)",
+              "token_refresh_lease_id=null",
+              "grant execute on function henvalt.complete_shopify_token_refresh(text,text,text,integer,integer,uuid) to service_role",
+          ):
+              assert fragment in sql, f"Missing SQL lease-fencing invariant: {fragment}"
+          assert r"p_shop_domain !~ '^[a-z0-9][a-z0-9-]*\.myshopify\.com$'" in sql, "Shopify domain regex must use literal-dot escapes"
+          assert r"p_shop_domain !~ '^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$'" not in sql, "Double-escaped shop regex rejects valid domains"
+          assert "drop function if exists henvalt.complete_shopify_token_refresh(text,text,text,integer,integer)" in sql
+          assert "drop function if exists henvalt.fail_shopify_token_refresh(text,text,boolean)" in sql
+          print("SQL lease ownership, expiry, cleanup, regex and privilege checks passed.")
+          PY
