@@ -1,0 +1,182 @@
+export const SHOPIFY_WEBHOOK_SPECS = [
+  { topic: "orders/create", gql: "ORDERS_CREATE" },
+  { topic: "orders/updated", gql: "ORDERS_UPDATED" },
+  { topic: "orders/paid", gql: "ORDERS_PAID" },
+  { topic: "orders/cancelled", gql: "ORDERS_CANCELLED" },
+  { topic: "refunds/create", gql: "REFUNDS_CREATE" },
+  { topic: "order_transactions/create", gql: "ORDER_TRANSACTIONS_CREATE" },
+  { topic: "checkouts/create", gql: "CHECKOUTS_CREATE" },
+  { topic: "checkouts/update", gql: "CHECKOUTS_UPDATE" },
+  { topic: "carts/create", gql: "CARTS_CREATE" },
+  { topic: "carts/update", gql: "CARTS_UPDATE" },
+  { topic: "customers_email_marketing_consent/update", gql: "CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE" },
+  { topic: "app/uninstalled", gql: "APP_UNINSTALLED" },
+] as const;
+
+const LIST_QUERY = "query ListWebhooks($after: String) { webhookSubscriptions(first:100, after:$after) { nodes { id topic uri } pageInfo { hasNextPage endCursor } } }";
+const CREATE_MUTATION = `mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) {
+  webhookSubscriptionCreate(topic:$topic,webhookSubscription:$input) {
+    userErrors { message }
+    webhookSubscription { id topic uri }
+  }
+}`;
+
+type Subscription = { id: string; topic: string; uri: string };
+type Result = { topic: string; ok: boolean; verified: boolean; id?: string; error?: string };
+
+const REGISTRATION_BUDGET_MS = 45_000;
+const FINAL_VERIFICATION_RESERVE_MS = 12_000;
+const MAX_SUBSCRIPTION_PAGES = 10;
+
+export async function registerShopifyWebhooks(input: {
+  shop: string;
+  accessToken: string;
+  webhookUri: string;
+  fetchImpl?: typeof fetch;
+  now?: () => number;
+}): Promise<{ results: Result[]; allRegistered: boolean }> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const now = input.now ?? Date.now;
+  const deadline = now() + REGISTRATION_BUDGET_MS;
+  const createDeadline = deadline - FINAL_VERIFICATION_RESERVE_MS;
+  const endpoint = `https://${input.shop}/admin/api/2026-10/graphql.json`;
+  const gql = async (
+    query: string,
+    variables: Record<string, unknown> = {},
+    operationDeadline = deadline,
+  ) => {
+    const remainingMs = operationDeadline - now();
+    if (remainingMs <= 0) throw new Error("SHOPIFY_WEBHOOK_REGISTRATION_DEADLINE_EXCEEDED");
+    const response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers: {
+        "x-shopify-access-token": input.accessToken,
+        "content-type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(Math.min(15000, remainingMs)),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.errors?.length) throw new Error("SHOPIFY_GRAPHQL_REQUEST_FAILED");
+    return payload?.data ?? {};
+  };
+  const getSubscriptions = async (operationDeadline: number): Promise<Subscription[]> => {
+    const subscriptions: Subscription[] = [];
+    const seenCursors = new Set<string>();
+    let after: string | null = null;
+    for (let page = 0; page < MAX_SUBSCRIPTION_PAGES; page++) {
+      const data = await gql(LIST_QUERY, { after }, operationDeadline);
+      const connection = data?.webhookSubscriptions;
+      const nodes = connection?.nodes;
+      const pageInfo = connection?.pageInfo;
+      if (!Array.isArray(nodes) || typeof pageInfo?.hasNextPage !== "boolean") {
+        throw new Error("SHOPIFY_WEBHOOK_LIST_INVALID");
+      }
+      subscriptions.push(...nodes.filter((node: any) =>
+        node && typeof node.id === "string" && typeof node.topic === "string" && typeof node.uri === "string"
+      ));
+      if (!pageInfo.hasNextPage) return subscriptions;
+      const cursor = pageInfo.endCursor;
+      if (typeof cursor !== "string" || !cursor || seenCursors.has(cursor)) {
+        throw new Error("SHOPIFY_WEBHOOK_CURSOR_INVALID");
+      }
+      seenCursors.add(cursor);
+      after = cursor;
+    }
+    throw new Error("SHOPIFY_WEBHOOK_PAGE_LIMIT_EXCEEDED");
+  };
+
+  let initial: Subscription[] | null = null;
+  let initialLookupError = false;
+  try {
+    initial = await getSubscriptions(createDeadline);
+  } catch {
+    // Fail closed: never create subscriptions when the existing set is unknown.
+    initialLookupError = true;
+  }
+
+  const results: Result[] = [];
+  for (const spec of SHOPIFY_WEBHOOK_SPECS) {
+    if (initialLookupError) {
+      results.push({ topic: spec.topic, ok: false, verified: false, error: "initial_lookup_failed" });
+      continue;
+    }
+    const existing = initial!.find((node) => node.topic === spec.gql && node.uri === input.webhookUri);
+    if (existing) {
+      results.push({ topic: spec.topic, ok: true, verified: false });
+      continue;
+    }
+    try {
+      const data = await gql(CREATE_MUTATION, {
+        topic: spec.gql,
+        input: { uri: input.webhookUri, format: "JSON" },
+      }, createDeadline);
+      const created = data?.webhookSubscriptionCreate;
+      if (created?.userErrors?.length || !created?.webhookSubscription?.id) {
+        results.push({
+          topic: spec.topic,
+          ok: false,
+          verified: false,
+          error: (created?.userErrors ?? []).map((item: any) => String(item.message ?? "user_error")).join("; ") || "not_created",
+        });
+      } else {
+        results.push({ topic: spec.topic, ok: true, verified: false });
+      }
+    } catch {
+      results.push({ topic: spec.topic, ok: false, verified: false, error: "registration_failed" });
+    }
+  }
+
+  let finalSubscriptions: Subscription[] = [];
+  let finalLookupError = false;
+  try {
+    finalSubscriptions = await getSubscriptions(deadline);
+  } catch {
+    finalLookupError = true;
+  }
+  for (const result of results) {
+    const spec = SHOPIFY_WEBHOOK_SPECS.find((item) => item.topic === result.topic)!;
+    const verified = finalSubscriptions.find((node) =>
+      node.topic === spec.gql && node.uri === input.webhookUri
+    );
+    result.verified = Boolean(verified);
+    result.ok = Boolean(verified);
+    if (verified) {
+      result.id = verified.id;
+      delete result.error;
+    } else if (finalLookupError) {
+      result.error = result.error ?? "final_verification_failed";
+    } else {
+      result.error = result.error ?? "subscription_not_verified";
+    }
+  }
+
+  return {
+    results,
+    allRegistered: results.length === SHOPIFY_WEBHOOK_SPECS.length &&
+      results.every((item) => item.ok && item.verified),
+  };
+}
+export async function getShopifyShopId(input: {
+  shop: string;
+  accessToken: string;
+  fetchImpl?: typeof fetch;
+}): Promise<string> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(`https://${input.shop}/admin/api/2026-10/graphql.json`, {
+    method: "POST",
+    headers: {
+      "x-shopify-access-token": input.accessToken,
+      "content-type": "application/json",
+      accept: "application/json",
+    },
+    body: JSON.stringify({ query: "query { shop { id } }" }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.errors?.length) throw new Error("SHOPIFY_SHOP_LOOKUP_FAILED");
+  const id = payload?.data?.shop?.id;
+  if (typeof id !== "string" || !id) throw new Error("SHOPIFY_SHOP_ID_MISSING");
+  return id;
+}

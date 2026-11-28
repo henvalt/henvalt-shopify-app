@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { getShopifyShopId, registerShopifyWebhooks, SHOPIFY_WEBHOOK_SPECS } from "./webhook-registration.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const SHOPIFY_API_KEY = Deno.env.get("SHOPIFY_API_KEY") ?? "";
@@ -274,14 +274,13 @@ Deno.serve(async (req: Request) => {
       return json(502, { error: "shopify_expiring_offline_token_response_invalid" });
     }
 
-    const shopRes = await fetch(`https://${shop}/admin/api/2026-10/shop.json`, { headers: { "x-shopify-access-token": accessToken, accept: "application/json" } });
-    if (!shopRes.ok) {
-      console.error("Shopify shop verification failed", shopRes.status);
+    let shopId = "";
+    try {
+      shopId = await getShopifyShopId({ shop, accessToken });
+    } catch {
+      console.error("Shopify GraphQL shop verification failed");
       return json(502, { error: "shopify_shop_verification_failed" });
     }
-    const shopData = await shopRes.json();
-    const shopId = String(shopData?.shop?.id ?? "");
-    if (!shopId) return json(502, { error: "shopify_shop_id_missing" });
 
     const finalized = await db("/rest/v1/rpc/control_plane_finalize_shopify_oauth_install_expiring_for_owner", {
       method: "POST",
@@ -316,32 +315,12 @@ Deno.serve(async (req: Request) => {
       pixelActivation = { activated: false, error: "REQUIRED_PIXEL_SCOPES_MISSING" };
     }
 
-    // Registration is intentionally explicit and checked; never silently mark it successful.
+    // Registration is idempotent: read existing subscriptions once, create only missing topics,
+    // then verify the complete expected set before reporting success.
     const webhookUri = "https://henvalt-clean-ingress-v1.chmuhammadrehan18.workers.dev/shopify/webhooks";
-    const specs = [{topic:"orders/create",gql:"ORDERS_CREATE"},{topic:"orders/updated",gql:"ORDERS_UPDATED"},{topic:"orders/paid",gql:"ORDERS_PAID"},{topic:"orders/cancelled",gql:"ORDERS_CANCELLED"},{topic:"refunds/create",gql:"REFUNDS_CREATE"},{topic:"order_transactions/create",gql:"ORDER_TRANSACTIONS_CREATE"},{topic:"checkouts/create",gql:"CHECKOUTS_CREATE"},{topic:"checkouts/update",gql:"CHECKOUTS_UPDATE"},{topic:"carts/create",gql:"CARTS_CREATE"},{topic:"carts/update",gql:"CARTS_UPDATE"},{topic:"customers_email_marketing_consent/update",gql:"CUSTOMERS_EMAIL_MARKETING_CONSENT_UPDATE"},{topic:"app/uninstalled",gql:"APP_UNINSTALLED"}];
-    const results: Array<Record<string, unknown>> = [];
-    async function gql(query:string,variables:Record<string,unknown>={}) {
-      const res=await fetch(`https://${shop}/admin/api/2026-10/graphql.json`,{method:"POST",headers:{"x-shopify-access-token":accessToken,"content-type":"application/json",accept:"application/json"},body:JSON.stringify({query,variables})});
-      const d=await res.json().catch(()=>({}));
-      if(!res.ok||d.errors?.length) throw new Error("graphql_failed");
-      return d.data;
-    }
-    for(const spec of specs) {
-      try {
-        let nodes=(await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } } }")).webhookSubscriptions?.nodes??[];
-        let found=nodes.find((x:any)=>x.topic===spec.gql&&x.uri===webhookUri);
-        if(!found) {
-          const d=await gql("mutation CreateWebhook($topic: WebhookSubscriptionTopic!, $input: WebhookSubscriptionInput!) { webhookSubscriptionCreate(topic:$topic,webhookSubscription:$input) { userErrors { message } webhookSubscription { id topic uri } } }",{topic:spec.gql,input:{uri:webhookUri,format:"JSON"}});
-          const p=d.webhookSubscriptionCreate;
-          if(p?.userErrors?.length||!p?.webhookSubscription?.id){results.push({topic:spec.topic,ok:false,error:(p?.userErrors??[]).map((e:any)=>e.message).join("; ")||"not_created"});continue;}
-        }
-        results.push({topic:spec.topic,ok:true});
-      } catch { results.push({topic:spec.topic,ok:false,error:"registration_failed"}); }
-    }
-    let finalNodes:any[]=[];
-    try{finalNodes=(await gql("query { webhookSubscriptions(first:100) { nodes { id topic uri } } }")).webhookSubscriptions?.nodes??[];}catch{}
-    for(const r of results){const s=specs.find(x=>x.topic===r.topic);const f=s&&finalNodes.find((x:any)=>x.topic===s.gql&&x.uri===webhookUri);r.verified=!!f;r.ok=r.ok===true&&!!f;if(f)r.id=f.id;}
-    const allWebhooksRegistered=results.length===specs.length&&results.every(x=>x.ok===true&&x.verified===true);
+    const webhookRegistration = await registerShopifyWebhooks({ shop, accessToken, webhookUri });
+    const results = webhookRegistration.results;
+    const allWebhooksRegistered = webhookRegistration.allRegistered;
     // Store per-topic verification for support and dashboard diagnostics.
     const webhookAudit = await db("/rest/v1/audit_log", {
       method: "POST",
@@ -358,7 +337,7 @@ Deno.serve(async (req: Request) => {
           destination: webhookUri,
           all_registered: allWebhooksRegistered,
           verified_count: results.filter((item) => item.ok === true && item.verified === true).length,
-          expected_count: specs.length,
+          expected_count: SHOPIFY_WEBHOOK_SPECS.length,
           registrations: results.map((item) => ({
             topic: item.topic,
             ok: item.ok === true,
