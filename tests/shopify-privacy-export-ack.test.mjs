@@ -30,7 +30,7 @@ test("privacy export endpoint remains owner-authenticated and exposes only the d
   assert.match(source, /auth\/v1\/user/);
   assert.match(source, /role=in\.\(OWNER,ADMIN\)/);
   assert.match(source, /PRODUCTION_DASHBOARD_ORIGIN = "https:\/\/henvalt-dashboard\.pages\.dev"/);
-  assert.match(source, /STAGING_DASHBOARD_ORIGIN = "https:\/\/65003dc3\.henvalt-dashboard-preview\.pages\.dev"/);
+  assert.match(source, /STAGING_DASHBOARD_ORIGIN = "https:\/\/id-preview--6382eaeb-7d73-473e-810b-2b89184d4bf0\.lovable\.app"/);
   assert.match(source, /access-control-allow-origin": DASHBOARD_ORIGIN/);
   assert.match(source, /DASHBOARD_ORIGIN = NORMALIZED_SUPABASE_URL === STAGING_SUPABASE_URL/);
   assert.match(source, /access-control-allow-methods": "GET, POST, OPTIONS/);
