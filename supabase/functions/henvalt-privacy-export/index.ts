@@ -6,8 +6,19 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+const STAGING_SUPABASE_URL = "https://xidhtmrfvsgfmyltjuja.supabase.co";
+const PRODUCTION_SUPABASE_URL = "https://ocyplckdojdubyrsxcxa.supabase.co";
+const STAGING_DASHBOARD_ORIGIN = "https://chore-staging-shopify-app-co.henvalt-dashboard-preview.pages.dev";
+const PRODUCTION_DASHBOARD_ORIGIN = "https://henvalt-dashboard.pages.dev";
+const NORMALIZED_SUPABASE_URL = SUPABASE_URL.replace(/\\/+$/, "");
+const DASHBOARD_ORIGIN = NORMALIZED_SUPABASE_URL === STAGING_SUPABASE_URL
+  ? STAGING_DASHBOARD_ORIGIN
+  : NORMALIZED_SUPABASE_URL === PRODUCTION_SUPABASE_URL
+    ? PRODUCTION_DASHBOARD_ORIGIN
+    : "";
+const IS_STAGING = NORMALIZED_SUPABASE_URL === STAGING_SUPABASE_URL;
 const headers = {
-  "access-control-allow-origin": "https://henvalt-dashboard.pages.dev",
+  "access-control-allow-origin": DASHBOARD_ORIGIN,
   "access-control-allow-headers": "authorization, apikey, content-type, x-client-info",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-expose-headers": "content-disposition, x-henvalt-delivery-ack-token",
@@ -34,7 +45,10 @@ async function rest(path: string, method = "GET", body?: unknown, prefer = "retu
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers });
   if (req.method !== "GET" && req.method !== "POST") return reply(405, { error: "method_not_allowed" });
-  if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY) return reply(503, { error: "privacy_export_not_configured" });
+  if (!SUPABASE_URL || !SERVICE_KEY || !ANON_KEY || !DASHBOARD_ORIGIN ||
+      (IS_STAGING && Deno.env.get("HENVALT_STAGE_NO_SEND") !== "true")) {
+    return reply(503, { error: "privacy_export_not_configured" });
+  }
 
   try {
     const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
