@@ -64,7 +64,7 @@ test("checks the secret digest and calls only the tenant-scoped pixel ingest RPC
   assert.equal(response.status, 202);
   assert.equal(calls.length, 2);
   assert.ok(calls[0].url.includes("/rest/v1/pixel_collector_auth"));
-  assert.equal(calls[0].init.method ?? "GET", "GET");
+  assert.equal(calls[0].init?.method ?? "GET", "GET");
   assert.ok(calls[1].url.endsWith("/rest/v1/rpc/ingest_pixel_event"));
   assert.equal(calls[1].init.method, "POST");
   assert.deepEqual(JSON.parse(calls[1].init.body), {
