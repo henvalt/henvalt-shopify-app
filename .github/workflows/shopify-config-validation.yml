@@ -41,6 +41,14 @@ jobs:
           assert "fetch(" in source, "Missing collector delivery"
           print("HENVALT Shopify app configuration and Pixel source checks passed.")
           PY
+      - name: Set up Deno for isolated ingress tests
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Shopify ingress Worker
+        run: deno check cloudflare/worker.js cloudflare/worker_test.ts
+      - name: Test Shopify ingress HMAC and forwarding
+        run: deno test cloudflare/worker_test.ts
 
   deploy-shopify-version:
     # Version creation is an explicit operator action, never an automatic push side effect.
