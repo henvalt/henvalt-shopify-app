@@ -8,7 +8,7 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const STAGING_SUPABASE_URL = "https://xidhtmrfvsgfmyltjuja.supabase.co";
 const PRODUCTION_SUPABASE_URL = "https://ocyplckdojdubyrsxcxa.supabase.co";
-const STAGING_DASHBOARD_ORIGIN = "https://chore-staging-shopify-app-co.henvalt-dashboard-preview.pages.dev";
+const STAGING_DASHBOARD_ORIGIN = "https://65003dc3.henvalt-dashboard-preview.pages.dev";
 const PRODUCTION_DASHBOARD_ORIGIN = "https://henvalt-dashboard.pages.dev";
 const NORMALIZED_SUPABASE_URL = SUPABASE_URL.replace(/\/+$/, "");
 const DASHBOARD_ORIGIN = NORMALIZED_SUPABASE_URL === STAGING_SUPABASE_URL
