@@ -11,6 +11,11 @@ on:
       - "supabase/functions/henvalt-privacy-export/index.ts"
       - "supabase/functions/henvalt-shopify-privacy/index.ts"
       - "docs/PRIVACY_EXPORT_DELIVERY_SEMANTICS_2026-11-22.md"
+      - "dashboard/functions/config.js"
+      - "dashboard/index.html"
+      - "tests/dashboard-preview-isolation.test.mjs"
+      - "tests/privacy-export-delivery-semantics.test.mjs"
+      - "supabase/config.toml"
   push:
     branches:
       - work/48h-system-readiness-2026-11-21
@@ -28,4 +33,12 @@ jobs:
         with:
           node-version: 22
       - name: Verify privacy HMAC fixtures without contacting production
-        run: node --test tests/shopify-privacy-hmac-contract.test.mjs tests/shopify-privacy-workflow-safety.test.mjs tests/privacy-export-delivery-semantics.test.mjs
+        run: node --test tests/shopify-privacy-hmac-contract.test.mjs tests/shopify-privacy-workflow-safety.test.mjs tests/privacy-export-delivery-semantics.test.mjs tests/dashboard-preview-isolation.test.mjs
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check staging Shopify privacy webhook and owner export functions
+        run: |
+          deno check --node-modules-dir=auto supabase/functions/henvalt-shopify-privacy/index.ts
+          deno check --node-modules-dir=auto supabase/functions/henvalt-privacy-export/index.ts
