@@ -47,7 +47,7 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
-  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(503, { error: "delivery_service_not_configured" });
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) return json(503, { error: "delivery_service_not_configured", henvalt_delivery_stage: "pre_provider" });
 
   const authorization = req.headers.get("authorization") ?? "";
   const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1] ?? "";
@@ -104,11 +104,11 @@ Deno.serve(async (req: Request) => {
       },
     );
 
-    if (!tokenResponse.ok) return json(409, { error: "tenant_provider_credential_unavailable" });
+    if (!tokenResponse.ok) return json(409, { error: "tenant_provider_credential_unavailable", henvalt_delivery_stage: "pre_provider" });
 
     const tokenValue = await tokenResponse.json().catch(() => null);
     if (typeof tokenValue !== "string" || tokenValue.length < 20 || tokenValue.length > 512) {
-      return json(409, { error: "tenant_provider_credential_unavailable" });
+      return json(409, { error: "tenant_provider_credential_unavailable", henvalt_delivery_stage: "pre_provider" });
     }
     apiToken = tokenValue;
 
@@ -158,8 +158,8 @@ Deno.serve(async (req: Request) => {
     return json(
       providerResponse.status,
       providerBody && typeof providerBody === "object"
-        ? providerBody as Record<string, unknown>
-        : { result: providerBody },
+        ? { ...(providerBody as Record<string, unknown>), henvalt_delivery_stage: "provider_response" }
+        : { result: providerBody, henvalt_delivery_stage: "provider_response" },
       responseHeaders,
     );
   } catch {
