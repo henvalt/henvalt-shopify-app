@@ -20,7 +20,7 @@ const IS_NON_PRODUCTION_SUPABASE = (() => {
     return true;
   }
 })();
-const STAGING_DASHBOARD_URL = "https://65003dc3.henvalt-dashboard-preview.pages.dev";
+const STAGING_DASHBOARD_URL = "https://id-preview--6382eaeb-7d73-473e-810b-2b89184d4bf0.lovable.app";
 const HENVALT_DASHBOARD_URL = IS_STAGING_SUPABASE
   ? STAGING_DASHBOARD_URL
   : Deno.env.get("HENVALT_DASHBOARD_URL") ?? "";
